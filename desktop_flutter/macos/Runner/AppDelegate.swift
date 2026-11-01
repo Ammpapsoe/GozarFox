@@ -17,6 +17,7 @@ class AppDelegate: FlutterAppDelegate {
 
   @objc private func mainWindowWillClose(_ notification: Notification) {
     mainWindowClosed = true
+    DispatchQueue.main.async { NSApp.terminate(nil) }
   }
 
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -29,10 +30,8 @@ class AppDelegate: FlutterAppDelegate {
     if window.isMiniaturized {
       window.deminiaturize(nil)
     }
-    if !window.isVisible {
-      window.makeKeyAndOrderFront(nil)
-    }
-    window.performClose(nil)
+    window.makeKeyAndOrderFront(nil)
+    DispatchQueue.main.async { window.performClose(nil) }
     return .terminateCancel
   }
 

@@ -130,6 +130,7 @@ class GozarScreen extends StatefulWidget {
 
 class _GozarScreenState extends State<GozarScreen> with WindowListener {
   late final Core _core;
+  late final Future<void> _startup;
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
@@ -163,7 +164,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     _core.onExit = () {
       if (mounted) setState(() => _fatal = 'core disconnected');
     };
-    unawaited(_start());
+    _startup = _start();
+    unawaited(_startup);
   }
 
   @override
@@ -932,6 +934,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     if (_windowClosing || !widget.windowControls) return;
     setState(() => _windowClosing = true);
     try {
+      await _startup.timeout(const Duration(seconds: 45));
       if (_core.running) {
         final reply =
             await _core.call('disconnect').timeout(const Duration(seconds: 45));

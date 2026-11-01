@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,6 +156,18 @@ class FakeCore extends Core {
 
   @override
   void stop() => isRunning = false;
+}
+
+class SlowStartCore extends FakeCore {
+  SlowStartCore() : super(signedIn: true, language: 'en');
+
+  final ready = Completer<void>();
+
+  @override
+  Future<void> start() async {
+    await ready.future;
+    isRunning = true;
+  }
 }
 
 void main() {
@@ -643,6 +657,35 @@ void main() {
         const StandardMethodCodec().encodeMethodCall(
             const MethodCall('onEvent', {'eventName': 'close'})),
         null);
+    await tester.pumpAndSettle();
+    await request;
+    expect(core.requests, contains('disconnect'));
+    expect(core.running, isFalse);
+    expect(actions, ['setPreventClose', 'close']);
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
+
+  testWidgets('close waits for a starting core before disconnecting',
+      (tester) async {
+    final actions = <String>[];
+    const channel = MethodChannel('window_manager');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+        (call) async {
+      actions.add(call.method);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    final core = SlowStartCore()..live = true;
+    await tester.pumpWidget(GozarApp(core: core, windowControls: true));
+    final request = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'window_manager',
+        const StandardMethodCodec().encodeMethodCall(
+            const MethodCall('onEvent', {'eventName': 'close'})),
+        null);
+    await tester.pump();
+    expect(actions, isEmpty);
+    expect(core.requests, isEmpty);
+    core.ready.complete();
     await tester.pumpAndSettle();
     await request;
     expect(core.requests, contains('disconnect'));

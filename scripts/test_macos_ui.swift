@@ -74,7 +74,7 @@ func runSmoke() throws {
     throw SmokeError("Could not request a normal macOS quit.")
   }
   guard waitUntil(60, { app.isTerminated }) else {
-    throw SmokeError("The macOS application did not quit.")
+    throw SmokeError("The macOS application did not quit (hidden: \(app.isHidden), visible window: \(visibleWindow(for: pid)), simulated events: \(events().joined(separator: ", ")).")
   }
   let recorded = events()
   guard let disconnect = recorded.firstIndex(of: "disconnect"),
