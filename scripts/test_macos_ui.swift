@@ -41,30 +41,39 @@ func runSmoke() throws {
     return text.split(separator: "\n").map(String.init)
   }
 
-  let process = Process()
-  process.executableURL = URL(fileURLWithPath: executable)
-  var environment = ProcessInfo.processInfo.environment
-  environment["GOZAR_CORE"] = core
-  environment["GOZAR_UI_TEST_LOG"] = logPath
-  process.environment = environment
-  try process.run()
-  defer { if process.isRunning { process.terminate() } }
-  let pid = process.processIdentifier
-  guard waitUntil(60, { process.isRunning && events().contains("state") && visibleWindow(for: pid) }) else {
+  let bundle = URL(fileURLWithPath: executable).deletingLastPathComponent()
+    .deletingLastPathComponent().deletingLastPathComponent()
+  let configuration = NSWorkspace.OpenConfiguration()
+  configuration.activates = true
+  configuration.createsNewApplicationInstance = true
+  configuration.addsToRecentItems = false
+  configuration.environment = ["GOZAR_CORE": core, "GOZAR_UI_TEST_LOG": logPath]
+  var launched: NSRunningApplication?
+  var launchError: Error?
+  var launchFinished = false
+  NSWorkspace.shared.openApplication(at: bundle, configuration: configuration) { app, error in
+    launched = app
+    launchError = error
+    launchFinished = true
+  }
+  guard waitUntil(30, { launchFinished }), let app = launched else {
+    throw SmokeError("Could not launch the native macOS application: \(String(describing: launchError))")
+  }
+  defer { if !app.isTerminated { _ = app.forceTerminate() } }
+  let pid = app.processIdentifier
+  guard waitUntil(60, { !app.isTerminated && events().contains("state") && visibleWindow(for: pid) }) else {
     throw SmokeError("The macOS window or its simulated core did not start.")
   }
-  guard let app = NSRunningApplication(processIdentifier: pid) else {
-    throw SmokeError("Could not inspect the native macOS application.")
-  }
   if hidden {
-    guard app.hide(), waitUntil(10, { app.isHidden }) else {
-      throw SmokeError("Could not hide the native macOS application.")
+    let sent = app.hide()
+    guard waitUntil(10, { app.isHidden && !visibleWindow(for: pid) }) else {
+      throw SmokeError("Could not hide the native macOS application (policy \(app.activationPolicy.rawValue), request \(sent)).")
     }
   }
   guard app.terminate() else {
     throw SmokeError("Could not request a normal macOS quit.")
   }
-  guard waitUntil(60, { !process.isRunning }) else {
+  guard waitUntil(60, { app.isTerminated }) else {
     throw SmokeError("The macOS application did not quit.")
   }
   let recorded = events()
