@@ -321,6 +321,17 @@ jobs:
             test "$(lipo -archs "$framework/Versions/A/$name")" = "$ARCH"
           done < <(find "$EXTRACTED/Contents/Frameworks" -mindepth 1 -maxdepth 1 -type d -name '*.framework' -print0)
           ls -lh out/*
+      - name: Verify native macOS window with simulated core
+        if: matrix.platform == 'darwin'
+        working-directory: desktop_flutter
+        shell: bash
+        run: |
+          set -e
+          APP="$PWD/build/macos/Build/Products/Release/Gozar.app"
+          go build -trimpath -ldflags='-s -w' -o "$RUNNER_TEMP/gozar-ui-test-core" ../scripts/ui-smoke-core.go
+          swiftc ../scripts/test_macos_ui.swift -o "$RUNNER_TEMP/gozar-macos-ui-test"
+          "$RUNNER_TEMP/gozar-macos-ui-test" "$APP/Contents/MacOS/Gozar" "$RUNNER_TEMP/gozar-ui-test-core" "$RUNNER_TEMP/gozar-macos-ui-visible.log" visible
+          "$RUNNER_TEMP/gozar-macos-ui-test" "$APP/Contents/MacOS/Gozar" "$RUNNER_TEMP/gozar-ui-test-core" "$RUNNER_TEMP/gozar-macos-ui-hidden.log" hidden
       - name: Check download size
         working-directory: desktop_flutter
         shell: bash

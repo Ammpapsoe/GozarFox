@@ -3,12 +3,37 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
+  private var mainWindowClosed = false
+
+  override func applicationWillFinishLaunching(_ notification: Notification) {
+    super.applicationWillFinishLaunching(notification)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(mainWindowWillClose(_:)),
+      name: NSWindow.willCloseNotification,
+      object: mainFlutterWindow
+    )
+  }
+
+  @objc private func mainWindowWillClose(_ notification: Notification) {
+    mainWindowClosed = true
+  }
+
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-    if let window = sender.windows.first(where: { $0.isVisible }) {
-      window.performClose(nil)
-      return .terminateCancel
+    guard !mainWindowClosed, let window = mainFlutterWindow else {
+      return .terminateNow
     }
-    return .terminateNow
+    if sender.isHidden {
+      sender.unhide(nil)
+    }
+    if window.isMiniaturized {
+      window.deminiaturize(nil)
+    }
+    if !window.isVisible {
+      window.makeKeyAndOrderFront(nil)
+    }
+    window.performClose(nil)
+    return .terminateCancel
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
