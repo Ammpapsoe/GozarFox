@@ -46,7 +46,7 @@ rows = [
         badge('Core', 'macOS__ARM64', '4b4b4b', 'apple', 'Gozar-Core-macOS-ARM.tar.xz'))),
 ]
 
-print('Graphics improvements.')
+print('بهبود گرافیکی')
 print()
 print('| System | Download |')
 print('|:--:|:--|')

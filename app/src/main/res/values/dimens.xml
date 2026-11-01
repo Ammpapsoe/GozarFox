@@ -6,7 +6,12 @@
     <dimen name="sp_l">16dp</dimen>
     <dimen name="sp_xl">20dp</dimen>
     <dimen name="sp_xxl">24dp</dimen>
-    <dimen name="screen_gutter">20dp</dimen>
+    <dimen name="sp_3xl">32dp</dimen>
+    <dimen name="screen_gutter">16dp</dimen>
+    <dimen name="stack_gap">2dp</dimen>
+    <dimen name="radius_s">12dp</dimen>
+    <dimen name="radius_m">20dp</dimen>
+    <dimen name="radius_l">28dp</dimen>
     <dimen name="card_radius">28dp</dimen>
     <dimen name="tile_size">40dp</dimen>
     <dimen name="tile_radius">12dp</dimen>
@@ -14,12 +19,14 @@
     <dimen name="row_height">64dp</dimen>
     <dimen name="row_pad_start">16dp</dimen>
     <dimen name="row_pad_end">16dp</dimen>
-    <dimen name="icon_action">44dp</dimen>
+    <dimen name="icon_action">48dp</dimen>
     <dimen name="connect_button">196dp</dimen>
     <dimen name="touch_target">48dp</dimen>
     <dimen name="row_gap">8dp</dimen>
     <dimen name="tile_big_size">56dp</dimen>
     <dimen name="logo_height">34dp</dimen>
-    <dimen name="tile_action">46dp</dimen>
+    <dimen name="tile_action">48dp</dimen>
     <dimen name="tile_action_pad">12dp</dimen>
+    <dimen name="metric_icon">48dp</dimen>
+    <dimen name="metric_icon_pad">12dp</dimen>
 </resources>

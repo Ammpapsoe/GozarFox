@@ -2,13 +2,13 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
-            <corners android:radius="24dp" />
+            <corners android:radius="@dimen/radius_m" />
             <solid android:color="@color/m3_surface_container_highest" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <corners android:radius="24dp" />
+            <corners android:radius="@dimen/radius_m" />
             <solid android:color="@color/m3_surface_container_high" />
         </shape>
     </item>

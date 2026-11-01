@@ -12,9 +12,9 @@
     <style name="Gozar.Section" parent="">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginStart">@dimen/sp_xs</item>
+        <item name="android:layout_marginStart">@dimen/row_pad_start</item>
         <item name="android:layout_marginTop">@dimen/sp_xxl</item>
-        <item name="android:layout_marginBottom">@dimen/sp_xs</item>
+        <item name="android:layout_marginBottom">@dimen/sp_s</item>
         <item name="android:textAppearance">@style/TextAppearance.Gozar.TitleSmall</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
     </style>
@@ -61,7 +61,7 @@
     <style name="Gozar.Row.Subtitle" parent="">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:layout_marginTop">@dimen/sp_xs</item>
         <item name="android:textAppearance">@style/TextAppearance.Gozar.BodyMedium</item>
         <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
         <item name="android:maxLines">2</item>
@@ -78,7 +78,7 @@
     <style name="Gozar.Tile" parent="">
         <item name="android:layout_width">@dimen/tile_size</item>
         <item name="android:layout_height">@dimen/tile_size</item>
-        <item name="android:padding">9dp</item>
+        <item name="android:padding">@dimen/sp_s</item>
         <item name="android:background">@drawable/tile</item>
         <item name="android:backgroundTint">?attr/colorSecondaryContainer</item>
     </style>
@@ -90,7 +90,7 @@
     <style name="Gozar.Sheet.Row" parent="">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:minHeight">60dp</item>
+        <item name="android:minHeight">@dimen/row_height</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:orientation">horizontal</item>
         <item name="android:paddingStart">@dimen/sp_xxl</item>

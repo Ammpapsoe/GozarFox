@@ -970,7 +970,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         ? const Color(0xFFF6F7F8)
         : Theme.of(context).colorScheme.onSurface;
     return SizedBox(
-      height: 54,
+      height: 56,
       child: Row(children: [
         if (_state.signedIn && !_adding)
           SizedBox(
@@ -978,7 +978,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
             child: IconButton(
               tooltip: words.settings,
               onPressed: _showSettings,
-              icon: Icon(Icons.menu_rounded, color: foreground, size: 21),
+              icon: Icon(Icons.menu_rounded, color: foreground, size: 20),
             ),
           )
         else
@@ -997,7 +997,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                       color: foreground,
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: .1)),
+                      letterSpacing: 0)),
             ]),
           ),
         ),
@@ -1005,7 +1005,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           _windowButton(Icons.remove, words.minimize,
               () => windowManager.minimize(), foreground),
           _windowButton(Icons.close, words.close, _closeWindow, foreground),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
         ],
       ]),
     );
@@ -1014,8 +1014,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Widget _windowButton(IconData icon, String tooltip,
           Future<void> Function() action, Color color) =>
       SizedBox(
-        width: 38,
-        height: 44,
+        width: 40,
+        height: 40,
         child: IconButton(
           tooltip: tooltip,
           padding: EdgeInsets.zero,
@@ -1039,13 +1039,13 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 20, 4),
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
               child: Row(children: [
                 IconButton(
                     tooltip: words.back,
                     onPressed: _backFromSettings,
                     icon: const Icon(Icons.arrow_back)),
-                const SizedBox(width: 4),
+                const SizedBox(width: 8),
                 Expanded(
                     child: Text(title,
                         style: Theme.of(context).textTheme.titleLarge)),
@@ -1053,7 +1053,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
                   child: KeyedSubtree(
@@ -1089,7 +1089,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     if (_settingsSection.isEmpty) {
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Padding(
-            padding: const EdgeInsets.fromLTRB(4, 6, 4, 12),
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
             child: Text(words.settingsSections,
                 style: TextStyle(color: muted(context)))),
         _settingTile(
@@ -1278,14 +1278,14 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           ),
           Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 96, 24, 24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(GzRadius.card + GzSpace.xs),
                     border: Border.all(
                         color: Theme.of(context).colorScheme.outlineVariant),
                   ),
@@ -1308,7 +1308,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                             : words.signInDescription,
                         style: TextStyle(color: muted(context)),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
                       TextField(
                         controller: _email,
                         enabled: !_busy,
@@ -1327,7 +1327,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _password,
                         enabled: !_busy,
@@ -1352,7 +1352,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                         ),
                       ),
                       if (_creating) ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         TextField(
                           controller: _confirm,
                           enabled: !_busy,
@@ -1368,7 +1368,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                         ),
                       ],
                       if (_needsCode) ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Text(words.checkEmail,
                             style: TextStyle(color: muted(context))),
                         const SizedBox(height: 8),
@@ -1387,10 +1387,10 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                         ),
                       ],
                       if (_captchaImage != null) ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 12),
                         Text(words.securityCheck,
                             style: Theme.of(context).textTheme.titleSmall),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         Text(words.securityInstruction,
                             style: TextStyle(color: muted(context))),
                         const SizedBox(height: 8),
@@ -1514,7 +1514,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     return Column(children: [
       Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1529,12 +1529,12 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 9, vertical: 4),
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: _state.live
                                     ? const Color(0xFF245248)
                                     : const Color(0xFF3A404B),
-                                borderRadius: BorderRadius.circular(7),
+                                borderRadius: BorderRadius.circular(GzRadius.s),
                               ),
                               child: Text(status,
                                   style: const TextStyle(
@@ -1565,7 +1565,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                               ),
                             ),
                           ]),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       Text(_state.live ? words.tapDisconnect : words.tapConnect,
                           style:
                               const TextStyle(color: secondary, fontSize: 12)),
@@ -1602,12 +1602,12 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                 ),
               ),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(GzRadius.m),
               onTap: canSelect ? _showServers : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(children: [
                   CountryFlag(code: server?.code, size: 30),
                   const SizedBox(width: 10),
@@ -1615,11 +1615,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                     child: Text(location,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: foreground,
-                            fontSize: 20,
-                            height: 1.15,
-                            fontWeight: FontWeight.w700)),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: foreground)),
                   ),
                   if (canSelect)
                     Icon(
@@ -1631,7 +1628,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                 ]),
               ),
             ),
-            const SizedBox(height: 11),
+            const SizedBox(height: 12),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Icon(Icons.device_hub_outlined, color: secondary, size: 17),
               const SizedBox(width: 6),
@@ -1653,7 +1650,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
               ),
             ]),
             const SizedBox(height: 12),
-            Wrap(spacing: 22, runSpacing: 7, children: [
+            Wrap(spacing: 20, runSpacing: 8, children: [
               _trafficLabel(Icons.south_rounded, words.download,
                   _state.live ? _speed(_state.rateDown) : '—'),
               _trafficLabel(Icons.north_rounded, words.upload,
@@ -1676,22 +1673,24 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           Tooltip(
             message: words.unavailable,
             child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(20, 10, 12, 10),
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 12, 8),
               child: Row(children: [
                 const Icon(Icons.shield_outlined,
                     color: Color(0xFF858A94), size: 20),
-                const SizedBox(width: 7),
+                const SizedBox(width: 8),
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(words.firewall,
                       style: const TextStyle(color: secondary, fontSize: 12)),
                   Text(words.unavailable,
-                      style: const TextStyle(
-                          color: Color(0xFF777D88), fontSize: 10)),
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(color: const Color(0xFF868C97))),
                 ]),
               ]),
             ),
           ),
-          Container(width: 1, height: 38, color: const Color(0xFF31343A)),
+          Container(width: 1, height: 36, color: const Color(0xFF31343A)),
           Expanded(
             child: TextButton.icon(
               onPressed: canSelect ? _showServers : null,
@@ -1702,7 +1701,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                 foregroundColor: foreground,
                 disabledForegroundColor: secondary,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
             ),
           ),
@@ -1710,7 +1709,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       ),
       Container(
         color: const Color(0xFF0D1016),
-        padding: const EdgeInsetsDirectional.fromSTEB(20, 7, 12, 7),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 8, 8),
         child: Row(children: [
           Icon(_state.limit > 0 ? Icons.donut_small : Icons.circle_outlined,
               color: _state.limit > 0 ? const Color(0xFF70CCB0) : secondary,
@@ -1742,8 +1741,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Widget _trafficLabel(IconData icon, String label, String value) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: const Color(0xFFA9AFB9), size: 15),
-          const SizedBox(width: 4),
+          Icon(icon, color: const Color(0xFFA9AFB9), size: 16),
+          const SizedBox(width: 6),
           Text('$label  $value',
               style: const TextStyle(color: Color(0xFFCFD1D6), fontSize: 12)),
         ],
