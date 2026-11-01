@@ -331,7 +331,15 @@ jobs:
           go build -trimpath -ldflags='-s -w' -o "$RUNNER_TEMP/gozar-ui-test-core" ../scripts/ui-smoke-core.go
           swiftc ../scripts/test_macos_ui.swift -o "$RUNNER_TEMP/gozar-macos-ui-test"
           "$RUNNER_TEMP/gozar-macos-ui-test" "$APP/Contents/MacOS/Gozar" "$RUNNER_TEMP/gozar-ui-test-core" "$RUNNER_TEMP/gozar-macos-ui-visible.log" visible
+          set +e
           "$RUNNER_TEMP/gozar-macos-ui-test" "$APP/Contents/MacOS/Gozar" "$RUNNER_TEMP/gozar-ui-test-core" "$RUNNER_TEMP/gozar-macos-ui-hidden.log" hidden
+          hidden_status=$?
+          set -e
+          if [ "$hidden_status" = 77 ]; then
+            echo '::warning::Hidden-window quit was not tested because this runner could not hide the app.'
+          elif [ "$hidden_status" != 0 ]; then
+            exit "$hidden_status"
+          fi
       - name: Check download size
         working-directory: desktop_flutter
         shell: bash

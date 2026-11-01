@@ -7,6 +7,11 @@ struct SmokeError: Error, CustomStringConvertible {
   init(_ description: String) { self.description = description }
 }
 
+struct SmokeUnavailable: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
 func waitUntil(_ seconds: TimeInterval, _ condition: () -> Bool) -> Bool {
   let deadline = Date().addingTimeInterval(seconds)
   while Date() < deadline {
@@ -67,7 +72,9 @@ func runSmoke() throws {
   if hidden {
     let sent = app.hide()
     guard waitUntil(10, { app.isHidden && !visibleWindow(for: pid) }) else {
-      throw SmokeError("Could not hide the native macOS application (policy \(app.activationPolicy.rawValue), request \(sent)).")
+      let message = "Could not hide the native macOS application (policy \(app.activationPolicy.rawValue), request \(sent))."
+      if !sent { throw SmokeUnavailable(message) }
+      throw SmokeError(message)
     }
   }
   guard app.terminate() else {
@@ -86,6 +93,9 @@ func runSmoke() throws {
 
 do {
   try runSmoke()
+} catch let error as SmokeUnavailable {
+  fputs("\(error)\n", stderr)
+  exit(77)
 } catch {
   fputs("\(error)\n", stderr)
   exit(1)
