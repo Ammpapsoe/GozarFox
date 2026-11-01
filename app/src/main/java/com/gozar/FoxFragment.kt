@@ -1,6 +1,10 @@
 package com.gozar
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
@@ -33,10 +37,18 @@ class FoxFragment : Fragment() {
     private lateinit var up: RollingValueView
     private lateinit var total: RollingValueView
     private lateinit var session: TextView
+    private lateinit var chart: TrafficChartView
+    private lateinit var chartCard: View
+    private lateinit var metricIcons: List<View>
+    private var previousMetrics = listOf<Long>()
     private lateinit var serverFlag: CountryFlagView
     private lateinit var serverName: TextView
     private lateinit var serverMeta: TextView
     private var measured = false
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        requestVpnPermission()
+    }
 
     private val permission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -65,6 +77,9 @@ class FoxFragment : Fragment() {
         up = view.findViewById(R.id.foxUp)
         total = view.findViewById(R.id.foxTotal)
         session = view.findViewById(R.id.foxSession)
+        chart = view.findViewById(R.id.foxChart)
+        chartCard = view.findViewById(R.id.foxChartCard)
+        metricIcons = listOf(R.id.foxDownIcon, R.id.foxUpIcon, R.id.foxTotalIcon, R.id.foxSessionIcon).map { view.findViewById(it) }
         serverFlag = view.findViewById(R.id.foxServerFlag)
         serverName = view.findViewById(R.id.foxServerName)
         serverMeta = view.findViewById(R.id.foxServerMeta)
@@ -109,14 +124,29 @@ class FoxFragment : Fragment() {
             }
             FoxLink.connected || FoxLink.connecting || FoxVpnService.isAlive() -> disconnect()
             else -> {
-                val ask = VpnService.prepare(c)
-                if (ask != null) permission.launch(ask) else FoxVpnService.start(c)
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(c, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                    !Store.notificationAsked(c)) {
+                    Store.setNotificationAsked(c)
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else requestVpnPermission()
             }
         }
     }
 
+    private fun requestVpnPermission() {
+        if (!isAdded) return
+        val c = requireContext()
+        val ask = VpnService.prepare(c)
+        if (ask != null) permission.launch(ask) else FoxVpnService.start(c)
+    }
+
     private fun disconnect() {
         val c = requireContext()
+        if (FoxVpnService.alwaysOn()) {
+            showAlwaysOnSettings(c)
+            return
+        }
         FoxVpnService.stop(c)
         FoxLink.stop()
         render()
@@ -147,6 +177,10 @@ class FoxFragment : Fragment() {
                 if (which == 0) {
                     Fox.refreshUsage(c)
                 } else {
+                    if (FoxVpnService.alwaysOn()) {
+                        showAlwaysOnSettings(c)
+                        return@setItems
+                    }
                     FoxVpnService.stop(c)
                     FoxLink.stop()
                     Fox.signOut(c)
@@ -222,15 +256,33 @@ class FoxFragment : Fragment() {
             livePing.text = if (delay > 0) "$delay ms" else ""
         }
         stats.visibility = if (live) View.VISIBLE else View.GONE
+        chartCard.visibility = if (live) View.VISIBLE else View.GONE
         if (live) {
+            chart.setSamples(FoxLink.trafficHistory())
+            val metrics = listOf(FoxLink.downRate.toLong(), FoxLink.upRate.toLong(), FoxLink.down + FoxLink.up, FoxLink.elapsed())
+            if (previousMetrics.size == metrics.size) {
+                metrics.forEachIndexed { index, value ->
+                    if (value != previousMetrics[index]) animateMetric(metricIcons[index])
+                }
+            }
+            previousMetrics = metrics
             down.setValue(fmtSpeed(FoxLink.downRate))
             up.setValue(fmtSpeed(FoxLink.upRate))
             total.setValue(fmtBytes(FoxLink.down + FoxLink.up))
             session.text = fmtTime(FoxLink.elapsed())
-        }
+        } else previousMetrics = emptyList()
 
         paintServer(c)
         maybeMeasure()
+    }
+
+    private fun animateMetric(icon: View) {
+        icon.animate().cancel()
+        icon.scaleX = 1f
+        icon.scaleY = 1f
+        icon.animate().scaleX(1.09f).scaleY(1.09f).setDuration(140).withEndAction {
+            icon.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
+        }.start()
     }
 
     private fun paintServer(c: Context) {

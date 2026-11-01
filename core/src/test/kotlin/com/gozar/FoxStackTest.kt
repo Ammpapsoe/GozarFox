@@ -66,7 +66,7 @@ class FoxStackTest {
             override fun finishWrite() { finished.countDown() }
             override fun close() { allowEof.countDown() }
         }
-        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _ -> pipe }, { _, _ -> })
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ -> pipe }, { _, _ -> })
         stack.start()
         try {
             input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
@@ -127,18 +127,32 @@ class FoxStackTest {
         val header = query.copyOfRange(0, 12)
         header[2] = 0x81.toByte()
         header[3] = 0x80.toByte()
-        header[7] = 2
+        header[7] = 3
         fun record(a: Int, b: Int, c: Int, d: Int) = byteArrayOf(
             0xc0.toByte(), 0x0c, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x3c,
             0x00, 0x04, a.toByte(), b.toByte(), c.toByte(), d.toByte()
         )
-        val answer = header + query.copyOfRange(12, query.size) + record(1, 2, 3, 4) + record(5, 6, 7, 8)
-        val stack = FoxStack(PacketInput(), PacketOutput(), 0x0a6f0002, FoxResolver(0), { _, _ -> EchoPipe() }, { _, _ -> })
+        val answer = header + query.copyOfRange(12, query.size) + record(1, 2, 3, 4) + record(5, 6, 7, 8) + record(203, 0, 113, 7)
+        val input = PacketInput()
+        val output = PacketOutput()
+        val destinations = LinkedBlockingQueue<Pair<String, String>>()
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, address, _ ->
+            destinations.put(host to address)
+            EchoPipe()
+        }, { _, _ -> })
         val learn = FoxStack::class.java.getDeclaredMethod("learn", ByteArray::class.java, ByteArray::class.java)
         learn.isAccessible = true
         learn.invoke(stack, query, answer)
         assertEquals("test.example", stack.nameOf(0x01020304))
         assertEquals("test.example", stack.nameOf(0x05060708))
+        stack.start()
+        try {
+            input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
+            assertEquals("test.example" to "203.0.113.7", destinations.poll(5, TimeUnit.SECONDS))
+        } finally {
+            stack.stop()
+            input.close()
+        }
     }
 
     @Test
@@ -165,7 +179,7 @@ class FoxStackTest {
             override fun write(buffer: ByteArray, offset: Int, length: Int) { release.await() }
             override fun close() { stopped.countDown(); release.countDown() }
         }
-        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _ -> pipe }, { _, _ -> })
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ -> pipe }, { _, _ -> })
         stack.start()
         try {
             input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
@@ -210,7 +224,7 @@ class FoxStackTest {
             override fun write(buffer: ByteArray, offset: Int, length: Int) = Unit
             override fun close() { closed.countDown() }
         }
-        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _ ->
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ ->
             started.countDown()
             release.await()
             pipe
@@ -246,7 +260,7 @@ class FoxStackTest {
             override fun finishWrite() { finished.countDown() }
             override fun close() { closed.countDown() }
         }
-        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _ -> pipe }, { _, _ -> })
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ -> pipe }, { _, _ -> })
         stack.start()
         try {
             input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
@@ -271,7 +285,7 @@ class FoxStackTest {
         val uploaded = AtomicInteger()
         val downloaded = AtomicInteger()
         val downloadedReady = CountDownLatch(1)
-        private val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, port ->
+        private val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, _, port ->
             dialed.set("$host:$port")
             pipe
         }, { inbound, bytes ->

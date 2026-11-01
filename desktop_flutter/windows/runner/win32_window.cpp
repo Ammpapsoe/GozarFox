@@ -2,6 +2,7 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
@@ -158,6 +159,44 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_NCCALCSIZE:
+      if (wparam) return 0;
+      break;
+    case WM_GETMINMAXINFO: {
+      auto info = reinterpret_cast<MINMAXINFO*>(lparam);
+      HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+      MONITORINFO display{};
+      display.cbSize = static_cast<DWORD>(sizeof(display));
+      if (GetMonitorInfo(monitor, &display)) {
+        info->ptMaxPosition.x = display.rcWork.left - display.rcMonitor.left;
+        info->ptMaxPosition.y = display.rcWork.top - display.rcMonitor.top;
+        info->ptMaxSize.x = display.rcWork.right - display.rcWork.left;
+        info->ptMaxSize.y = display.rcWork.bottom - display.rcWork.top;
+      }
+      double scale = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
+      info->ptMinTrackSize.x = Scale(360, scale);
+      info->ptMinTrackSize.y = Scale(440, scale);
+      return 0;
+    }
+    case WM_NCHITTEST: {
+      if (IsZoomed(hwnd)) return HTCLIENT;
+      RECT bounds;
+      GetWindowRect(hwnd, &bounds);
+      HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+      int edge = Scale(8, FlutterDesktopGetDpiForMonitor(monitor) / 96.0);
+      int x = GET_X_LPARAM(lparam), y = GET_Y_LPARAM(lparam);
+      bool left = x < bounds.left + edge, right = x >= bounds.right - edge;
+      bool top = y < bounds.top + edge, bottom = y >= bounds.bottom - edge;
+      if (top && left) return HTTOPLEFT;
+      if (top && right) return HTTOPRIGHT;
+      if (bottom && left) return HTBOTTOMLEFT;
+      if (bottom && right) return HTBOTTOMRIGHT;
+      if (left) return HTLEFT;
+      if (right) return HTRIGHT;
+      if (top) return HTTOP;
+      if (bottom) return HTBOTTOM;
+      return HTCLIENT;
+    }
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();

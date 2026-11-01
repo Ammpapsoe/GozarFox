@@ -28,7 +28,7 @@ class FoxStack(
     private val outgoing: OutputStream,
     private val local: Int,
     private val resolver: FoxResolver,
-    private val dial: (String, Int) -> FoxPipe,
+    private val dial: (String, String, Int) -> FoxPipe,
     private val meter: (Boolean, Long) -> Unit
 ) {
 
@@ -458,9 +458,10 @@ class FoxStack(
 
         fun begin() {
             thread(isDaemon = true, name = "fox-flow") {
-                val host = names[remote] ?: address(remote)
+                val destination = address(remote)
+                val host = names[remote] ?: destination
                 val link = try {
-                    if (remotePort == 53) dnsPipe() else dial(host, remotePort)
+                    if (remotePort == 53) dnsPipe() else dial(host, destination, remotePort)
                 } catch (e: Exception) {
                     if (!closed) send(remote, remotePort, appPort, sent, expected, RST or ACK, 0, null, 0, 0)
                     flows.remove(key, this)
@@ -601,7 +602,8 @@ class FoxStack(
 class FoxResolver(
     private val proxyPort: Int,
     private val request: ((String, ByteArray) -> ByteArray?)? = null,
-    private val now: () -> Long = { System.nanoTime() / 1_000_000L }
+    private val now: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val endpoints: List<String> = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false)
 ) {
 
     private class Entry(val body: ByteArray, val storedAt: Long, val expires: Long)
@@ -633,6 +635,56 @@ class FoxResolver(
             cache[key] = Entry(body, time, time + ttl)
         }
         return retag(query, body)
+    }
+
+    fun directAddress(host: String): String? {
+        val raw = host.trim().removeSurrounding("[", "]").trimEnd('.')
+        if (raw.isEmpty()) return null
+        if (raw.equals("localhost", true) || raw.endsWith(".localhost", true)) return "127.0.0.1"
+        if (raw.endsWith(".local", true)) return null
+        if (raw.contains(':')) {
+            if (!raw.matches(Regex("[0-9a-fA-F:.]+"))) return null
+            return try { java.net.InetAddress.getByName(raw).hostAddress } catch (_: Exception) { null }
+        }
+        val parts = raw.split('.')
+        if (parts.size == 4 && parts.all { it.isNotEmpty() && it.all(Char::isDigit) }) {
+            val numbers = parts.map { it.toIntOrNull() ?: return null }
+            return if (numbers.all { it in 0..255 }) numbers.joinToString(".") else null
+        }
+        val ascii = try { java.net.IDN.toASCII(raw, java.net.IDN.USE_STD3_ASCII_RULES).lowercase(java.util.Locale.ROOT) }
+            catch (_: Exception) { return null }
+        val labels = ascii.split('.')
+        if (ascii.length > 253 || labels.any { it.isEmpty() || it.length > 63 }) return null
+        val id = java.util.concurrent.ThreadLocalRandom.current().nextInt(65536)
+        val query = ByteArrayOutputStream().apply {
+            write(byteArrayOf((id ushr 8).toByte(), id.toByte(), 1, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+            for (label in labels) {
+                val bytes = label.toByteArray(Charsets.US_ASCII)
+                write(bytes.size)
+                write(bytes)
+            }
+            write(byteArrayOf(0, 0, 1, 0, 1))
+        }.toByteArray()
+        val body = answer(query) ?: return null
+        if (body.size < 12 || body[3].toInt() and 15 != 0) return null
+        var at = questionEnd(body, 12)
+        if (at < 0 || at + 4 > body.size) return null
+        at += 4
+        repeat(short(body, 6).coerceAtMost(256)) {
+            at = questionEnd(body, at)
+            if (at < 0 || at + 10 > body.size) return null
+            val type = short(body, at)
+            val recordClass = short(body, at + 2)
+            val size = short(body, at + 8)
+            at += 10
+            if (at + size > body.size) return null
+            if (type == 1 && recordClass == 1 && size == 4) {
+                val address = (0..3).joinToString(".") { index -> (body[at + index].toInt() and 255).toString() }
+                if (address != "0.0.0.0") return address
+            }
+            at += size
+        }
+        return null
     }
 
     private fun retag(query: ByteArray, body: ByteArray, age: Long = 0): ByteArray {
@@ -705,7 +757,7 @@ class FoxResolver(
     private fun exchange(query: ByteArray): ByteArray? {
         if (!slots.tryAcquire(2, TimeUnit.SECONDS)) return null
         try {
-            for (url in listOf("https://dns.google/dns-query", "https://mozilla.cloudflare-dns.com/dns-query")) {
+            for (url in endpoints) {
                 val body = try { over(url, query) } catch (_: Exception) { null }
                 if (body != null && valid(query, body) && body[3].toInt() and 0x0F != 2) return body
             }
@@ -723,6 +775,7 @@ class FoxResolver(
             connection.connectTimeout = 8000
             connection.readTimeout = 8000
             connection.requestMethod = "POST"
+            connection.instanceFollowRedirects = false
             connection.doOutput = true
             connection.setRequestProperty("content-type", "application/dns-message")
             connection.setRequestProperty("accept", "application/dns-message")

@@ -1,7 +1,7 @@
 name: gozar
 description: Gozar desktop
 publish_to: 'none'
-version: 1.9.5+30
+version: 1.10.0+31
 
 environment:
   sdk: ^3.5.4
@@ -22,6 +22,7 @@ flutter:
   assets:
     - assets/firefox.png
     - assets/gozar.png
+    - assets/flags/
   fonts:
     - family: Vazirmatn
       fonts:

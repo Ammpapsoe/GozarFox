@@ -30,6 +30,14 @@ object Store {
     fun setChain(c: Context, v: String) = p(c).edit().putString("chain", v).apply()
     fun rootRouting(c: Context) = p(c).getBoolean("root_routing", false)
     fun setRootRouting(c: Context, v: Boolean) = p(c).edit().putBoolean("root_routing", v).apply()
+    fun dnsProfile(c: Context) = p(c).getString("dns_profile", DnsPolicy.AUTO) ?: DnsPolicy.AUTO
+    fun setDnsProfile(c: Context, value: String) = p(c).edit().putString("dns_profile", value).apply()
+    fun customDns(c: Context) = p(c).getString("custom_dns", "") ?: ""
+    fun setCustomDns(c: Context, value: String) = p(c).edit().putString("custom_dns", value).apply()
+    fun blockAds(c: Context) = p(c).getBoolean("block_ads", false)
+    fun setBlockAds(c: Context, value: Boolean) = p(c).edit().putBoolean("block_ads", value).apply()
+    fun notificationAsked(c: Context) = p(c).getBoolean("notification_asked", false)
+    fun setNotificationAsked(c: Context) = p(c).edit().putBoolean("notification_asked", true).apply()
     fun apps(c: Context) = p(c).getStringSet("apps", emptySet())?.toSet() ?: emptySet()
     fun setApps(c: Context, v: Set<String>) = p(c).edit().putStringSet("apps", v).apply()
 

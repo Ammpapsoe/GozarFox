@@ -96,7 +96,7 @@ internal class RootSession private constructor(
                 val flag = File(context.filesDir, ".gozar-root-$suffix")
                 val plan = RootPlan(
                     iface, Process.myPid(), startedAt, flag.absolutePath, suffix,
-                    30000 + random.nextInt(30000), 7000 + random.nextInt(3000), Store.bypassLan(context)
+                    30000 + random.nextInt(30000), 7000 + random.nextInt(3000), false
                 )
                 RootSession(flag, plan, callback)
             } catch (_: Exception) {

@@ -20,6 +20,23 @@ successfully connected on the previously affected physical Android 13 phone afte
 fix. Device certificate stores and server chains vary, so this is not a guarantee for all devices.
 The app does not keep its previous in-memory diagnostics or crash file.
 
+Android exposes the system's Always-on VPN and Block connections without VPN settings rather
+than pretending an app-only switch can provide system lockdown. Status is available only while
+an established VPN service can query Android 10 or later. Direct TCP rules are disabled during
+lockdown, whenever status cannot be checked, and on Android 9 or earlier. LAN bypass is TCP-only;
+local-network discovery and other UDP traffic are not covered. Per-app selection, experimental
+root routing and system-level exceptions have separate limitations. Domain-based direct rules
+use DNS-to-IP associations, so shared IP addresses can make the match ambiguous.
+
+Android DNS can use the built-in encrypted providers or a custom HTTPS DNS endpoint. The optional
+ad/tracker protection selects AdGuard DNS without falling back to an unfiltered resolver. It
+blocks many domains, not all ads: first-party ads, applications using their own encrypted DNS,
+and traffic outside this VPN are not reliably filtered. DNS requests handled by Gozar travel
+through the authenticated proxy. The app shows an ongoing notification and an estimated session
+traffic chart. Promoted notifications and Xiaomi Focus/Super Island depend on system support,
+settings and, for Xiaomi, authorization. The new security and notification behavior has not been
+verified on a physical Android or Xiaomi device.
+
 On Android, the sign-in email button opens Android's system account chooser. It accepts only
 selected account names that are valid email addresses; manual entry remains available. It does
 not perform Google Sign-In or use Gozar's saved sessions as system accounts. On Linux the equivalent
@@ -32,19 +49,24 @@ For a separate local Android test installation, build with `-PgozarDiagnostic`. 
 `com.gozar.diagnostic` package and a separate app data directory. Without the official signing
 credentials, a local build is not an update to the official Gozar installation.
 
-Desktop builds are archives containing the application and its runtime libraries; they are not
-MSI, DMG, or DEB installers. The Windows build contains Wintun. The desktop tunnel configures a
+Desktop builds include a Windows EXE installer and Linux DEB alongside portable archives; macOS
+uses .tar.xz archives. They are not MSI or DMG installers. The Windows build contains Wintun. The desktop tunnel configures a
 TUN interface and uses a userspace network stack; it needs administrator privileges. On Windows,
 the application requests elevation when it starts. On Linux and macOS, launch the application
 with appropriate administrator privileges to use the tunnel. The new desktop app does not set
 or automatically clear a system proxy. If an older version left a proxy behind, review the system
-proxy settings manually rather than assuming that a proxy belongs to Gozar. Desktop DNS queries
+proxy settings manually rather than assuming that a proxy belongs to Gozar. Abrupt termination can
+leave routes or DNS modified, especially on Linux and macOS. Windows installers are not
+Authenticode-signed, and macOS builds are not notarized. Desktop DNS queries
 use DNS over HTTPS through the authenticated Firefox proxy; unsupported UDP is refused so clients
 can fall back to TCP when they support it. Windows route commands do not open console windows.
 
-The desktop tunnel is experimental. It has not been verified in a live connection in this
-revision. Firefox account sign-in and registration were checked with mock responses, not a real
-account. The non-interactive security check was also probed without account credentials. Mozilla
+The desktop tunnel is experimental. Real Linux, Windows and macOS tunnel interfaces were tested
+with local simulated upstreams; the new Linux code has also been retested with a local TLS-verified
+HTTP/2 CONNECT relay. These tests do not verify a connection to a real Firefox proxy. The new
+Windows window frame and macOS interface have not been tested on native devices. Firefox account
+sign-in and registration were checked with mock responses, not a real account. The non-interactive
+security check was also probed without account credentials. Mozilla
 may present an unsupported security challenge or refuse a request. IPv6 is not routed through
 the tunnel and may bypass it. UDP other than DNS is not supported. Mozilla's proxy supports only
 certain destination ports, including 80, 443, 8080, and 8443. Do not rely on this build for privacy

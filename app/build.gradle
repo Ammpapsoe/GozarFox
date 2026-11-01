@@ -14,9 +14,11 @@ android {
         applicationId 'com.gozar'
         minSdk 24
         targetSdk 35
-        versionCode 30
-        versionName '1.9.0'
+        versionCode 31
+        versionName '1.10.0'
         manifestPlaceholders.appLabel = '@string/app_name'
+        manifestPlaceholders.xiaomiAppId = System.getenv('XIAOMI_APP_ID') ?: ''
+        manifestPlaceholders.xiaomiDebug = 'false'
         if (project.hasProperty('gozarDiagnostic')) {
             applicationIdSuffix '.diagnostic'
             versionNameSuffix '-test'
@@ -57,6 +59,7 @@ android {
             signingConfig hasSigning ? signingConfigs.release : null
         }
         debug {
+            manifestPlaceholders.xiaomiDebug = 'true'
             minifyEnabled false
         }
     }
@@ -86,6 +89,7 @@ android {
         unitTests.includeAndroidResources = true
         unitTests.all {
             maxHeapSize = '384m'
+            jvmArgs '--add-opens=java.base/java.net=ALL-UNNAMED'
         }
     }
 
@@ -100,6 +104,7 @@ dependencies {
     testImplementation 'org.robolectric:robolectric:4.14.1'
     implementation project(':core')
     implementation 'com.google.zxing:core:3.5.3'
+    implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'androidx.fragment:fragment:1.8.9'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'

@@ -53,6 +53,23 @@ class Words {
         'Your password is not stored. Sign-in takes place through Mozilla.',
       );
   String get settings => pick('تنظیمات', 'Settings');
+  String get settingsSections => pick('بخش‌های تنظیمات', 'Settings sections');
+  String get connectionSettings => pick('اتصال', 'Connection');
+  String get displaySettings => pick('شخصی‌سازی', 'Personalization');
+  String get generalSettings => pick('عمومی', 'General');
+  String get accountSectionDetail =>
+      pick('حساب‌ها و ورود', 'Accounts and sign-in');
+  String get connectionSectionDetail =>
+      pick('سرورها، پراکسی و مسیرها', 'Servers, proxy and routing');
+  String get displaySectionDetail =>
+      pick('زبان و ظاهر', 'Language and appearance');
+  String get generalSectionDetail =>
+      pick('به‌روزرسانی و پشتیبانی', 'Updates and support');
+  String get back => pick('بازگشت', 'Back');
+  String get minimize => pick('کوچک‌کردن', 'Minimize');
+  String get maximize => pick('بزرگ‌کردن', 'Maximize');
+  String get totalUsage => pick('مصرف این اتصال', 'Session traffic');
+  String get pending => pick('در انتظار', 'Pending');
   String get account => pick('حساب Firefox', 'Firefox account');
   String get language => pick('زبان', 'Language');
   String get system => pick('سیستم', 'System');

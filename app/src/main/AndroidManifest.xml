@@ -5,11 +5,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <queries>
+        <provider android:authorities="miui.statusbar.notification.public" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -25,6 +27,9 @@
         android:label="${appLabel}"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+
+        <meta-data android:name="com.xiaomi.xms.APP_ID" android:value="${xiaomiAppId}" />
+        <meta-data android:name="com.xiaomi.xms.BUILD_TYPE_DEBUG" android:value="${xiaomiDebug}" />
 
         <activity
             android:name=".MainActivity"

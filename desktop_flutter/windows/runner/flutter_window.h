@@ -3,6 +3,7 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -26,6 +27,9 @@ class FlutterWindow : public Win32Window {
   flutter::DartProject project_;
 
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
+  bool closing_ = false;
+  bool close_requested_ = false;
 };
 
 #endif

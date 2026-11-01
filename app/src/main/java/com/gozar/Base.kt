@@ -79,3 +79,18 @@ fun showLanguagePicker(activity: Activity) {
         }
         .show()
 }
+
+fun showAlwaysOnSettings(context: Context) {
+    MaterialAlertDialogBuilder(context)
+        .setTitle(R.string.kill_switch)
+        .setMessage(R.string.always_on_managed)
+        .setNegativeButton(R.string.cancel, null)
+        .setPositiveButton(R.string.kill_open) { _, _ ->
+            try {
+                context.startActivity(android.content.Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+            } catch (_: Exception) {
+                Toast.makeText(context, R.string.kill_no_settings, Toast.LENGTH_SHORT).show()
+            }
+        }
+        .show()
+}

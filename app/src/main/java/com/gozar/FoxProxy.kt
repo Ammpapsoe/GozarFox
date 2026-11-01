@@ -10,11 +10,18 @@ import kotlin.concurrent.thread
 
 class FoxProxy(
     private val port: Int,
+    private val forceTunnel: Boolean = false,
+    private val countTraffic: Boolean = true,
+    private val directAllowed: () -> Boolean = { FoxVpnService.directRoutingAllowed() },
+    private val directAddress: (String) -> String? = { FoxVpnService.directAddress(it) },
     private val pass: () -> String?
 ) {
 
     @Volatile private var server: ServerSocket? = null
     @Volatile private var running = false
+    private val connections = Any()
+    private val clients = mutableSetOf<Socket>()
+    private val pipes = mutableSetOf<FoxPipe>()
 
     fun start(): Boolean {
         if (running) return true
@@ -31,12 +38,22 @@ class FoxProxy(
     }
 
     fun stop() {
-        running = false
-        try {
-            server?.close()
-        } catch (_: Exception) {
+        val openClients: List<Socket>
+        val openPipes: List<FoxPipe>
+        synchronized(connections) {
+            running = false
+            try {
+                server?.close()
+            } catch (_: Exception) {
+            }
+            server = null
+            openClients = clients.toList()
+            openPipes = pipes.toList()
+            clients.clear()
+            pipes.clear()
         }
-        server = null
+        for (client in openClients) try { client.close() } catch (_: Exception) { }
+        for (pipe in openPipes) try { pipe.close() } catch (_: Exception) { }
     }
 
     private fun acceptLoop(socket: ServerSocket) {
@@ -45,6 +62,13 @@ class FoxProxy(
                 socket.accept()
             } catch (e: Exception) {
                 break
+            }
+            val accepted = synchronized(connections) {
+                if (!running) false else clients.add(client)
+            }
+            if (!accepted) {
+                try { client.close() } catch (_: Exception) { }
+                continue
             }
             thread(isDaemon = true) { handle(client) }
         }
@@ -61,6 +85,7 @@ class FoxProxy(
             if (first == 0x05) socks(input, output) else web(input, output)
         } catch (_: Exception) {
         } finally {
+            synchronized(connections) { clients.remove(client) }
             try {
                 client.close()
             } catch (_: Exception) {
@@ -69,13 +94,20 @@ class FoxProxy(
     }
 
     private fun socks(input: InputStream, output: BufferedOutputStream) {
+        if (input.read() != 0x05) return
         val count = input.read()
         if (count <= 0) return
-        skip(input, count)
+        val methods = ByteArray(count)
+        if (readFull(input, methods) < 0) return
+        if (methods.none { it.toInt() == 0x00 }) {
+            output.write(byteArrayOf(0x05, 0xFF.toByte()))
+            output.flush()
+            return
+        }
         output.write(byteArrayOf(0x05, 0x00))
         output.flush()
         val head = ByteArray(4)
-        if (readFull(input, head) < 0) return
+        if (readFull(input, head) < 0 || head[0].toInt() != 0x05 || head[2].toInt() != 0x00) return
         if (head[1].toInt() != 0x01) {
             output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
@@ -172,15 +204,28 @@ class FoxProxy(
     }
 
     private fun open(host: String, port: Int): FoxPipe? {
-        if (FoxRoute.direct(host)) return FoxSocketPipe.connect(host, port)
-        val access = pass() ?: return null
-        val location = FoxLink.location ?: return null
-        return try {
-            FoxTunnel.open(location, host, port, access)
-        } catch (e: Exception) {
-            FoxLink.fault(e.message ?: "tunnel failed")
-            null
+        val tunnel = if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
+            val address = directAddress(host) ?: return null
+            if (!directAllowed()) return null
+            FoxSocketPipe.connect(address, port)?.let { DirectPipe(it, directAllowed) }
+        } else {
+            val access = pass() ?: return null
+            val location = FoxLink.location ?: return null
+            try {
+                FoxTunnel.open(location, host, port, access)
+            } catch (e: Exception) {
+                if (!forceTunnel) FoxLink.fault(e.message ?: "tunnel failed")
+                null
+            }
+        } ?: return null
+        val accepted = synchronized(connections) {
+            if (!running) false else pipes.add(tunnel)
         }
+        if (!accepted) {
+            try { tunnel.close() } catch (_: Exception) { }
+            return null
+        }
+        return tunnel
     }
 
     private fun pump(input: InputStream, output: BufferedOutputStream, tunnel: FoxPipe) {
@@ -191,13 +236,11 @@ class FoxProxy(
                     val n = input.read(buffer)
                     if (n < 0) break
                     tunnel.write(buffer, 0, n)
-                    FoxLink.count(false, n.toLong())
+                    if (countTraffic) FoxLink.count(false, n.toLong())
                 }
+                tunnel.finishWrite()
             } catch (_: Exception) {
-            }
-            try {
-                tunnel.close()
-            } catch (_: Exception) {
+                try { tunnel.close() } catch (_: Exception) { }
             }
         }
         val buffer = ByteArray(16384)
@@ -207,7 +250,7 @@ class FoxProxy(
                 if (n < 0) break
                 output.write(buffer, 0, n)
                 output.flush()
-                FoxLink.count(true, n.toLong())
+                if (countTraffic) FoxLink.count(true, n.toLong())
             }
         } catch (_: Exception) {
         }
@@ -215,7 +258,8 @@ class FoxProxy(
             up.interrupt()
         } catch (_: Exception) {
         }
-        tunnel.close()
+        try { tunnel.close() } catch (_: Exception) { }
+        synchronized(connections) { pipes.remove(tunnel) }
     }
 
     private fun readHead(input: InputStream): String? {
@@ -244,8 +288,4 @@ class FoxProxy(
         return done
     }
 
-    private fun skip(input: InputStream, count: Int) {
-        val buffer = ByteArray(count)
-        readFull(input, buffer)
-    }
 }

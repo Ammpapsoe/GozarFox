@@ -83,7 +83,7 @@ class MainActivity : BaseActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (onSettings) {
-                    showHome()
+                    if (!settings.goBack()) showHome()
                 } else {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()

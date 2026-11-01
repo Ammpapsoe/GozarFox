@@ -25,6 +25,10 @@ class FakeCore extends Core {
   bool recents = false;
   List<String> chain = [];
   bool live = false;
+  int rateDown = 0;
+  int rateUp = 0;
+  int down = 0;
+  int up = 0;
   bool captchaDone = false;
   int loginCalls = 0;
   Map<String, dynamic>? lastAuth;
@@ -58,6 +62,10 @@ class FakeCore extends Core {
         recents: recents,
         chain: chain,
         live: live,
+        rateDown: rateDown,
+        rateUp: rateUp,
+        down: down,
+        up: up,
         accounts: saved
             .map((email) => SavedAccount(
                 id: 'email:$email',
@@ -173,18 +181,26 @@ void main() {
     final core = FakeCore(signedIn: true, language: 'fa');
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     await tester.tap(find.byTooltip('تنظیمات'));
     await tester.pumpAndSettle();
     expect(find.text('حساب Firefox'), findsOneWidget);
+    await tester.tap(find.text('شخصی‌سازی'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('زبان'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Disconnected'), findsOneWidget);
     expect(Directionality.of(tester.element(find.text('Disconnected'))),
         TextDirection.ltr);
     await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Firefox account'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign out'));
     await tester.tap(find.text('Sign out'));
@@ -225,7 +241,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(2), '123456');
     await tester.tap(find.widgetWithText(FilledButton, 'Verify and sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     expect(core.requests, isNot(contains('connect')));
   });
   testWidgets('a second verification step clears the previous code',
@@ -250,7 +266,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(2), '123456');
     await tester.tap(find.widgetWithText(FilledButton, 'Verify and sign in'));
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     expect(core.requests, isNot(contains('connect')));
   });
   testWidgets('create account stays in the app and verifies the email',
@@ -289,7 +305,7 @@ void main() {
     await tester.ensureVisible(verify);
     await tester.tap(verify);
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     expect(core.lastAuth!['code'], '123456');
     expect(core.requests, isNot(contains('connect')));
   });
@@ -336,6 +352,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Firefox account'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Manage accounts'));
+      await tester.pumpAndSettle();
     }
 
     await openAccounts();
@@ -346,7 +364,7 @@ void main() {
     await tester.ensureVisible(find.text('Cancel'));
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     expect(core.saved, ['example@example.com']);
 
     await openAccounts();
@@ -373,6 +391,8 @@ void main() {
     expect(core.activeEmail, 'example@example.com');
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Firefox account'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Sign out'));
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
@@ -383,7 +403,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('second@example.test'));
     await tester.pumpAndSettle();
-    expect(find.text('Firefox VPN'), findsOneWidget);
+    expect(find.text('Gozar'), findsOneWidget);
     expect(core.activeEmail, 'second@example.test');
     expect(core.requests, isNot(contains('connect')));
   });
@@ -434,6 +454,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Personalization'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Light'));
@@ -442,7 +464,9 @@ void main() {
     expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
         ThemeMode.light);
 
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connection'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Remember last server'));
     await tester.pumpAndSettle();
@@ -455,7 +479,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.chain, ['socks5://127.0.0.1:1080']);
 
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('General'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Support Gozar'));
     await tester.tap(find.text('Support Gozar'));
@@ -467,4 +493,71 @@ void main() {
     expect(copied, 'UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3');
     expect(core.requests, isNot(contains('connect')));
   });
+  testWidgets(
+      'compact Windows frame displays live traffic and cleans up on close',
+      (tester) async {
+    tester.view.physicalSize = const Size(430, 580);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final actions = <String>[];
+    const channel = MethodChannel('gozar/window');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+        (call) async {
+      actions.add(call.method);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    final core = FakeCore(signedIn: true, language: 'en')
+      ..live = true
+      ..selectedHost = 'amsterdam.example'
+      ..rateDown = 2048
+      ..rateUp = 1024
+      ..down = 4096
+      ..up = 1024;
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.text('2.0 KB/s'), findsOneWidget);
+    expect(find.text('1.0 KB/s'), findsOneWidget);
+    expect(find.text('Session traffic: 5.0 KB'), findsOneWidget);
+    final flag = tester.widget<CountryFlag>(find.byType(CountryFlag).first);
+    expect(flag.code, 'NL');
+    expect(find.byTooltip('Minimize'), findsOneWidget);
+    await tester.tap(find.byTooltip('Minimize'));
+    await tester.tap(find.byTooltip('Maximize'));
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(actions, ['minimize', 'maximize', 'close']);
+    expect(core.requests, contains('disconnect'));
+    expect(core.running, isFalse);
+    expect(tester.takeException(), isNull);
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
+
+  testWidgets('a native Windows close request disconnects before exiting',
+      (tester) async {
+    final actions = <String>[];
+    const channel = MethodChannel('gozar/window');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+        (call) async {
+      actions.add(call.method);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    final core = FakeCore(signedIn: true, language: 'en')..live = true;
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    final request = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'gozar/window',
+        const StandardMethodCodec()
+            .encodeMethodCall(const MethodCall('requestClose')),
+        null);
+    await tester.pumpAndSettle();
+    await request;
+    expect(core.requests, contains('disconnect'));
+    expect(core.running, isFalse);
+    expect(actions, ['close']);
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 }

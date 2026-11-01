@@ -1,5 +1,6 @@
 package com.gozar
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,6 +11,11 @@ import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import java.util.Locale
+import kotlin.concurrent.thread
 import androidx.core.app.NotificationCompat
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -20,17 +26,36 @@ class FoxVpnService : VpnService() {
     private var descriptor: ParcelFileDescriptor? = null
 
     private var stack: FoxStack? = null
+    @Volatile private var resolver: FoxResolver? = null
     private var rootSession: RootSession? = null
     private var startFailure = ""
+    private var systemStarted = false
+    @Volatile private var focusProtocol = 0
+    private var lastNoticeAt = 0L
+    private var lastNoticeState = ""
 
     override fun onCreate() {
         super.onCreate()
         alive = true
         instance = this
+        thread(isDaemon = true, name = "focus-capability") {
+            val protocol = FocusIsland.permittedProtocol(applicationContext)
+            Handler(Looper.getMainLooper()).post {
+                if (instance === this) {
+                    focusProtocol = protocol
+                    refreshNotification(true)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == SERVICE_INTERFACE) systemStarted = true
         if (intent?.action == STOP) {
+            if (alwaysOn()) {
+                refreshNotification(true)
+                return START_STICKY
+            }
             close()
             return START_NOT_STICKY
         }
@@ -64,14 +89,6 @@ class FoxVpnService : VpnService() {
             abortStart(getString(R.string.apps_no_valid))
             return
         }
-        if (Store.bypassLan(this) && Build.VERSION.SDK_INT >= 33) {
-            for (range in LAN_RANGES) {
-                try {
-                    builder.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName(range.first), range.second))
-                } catch (e: Exception) {
-                }
-            }
-        }
         val fd = try {
             builder.establish()
         } catch (e: Exception) {
@@ -83,15 +100,20 @@ class FoxVpnService : VpnService() {
         }
         descriptor = fd
         val app = applicationContext
-        val resolver = FoxResolver(FoxLink.WEB_PORT)
+        val resolver = FoxResolver(
+            FoxLink.DNS_PORT,
+            endpoints = DnsPolicy.endpoints(Store.dnsProfile(this), Store.customDns(this), Store.blockAds(this))
+        )
+        this.resolver = resolver
         val engine = FoxStack(
             FileInputStream(fd.fileDescriptor),
             FileOutputStream(fd.fileDescriptor),
             addressOf(LOCAL_ADDRESS),
             resolver,
-            { host, port ->
-                if (FoxRoute.direct(host)) {
-                    FoxSocketPipe.connect(host, port) ?: throw IOException("direct connection failed")
+            { host, address, port ->
+                if (directRoutingAllowed() && FoxRoute.direct(host)) {
+                    val pipe = FoxSocketPipe.connect(address, port) ?: throw IOException("direct connection failed")
+                    DirectPipe(pipe) { directRoutingAllowed() }
                 } else {
                     val location = FoxLink.location ?: throw IOException("not connected yet")
                     val token = FoxStore.pass(app)
@@ -142,11 +164,13 @@ class FoxVpnService : VpnService() {
             current
         }
         root?.stop()
+        DirectPipe.closeAll()
         try {
             stack?.stop()
         } catch (e: Exception) {
         }
         stack = null
+        resolver = null
         try {
             descriptor?.close()
         } catch (e: Exception) {
@@ -185,44 +209,85 @@ class FoxVpnService : VpnService() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL, getString(R.string.fox_title), NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL, getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW)
             )
         }
+        val notification = makeNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFY, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIFY, notification)
+        }
+    }
+
+    private fun makeNotification(): Notification {
         val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
+            this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val stop = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, FoxVpnService::class.java).setAction(STOP),
+            this, 1, Intent(this, FoxVpnService::class.java).setAction(STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val note = NotificationCompat.Builder(this, CHANNEL)
+        val connected = FoxLink.connected
+        val location = FoxLink.location?.country.orEmpty().ifBlank { getString(R.string.fox_title) }
+        val speed = getString(R.string.notification_speed, fmtSpeed(FoxLink.downRate), fmtSpeed(FoxLink.upRate))
+        val total = getString(R.string.notification_usage, fmtBytes(FoxLink.down), fmtBytes(FoxLink.up))
+        val detail = when {
+            connected -> speed
+            FoxLink.error.isNotEmpty() -> FoxLink.error
+            else -> getString(R.string.notification_connecting)
+        }
+        val title = if (connected) getString(R.string.notification_connected, location) else getString(R.string.fox_title)
+        val builder = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_fox_note)
-            .setContentTitle(getString(R.string.fox_title))
-            .setContentText(getString(R.string.fox_notify))
+            .setContentTitle(title)
+            .setContentText(detail)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(if (connected) "$detail\n$total" else detail))
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setContentIntent(open)
-            .addAction(0, getString(R.string.disconnect), stop)
-            .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFY, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFY, note)
+        if (!alwaysOn()) builder.addAction(0, getString(R.string.disconnect), stop)
+        if (connected && FoxLink.since > 0) {
+            builder.setWhen(FoxLink.since).setShowWhen(true).setUsesChronometer(true)
+        } else builder.setShowWhen(false)
+        if (Build.VERSION.SDK_INT >= 36 && connected) {
+            builder.setRequestPromotedOngoing(true)
+                .setShortCriticalText(getString(R.string.focus_chip, compactRate(FoxLink.downRate)))
+        }
+        val notification = builder.build()
+        if (connected) FocusIsland.decorate(this, notification, focusProtocol, getString(R.string.fox_title), getString(R.string.focus_chip, compactRate(FoxLink.downRate)))
+        return notification
+    }
+
+    private fun compactRate(rate: Double): String {
+        val value = rate.coerceAtLeast(0.0)
+        return when {
+            value < 1000 -> "${value.toInt()} B/s"
+            value < 999_500 -> String.format(Locale.US, "%.1fK/s", value / 1000)
+            value < 999_500_000 -> String.format(Locale.US, "%.1fM/s", value / 1_000_000)
+            else -> String.format(Locale.US, "%.1fG/s", value / 1_000_000_000)
+        }
+    }
+
+    private fun refreshNotification(force: Boolean = false) {
+        if (!alive || descriptor == null) return
+        val state = "${FoxLink.connected}|${FoxLink.connecting}|${FoxLink.error}|$focusProtocol"
+        val now = SystemClock.elapsedRealtime()
+        if (!force && state == lastNoticeState && now - lastNoticeAt < 2000) return
+        lastNoticeState = state
+        lastNoticeAt = now
+        try {
+            getSystemService(NotificationManager::class.java).notify(NOTIFY, makeNotification())
+        } catch (_: Exception) {
         }
     }
 
     companion object {
         const val LOCAL_ADDRESS = "10.111.0.2"
-        val LAN_RANGES = arrayOf(
-            "10.0.0.0" to 8,
-            "172.16.0.0" to 12,
-            "192.168.0.0" to 16,
-            "169.254.0.0" to 16
-        )
         const val DNS_ADDRESS = "10.111.0.53"
         private const val CHANNEL = "fox_vpn"
         private const val NOTIFY = 7412
@@ -263,7 +328,42 @@ class FoxVpnService : VpnService() {
             instance?.activateRoot()
         }
 
+        fun updateNotification() {
+            instance?.refreshNotification()
+        }
+
         fun isAlive(): Boolean = alive
+
+        fun lockdownState(): Int {
+            val service = instance ?: return 0
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || service.descriptor == null) return 0
+            return try {
+                when {
+                    service.isLockdownEnabled -> 3
+                    service.isAlwaysOn -> 2
+                    else -> 1
+                }
+            } catch (_: Exception) {
+                0
+            }
+        }
+
+        fun alwaysOn(): Boolean {
+            val service = instance ?: return false
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return service.systemStarted
+            val state = lockdownState()
+            return state >= 2 || (state == 0 && service.systemStarted)
+        }
+
+        fun directAddress(host: String): String? = instance?.resolver?.directAddress(host)
+
+        fun directRoutingAllowed(): Boolean {
+            val service = instance ?: return false
+            if (service.descriptor == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+            return try { !service.isLockdownEnabled } catch (_: Exception) { false }
+        }
+
+        fun lockdownActive(): Boolean = instance != null && !directRoutingAllowed()
 
         fun addressOf(text: String): Int {
             val parts = text.split(".")

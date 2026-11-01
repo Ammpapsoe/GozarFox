@@ -6,6 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
+import android.transition.TransitionManager
+import androidx.core.widget.NestedScrollView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +27,8 @@ class SettingsFragment : Fragment() {
     private var updateChecking = false
     private var rootChecking = false
     private var appPicker: AppPicker? = null
+    private var section = ""
+    private var changingSwitch = false
     private val listener: () -> Unit = { if (isAdded && view != null) paint() }
 
     private fun <T : View> find(id: Int): T = view!!.findViewById(id)
@@ -33,18 +38,34 @@ class SettingsFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        section = savedInstanceState?.getString("section").orEmpty()
+        find<View>(R.id.sectionAccountButton).setOnClickListener { showSection("account") }
+        find<View>(R.id.sectionSecurityButton).setOnClickListener { showSection("security") }
+        find<View>(R.id.sectionConnectionButton).setOnClickListener { showSection("connection") }
+        find<View>(R.id.sectionAppearanceButton).setOnClickListener { showSection("appearance") }
+        find<View>(R.id.sectionGeneralButton).setOnClickListener { showSection("general") }
+        find<View>(R.id.rowKillSwitch).setOnClickListener { explainLockdown() }
+        find<View>(R.id.rowDns).setOnClickListener { pickDns() }
+        find<View>(R.id.rowNotifications).setOnClickListener { openNotificationSettings() }
+        find<View>(R.id.rowAds).setOnClickListener { requestAdBlocking(!Store.blockAds(requireContext())) }
+        find<MaterialSwitch>(R.id.swAds).setOnCheckedChangeListener { _, checked ->
+            if (!changingSwitch) requestAdBlocking(checked)
+        }
+        showSection(section, false)
         bind(R.id.rowGeo, R.id.swGeo, Store.geolocation(requireContext())) { Store.setGeolocation(requireContext(), it) }
         bind(R.id.rowRecents, R.id.swRecents, Store.recents(requireContext())) { Store.setRecents(requireContext(), it) }
 
-        find<View>(R.id.btnBack).setOnClickListener { (activity as? MainActivity)?.showHome() }
+        find<View>(R.id.btnBack).setOnClickListener {
+            if (!goBack()) (activity as? MainActivity)?.showHome()
+        }
         find<View>(R.id.rowLang).setOnClickListener { pickLanguage() }
         find<View>(R.id.rowTheme).setOnClickListener { pickTheme() }
         find<View>(R.id.rowUpdate).setOnClickListener { checkUpdates() }
         find<View>(R.id.rowGithub).setOnClickListener { openProject() }
         find<View>(R.id.rowAbout).setOnClickListener { showLegalNotice() }
-        find<View>(R.id.rowRouting).setOnClickListener { pickRouting() }
-        find<View>(R.id.rowChain).setOnClickListener { editChain() }
-        find<View>(R.id.rowApps).setOnClickListener { pickApps() }
+        find<View>(R.id.rowRouting).setOnClickListener { changeProtection { pickRouting() } }
+        find<View>(R.id.rowChain).setOnClickListener { changeProtection { editChain() } }
+        find<View>(R.id.rowApps).setOnClickListener { changeProtection { pickApps() } }
         find<View>(R.id.rowRoot).setOnClickListener { pickRoot() }
         find<View>(R.id.rowDonate).setOnClickListener { showDonation() }
         find<View>(R.id.btnAccounts).setOnClickListener { showAccounts() }
@@ -54,11 +75,13 @@ class SettingsFragment : Fragment() {
         }
         find<View>(R.id.btnSignOut).setOnClickListener { askSignOut() }
         Fox.watch(listener)
+        FoxLink.watch(listener)
         paint()
     }
 
     override fun onDestroyView() {
         Fox.unwatch(listener)
+        FoxLink.unwatch(listener)
         appPicker?.dismiss()
         appPicker = null
         super.onDestroyView()
@@ -67,6 +90,41 @@ class SettingsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         paint()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("section", section)
+        super.onSaveInstanceState(outState)
+    }
+
+    fun goBack(): Boolean {
+        if (section.isEmpty()) return false
+        showSection("")
+        return true
+    }
+
+    private fun showSection(value: String, animate: Boolean = true) {
+        section = value
+        if (view == null) return
+        val entries = listOf(
+            "" to R.id.settingsOverview,
+            "account" to R.id.settingsAccount,
+            "security" to R.id.settingsSecurity,
+            "connection" to R.id.settingsConnection,
+            "appearance" to R.id.settingsAppearance,
+            "general" to R.id.settingsGeneral
+        )
+        if (animate) TransitionManager.beginDelayedTransition(find<View>(R.id.settingsOverview).parent as ViewGroup)
+        for ((name, id) in entries) find<View>(id).visibility = if (name == section) View.VISIBLE else View.GONE
+        find<TextView>(R.id.settingsTitle).setText(when (section) {
+            "account" -> R.string.settings_account
+            "security" -> R.string.settings_security
+            "connection" -> R.string.connection_section
+            "appearance" -> R.string.visual
+            "general" -> R.string.settings_general
+            else -> R.string.settings
+        })
+        find<NestedScrollView>(R.id.settingsScroll).scrollTo(0, 0)
     }
 
     fun restore(intent: Intent?) {
@@ -83,6 +141,23 @@ class SettingsFragment : Fragment() {
     private fun paint() {
         if (view == null) return
         val context = context ?: return
+        find<TextView>(R.id.tvKillSwitch).setText(when (FoxVpnService.lockdownState()) {
+            3 -> R.string.kill_active
+            2 -> R.string.kill_always
+            1 -> R.string.kill_off
+            else -> R.string.kill_unknown
+        })
+        val blocking = Store.blockAds(context)
+        changingSwitch = true
+        find<MaterialSwitch>(R.id.swAds).isChecked = blocking
+        changingSwitch = false
+        find<TextView>(R.id.tvAds).setText(if (blocking) R.string.ad_block_on else R.string.ad_block_off)
+        find<TextView>(R.id.tvDns).text = if (blocking) getString(R.string.dns_overridden) else when (Store.dnsProfile(context)) {
+            DnsPolicy.CLOUDFLARE -> getString(R.string.dns_cloudflare)
+            DnsPolicy.QUAD9 -> getString(R.string.dns_quad9)
+            DnsPolicy.CUSTOM -> Store.customDns(context)
+            else -> getString(R.string.dns_auto)
+        }
         val signed = Fox.signedIn(context)
         val mail = FoxStore.email(context)
         find<TextView>(R.id.tvAccountEmail).text =
@@ -102,10 +177,13 @@ class SettingsFragment : Fragment() {
         find<UsageMeterView>(R.id.usageMeter).setProgress(percent)
         find<View>(R.id.btnAccountRefresh).isEnabled = signed
 
-        find<TextView>(R.id.tvRouting).text = if (Store.bypassLan(context) || Store.bypassList(context).isNotBlank()) {
-            getString(R.string.routing_on, FoxRoute.split(Store.bypassList(context)).size + if (Store.bypassLan(context)) 1 else 0)
-        } else {
-            getString(R.string.routing_off)
+        val hasDirectRoutes = Store.bypassLan(context) || Store.bypassList(context).isNotBlank()
+        val directGuarded = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
+            (FoxVpnService.isAlive() && FoxVpnService.lockdownActive())
+        find<TextView>(R.id.tvRouting).text = when {
+            !hasDirectRoutes -> getString(R.string.routing_off)
+            directGuarded -> getString(R.string.routing_guarded)
+            else -> getString(R.string.routing_on, FoxRoute.split(Store.bypassList(context)).size + if (Store.bypassLan(context)) 1 else 0)
         }
         val hops = FoxUpstream.parse(Store.chain(context)).size
         find<TextView>(R.id.tvChain).text =
@@ -144,6 +222,122 @@ class SettingsFragment : Fragment() {
         }
     }
 
+
+    private fun explainLockdown() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.kill_switch)
+            .setMessage(R.string.kill_message)
+            .setNegativeButton(R.string.close, null)
+            .setPositiveButton(R.string.kill_open) { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_VPN_SETTINGS))
+                } catch (_: Exception) {
+                    toast(R.string.kill_no_settings)
+                }
+            }
+            .show()
+    }
+
+    private fun changeProtection(action: () -> Unit) {
+        if (FoxVpnService.alwaysOn()) {
+            showAlwaysOnSettings(requireContext())
+            paint()
+            return
+        }
+        if (FoxLink.connected || FoxLink.connecting || FoxVpnService.isAlive()) {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.settings_protection)
+                .setMessage(R.string.change_disconnect)
+                .setNegativeButton(R.string.cancel) { _, _ -> paint() }
+                .setOnCancelListener { paint() }
+                .setPositiveButton(R.string.disconnect) { _, _ ->
+                    FoxVpnService.stop(requireContext())
+                    action()
+                    paint()
+                }
+                .show()
+        } else {
+            action()
+            paint()
+        }
+    }
+
+    private fun requestAdBlocking(enabled: Boolean) {
+        val c = requireContext()
+        paint()
+        if (enabled == Store.blockAds(c)) return
+        if (enabled) {
+            MaterialAlertDialogBuilder(c)
+                .setTitle(R.string.ad_block)
+                .setMessage(R.string.ad_block_detail)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.ok) { _, _ -> changeProtection { Store.setBlockAds(c, true) } }
+                .show()
+        } else changeProtection { Store.setBlockAds(c, false) }
+    }
+
+    private fun pickDns() {
+        val c = requireContext()
+        val labels = arrayOf(getString(R.string.dns_auto), getString(R.string.dns_cloudflare), getString(R.string.dns_quad9), getString(R.string.dns_custom))
+        val values = arrayOf(DnsPolicy.AUTO, DnsPolicy.CLOUDFLARE, DnsPolicy.QUAD9, DnsPolicy.CUSTOM)
+        MaterialAlertDialogBuilder(c)
+            .setTitle(R.string.dns_title)
+            .setSingleChoiceItems(labels, values.indexOf(Store.dnsProfile(c)).coerceAtLeast(0)) { dialog, index ->
+                dialog.dismiss()
+                val selected = values[index]
+                if (selected == DnsPolicy.CUSTOM) editDns() else if (selected != Store.dnsProfile(c)) {
+                    changeProtection { Store.setDnsProfile(c, selected) }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun editDns() {
+        val c = requireContext()
+        val content = layoutInflater.inflate(R.layout.dialog_text_value, null)
+        content.findViewById<TextView>(R.id.dialogTextHint).setText(R.string.dns_prompt)
+        val box = content.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.dialogTextBox)
+        val field = content.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogTextInput)
+        field.setHint(R.string.dns_example)
+        field.setSingleLine(true)
+        field.setText(Store.customDns(c))
+        val dialog = MaterialAlertDialogBuilder(c)
+            .setTitle(R.string.dns_custom)
+            .setView(content)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.routing_save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val value = field.text?.toString().orEmpty().trim()
+                if (!DnsPolicy.validCustom(value)) {
+                    box.error = getString(R.string.dns_invalid)
+                } else {
+                    dialog.dismiss()
+                    changeProtection {
+                        Store.setCustomDns(c, value)
+                        Store.setDnsProfile(c, DnsPolicy.CUSTOM)
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun openNotificationSettings() {
+        val c = requireContext()
+        try {
+            val intent = if (android.os.Build.VERSION.SDK_INT >= 26) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName)
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${c.packageName}"))
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            toast(R.string.kill_no_settings)
+        }
+    }
 
     private fun pickRouting() {
         val context = requireContext()
@@ -206,6 +400,10 @@ class SettingsFragment : Fragment() {
 
     private fun pickRoot() {
         if (rootChecking) return
+        if (FoxVpnService.alwaysOn()) {
+            showAlwaysOnSettings(requireContext())
+            return
+        }
         val context = requireContext()
         if (FoxLink.connected || FoxLink.connecting || FoxVpnService.isAlive()) {
             MaterialAlertDialogBuilder(context)
@@ -294,6 +492,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun withDisconnected(action: () -> Unit) {
+        if (FoxVpnService.alwaysOn()) {
+            showAlwaysOnSettings(requireContext())
+            return
+        }
         if (Fox.busy) {
             toast(R.string.account_wait)
             return
@@ -313,6 +515,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun askSignOut() {
+        if (FoxVpnService.alwaysOn()) {
+            showAlwaysOnSettings(requireContext())
+            return
+        }
         if (Fox.busy) {
             toast(R.string.account_wait)
             return

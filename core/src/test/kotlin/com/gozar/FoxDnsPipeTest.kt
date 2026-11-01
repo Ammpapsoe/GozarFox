@@ -17,7 +17,7 @@ class FoxDnsPipeTest {
             val response = q.copyOf().apply { this[2] = 0x81.toByte(); this[3] = 0x80.toByte(); this[7] = 1 }
             response + byteArrayOf(0xc0.toByte(), 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 1, 2, 3, 4)
         })
-        val stack = FoxStack(java.io.ByteArrayInputStream(byteArrayOf()), java.io.ByteArrayOutputStream(), 0, resolver, { _, _ -> throw AssertionError() }, { _, _ -> })
+        val stack = FoxStack(java.io.ByteArrayInputStream(byteArrayOf()), java.io.ByteArrayOutputStream(), 0, resolver, { _, _, _ -> throw AssertionError() }, { _, _ -> })
         val pipe = stack.dnsPipe()
         val request = query(7)
         val framed = byteArrayOf(0, request.size.toByte()) + request

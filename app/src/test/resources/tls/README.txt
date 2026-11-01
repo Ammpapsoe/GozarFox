@@ -1,0 +1,1 @@
+This loopback TLS fixture is public and is used only by local unit tests. It is not an application signing key and must not be used for production connections. The test resources are not packaged in release APKs.

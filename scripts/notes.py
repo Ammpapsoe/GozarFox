@@ -59,74 +59,31 @@ print('The Windows EXE and Linux DEB include the app, native core, libraries and
       'Portable archives are also available. Separate core downloads are native developer components, not graphical apps. '
       'Desktop downloads are individually limited to under 17 MB and do not include a JVM.')
 print()
-print('## Adaptive tunneling')
+print('## Added')
 print()
-print('- **Android:** Gozar chooses between HTTPS CONNECT over HTTP/2 and HTTP/1.1 for new connections, '
-      'using endpoint-specific connection timing and temporary failure history. It periodically samples the alternative and keeps certificate and hostname verification enabled.')
-print('- **Desktop:** the core reuses a small pool of HTTP/2 connections and can try HTTP/3 CONNECT when the selected endpoint and network actually accept it. '
-      'It falls back to HTTP/2 or HTTP/1.1 when appropriate. A configured TCP proxy chain is never bypassed to try HTTP/3. '
-      'The selector learns from new connection attempts; it does not move existing connections or guarantee the fastest path.')
-print('- HTTP/3 was exercised against a local simulated proxy, including session reuse and rejection of an untrusted certificate. '
-      'Support on a particular Firefox endpoint or network has not been established. HTTP/3 to a proxy does **not** mean arbitrary destination UDP is supported.')
+print('- **Android protection:** system Always-on VPN and Block connections without VPN settings, '
+      'with available system status and automatic retry. Direct routes are disabled under lockdown and on Android 9 or earlier, '
+      'where lockdown status is not available; LAN bypass covers TCP only.')
+print('- **Android DNS:** choose an encrypted DNS provider or a custom HTTPS endpoint. '
+      'Optional AdGuard DNS filtering blocks many advertising, tracking and malicious domains; '
+      'it cannot block every ad or traffic using its own DNS or bypassing the VPN.')
+print('- **Android connection information:** an ongoing notification, live upload/download rates, '
+      'session totals and a traffic chart. Supported Android versions may promote the notification; '
+      'Xiaomi Focus/Super Island requires a compatible device, Xiaomi authorization and an app ID; '
+      'an app ID is not configured for this release.')
+print('- **Desktop:** a compact Windows window with custom controls, server flags and traffic rates; '
+      'Linux and macOS retain their native window frames. Settings are organized into sections, '
+      'with a brief visual refresh across the apps.')
+print('- Improved relay startup verification and proxy connection cleanup.')
 print()
-print('## Reliability fixes')
+print('## Platform notes')
 print()
-print('- Fixed an Android TCP upload path that could acknowledge data without retaining it under backpressure. '
-      'The tunnel now bounds its queue, reopens the receive window as space becomes available, and closes a connection that completes after its flow was cancelled.')
-print('- Updated Android DNS handling to allow concurrent lookups, honor bounded response TTLs, avoid caching failed answers as successful results, '
-      'and recover after failures instead of remaining latched. Large UDP answers are marked truncated so clients can retry over TCP; TCP DNS requests use the same DNS-over-HTTPS path and teach the tunnel domain routing from the answer. A specific route for the in-tunnel DNS address also takes precedence over an optional LAN exclusion.')
-print('- Improved HTTP/2 handling of padded frames, data frames larger than the caller’s read buffer, long authorization headers, flow-control windows, write errors, and TCP half-close. '
-      'Fallback does not disable TLS verification.')
-print('- Fixed native TUN packet headroom for modern Linux TUN offload and macOS utun, released incoming packet buffers correctly, '
-      'and made device read/write failures stop the tunnel rather than silently dropping packets. Linux proxy bypass follows the actual route selected for the upstream, including direct and non-default-interface routes; cleanup removes only Gozar-created bypass routes and leaves newer DNS changes intact. On Windows, tunnel startup waits until the adapter is up and its address is preferred before directing traffic to it; default-route selection uses the lowest available metric.')
-print('- Android and desktop now schedule proxy-pass renewal before the advertised expiry, retry temporary failures, '
-      'and stop the renewal task on disconnect. New desktop connections read the current pass instead of a token captured at connection time. '
-      'Account and connection generation checks prevent a cancelled renewal from replacing a newer session.')
+print('Android lockdown is controlled by Android, not an in-app switch, and system or per-app exceptions can apply. '
+      'Root routing remains experimental. The new Android features and Xiaomi presentation have not been verified on a physical device.')
 print()
-print('## Android root routing — experimental and opt-in')
+print('Linux and macOS still require suitable privileges for the desktop TUN; abrupt termination can leave routes or DNS changed. '
+      'Windows is not Authenticode-signed and macOS is not notarized. '
+      'Local mock-relay tests do not establish interoperability with a real Firefox server.')
 print()
-print('A new Settings option requests superuser permission using `su` and checks for UID 0. '
-      'Only after explicit consent does Gozar attempt extra routing for IPv4 TCP and DNS from root-owned processes while the normal VPN is connected. '
-      'It attempts to preserve protected/explicitly selected sockets and LAN bypass, uses source NAT for the tunnel, '
-      'and removes its own rules on normal disconnect or partial setup failure. A process watchdog attempts cleanup after an app crash.')
-print()
-print('**Important:** no rooted Android device was available for physical verification. '
-      'Firewall implementations, policy marks, SELinux, NAT and crash cleanup vary by device; the option may fail or affect connectivity. '
-      'Non-DNS UDP, IPv6 and some kernel-originated traffic may remain outside the tunnel. Per-app selection does not define the UID 0 policy. '
-      'Do not rely on this experimental option for leak protection or assume it covers all device traffic.')
-print()
-print('## Android interface and Android 13')
-print()
-print('- The per-app sheet appears immediately with a loading indicator while installed and system applications are enumerated. '
-      'It can be dismissed during loading; filtering and selection remain available after loading.')
-print('- The account switcher now presents the active account, saved alternatives and an add-account action in a clearer sheet. '
-      'Switching or adding an account disconnects the active VPN first; signing out returns to sign-in.')
-print('- The Android 13 certificate-chain fix from the preceding release remains in place. '
-      'The user reports that their friend tested that earlier fix on the affected Android 13 phone and successfully connected. '
-      'This release has not separately been verified on that phone; certificate and hostname checks remain enabled.')
-print()
-print('## Desktop and platform limits')
-print()
-print('The Windows installer installs per user and offers an optional desktop shortcut. Windows requests administrator approval when the app starts. '
-      'The EXE is not Authenticode-signed. macOS builds are ad-hoc signed and not notarized. '
-      '**Linux and macOS do not yet have an automatic privilege helper:** a normal unprivileged launch can sign in but cannot start the TUN; '
-      'the app must already have suitable administrator privileges. The Linux desktop shortcut starts without them. '
-      'Graphical execution with elevated privileges depends on the desktop environment; a safer privilege helper remains future work. '
-      'Normal disconnect restores Gozar-managed routes and DNS, but forced termination or a crash can leave changes behind, '
-      'especially on Linux and macOS; network settings may need manual recovery. '
-      'Real Linux TUN, Windows Wintun and macOS utun devices were exercised with local mock upstream and DNS services. '
-      'The tests covered TCP uploads, half-close, UDP/TCP DNS and shutdown. An additional real-TUN test sends concurrent TCP traffic through a locally simulated, TLS-verified HTTP/2 CONNECT proxy. '
-      'These tests do not verify connectivity to a real Firefox server or production account.')
-print()
-print('Desktop per-app and per-domain routing, a dedicated LAN-bypass control and a route map are not implemented. '
-      'The existing proxy-chain editor accepts unauthenticated SOCKS5 and HTTP CONNECT hops; changes require disconnection. '
-      'IPv6 and general non-DNS UDP coverage are not established. No leak-free, universal-coverage, '
-      'or network-speed guarantee is made. Windows interface “No Internet” indicators can reflect Windows connectivity checks '
-      'or a real connectivity problem and should be investigated separately.')
-print()
-print('## Verification and signing')
-print()
-print('Automated unit tests and local simulations cover the changed tunnel, resolver, selector, root command planning and interface paths; '
-      'they do not replace testing with real accounts and networks. Each application and core download is accompanied by a detached OpenPGP signature; '
-      '`gozar-public-key.asc` is provided for verification. The Android release APKs must be signed with the existing official Android key to upgrade an existing install. '
-      'Do not substitute a debug or newly generated key as an official upgrade.')
+print('Android updates must use the existing release signing key. Downloads are accompanied by detached OpenPGP signatures '
+      'and the verification key.')

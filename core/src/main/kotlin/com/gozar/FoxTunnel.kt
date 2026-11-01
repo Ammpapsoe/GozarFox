@@ -30,6 +30,10 @@ class FoxDuplex(
     private var ended = false
     @Volatile private var closed = false
 
+    internal fun setReadTimeout(timeout: Int) {
+        socket.soTimeout = timeout
+    }
+
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (!h2) return input.read(buffer, offset, length)
         if (length == 0) return 0
@@ -410,9 +414,16 @@ object FoxTunnel {
         }
     }
 
+    fun verify(location: FoxLocation, pass: String) {
+        RelayCheck.verify { target -> open(location, target, 443, pass, 8000) }
+    }
+
+    fun passRejected(error: Exception): Boolean = RelayCheck.passRejected(error)
+
     fun probe(location: FoxLocation, pass: String): String {
-        val tunnel = open(location, "ifconfig.me", 80, pass)
+        val tunnel = open(location, "ifconfig.me", 80, pass, 8000)
         try {
+            tunnel.setReadTimeout(8000)
             val request = "GET /ip HTTP/1.1\r\nHost: ifconfig.me\r\nUser-Agent: curl/8\r\nAccept: */*\r\nConnection: close\r\n\r\n"
             tunnel.write(request.toByteArray(Charsets.US_ASCII), 0, request.length)
             val out = ByteArrayOutputStream()

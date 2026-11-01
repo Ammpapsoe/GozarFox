@@ -137,7 +137,7 @@ class FoxTunnelTest {
             val output = PacketOutput()
             FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
             val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
-            val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, port ->
+            val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, _, port ->
                 FoxTunnel.open(location, host, port, "local-test-only", 4000)
             }, { _, _ -> })
             stack.start()

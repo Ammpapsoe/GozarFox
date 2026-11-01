@@ -67,6 +67,8 @@ class CoreState {
     this.remaining = 0,
     this.rateDown = 0,
     this.rateUp = 0,
+    this.down = 0,
+    this.up = 0,
     this.version = '',
     this.server,
     this.servers = const [],
@@ -89,6 +91,8 @@ class CoreState {
   final int remaining;
   final int rateDown;
   final int rateUp;
+  final int down;
+  final int up;
   final String version;
   final Place? server;
   final List<Place> servers;
@@ -119,6 +123,8 @@ class CoreState {
       remaining: (json['remaining'] as num?)?.toInt() ?? 0,
       rateDown: (json['rate_down'] as num?)?.toInt() ?? 0,
       rateUp: (json['rate_up'] as num?)?.toInt() ?? 0,
+      down: (json['down'] as num?)?.toInt() ?? 0,
+      up: (json['up'] as num?)?.toInt() ?? 0,
       version: json['version'] as String? ?? '',
       server:
           rawServer is Map<String, dynamic> ? Place.fromJson(rawServer) : null,

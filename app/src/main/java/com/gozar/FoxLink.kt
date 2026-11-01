@@ -3,12 +3,17 @@ package com.gozar
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import java.util.ArrayDeque
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.concurrent.thread
 
 object FoxLink {
 
     const val SOCKS_PORT = 10810
     const val WEB_PORT = 10811
+    const val DNS_PORT = 10812
 
     @Volatile var connected = false
     @Volatile var connecting = false
@@ -16,26 +21,36 @@ object FoxLink {
     @Volatile var location: FoxLocation? = null
     @Volatile var exitIp: String = ""
     @Volatile var since: Long = 0L
-    @Volatile var down: Long = 0L
-    @Volatile var up: Long = 0L
+    private val downBytes = AtomicLong()
+    private val upBytes = AtomicLong()
+    val down: Long get() = downBytes.get()
+    val up: Long get() = upBytes.get()
     @Volatile var downRate: Double = 0.0
     @Volatile var upRate: Double = 0.0
 
     private var socks: FoxProxy? = null
     private var web: FoxProxy? = null
+    private var dns: FoxProxy? = null
+    private val historyLock = Any()
+    private val history = ArrayDeque<Pair<Float, Float>>()
     private val stateLock = Any()
     private var generation = 0L
     private val main = Handler(Looper.getMainLooper())
-    private var lastDown = 0L
-    private var lastUp = 0L
-    private var lastAt = 0L
     private var ticker: Thread? = null
     private var renewer: Thread? = null
 
     var onChange: (() -> Unit)? = null
+    private val listeners = CopyOnWriteArrayList<() -> Unit>()
+
+    fun watch(listener: () -> Unit) { listeners.addIfAbsent(listener) }
+    fun unwatch(listener: () -> Unit) { listeners.remove(listener) }
 
     fun tick() {
-        main.post { onChange?.invoke() }
+        main.post {
+            onChange?.invoke()
+            for (listener in listeners) listener()
+            FoxVpnService.updateNotification()
+        }
     }
 
     fun fault(message: String) {
@@ -44,8 +59,11 @@ object FoxLink {
     }
 
     fun count(inbound: Boolean, bytes: Long) {
-        if (inbound) down += bytes else up += bytes
+        if (bytes <= 0) return
+        if (inbound) downBytes.addAndGet(bytes) else upBytes.addAndGet(bytes)
     }
+
+    fun trafficHistory(): List<Pair<Float, Float>> = synchronized(historyLock) { history.toList() }
 
     fun start(c: Context) {
         val app = c.applicationContext
@@ -79,42 +97,38 @@ object FoxLink {
                     location = chosen
                     socks = FoxProxy(SOCKS_PORT) { FoxStore.pass(app).ifEmpty { null } }
                     web = FoxProxy(WEB_PORT) { FoxStore.pass(app).ifEmpty { null } }
-                    if (socks?.start() != true || web?.start() != true) {
+                    dns = FoxProxy(DNS_PORT, forceTunnel = true, countTraffic = false) { FoxStore.pass(app).ifEmpty { null } }
+                    if (socks?.start() != true || web?.start() != true || dns?.start() != true) {
                         throw FoxError("The local proxy did not start")
                     }
                 }
-                val detected = try {
-                    FoxTunnel.probe(chosen, pass.token)
+                try {
+                    FoxTunnel.verify(chosen, pass.token)
                 } catch (e: Exception) {
-                    if (FoxTunnel.isTlsFailure(e)) throw e
-                    val reason = e.message ?: ""
-                    if (reason.contains("rejected the pass") || reason.contains("pass was refused") || reason.contains("no status")) {
-                        if (!current(attempt)) return@thread
-                        val renewed = Fox.validAccess(app)
-                        pass = FoxApi.pass(renewed.token)
-                        if (!storePass(app, pass, renewed, attempt)) return@thread
-                        FoxTunnel.probe(chosen, pass.token)
-                    } else if (reason.contains("allowance") || reason.contains("region") || reason.contains("access") || reason.contains("rejected") || reason.contains("closed the connection")) {
-                        throw FoxError(reason)
-                    } else {
-                        ""
-                    }
+                    if (!FoxTunnel.passRejected(e)) throw e
+                    if (!current(attempt)) return@thread
+                    val renewed = Fox.validAccess(app)
+                    pass = FoxApi.pass(renewed.token)
+                    if (!storePass(app, pass, renewed, attempt)) return@thread
+                    FoxTunnel.verify(chosen, pass.token)
                 }
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
-                    exitIp = detected
+                    exitIp = ""
                     connected = true
                     connecting = false
                     since = System.currentTimeMillis()
-                    down = 0L
-                    up = 0L
+                    downBytes.set(0L)
+                    upBytes.set(0L)
+                    synchronized(historyLock) { history.clear() }
                     error = ""
                     if (Store.recents(app)) Store.setLastServer(app, chosen.host)
-                    startTicker()
+                    startTicker(attempt)
                     startRenewal(app, attempt)
                 }
                 tick()
                 FoxVpnService.activateRoot()
+                detectExit(chosen, pass.token, attempt)
             } catch (e: Exception) {
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
@@ -128,7 +142,26 @@ object FoxLink {
                     stopServers()
                 }
                 tick()
+                if (FoxVpnService.alwaysOn()) {
+                    main.postDelayed({
+                        if (current(attempt) && FoxVpnService.isAlive() && FoxVpnService.alwaysOn() && !connected && !connecting) start(app)
+                    }, 15_000L)
+                }
             }
+        }
+    }
+
+    private fun detectExit(location: FoxLocation, token: String, attempt: Long) {
+        thread(isDaemon = true, name = "fox-exit-ip") {
+            val value = try { FoxTunnel.probe(location, token) } catch (_: Exception) { "" }
+            if (value.isEmpty()) return@thread
+            val changed = synchronized(stateLock) {
+                if (attempt != generation || !connected) false else {
+                    exitIp = value
+                    true
+                }
+            }
+            if (changed) tick()
         }
     }
 
@@ -140,8 +173,11 @@ object FoxLink {
             else FoxStore.saveUsage(app, pass, access.id, access.revision)
         }
 
-    fun stop() {
+    fun stop() = stopAttempt(null, "")
+
+    private fun stopAttempt(attempt: Long?, reason: String) {
         synchronized(stateLock) {
+            if (attempt != null && attempt != generation) return
             generation += 1
             stopServers()
             connected = false
@@ -150,7 +186,7 @@ object FoxLink {
             downRate = 0.0
             upRate = 0.0
             since = 0L
-            error = ""
+            error = reason
             stopTicker()
             stopRenewal()
         }
@@ -160,33 +196,48 @@ object FoxLink {
     private fun stopServers() {
         socks?.stop()
         web?.stop()
+        dns?.stop()
         socks = null
         web = null
+        dns = null
     }
 
-    private fun startTicker() {
+    private fun startTicker(attempt: Long) {
         stopTicker()
-        lastDown = down
-        lastUp = up
-        lastAt = System.currentTimeMillis()
         ticker = thread(isDaemon = true, name = "fox-meter") {
-            while (connected) {
+            var lastDown = down
+            var lastUp = up
+            var lastAt = SystemClock.elapsedRealtime()
+            while (current(attempt) && connected) {
                 try {
                     Thread.sleep(1000)
                 } catch (e: InterruptedException) {
                     break
                 }
+                if (!current(attempt) || !connected) break
+                if (!FoxVpnService.directRoutingAllowed()) DirectPipe.closeAll()
                 if (!FoxVpnService.isAlive()) {
-                    error = "The system closed the tunnel"
-                    stop()
+                    stopAttempt(attempt, "The system closed the tunnel")
                     break
                 }
-                val now = System.currentTimeMillis()
+                val now = SystemClock.elapsedRealtime()
                 val span = (now - lastAt).coerceAtLeast(1)
-                downRate = (down - lastDown) * 1000.0 / span
-                upRate = (up - lastUp) * 1000.0 / span
-                lastDown = down
-                lastUp = up
+                val totalDown = down
+                val totalUp = up
+                val applied = synchronized(stateLock) {
+                    if (attempt != generation || !connected) false else {
+                        downRate = (totalDown - lastDown).coerceAtLeast(0) * 1000.0 / span
+                        upRate = (totalUp - lastUp).coerceAtLeast(0) * 1000.0 / span
+                        synchronized(historyLock) {
+                            history.addLast(downRate.coerceAtLeast(0.0).toFloat() to upRate.coerceAtLeast(0.0).toFloat())
+                            while (history.size > 60) history.removeFirst()
+                        }
+                        true
+                    }
+                }
+                if (!applied) break
+                lastDown = totalDown
+                lastUp = totalUp
                 lastAt = now
                 tick()
             }
