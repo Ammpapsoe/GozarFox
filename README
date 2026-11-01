@@ -61,6 +61,11 @@ Authenticode-signed, and macOS builds are not notarized. Desktop DNS queries
 use DNS over HTTPS through the authenticated Firefox proxy; unsupported UDP is refused so clients
 can fall back to TCP when they support it. Windows route commands do not open console windows.
 
+The compact desktop dashboard uses a frameless window, a draggable header, and a real connect
+control. Relay location, exit address, traffic and usage are shown only when available. The firewall
+control is unavailable: this build does not implement a desktop kill switch. On ordinary window
+close, the application requests tunnel shutdown before exiting; forced termination is different.
+
 The desktop tunnel is experimental. Real Linux, Windows and macOS tunnel interfaces were tested
 with local simulated upstreams; the new Linux code has also been retested with a local TLS-verified
 HTTP/2 CONNECT relay. These tests do not verify a connection to a real Firefox proxy. The new

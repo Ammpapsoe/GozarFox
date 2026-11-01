@@ -46,8 +46,8 @@ class TrafficChartView @JvmOverloads constructor(
         }
         if (samples.size < 2) return
         val peak = max(1024f, samples.maxOf { max(it.first, it.second) })
-        drawSeries(canvas, left, top, right, bottom, peak, true, R.color.fox_red)
-        drawSeries(canvas, left, top, right, bottom, peak, false, R.color.fox_orange)
+        drawSeries(canvas, left, top, right, bottom, peak, true, R.color.kind_down)
+        drawSeries(canvas, left, top, right, bottom, peak, false, R.color.kind_up)
     }
 
     private fun drawSeries(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float, peak: Float, download: Boolean, color: Int) {

@@ -160,6 +160,8 @@ class SettingsFragment : Fragment() {
         }
         val signed = Fox.signedIn(context)
         val mail = FoxStore.email(context)
+        find<TextView>(R.id.tvSettingsOverviewAccount).text =
+            if (signed && mail.isNotBlank()) mail else getString(R.string.settings_account_desc)
         find<TextView>(R.id.tvAccountEmail).text =
             if (signed) mail else getString(R.string.fox_signed_out)
         find<TextView>(R.id.tvAccountInitial).text =
@@ -168,13 +170,16 @@ class SettingsFragment : Fragment() {
         val used = (limit - Fox.remaining).coerceAtLeast(0)
         val left = Fox.remaining.coerceAtLeast(0)
         val percent = if (limit > 0) ((used * 100) / limit).toInt().coerceIn(0, 100) else 0
-        find<TextView>(R.id.tvAccountPlan).text = getString(R.string.account_free)
-        find<TextView>(R.id.tvUsagePercent).text = "$percent%"
+        find<TextView>(R.id.tvAccountPlan).text = getString(R.string.settings_account)
+        find<TextView>(R.id.tvUsagePercent).text = if (limit > 0) "$percent%" else "—"
         find<TextView>(R.id.tvUsageUsed).text =
-            if (limit > 0) getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit))) else getString(R.string.account_free)
+            if (limit > 0) getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit))) else getString(R.string.fox_usage_pending)
         find<TextView>(R.id.tvUsageLeft).text =
             if (limit > 0) getString(R.string.usage_left, ltr(plain(left))) else ""
-        find<UsageMeterView>(R.id.usageMeter).setProgress(percent)
+        find<UsageMeterView>(R.id.usageMeter).apply {
+            visibility = if (limit > 0) View.VISIBLE else View.GONE
+            setProgress(percent)
+        }
         find<View>(R.id.btnAccountRefresh).isEnabled = signed
 
         val hasDirectRoutes = Store.bypassLan(context) || Store.bypassList(context).isNotBlank()

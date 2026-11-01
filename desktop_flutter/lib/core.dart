@@ -9,6 +9,7 @@ class Place {
     required this.city,
     required this.host,
     required this.recommended,
+    this.port = 0,
   });
 
   final String code;
@@ -16,6 +17,7 @@ class Place {
   final String city;
   final String host;
   final bool recommended;
+  final int port;
 
   factory Place.fromJson(Map<String, dynamic> json) => Place(
         code: json['code'] as String? ?? '',
@@ -23,6 +25,7 @@ class Place {
         city: json['city'] as String? ?? '',
         host: json['host'] as String? ?? '',
         recommended: json['recommended'] as bool? ?? false,
+        port: (json['port'] as num?)?.toInt() ?? 0,
       );
 
   String label(bool fa) {
@@ -62,6 +65,8 @@ class CoreState {
     this.connecting = false,
     this.mode = 'tun',
     this.fault = '',
+    this.exit = '',
+    this.device = '',
     this.needsAdmin = false,
     this.limit = 0,
     this.remaining = 0,
@@ -86,6 +91,8 @@ class CoreState {
   final bool connecting;
   final String mode;
   final String fault;
+  final String exit;
+  final String device;
   final bool needsAdmin;
   final int limit;
   final int remaining;
@@ -118,6 +125,8 @@ class CoreState {
       connecting: json['connecting'] as bool? ?? false,
       mode: json['mode'] as String? ?? 'tun',
       fault: json['fault'] as String? ?? '',
+      exit: json['exit'] as String? ?? '',
+      device: json['device'] as String? ?? '',
       needsAdmin: json['needs_admin'] as bool? ?? false,
       limit: (json['limit'] as num?)?.toInt() ?? 0,
       remaining: (json['remaining'] as num?)?.toInt() ?? 0,
@@ -247,6 +256,17 @@ class Core {
       return await waiter.future.timeout(const Duration(seconds: 180));
     } finally {
       _pending.remove(id);
+    }
+  }
+
+  Future<void> shutdown() async {
+    final process = _process;
+    stop();
+    if (process == null) return;
+    try {
+      await process.exitCode.timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      return;
     }
   }
 

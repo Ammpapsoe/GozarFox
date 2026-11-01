@@ -3,24 +3,41 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'core.dart';
 import 'strings.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const GozarApp());
+  await windowManager.ensureInitialized();
+  await windowManager.setPreventClose(true);
+  const options = WindowOptions(
+    size: Size(460, 380),
+    minimumSize: Size(360, 360),
+    center: true,
+    backgroundColor: Colors.transparent,
+    titleBarStyle: TitleBarStyle.hidden,
+    windowButtonVisibility: false,
+    title: 'Gozar',
+  );
+  runApp(const GozarApp(windowControls: true));
+  unawaited(windowManager.waitUntilReadyToShow(options, () async {
+    if (Platform.isWindows) await windowManager.setAsFrameless();
+    await windowManager.show();
+    await windowManager.focus();
+  }));
 }
 
 class GozarApp extends StatefulWidget {
-  const GozarApp({super.key, this.core});
+  const GozarApp({super.key, this.core, this.windowControls = false});
 
   final Core? core;
+  final bool windowControls;
 
   @override
   State<GozarApp> createState() => _GozarAppState();
@@ -80,6 +97,7 @@ class _GozarAppState extends State<GozarApp> with WidgetsBindingObserver {
         ],
         home: GozarScreen(
           core: widget.core,
+          windowControls: widget.windowControls,
           persian: _persian,
           language: _language,
           onLanguageChanged: _changeLanguage,
@@ -92,6 +110,7 @@ class GozarScreen extends StatefulWidget {
   const GozarScreen({
     super.key,
     this.core,
+    required this.windowControls,
     required this.persian,
     required this.language,
     required this.onLanguageChanged,
@@ -99,6 +118,7 @@ class GozarScreen extends StatefulWidget {
   });
 
   final Core? core;
+  final bool windowControls;
   final bool persian;
   final String language;
   final ValueChanged<String> onLanguageChanged;
@@ -108,7 +128,7 @@ class GozarScreen extends StatefulWidget {
   State<GozarScreen> createState() => _GozarScreenState();
 }
 
-class _GozarScreenState extends State<GozarScreen> {
+class _GozarScreenState extends State<GozarScreen> with WindowListener {
   late final Core _core;
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -129,7 +149,6 @@ class _GozarScreenState extends State<GozarScreen> {
   bool _settingsOpen = false;
   bool _windowClosing = false;
   String _settingsSection = '';
-  static const _windowChannel = MethodChannel('gozar/window');
   String? _captchaImage;
   String? _error;
   String? _fatal;
@@ -140,11 +159,7 @@ class _GozarScreenState extends State<GozarScreen> {
   void initState() {
     super.initState();
     _core = widget.core ?? Core();
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      _windowChannel.setMethodCallHandler((call) async {
-        if (call.method == 'requestClose') await _windowAction('close');
-      });
-    }
+    if (widget.windowControls) windowManager.addListener(this);
     _core.onExit = () {
       if (mounted) setState(() => _fatal = 'core disconnected');
     };
@@ -154,9 +169,7 @@ class _GozarScreenState extends State<GozarScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      _windowChannel.setMethodCallHandler(null);
-    }
+    if (widget.windowControls) windowManager.removeListener(this);
     _core.stop();
     _email.dispose();
     _password.dispose();
@@ -848,7 +861,7 @@ class _GozarScreenState extends State<GozarScreen> {
           as Map<String, dynamic>;
       final tag = data['tag_name'] as String? ?? '';
       final url = data['html_url'] as String? ?? '';
-      const current = '1.10.0';
+      const current = '1.10.1';
       List<int> version(String value) => RegExp(r'\d+')
           .allMatches(value)
           .take(3)
@@ -910,66 +923,102 @@ class _GozarScreenState extends State<GozarScreen> {
     });
   }
 
-  Future<void> _windowAction(String action) async {
+  @override
+  void onWindowClose() {
+    unawaited(_closeWindow());
+  }
+
+  Future<void> _closeWindow() async {
+    if (_windowClosing || !widget.windowControls) return;
+    setState(() => _windowClosing = true);
     try {
-      if (action == 'close') {
-        if (_windowClosing) return;
-        _windowClosing = true;
-        if (_core.running && (_state.live || _state.connecting)) {
-          try {
-            await _core.call('disconnect').timeout(const Duration(seconds: 4));
-          } on Object catch (error) {
-            if (mounted) setState(() => _error = error.toString());
-          }
+      if (_core.running) {
+        final reply =
+            await _core.call('disconnect').timeout(const Duration(seconds: 45));
+        if (reply.error != null ||
+            reply.state == null ||
+            reply.state!.live ||
+            reply.state!.connecting) {
+          throw StateError('disconnect failed');
         }
-        _core.stop();
+        _apply(reply);
+        await _core.shutdown();
       }
-      await _windowChannel.invokeMethod<void>(action);
-    } on PlatformException {
-      if (action == 'close') _windowClosing = false;
-    } on MissingPluginException {
-      if (action == 'close') _windowClosing = false;
+      await windowManager.setPreventClose(false);
+      await windowManager.close();
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _windowClosing = false;
+          _error = words.closeFailed;
+        });
+        if (_settingsOpen || !_state.signedIn || _adding || _fatal != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(words.closeFailed)),
+          );
+        }
+      }
     }
   }
 
-  Widget _titleBar() => Container(
-        height: 38,
-        color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        child: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (_) => unawaited(_windowAction('drag')),
-                onDoubleTap: () => unawaited(_windowAction('maximize')),
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 14),
-                  child: Row(children: [
-                    Image.asset('assets/firefox.png', width: 19, height: 19),
-                    const SizedBox(width: 8),
-                    Text('Gozar',
-                        style: Theme.of(context).textTheme.labelLarge),
-                  ]),
-                ),
-              ),
+  Widget _titleBar() {
+    final isHome = _state.signedIn && !_adding && !_settingsOpen;
+    final foreground = isHome
+        ? const Color(0xFFF6F7F8)
+        : Theme.of(context).colorScheme.onSurface;
+    return SizedBox(
+      height: 54,
+      child: Row(children: [
+        if (_state.signedIn && !_adding)
+          SizedBox(
+            width: 48,
+            child: IconButton(
+              tooltip: words.settings,
+              onPressed: _showSettings,
+              icon: Icon(Icons.menu_rounded, color: foreground, size: 21),
             ),
-            _windowButton(Icons.remove, words.minimize, 'minimize'),
-            _windowButton(Icons.crop_square, words.maximize, 'maximize'),
-            _windowButton(Icons.close, words.close, 'close'),
-          ],
+          )
+        else
+          const SizedBox(width: 16),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanStart: widget.windowControls
+                ? (_) => unawaited(windowManager.startDragging())
+                : null,
+            child: Row(children: [
+              Image.asset('assets/firefox.png', width: 25, height: 25),
+              const SizedBox(width: 8),
+              Text('Gozar',
+                  style: TextStyle(
+                      color: foreground,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .1)),
+            ]),
+          ),
         ),
-      );
+        if (widget.windowControls) ...[
+          _windowButton(Icons.remove, words.minimize,
+              () => windowManager.minimize(), foreground),
+          _windowButton(Icons.close, words.close, _closeWindow, foreground),
+          const SizedBox(width: 6),
+        ],
+      ]),
+    );
+  }
 
-  Widget _windowButton(IconData icon, String tooltip, String action) =>
+  Widget _windowButton(IconData icon, String tooltip,
+          Future<void> Function() action, Color color) =>
       SizedBox(
-        width: 42,
-        height: 38,
+        width: 38,
+        height: 44,
         child: IconButton(
           tooltip: tooltip,
           padding: EdgeInsets.zero,
           splashRadius: 18,
-          icon: Icon(icon, size: 17),
-          onPressed: () => unawaited(_windowAction(action)),
+          icon: Icon(icon, color: color, size: 18),
+          onPressed: _windowClosing ? null : () => unawaited(action()),
         ),
       );
 
@@ -1139,28 +1188,75 @@ class _GozarScreenState extends State<GozarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customFrame = defaultTargetPlatform == TargetPlatform.windows;
-    return Scaffold(
-      body: Column(children: [
-        if (customFrame) _titleBar(),
-        Expanded(
-            child: SafeArea(
-          top: !customFrame,
-          child: _starting
-              ? const Center(child: CircularProgressIndicator())
-              : _fatal != null
-                  ? Center(
-                      child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Text(_message(_fatal!),
-                              textAlign: TextAlign.center)))
-                  : _state.signedIn && !_adding
-                      ? _settingsOpen
-                          ? _settingsScreen()
-                          : _home()
-                      : _loginScreen(),
-        )),
-      ]),
+    final isHome = _state.signedIn &&
+        !_adding &&
+        !_settingsOpen &&
+        !_starting &&
+        _fatal == null;
+    final shellColor = isHome
+        ? const Color(0xFF121720)
+        : Theme.of(context).scaffoldBackgroundColor;
+    return Material(
+      color: Colors.transparent,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.windowControls ? 20 : 0),
+        child: Stack(children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: shellColor,
+                gradient: isHome
+                    ? const RadialGradient(
+                        center: Alignment(.38, -.2),
+                        radius: 1.05,
+                        colors: [
+                          Color(0xFF524322),
+                          Color(0xFF25251F),
+                          Color(0xFF10151E)
+                        ],
+                        stops: [0, .48, 1],
+                      )
+                    : null,
+              ),
+            ),
+          ),
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Column(children: [
+              _titleBar(),
+              Expanded(
+                child: SafeArea(
+                  top: false,
+                  child: _starting
+                      ? const Center(child: CircularProgressIndicator())
+                      : _fatal != null
+                          ? Center(
+                              child: Padding(
+                                  padding: const EdgeInsets.all(32),
+                                  child: Text(_message(_fatal!),
+                                      textAlign: TextAlign.center)))
+                          : _state.signedIn && !_adding
+                              ? _settingsOpen
+                                  ? _settingsScreen()
+                                  : _home()
+                              : _loginScreen(),
+                ),
+              ),
+            ]),
+          ),
+          if (widget.windowControls)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0x66575C67)),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ),
     );
   }
 
@@ -1397,232 +1493,282 @@ class _GozarScreenState extends State<GozarScreen> {
         ],
       );
 
-  Widget _home() => Center(
+  Widget _home() {
+    const secondary = Color(0xFFAAADB6);
+    const foreground = Color(0xFFF6F7F8);
+    final server = _state.server;
+    final selected = server != null && server.host.isNotEmpty;
+    final location = selected
+        ? server.label(widget.persian)
+        : _state.live
+            ? words.unavailable
+            : words.bestServer;
+    final connecting = _connectionBusy || _state.connecting;
+    final status = connecting
+        ? (_state.live ? words.disconnecting : words.connecting)
+        : (_state.live ? words.connected : words.disconnected);
+    final canSelect = !_busy && !_state.live && !_state.connecting;
+    return Column(children: [
+      Expanded(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(children: [
-                    Image.asset('assets/firefox.png', width: 36, height: 36),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Text('Gozar',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
-                          Text(_state.email,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textDirection: TextDirection.ltr,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: muted(context))),
-                        ])),
-                    IconButton(
-                        tooltip: words.settings,
-                        onPressed: _showSettings,
-                        icon: const Icon(Icons.settings_outlined, color: soft)),
-                  ]),
-                  const SizedBox(height: 14),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: _state.live
-                              ? const [Color(0xFF8D001F), Color(0xFFD7002A)]
-                              : const [Color(0xFF4A1120), Color(0xFF8D001F)]),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Column(children: [
-                      Row(children: [
-                        Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                              Row(children: [
-                                Icon(
-                                    _state.live
-                                        ? Icons.shield
-                                        : Icons.shield_outlined,
-                                    color: const Color(0xFFFFDADF),
-                                    size: 17),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                    child: Text(
-                                        _connectionBusy
-                                            ? (_state.live
-                                                ? words.disconnecting
-                                                : words.connecting)
-                                            : _state.live
-                                                ? words.connected
-                                                : words.disconnected,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 17))),
-                              ]),
-                              const SizedBox(height: 7),
-                              Text(
-                                  _state.live
-                                      ? words.tapDisconnect
-                                      : words.tapConnect,
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _state.live
+                                    ? const Color(0xFF245248)
+                                    : const Color(0xFF3A404B),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: Text(status,
                                   style: const TextStyle(
-                                      color: Color(0xFFFFDADF))),
-                              if (_state.live) ...[
-                                const SizedBox(height: 7),
-                                Text(
-                                    '${words.totalUsage}: ${_size(_state.down + _state.up)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: Color(0xFFFFDADF),
-                                        fontSize: 12)),
-                              ],
-                            ])),
-                        const SizedBox(width: 10),
-                        Semantics(
-                          button: true,
-                          label: _state.live ? words.disconnect : words.connect,
-                          child: Material(
-                              color: const Color(0xFFFFF0E6),
-                              shape: const CircleBorder(),
+                                      color: foreground,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                            Text(
+                                server != null && server.port > 0
+                                    ? 'TUN · Relay ${server.port}'
+                                    : 'TUN',
+                                textDirection: TextDirection.ltr,
+                                style: const TextStyle(
+                                    color: secondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
+                            Tooltip(
+                              message: words.tunnelNotice,
                               child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: _busy ? null : _toggleConnection,
-                                  child: SizedBox(
-                                      width: 76,
-                                      height: 76,
-                                      child: Center(
-                                          child: _connectionBusy
-                                              ? const SizedBox(
-                                                  width: 26,
-                                                  height: 26,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                          color: dark,
-                                                          strokeWidth: 3))
-                                              : const Icon(
-                                                  Icons
-                                                      .power_settings_new_rounded,
-                                                  size: 37,
-                                                  color: dark))))),
-                        ),
-                      ]),
-                      if (_state.limit > 0) ...[
-                        const SizedBox(height: 18),
-                        Row(children: [
-                          Expanded(
-                              child: Text(words.remaining,
-                                  style: const TextStyle(
-                                      color: Color(0xFFFFDADF), fontSize: 12))),
-                          Text(
-                              '${_size(_state.remaining)} / ${_size(_state.limit)}',
-                              textDirection: TextDirection.ltr,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 12)),
-                        ]),
-                        const SizedBox(height: 7),
-                        LinearProgressIndicator(
-                            value: (_state.remaining / _state.limit)
-                                .clamp(0.0, 1.0),
-                            minHeight: 4,
-                            color: const Color(0xFFFFDADF),
-                            backgroundColor: const Color(0x66FFFFFF),
-                            borderRadius: BorderRadius.circular(8)),
-                      ],
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () =>
+                                    unawaited(_info('TUN', words.tunnelNotice)),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(Icons.info_outline,
+                                      color: secondary, size: 15),
+                                ),
+                              ),
+                            ),
+                          ]),
+                      const SizedBox(height: 10),
+                      Text(_state.live ? words.tapDisconnect : words.tapConnect,
+                          style:
+                              const TextStyle(color: secondary, fontSize: 12)),
                     ]),
+              ),
+              const SizedBox(width: 12),
+              Tooltip(
+                message: _state.live ? words.disconnect : words.connect,
+                child: Semantics(
+                  button: true,
+                  label: _state.live ? words.disconnect : words.connect,
+                  child: Material(
+                    color: foreground,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _busy || _windowClosing ? null : _toggleConnection,
+                      child: SizedBox(
+                        width: 78,
+                        height: 78,
+                        child: Center(
+                          child: connecting
+                              ? const SizedBox(
+                                  width: 25,
+                                  height: 25,
+                                  child: CircularProgressIndicator(
+                                      color: Color(0xFF191C22), strokeWidth: 3))
+                              : const Icon(Icons.power_settings_new_rounded,
+                                  color: Color(0xFF191C22), size: 39),
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Card(
-                      margin: EdgeInsets.zero,
-                      child: ListTile(
-                        enabled: !_busy && !_state.live,
-                        leading: CountryFlag(code: _state.server?.code),
-                        title: Text(words.server),
-                        subtitle: Text(
-                            _loadingServers
-                                ? words.loadingServers
-                                : _state.server?.host.isNotEmpty == true
-                                    ? _state.server!.label(widget.persian)
-                                    : words.chooseServer,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: muted(context))),
-                        trailing: Icon(
-                            widget.persian
-                                ? Icons.chevron_left
-                                : Icons.chevron_right,
-                            color: soft),
-                        onTap: _showServers,
-                      )),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(
-                        child: RateCard(
-                            icon: Icons.south_rounded,
-                            label: words.download,
-                            value: _speed(_state.rateDown))),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: RateCard(
-                            icon: Icons.north_rounded,
-                            label: words.upload,
-                            value: _speed(_state.rateUp))),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Icon(Icons.info_outline, color: soft, size: 16),
-                    const SizedBox(width: 6),
-                    Expanded(
-                        child: Text(words.tunnelNotice,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: muted(context)))),
-                  ]),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    ErrorText(_message(_error!))
-                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: canSelect ? _showServers : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(children: [
+                  CountryFlag(code: server?.code, size: 30),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(location,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: foreground,
+                            fontSize: 20,
+                            height: 1.15,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  if (canSelect)
+                    Icon(
+                        widget.persian
+                            ? Icons.chevron_left
+                            : Icons.chevron_right,
+                        color: secondary,
+                        size: 21),
                 ]),
-          ),
+              ),
+            ),
+            const SizedBox(height: 11),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.device_hub_outlined, color: secondary, size: 17),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    '${words.tunnelDevice}: ${_state.live && _state.device.isNotEmpty ? _state.device : '—'}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: secondary, fontSize: 12)),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                    '${words.exitIp}: ${_state.live && _state.exit.isNotEmpty ? _state.exit : '—'}',
+                    textAlign: TextAlign.end,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: secondary, fontSize: 12)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            Wrap(spacing: 22, runSpacing: 7, children: [
+              _trafficLabel(Icons.south_rounded, words.download,
+                  _state.live ? _speed(_state.rateDown) : '—'),
+              _trafficLabel(Icons.north_rounded, words.upload,
+                  _state.live ? _speed(_state.rateUp) : '—'),
+              if (_state.live)
+                Text('${words.totalUsage}: ${_size(_state.down + _state.up)}',
+                    style: const TextStyle(color: secondary, fontSize: 11)),
+            ]),
+            if (_error != null || _state.fault.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ErrorText(_message(_error ?? _state.fault)),
+            ],
+          ]),
         ),
+      ),
+      Container(
+        decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: Color(0xFF31343A)))),
+        child: Row(children: [
+          Tooltip(
+            message: words.unavailable,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 10, 12, 10),
+              child: Row(children: [
+                const Icon(Icons.shield_outlined,
+                    color: Color(0xFF858A94), size: 20),
+                const SizedBox(width: 7),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(words.firewall,
+                      style: const TextStyle(color: secondary, fontSize: 12)),
+                  Text(words.unavailable,
+                      style: const TextStyle(
+                          color: Color(0xFF777D88), fontSize: 10)),
+                ]),
+              ]),
+            ),
+          ),
+          Container(width: 1, height: 38, color: const Color(0xFF31343A)),
+          Expanded(
+            child: TextButton.icon(
+              onPressed: canSelect ? _showServers : null,
+              icon: const Icon(Icons.public, size: 18),
+              label: Text(words.locations,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              style: TextButton.styleFrom(
+                foregroundColor: foreground,
+                disabledForegroundColor: secondary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+              ),
+            ),
+          ),
+        ]),
+      ),
+      Container(
+        color: const Color(0xFF0D1016),
+        padding: const EdgeInsetsDirectional.fromSTEB(20, 7, 12, 7),
+        child: Row(children: [
+          Icon(_state.limit > 0 ? Icons.donut_small : Icons.circle_outlined,
+              color: _state.limit > 0 ? const Color(0xFF70CCB0) : secondary,
+              size: 17),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+                _state.limit > 0
+                    ? '${_size(_state.remaining)} ${words.remaining}'
+                    : words.usageUnavailable,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: secondary, fontSize: 12)),
+          ),
+          TextButton(
+            onPressed: _busy ? null : () => unawaited(_showAccounts()),
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: const Color(0xFFE5E6EA),
+            ),
+            child: Text(words.account,
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _trafficLabel(IconData icon, String label, String value) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: const Color(0xFFA9AFB9), size: 15),
+          const SizedBox(width: 4),
+          Text('$label  $value',
+              style: const TextStyle(color: Color(0xFFCFD1D6), fontSize: 12)),
+        ],
       );
 }
 
 class CountryFlag extends StatelessWidget {
-  const CountryFlag({super.key, required this.code});
+  const CountryFlag({super.key, required this.code, this.size = 36});
 
   final String? code;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final value = code?.toLowerCase() ?? '';
-    Widget fallback() => const CircleAvatar(
-          radius: 18,
-          backgroundColor: Color(0x33D7002A),
-          child: Icon(Icons.public, color: soft, size: 20),
+    Widget fallback() => CircleAvatar(
+          radius: size / 2,
+          backgroundColor: const Color(0x334D5965),
+          child: Icon(Icons.public,
+              color: const Color(0xFFBFC5CD), size: size * .55),
         );
     if (!RegExp(r'^[a-z]{2}$').hasMatch(value)) return fallback();
     return Semantics(
       label: code!.toUpperCase(),
       child: ClipOval(
           child: SizedBox(
-              width: 36,
-              height: 36,
+              width: size,
+              height: size,
               child: Image.asset('assets/flags/$value.png',
                   fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => fallback()))),

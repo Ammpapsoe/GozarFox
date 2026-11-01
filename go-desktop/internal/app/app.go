@@ -83,6 +83,7 @@ type App struct {
 	connecting      bool
 	needAdmin       bool
 	exit            string
+	activeServer    fxa.Location
 	since           int64
 	rateDown        atomic.Int64
 	rateUp          atomic.Int64
@@ -149,6 +150,9 @@ func (a *App) State() State {
 			state.Server = place
 			break
 		}
+	}
+	if a.live && a.activeServer.Host != "" {
+		state.Server = a.activeServer
 	}
 	if a.engine != nil {
 		state.Down, state.Up = a.engine.Counters()
@@ -736,6 +740,12 @@ func (a *App) connect() error {
 	a.mu.Lock()
 	a.engine = created
 	a.transport = transport
+	for _, place := range servers {
+		if strings.EqualFold(place.Host, target.Host) {
+			a.activeServer = place
+			break
+		}
+	}
 	a.live = true
 	a.since = time.Now().Unix()
 	if a.cfg.Recents {
@@ -784,6 +794,7 @@ func (a *App) teardown() {
 	a.renewCancel = nil
 	a.engine = nil
 	a.live = false
+	a.activeServer = fxa.Location{}
 	a.exit = ""
 	a.since = 0
 	a.mu.Unlock()

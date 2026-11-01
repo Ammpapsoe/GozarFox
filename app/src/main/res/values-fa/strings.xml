@@ -431,4 +431,8 @@ AGPL-3.0-or-later</string>
     <string name="chart_upload">ارسال</string>
     <string name="focus_chip">↓ %1$s</string>
     <string name="always_on_managed">برای قطع اتصال، خروج از حساب یا تغییر این محافظت، ابتدا VPN همیشه‌فعال را در تنظیمات اندروید خاموش کنید.</string>
+    <string name="fox_disconnected">قطع است</string>
+    <string name="fox_usage_pending">اطلاعات مصرف در دسترس نیست</string>
+    <string name="settings_group_protection">امنیت و اتصال</string>
+    <string name="settings_group_app">ظاهر و برنامه</string>
 </resources>

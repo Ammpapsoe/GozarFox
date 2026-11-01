@@ -39,8 +39,8 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "Gozar");
   }
 
-  gtk_window_set_default_size(window, 430, 580);
-  gtk_widget_set_size_request(GTK_WIDGET(window), 360, 440);
+  gtk_window_set_default_size(window, 460, 380);
+  gtk_widget_set_size_request(GTK_WIDGET(window), 360, 360);
   g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
   if (exe != nullptr) {
     g_autofree gchar* folder = g_path_get_dirname(exe);

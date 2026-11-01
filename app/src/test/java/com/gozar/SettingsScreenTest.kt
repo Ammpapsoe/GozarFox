@@ -59,6 +59,11 @@ class SettingsScreenTest {
             openSettings(activity)
             assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsOverview).visibility)
             assertEquals(View.GONE, activity.findViewById<View>(R.id.settingsSecurity).visibility)
+            assertEquals("person@example.test", activity.findViewById<TextView>(R.id.tvSettingsOverviewAccount).text.toString())
+            assertTrue(activity.findViewById<View>(R.id.sectionSecurityButton).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.sectionConnectionButton).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.sectionAppearanceButton).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.sectionGeneralButton).isClickable)
             activity.findViewById<View>(R.id.sectionSecurityButton).performClick()
             assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsSecurity).visibility)
             assertEquals(activity.getString(R.string.kill_unknown), activity.findViewById<TextView>(R.id.tvKillSwitch).text.toString())
@@ -95,4 +100,30 @@ class SettingsScreenTest {
             controller.pause().stop().destroy()
         }
     }
+    @Test
+    fun persianSectionsRetainConnectionControls() {
+        val context = RuntimeEnvironment.getApplication()
+        Store.setLang(context, "fa")
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        try {
+            openSettings(activity)
+            assertEquals("fa", activity.resources.configuration.locales[0].language)
+            assertEquals(View.LAYOUT_DIRECTION_RTL, activity.resources.configuration.layoutDirection)
+            assertEquals("person@example.test", activity.findViewById<TextView>(R.id.tvSettingsOverviewAccount).text.toString())
+            activity.findViewById<View>(R.id.sectionConnectionButton).performClick()
+            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.settingsConnection).visibility)
+            assertTrue(activity.findViewById<View>(R.id.rowRouting).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.rowApps).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.rowChain).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.rowRoot).isClickable)
+            activity.findViewById<View>(R.id.btnBack).performClick()
+            activity.findViewById<View>(R.id.sectionAppearanceButton).performClick()
+            assertTrue(activity.findViewById<View>(R.id.rowLang).isClickable)
+            assertTrue(activity.findViewById<View>(R.id.rowTheme).isClickable)
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
 }

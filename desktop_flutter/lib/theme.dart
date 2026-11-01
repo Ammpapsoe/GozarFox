@@ -4,8 +4,8 @@ const dark = Color(0xFF78001A);
 const mid = Color(0xFFE4002B);
 const soft = Color(0xFFFF5165);
 const light = Color(0xFFFFDADF);
-const ink = Color(0xFF0A0B0E);
-const card = Color(0xFF1D1819);
+const ink = Color(0xFF101217);
+const card = Color(0xFF202229);
 const text = Color(0xFFF4F5F9);
 const dim = Color(0xFF9EA1AF);
 
@@ -27,7 +27,7 @@ ThemeData buildTheme({bool lightMode = false}) {
           onSurfaceVariant: dim,
         );
   return base.copyWith(
-    scaffoldBackgroundColor: lightMode ? const Color(0xFFFFF8F8) : ink,
+    scaffoldBackgroundColor: lightMode ? const Color(0xFFFAF9F8) : ink,
     colorScheme: scheme,
     textTheme: base.textTheme.apply(
       bodyColor: scheme.onSurface,
@@ -35,7 +35,7 @@ ThemeData buildTheme({bool lightMode = false}) {
       fontFamily: 'Vazirmatn',
     ),
     cardTheme: CardTheme(
-      color: lightMode ? const Color(0xFFFFEFF0) : card,
+      color: lightMode ? const Color(0xFFF1EFEE) : card,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     ),
@@ -52,7 +52,7 @@ ThemeData buildTheme({bool lightMode = false}) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: lightMode ? const Color(0xFFFFF3F3) : const Color(0xFF22252D),
+      fillColor: lightMode ? const Color(0xFFF1EFEE) : const Color(0xFF22252D),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),

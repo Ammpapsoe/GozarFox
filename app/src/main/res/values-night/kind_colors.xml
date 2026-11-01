@@ -2,11 +2,11 @@
 <resources>
     <color name="kind_down_container">#004f52</color>
     <color name="kind_down_on_container">#8ff2f6</color>
-    <color name="kind_down">#00696c</color>
+    <color name="kind_down">#72d6da</color>
     <color name="kind_down_alt">#72d6da</color>
     <color name="kind_up_container">#23467f</color>
     <color name="kind_up_on_container">#d7e2ff</color>
-    <color name="kind_up">#3d5e98</color>
+    <color name="kind_up">#acc7ff</color>
     <color name="kind_up_alt">#acc7ff</color>
     <color name="kind_total_container">#275018</color>
     <color name="kind_total_on_container">#bef0a7</color>

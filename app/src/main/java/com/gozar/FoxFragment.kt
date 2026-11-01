@@ -39,7 +39,7 @@ class FoxFragment : Fragment() {
     private lateinit var session: TextView
     private lateinit var chart: TrafficChartView
     private lateinit var chartCard: View
-    private lateinit var metricIcons: List<View>
+    private lateinit var metricIcons: List<MetricIconView>
     private var previousMetrics = listOf<Long>()
     private lateinit var serverFlag: CountryFlagView
     private lateinit var serverName: TextView
@@ -80,17 +80,22 @@ class FoxFragment : Fragment() {
         chart = view.findViewById(R.id.foxChart)
         chartCard = view.findViewById(R.id.foxChartCard)
         metricIcons = listOf(R.id.foxDownIcon, R.id.foxUpIcon, R.id.foxTotalIcon, R.id.foxSessionIcon).map { view.findViewById(it) }
+        val colors = listOf(R.color.kind_down_container, R.color.kind_up_container,
+            R.color.kind_total_container, R.color.kind_proxy_container)
+        metricIcons.forEachIndexed { index, icon ->
+            icon.setAppearance(requireContext().getColor(colors[index]), index)
+        }
         serverFlag = view.findViewById(R.id.foxServerFlag)
         serverName = view.findViewById(R.id.foxServerName)
         serverMeta = view.findViewById(R.id.foxServerMeta)
 
         connect.tune(
-            requireContext().getColor(R.color.fox_cream),
-            requireContext().getColor(R.color.fox_red_dark),
-            requireContext().getColor(R.color.fox_peach),
-            requireContext().getColor(R.color.fox_red_dark),
-            requireContext().getColor(R.color.fox_orange),
-            requireContext().getColor(R.color.fox_red_dark)
+            requireContext().getColor(R.color.fox_red),
+            requireContext().getColor(R.color.fox_on_red),
+            requireContext().getColor(R.color.m3_ok),
+            requireContext().getColor(R.color.m3_on_ok),
+            requireContext().getColor(R.color.m3_error),
+            requireContext().getColor(R.color.m3_on_error)
         )
 
         view.findViewById<View>(R.id.foxAccountButton).setOnClickListener { accountMenu() }
@@ -213,6 +218,7 @@ class FoxFragment : Fragment() {
 
         account.text = if (mail.isEmpty()) getString(R.string.fox_signed_out) else mail
 
+        quotaBar.visibility = if (Fox.limit > 0) View.VISIBLE else View.GONE
         if (Fox.limit > 0) {
             val used = (Fox.limit - Fox.remaining).coerceAtLeast(0)
             quotaText.text = getString(R.string.fox_quota_value, fmtBytes(used), fmtBytes(Fox.limit))
@@ -220,7 +226,7 @@ class FoxFragment : Fragment() {
             reset.visibility = View.VISIBLE
             reset.text = if (Fox.reset.isEmpty()) "" else getString(R.string.fox_reset, resetText(Fox.reset))
         } else {
-            quotaText.text = getString(R.string.fox_quota_empty)
+            quotaText.text = getString(R.string.fox_usage_pending)
             quotaBar.progress = 0
             reset.visibility = View.GONE
         }
@@ -228,7 +234,7 @@ class FoxFragment : Fragment() {
         state.text = when {
             live -> getString(R.string.fox_connected)
             busy -> getString(R.string.fox_connecting)
-            else -> getString(R.string.fox_plan_title)
+            else -> getString(R.string.fox_disconnected)
         }
 
         val wanted = when {
@@ -262,7 +268,7 @@ class FoxFragment : Fragment() {
             val metrics = listOf(FoxLink.downRate.toLong(), FoxLink.upRate.toLong(), FoxLink.down + FoxLink.up, FoxLink.elapsed())
             if (previousMetrics.size == metrics.size) {
                 metrics.forEachIndexed { index, value ->
-                    if (value != previousMetrics[index]) animateMetric(metricIcons[index])
+                    if (value != previousMetrics[index]) metricIcons[index].changeShape()
                 }
             }
             previousMetrics = metrics
@@ -274,15 +280,6 @@ class FoxFragment : Fragment() {
 
         paintServer(c)
         maybeMeasure()
-    }
-
-    private fun animateMetric(icon: View) {
-        icon.animate().cancel()
-        icon.scaleX = 1f
-        icon.scaleY = 1f
-        icon.animate().scaleX(1.09f).scaleY(1.09f).setDuration(140).withEndAction {
-            icon.animate().scaleX(1f).scaleY(1f).setDuration(180).start()
-        }.start()
     }
 
     private fun paintServer(c: Context) {

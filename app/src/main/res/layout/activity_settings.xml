@@ -7,15 +7,16 @@
         </LinearLayout>
         <LinearLayout android:id="@+id/settingsOverview" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="visible">
             <TextView style="@style/Gozar.Section" android:text="@string/settings_choose" />
-            <LinearLayout android:id="@+id/sectionAccountButton" style="@style/Gozar.Row">
-                <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/settings_account" android:src="@drawable/ic_account" app:tint="@color/tile_on_container" />
+            <LinearLayout android:id="@+id/sectionAccountButton" style="@style/Gozar.Row" android:background="@drawable/settings_account_card" android:minHeight="76dp">
+                <ImageView android:layout_width="42dp" android:layout_height="42dp" android:contentDescription="@string/settings_account" android:src="@drawable/fox_red_logo" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/settings_account" />
-                    <TextView style="@style/Gozar.Row.Subtitle" android:text="@string/settings_account_desc" />
+                    <TextView android:id="@+id/tvSettingsOverviewAccount" style="@style/Gozar.Row.Subtitle" android:textDirection="ltr" android:textAlignment="viewStart" android:ellipsize="end" android:maxLines="1" android:text="@string/settings_account_desc" />
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/sectionSecurityButton" style="@style/Gozar.Row">
+            <TextView style="@style/Gozar.Section" android:text="@string/settings_group_protection" />
+            <LinearLayout android:id="@+id/sectionSecurityButton" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/settings_security" android:src="@drawable/ic_shield" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/settings_security" />
@@ -23,7 +24,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/sectionConnectionButton" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/sectionConnectionButton" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/connection_section" android:src="@drawable/ic_alt_route" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/connection_section" />
@@ -31,7 +32,8 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/sectionAppearanceButton" style="@style/Gozar.Row">
+            <TextView style="@style/Gozar.Section" android:text="@string/settings_group_app" />
+            <LinearLayout android:id="@+id/sectionAppearanceButton" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/visual" android:src="@drawable/ic_palette" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/visual" />
@@ -39,7 +41,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/sectionGeneralButton" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/sectionGeneralButton" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/settings_general" android:src="@drawable/ic_info" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/settings_general" />
@@ -76,7 +78,7 @@
         </LinearLayout>
         <LinearLayout android:id="@+id/settingsSecurity" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <TextView style="@style/Gozar.Section" android:text="@string/settings_protection" />
-            <LinearLayout android:id="@+id/rowKillSwitch" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowKillSwitch" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/kill_switch" android:src="@drawable/ic_shield" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/kill_switch" />
@@ -84,7 +86,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowAds" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowAds" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/ad_block" android:src="@drawable/ic_security" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/ad_block" />
@@ -92,7 +94,7 @@
                 </LinearLayout>
                 <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swAds" android:layout_width="wrap_content" android:layout_height="wrap_content" android:contentDescription="@string/ad_block" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowDns" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowDns" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/dns_title" android:src="@drawable/ic_dns" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/dns_title" />
@@ -100,7 +102,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowNotifications" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowNotifications" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_squircle" android:backgroundTint="@color/tile_container" android:contentDescription="@string/notification_title" android:src="@drawable/ic_bell" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/notification_title" />
@@ -111,7 +113,7 @@
         </LinearLayout>
         <LinearLayout android:id="@+id/settingsConnection" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <TextView style="@style/Gozar.Section" android:text="@string/connection_section" />
-            <LinearLayout android:id="@+id/rowGeo" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowGeo" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_burst" android:backgroundTint="@color/tile_container" android:contentDescription="@string/geolocation" android:src="@drawable/ic_location" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/geolocation" />
@@ -119,7 +121,7 @@
                 </LinearLayout>
                 <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swGeo" android:layout_width="wrap_content" android:layout_height="wrap_content" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowRecents" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowRecents" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_hex" android:backgroundTint="@color/tile_container" android:contentDescription="@string/recents" android:src="@drawable/ic_time" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/recents" />
@@ -127,7 +129,7 @@
                 </LinearLayout>
                 <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swRecents" android:layout_width="wrap_content" android:layout_height="wrap_content" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowRouting" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowRouting" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_gem" android:backgroundTint="@color/tile_container" android:contentDescription="@string/routing" android:src="@drawable/ic_alt_route" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/routing" />
@@ -135,7 +137,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowApps" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowApps" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_hex" android:backgroundTint="@color/tile_container" android:contentDescription="@string/apps" android:src="@drawable/ic_apps" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/apps" />
@@ -143,7 +145,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowChain" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowChain" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_clover" android:backgroundTint="@color/tile_container" android:contentDescription="@string/chain" android:src="@drawable/ic_link" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/chain" />
@@ -151,7 +153,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowRoot" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowRoot" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_hex" android:backgroundTint="@color/tile_container" android:contentDescription="@string/root_title" android:src="@drawable/ic_shield" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/root_title" />
@@ -162,7 +164,7 @@
         </LinearLayout>
         <LinearLayout android:id="@+id/settingsAppearance" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <TextView style="@style/Gozar.Section" android:text="@string/visual" />
-            <LinearLayout android:id="@+id/rowLang" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowLang" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_flower" android:backgroundTint="@color/tile_container" android:contentDescription="@string/language" android:src="@drawable/ic_translate" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/language" />
@@ -170,7 +172,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowTheme" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowTheme" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_flower" android:backgroundTint="@color/tile_container" android:contentDescription="@string/theme" android:src="@drawable/ic_palette" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/theme" />
@@ -181,7 +183,7 @@
         </LinearLayout>
         <LinearLayout android:id="@+id/settingsGeneral" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
             <TextView style="@style/Gozar.Section" android:text="@string/settings_general" />
-            <LinearLayout android:id="@+id/rowUpdate" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowUpdate" style="@style/Gozar.Row" android:background="@drawable/settings_group_top">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_clover" android:backgroundTint="@color/tile_container" android:contentDescription="@string/check_updates" android:src="@drawable/ic_refresh" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/check_updates" />
@@ -189,7 +191,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowGithub" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowGithub" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_gem" android:backgroundTint="@color/tile_container" android:contentDescription="@string/project" android:src="@drawable/ic_published" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/project" />
@@ -197,7 +199,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowAbout" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowAbout" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_puff" android:backgroundTint="@color/tile_container" android:contentDescription="@string/about" android:src="@drawable/ic_info" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/about" />
@@ -205,7 +207,7 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="@color/tile_on_container" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowDonate" style="@style/Gozar.Row">
+            <LinearLayout android:id="@+id/rowDonate" style="@style/Gozar.Row" android:layout_marginTop="2dp" android:background="@drawable/settings_group_bottom">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_flower" android:backgroundTint="@color/tile_container" android:contentDescription="@string/donate_section" android:src="@drawable/ic_heart" app:tint="@color/tile_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/donate_section" />

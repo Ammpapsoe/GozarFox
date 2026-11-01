@@ -29,6 +29,11 @@ class FakeCore extends Core {
   int rateUp = 0;
   int down = 0;
   int up = 0;
+  int limit = 0;
+  int remaining = 0;
+  String exit = '';
+  String device = '';
+  bool disconnectFailure = false;
   bool captchaDone = false;
   int loginCalls = 0;
   Map<String, dynamic>? lastAuth;
@@ -66,6 +71,10 @@ class FakeCore extends Core {
         rateUp: rateUp,
         down: down,
         up: up,
+        limit: limit,
+        remaining: remaining,
+        exit: exit,
+        device: device,
         accounts: saved
             .map((email) => SavedAccount(
                 id: 'email:$email',
@@ -98,7 +107,13 @@ class FakeCore extends Core {
     if (method == 'theme') theme = params!['theme'] as String;
     if (method == 'recents') recents = params!['enabled'] as bool;
     if (method == 'chain') chain = (params!['hops'] as List).cast<String>();
-    if (method == 'disconnect') live = false;
+    if (method == 'connect') live = true;
+    if (method == 'disconnect') {
+      if (disconnectFailure) {
+        return CoreReply(state: current, error: 'disconnect failed');
+      }
+      live = false;
+    }
     if (method == 'system_accounts') {
       return CoreReply(state: current, systemEmails: systemEmails);
     }
@@ -217,7 +232,7 @@ void main() {
     final core = FakeCore(signedIn: true, language: 'en');
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Server'));
+    await tester.tap(find.text('Locations'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Netherlands · Amsterdam'));
     await tester.pumpAndSettle();
@@ -493,15 +508,85 @@ void main() {
     expect(copied, 'UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3');
     expect(core.requests, isNot(contains('connect')));
   });
-  testWidgets(
-      'compact Windows frame displays live traffic and cleans up on close',
+  test('core maps only reported connection data', () {
+    final state = CoreState.fromJson({
+      'live': true,
+      'exit': '192.0.2.9',
+      'device': 'Test TUN',
+      'limit': 1000,
+      'remaining': 600,
+      'server': {
+        'code': 'NL',
+        'country': 'Netherlands',
+        'city': 'Amsterdam',
+        'host': 'relay.example',
+        'port': 8443,
+      },
+    });
+    expect(state.exit, '192.0.2.9');
+    expect(state.device, 'Test TUN');
+    expect(state.remaining, 600);
+    expect(state.server!.port, 8443);
+    expect(const CoreState().exit, isEmpty);
+    expect(const CoreState().limit, 0);
+  });
+
+  testWidgets('unknown network, quota and firewall are not fabricated',
       (tester) async {
-    tester.view.physicalSize = const Size(430, 580);
+    tester.view.physicalSize = const Size(360, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final core = FakeCore(signedIn: true, language: 'en');
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    expect(find.text('Disconnected'), findsOneWidget);
+    expect(find.text('Usage unavailable'), findsOneWidget);
+    expect(find.text('Tunnel device: —'), findsOneWidget);
+    expect(find.text('Exit IP: —'), findsOneWidget);
+    expect(find.text('Firewall'), findsOneWidget);
+    expect(find.text('Unavailable'), findsOneWidget);
+    expect(find.textContaining('WireGuard'), findsNothing);
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(core.requests, contains('connect'));
+    expect(find.text('Connected'), findsOneWidget);
+    final locations = tester.widget<TextButton>(find.ancestor(
+        of: find.text('Locations'),
+        matching: find.byWidgetPredicate((widget) => widget is TextButton)));
+    expect(locations.onPressed, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('compact Persian dashboard is RTL without overflow',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final core = FakeCore(signedIn: true, language: 'fa')
+      ..live = true
+      ..selectedHost = 'amsterdam.example'
+      ..exit = '2001:db8:1234:5678:1234:5678:abcd:1234'
+      ..device = 'very-long-tunnel-device-name';
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    expect(find.text('متصل است'), findsOneWidget);
+    expect(Directionality.of(tester.element(find.text('متصل است'))),
+        TextDirection.rtl);
+    expect(find.text('دیوار آتش'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'compact Windows frame displays reported data and disconnects on close',
+      (tester) async {
+    tester.view.physicalSize = const Size(430, 380);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final actions = <String>[];
-    const channel = MethodChannel('gozar/window');
+    const channel = MethodChannel('window_manager');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
         (call) async {
       actions.add(call.method);
@@ -515,30 +600,34 @@ void main() {
       ..rateDown = 2048
       ..rateUp = 1024
       ..down = 4096
-      ..up = 1024;
-    await tester.pumpWidget(GozarApp(core: core));
+      ..up = 1024
+      ..exit = '192.0.2.4'
+      ..device = 'Wintun'
+      ..limit = 10240
+      ..remaining = 5120;
+    await tester.pumpWidget(GozarApp(core: core, windowControls: true));
     await tester.pumpAndSettle();
     expect(find.text('Connected'), findsOneWidget);
-    expect(find.text('2.0 KB/s'), findsOneWidget);
-    expect(find.text('1.0 KB/s'), findsOneWidget);
+    expect(find.text('Download  2.0 KB/s'), findsOneWidget);
+    expect(find.text('Upload  1.0 KB/s'), findsOneWidget);
     expect(find.text('Session traffic: 5.0 KB'), findsOneWidget);
+    expect(find.text('Exit IP: 192.0.2.4'), findsOneWidget);
+    expect(find.text('Tunnel device: Wintun'), findsOneWidget);
+    expect(find.text('5.0 KB Remaining'), findsOneWidget);
     final flag = tester.widget<CountryFlag>(find.byType(CountryFlag).first);
     expect(flag.code, 'NL');
-    expect(find.byTooltip('Minimize'), findsOneWidget);
     await tester.tap(find.byTooltip('Minimize'));
-    await tester.tap(find.byTooltip('Maximize'));
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
-    expect(actions, ['minimize', 'maximize', 'close']);
+    expect(actions, ['minimize', 'setPreventClose', 'close']);
     expect(core.requests, contains('disconnect'));
     expect(core.running, isFalse);
     expect(tester.takeException(), isNull);
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
-  testWidgets('a native Windows close request disconnects before exiting',
-      (tester) async {
+  testWidgets('native close event disconnects before exiting', (tester) async {
     final actions = <String>[];
-    const channel = MethodChannel('gozar/window');
+    const channel = MethodChannel('window_manager');
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
         (call) async {
       actions.add(call.method);
@@ -547,17 +636,43 @@ void main() {
     addTearDown(() => tester.binding.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null));
     final core = FakeCore(signedIn: true, language: 'en')..live = true;
-    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpWidget(GozarApp(core: core, windowControls: true));
     await tester.pumpAndSettle();
     final request = tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'gozar/window',
-        const StandardMethodCodec()
-            .encodeMethodCall(const MethodCall('requestClose')),
+        'window_manager',
+        const StandardMethodCodec().encodeMethodCall(
+            const MethodCall('onEvent', {'eventName': 'close'})),
         null);
     await tester.pumpAndSettle();
     await request;
     expect(core.requests, contains('disconnect'));
     expect(core.running, isFalse);
-    expect(actions, ['close']);
+    expect(actions, ['setPreventClose', 'close']);
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
+
+  testWidgets('close failure keeps the core and window open', (tester) async {
+    final actions = <String>[];
+    const channel = MethodChannel('window_manager');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+        (call) async {
+      actions.add(call.method);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    final core = FakeCore(signedIn: true, language: 'en')
+      ..live = true
+      ..disconnectFailure = true;
+    await tester.pumpWidget(GozarApp(core: core, windowControls: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(core.requests, contains('disconnect'));
+    expect(core.running, isTrue);
+    expect(actions, isEmpty);
+    expect(
+        find.text(
+            'The tunnel could not be safely disconnected. Please try closing again.'),
+        findsOneWidget);
   }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 }

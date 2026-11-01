@@ -26,6 +26,22 @@ int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
 
+void UpdateWindowShape(HWND hwnd) {
+  if (IsZoomed(hwnd)) {
+    SetWindowRgn(hwnd, nullptr, TRUE);
+    return;
+  }
+  RECT bounds;
+  if (!GetWindowRect(hwnd, &bounds)) return;
+  int width = bounds.right - bounds.left;
+  int height = bounds.bottom - bounds.top;
+  if (width <= 0 || height <= 0) return;
+  HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+  int diameter = Scale(40, FlutterDesktopGetDpiForMonitor(monitor) / 96.0);
+  HRGN shape = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter, diameter);
+  if (shape && !SetWindowRgn(hwnd, shape, TRUE)) DeleteObject(shape);
+}
+
 void EnableFullDpiSupportIfAvailable(HWND hwnd) {
   HMODULE user32_module = LoadLibraryA("User32.dll");
   if (!user32_module) {
@@ -175,7 +191,7 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       double scale = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
       info->ptMinTrackSize.x = Scale(360, scale);
-      info->ptMinTrackSize.y = Scale(440, scale);
+      info->ptMinTrackSize.y = Scale(360, scale);
       return 0;
     }
     case WM_NCHITTEST: {
@@ -216,6 +232,7 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
     case WM_SIZE: {
+      if (wparam != SIZE_MINIMIZED) UpdateWindowShape(hwnd);
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
 

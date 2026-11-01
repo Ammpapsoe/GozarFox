@@ -252,6 +252,22 @@ jobs:
             "-DHEADER_FILE=$(cygpath -w "$PWD/../packaging/windows/header.bmp")" \
             "$(cygpath -w "$PWD/../packaging/windows/gozar.nsi")"
           ls -lh out/*
+      - name: Verify native Windows window with simulated core
+        if: matrix.platform == 'windows'
+        working-directory: desktop_flutter
+        shell: pwsh
+        run: |
+          $runner = Get-ChildItem -Path build/windows -Filter gozar.exe -Recurse | Where-Object { $_.FullName -match '[\\/]runner[\\/]Release[\\/]' } | Select-Object -First 1
+          if (!$runner) { throw 'Windows runner not found' }
+          go build -trimpath -ldflags='-s -w -H=windowsgui' -o "$env:RUNNER_TEMP/gozar-ui-test-core.exe" ../scripts/ui-smoke-core.go
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ../scripts/test_windows_ui.ps1 -Bundle $runner.DirectoryName -Core "$env:RUNNER_TEMP/gozar-ui-test-core.exe" -TestLog "$env:RUNNER_TEMP/gozar-ui-test.log" -Screenshot "$env:RUNNER_TEMP/gozar-ui-simulated.png"
+      - uses: actions/upload-artifact@v4
+        if: matrix.platform == 'windows' && !startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: gozar-windows-ui-simulated
+          path: ${{ runner.temp }}/gozar-ui-simulated.png
+          if-no-files-found: warn
       - name: Verify Windows installer and uninstaller
         if: matrix.platform == 'windows'
         working-directory: desktop_flutter
@@ -274,10 +290,8 @@ jobs:
             arm64) ARCH=arm64 ;;
             *) echo "Unsupported macOS architecture"; exit 1 ;;
           esac
-          for binary in \
-            "$APP/Contents/MacOS/Gozar" \
-            "$APP/Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS" \
-            "$APP/Contents/Frameworks/App.framework/Versions/A/App"; do
+          thin_binary() {
+            binary="$1"
             test -f "$binary"
             if [ "$(lipo -archs "$binary")" != "$ARCH" ]; then
               lipo "$binary" -thin "$ARCH" -output "$binary.thin"
@@ -285,7 +299,12 @@ jobs:
               mv "$binary.thin" "$binary"
             fi
             test "$(lipo -archs "$binary")" = "$ARCH"
-          done
+          }
+          thin_binary "$APP/Contents/MacOS/Gozar"
+          while IFS= read -r -d '' framework; do
+            name=$(basename "$framework" .framework)
+            thin_binary "$framework/Versions/A/$name"
+          done < <(find "$APP/Contents/Frameworks" -mindepth 1 -maxdepth 1 -type d -name '*.framework' -print0)
           (cd ../go-desktop && CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" go build -trimpath -ldflags='-s -w' -o "../desktop_flutter/$APP/Contents/MacOS/gozar-core" ./cmd/gozar)
           test "$(lipo -archs "$APP/Contents/MacOS/gozar-core")" = "$ARCH"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../QUIC-GO-LICENSE.txt ../QPACK-LICENSE.txt ../GO-DEPS-LICENSES.txt "$APP/Contents/Resources/"
@@ -295,13 +314,12 @@ jobs:
           tar -xJf "out/Gozar-$ARTIFACT_NAME.tar.xz" -C "$RUNNER_TEMP/gozar-extracted"
           codesign --verify --deep --strict "$RUNNER_TEMP/gozar-extracted/Gozar.app"
           EXTRACTED="$RUNNER_TEMP/gozar-extracted/Gozar.app"
-          for binary in \
-            "$EXTRACTED/Contents/MacOS/Gozar" \
-            "$EXTRACTED/Contents/MacOS/gozar-core" \
-            "$EXTRACTED/Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS" \
-            "$EXTRACTED/Contents/Frameworks/App.framework/Versions/A/App"; do
-            test "$(lipo -archs "$binary")" = "$ARCH"
-          done
+          test "$(lipo -archs "$EXTRACTED/Contents/MacOS/Gozar")" = "$ARCH"
+          test "$(lipo -archs "$EXTRACTED/Contents/MacOS/gozar-core")" = "$ARCH"
+          while IFS= read -r -d '' framework; do
+            name=$(basename "$framework" .framework)
+            test "$(lipo -archs "$framework/Versions/A/$name")" = "$ARCH"
+          done < <(find "$EXTRACTED/Contents/Frameworks" -mindepth 1 -maxdepth 1 -type d -name '*.framework' -print0)
           ls -lh out/*
       - name: Check download size
         working-directory: desktop_flutter

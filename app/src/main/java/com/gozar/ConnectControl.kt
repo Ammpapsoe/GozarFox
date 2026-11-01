@@ -276,10 +276,10 @@ class ConnectControl @JvmOverloads constructor(
             else -> primary
         }
         val end = when (state) {
-            BUSY -> accent
-            ON -> ColorUtils.blendARGB(accent, primary, 0.2f)
+            BUSY -> color(R.color.fox_orange)
+            ON -> ColorUtils.blendARGB(accent, color(R.color.m3_ok_container), 0.28f)
             ERROR -> error
-            else -> ColorUtils.blendARGB(primary, accent, 0.38f)
+            else -> ColorUtils.blendARGB(primary, color(R.color.fox_orange), 0.28f)
         }
         fill.shader = android.graphics.LinearGradient(
             cx - scale, cy - scale, cx + scale, cy + scale,

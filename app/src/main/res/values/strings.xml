@@ -431,4 +431,8 @@ AGPL-3.0-or-later</string>
     <string name="chart_upload">Upload</string>
     <string name="focus_chip">↓ %1$s</string>
     <string name="always_on_managed">Disable Always-on VPN in Android settings before disconnecting, signing out or changing this protection.</string>
+    <string name="fox_disconnected">Disconnected</string>
+    <string name="fox_usage_pending">Usage information unavailable</string>
+    <string name="settings_group_protection">Protection &amp; connection</string>
+    <string name="settings_group_app">Appearance &amp; app</string>
 </resources>

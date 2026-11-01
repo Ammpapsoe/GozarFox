@@ -94,6 +94,15 @@ class Words {
   String get download => pick('دریافت', 'Download');
   String get upload => pick('ارسال', 'Upload');
   String get remaining => pick('حجم باقی‌مانده', 'Remaining');
+  String get locations => pick('مکان‌ها', 'Locations');
+  String get firewall => pick('دیوار آتش', 'Firewall');
+  String get unavailable => pick('در دسترس نیست', 'Unavailable');
+  String get exitIp => pick('آی‌پی خروجی', 'Exit IP');
+  String get tunnelDevice => pick('رابط تونل', 'Tunnel device');
+  String get usageUnavailable => pick('مصرف نامشخص', 'Usage unavailable');
+  String get closeFailed => pick(
+      'قطع امن تونل پیش از بستن برنامه انجام نشد؛ دوباره تلاش کنید.',
+      'The tunnel could not be safely disconnected. Please try closing again.');
   String get tunnelNotice => pick(
         'نسخهٔ آزمایشی: ترافیک IPv6 از تونل عبور نمی‌کند و UDP به‌جز DNS پشتیبانی نمی‌شود.',
         'Experimental: IPv6 bypasses the tunnel, and UDP other than DNS is not supported.',
