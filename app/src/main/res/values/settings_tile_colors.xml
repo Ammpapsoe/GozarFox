@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="settings_blue_container">#DCE9F8</color>
+    <color name="settings_blue_on_container">#214A70</color>
+    <color name="settings_teal_container">#D4ECE7</color>
+    <color name="settings_teal_on_container">#17564A</color>
+    <color name="settings_lavender_container">#E9E0F5</color>
+    <color name="settings_lavender_on_container">#593E72</color>
+    <color name="settings_amber_container">#F4E8D3</color>
+    <color name="settings_amber_on_container">#77520D</color>
+    <color name="settings_rose_container">#F4DDE1</color>
+    <color name="settings_rose_on_container">#842F40</color>
+    <color name="settings_sage_container">#E0EAD7</color>
+    <color name="settings_sage_on_container">#3E603B</color>
+    <color name="settings_slate_container">#E1E9EE</color>
+    <color name="settings_slate_on_container">#344C59</color>
+    <color name="settings_violet_container">#E7E2F1</color>
+    <color name="settings_violet_on_container">#50466C</color>
+</resources>

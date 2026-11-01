@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.transition.TransitionManager
 import androidx.core.widget.NestedScrollView
 import android.view.LayoutInflater
 import android.view.View
@@ -29,7 +28,27 @@ class SettingsFragment : Fragment() {
     private var appPicker: AppPicker? = null
     private var section = ""
     private var changingSwitch = false
-    private val listener: () -> Unit = { if (isAdded && view != null) paint() }
+    private var linkState: List<Boolean>? = null
+    private var usageState: Pair<Long, Long>? = null
+    private var versionName: String? = null
+    private val accountListener: () -> Unit = { if (isAdded && view != null && !isHidden) paint() }
+    private val linkListener: () -> Unit = {
+        if (isAdded && view != null && !isHidden) {
+            if (section == "security" || section == "connection") {
+                val current = connectionState()
+                if (current != linkState) {
+                    linkState = current
+                    paint()
+                }
+            } else if (section == "account" && usageState != (Fox.limit to Fox.remaining)) {
+                paint()
+            }
+        }
+    }
+
+    private fun connectionState() = listOf(
+        FoxLink.connected, FoxLink.connecting, FoxVpnService.isAlive(), FoxVpnService.rootActive
+    )
 
     private fun <T : View> find(id: Int): T = view!!.findViewById(id)
 
@@ -51,7 +70,6 @@ class SettingsFragment : Fragment() {
         find<MaterialSwitch>(R.id.swAds).setOnCheckedChangeListener { _, checked ->
             if (!changingSwitch) requestAdBlocking(checked)
         }
-        showSection(section, false)
         bind(R.id.rowGeo, R.id.swGeo, Store.geolocation(requireContext())) { Store.setGeolocation(requireContext(), it) }
         bind(R.id.rowRecents, R.id.swRecents, Store.recents(requireContext())) { Store.setRecents(requireContext(), it) }
 
@@ -74,14 +92,14 @@ class SettingsFragment : Fragment() {
             toast(R.string.account_refreshing)
         }
         find<View>(R.id.btnSignOut).setOnClickListener { askSignOut() }
-        Fox.watch(listener)
-        FoxLink.watch(listener)
-        paint()
+        Fox.watch(accountListener)
+        FoxLink.watch(linkListener)
+        showSection(section)
     }
 
     override fun onDestroyView() {
-        Fox.unwatch(listener)
-        FoxLink.unwatch(listener)
+        Fox.unwatch(accountListener)
+        FoxLink.unwatch(linkListener)
         appPicker?.dismiss()
         appPicker = null
         super.onDestroyView()
@@ -89,7 +107,12 @@ class SettingsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        paint()
+        if (!isHidden) paint()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) paint()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -103,7 +126,7 @@ class SettingsFragment : Fragment() {
         return true
     }
 
-    private fun showSection(value: String, animate: Boolean = true) {
+    private fun showSection(value: String) {
         section = value
         if (view == null) return
         val entries = listOf(
@@ -114,7 +137,6 @@ class SettingsFragment : Fragment() {
             "appearance" to R.id.settingsAppearance,
             "general" to R.id.settingsGeneral
         )
-        if (animate) TransitionManager.beginDelayedTransition(find<View>(R.id.settingsOverview).parent as ViewGroup)
         for ((name, id) in entries) find<View>(id).visibility = if (name == section) View.VISIBLE else View.GONE
         find<TextView>(R.id.settingsTitle).setText(when (section) {
             "account" -> R.string.settings_account
@@ -125,10 +147,11 @@ class SettingsFragment : Fragment() {
             else -> R.string.settings
         })
         find<NestedScrollView>(R.id.settingsScroll).scrollTo(0, 0)
+        paint()
     }
 
     fun restore(intent: Intent?) {
-        if (view != null) paint()
+        if (view != null && !isHidden) paint()
     }
 
     private fun bind(row: Int, switchId: Int, initial: Boolean, save: (Boolean) -> Unit) {
@@ -141,92 +164,104 @@ class SettingsFragment : Fragment() {
     private fun paint() {
         if (view == null) return
         val context = context ?: return
-        find<TextView>(R.id.tvKillSwitch).setText(when (FoxVpnService.lockdownState()) {
-            3 -> R.string.kill_active
-            2 -> R.string.kill_always
-            1 -> R.string.kill_off
-            else -> R.string.kill_unknown
-        })
-        val blocking = Store.blockAds(context)
-        changingSwitch = true
-        find<MaterialSwitch>(R.id.swAds).isChecked = blocking
-        changingSwitch = false
-        find<TextView>(R.id.tvAds).setText(if (blocking) R.string.ad_block_on else R.string.ad_block_off)
-        find<TextView>(R.id.tvDns).text = if (blocking) getString(R.string.dns_overridden) else when (Store.dnsProfile(context)) {
-            DnsPolicy.CLOUDFLARE -> getString(R.string.dns_cloudflare)
-            DnsPolicy.QUAD9 -> getString(R.string.dns_quad9)
-            DnsPolicy.CUSTOM -> Store.customDns(context)
-            else -> getString(R.string.dns_auto)
-        }
-        val signed = Fox.signedIn(context)
-        val mail = FoxStore.email(context)
-        find<TextView>(R.id.tvSettingsOverviewAccount).text =
-            if (signed && mail.isNotBlank()) mail else getString(R.string.settings_account_desc)
-        find<TextView>(R.id.tvAccountEmail).text =
-            if (signed) mail else getString(R.string.fox_signed_out)
-        find<TextView>(R.id.tvAccountInitial).text =
-            if (signed && mail.isNotEmpty()) mail.substring(0, 1).uppercase() else "?"
-        val limit = Fox.limit
-        val used = (limit - Fox.remaining).coerceAtLeast(0)
-        val left = Fox.remaining.coerceAtLeast(0)
-        val percent = if (limit > 0) ((used * 100) / limit).toInt().coerceIn(0, 100) else 0
-        find<TextView>(R.id.tvAccountPlan).text = getString(R.string.settings_account)
-        find<TextView>(R.id.tvUsagePercent).text = if (limit > 0) "$percent%" else "—"
-        find<TextView>(R.id.tvUsageUsed).text =
-            if (limit > 0) getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit))) else getString(R.string.fox_usage_pending)
-        find<TextView>(R.id.tvUsageLeft).text =
-            if (limit > 0) getString(R.string.usage_left, ltr(plain(left))) else ""
-        find<UsageMeterView>(R.id.usageMeter).apply {
-            visibility = if (limit > 0) View.VISIBLE else View.GONE
-            setProgress(percent)
-        }
-        find<View>(R.id.btnAccountRefresh).isEnabled = signed
-
-        val hasDirectRoutes = Store.bypassLan(context) || Store.bypassList(context).isNotBlank()
-        val directGuarded = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
-            (FoxVpnService.isAlive() && FoxVpnService.lockdownActive())
-        find<TextView>(R.id.tvRouting).text = when {
-            !hasDirectRoutes -> getString(R.string.routing_off)
-            directGuarded -> getString(R.string.routing_guarded)
-            else -> getString(R.string.routing_on, FoxRoute.split(Store.bypassList(context)).size + if (Store.bypassLan(context)) 1 else 0)
-        }
-        val hops = FoxUpstream.parse(Store.chain(context)).size
-        find<TextView>(R.id.tvChain).text =
-            if (hops > 0) getString(R.string.chain_on, hops) else getString(R.string.chain_off)
-        find<TextView>(R.id.tvRoot).text = getString(when {
-            rootChecking -> R.string.root_checking
-            FoxVpnService.rootActive -> R.string.root_active
-            Store.rootRouting(context) -> R.string.root_ready
-            else -> R.string.root_off
-        })
-        val only = Store.apps(context)
-        find<TextView>(R.id.tvApps).text =
-            if (only.isEmpty()) getString(R.string.apps_all) else getString(R.string.apps_count, only.size)
-
-        find<TextView>(R.id.tvLang).text = when (Store.lang(context)) {
-            "fa" -> getString(R.string.lang_fa)
-            "en" -> getString(R.string.lang_en)
-            else -> getString(R.string.lang_system)
-        }
-        find<TextView>(R.id.tvTheme).text = when (Store.theme(context)) {
-            "light" -> getString(R.string.theme_light)
-            "dark" -> getString(R.string.theme_dark)
-            else -> getString(R.string.theme_auto)
-        }
-        val version = try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        } catch (e: Exception) {
-            ""
-        }
-        find<TextView>(R.id.tvAbout).text = getString(R.string.version_license, version)
-        val available = Store.updateVersion(context)
-        find<TextView>(R.id.tvUpdate).text = when {
-            updateChecking -> getString(R.string.update_checking)
-            available.isNotBlank() -> getString(R.string.update_available, available)
-            else -> getString(R.string.update_current, version)
+        when (section) {
+            "" -> {
+                val mail = FoxStore.email(context)
+                find<TextView>(R.id.tvSettingsOverviewAccount).text =
+                    if (Fox.signedIn(context) && mail.isNotBlank()) mail else getString(R.string.settings_account_desc)
+            }
+            "account" -> {
+                usageState = Fox.limit to Fox.remaining
+                val signed = Fox.signedIn(context)
+                val mail = FoxStore.email(context)
+                find<TextView>(R.id.tvAccountEmail).text = if (signed) mail else getString(R.string.fox_signed_out)
+                find<TextView>(R.id.tvAccountInitial).text =
+                    if (signed && mail.isNotEmpty()) mail.substring(0, 1).uppercase() else "?"
+                val limit = Fox.limit
+                val used = (limit - Fox.remaining).coerceAtLeast(0)
+                val left = Fox.remaining.coerceAtLeast(0)
+                val percent = if (limit > 0) ((used * 100) / limit).toInt().coerceIn(0, 100) else 0
+                find<TextView>(R.id.tvAccountPlan).text = getString(R.string.settings_account)
+                find<TextView>(R.id.tvUsagePercent).text = if (limit > 0) "$percent%" else "—"
+                find<TextView>(R.id.tvUsageUsed).text =
+                    if (limit > 0) getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit))) else getString(R.string.fox_usage_pending)
+                find<TextView>(R.id.tvUsageLeft).text =
+                    if (limit > 0) getString(R.string.usage_left, ltr(plain(left))) else ""
+                find<UsageMeterView>(R.id.usageMeter).apply {
+                    visibility = if (limit > 0) View.VISIBLE else View.GONE
+                    setProgress(percent)
+                }
+                find<View>(R.id.btnAccountRefresh).isEnabled = signed
+            }
+            "security" -> {
+                linkState = connectionState()
+                find<TextView>(R.id.tvKillSwitch).setText(when (FoxVpnService.lockdownState()) {
+                    3 -> R.string.kill_active
+                    2 -> R.string.kill_always
+                    1 -> R.string.kill_off
+                    else -> R.string.kill_unknown
+                })
+                val blocking = Store.blockAds(context)
+                changingSwitch = true
+                find<MaterialSwitch>(R.id.swAds).isChecked = blocking
+                changingSwitch = false
+                find<TextView>(R.id.tvAds).setText(if (blocking) R.string.ad_block_on else R.string.ad_block_off)
+                find<TextView>(R.id.tvDns).text = if (blocking) getString(R.string.dns_overridden) else when (Store.dnsProfile(context)) {
+                    DnsPolicy.CLOUDFLARE -> getString(R.string.dns_cloudflare)
+                    DnsPolicy.QUAD9 -> getString(R.string.dns_quad9)
+                    DnsPolicy.CUSTOM -> Store.customDns(context)
+                    else -> getString(R.string.dns_auto)
+                }
+            }
+            "connection" -> {
+                linkState = connectionState()
+                val hasDirectRoutes = Store.bypassLan(context) || Store.bypassList(context).isNotBlank()
+                val directGuarded = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
+                    (FoxVpnService.isAlive() && FoxVpnService.lockdownActive())
+                find<TextView>(R.id.tvRouting).text = when {
+                    !hasDirectRoutes -> getString(R.string.routing_off)
+                    directGuarded -> getString(R.string.routing_guarded)
+                    else -> getString(R.string.routing_on, FoxRoute.split(Store.bypassList(context)).size + if (Store.bypassLan(context)) 1 else 0)
+                }
+                val hops = FoxUpstream.parse(Store.chain(context)).size
+                find<TextView>(R.id.tvChain).text = if (hops > 0) getString(R.string.chain_on, hops) else getString(R.string.chain_off)
+                find<TextView>(R.id.tvRoot).text = getString(when {
+                    rootChecking -> R.string.root_checking
+                    FoxVpnService.rootActive -> R.string.root_active
+                    Store.rootRouting(context) -> R.string.root_ready
+                    else -> R.string.root_off
+                })
+                val only = Store.apps(context)
+                find<TextView>(R.id.tvApps).text = if (only.isEmpty()) getString(R.string.apps_all) else getString(R.string.apps_count, only.size)
+            }
+            "appearance" -> {
+                find<TextView>(R.id.tvLang).text = when (Store.lang(context)) {
+                    "fa" -> getString(R.string.lang_fa)
+                    "en" -> getString(R.string.lang_en)
+                    else -> getString(R.string.lang_system)
+                }
+                find<TextView>(R.id.tvTheme).text = when (Store.theme(context)) {
+                    "light" -> getString(R.string.theme_light)
+                    "dark" -> getString(R.string.theme_dark)
+                    else -> getString(R.string.theme_auto)
+                }
+            }
+            "general" -> {
+                val version = versionName ?: try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty().also { versionName = it }
+                } catch (_: Exception) {
+                    ""
+                }
+                find<TextView>(R.id.tvAbout).text = getString(R.string.version_license, version)
+                val available = Store.updateVersion(context)
+                find<TextView>(R.id.tvUpdate).text = when {
+                    updateChecking -> getString(R.string.update_checking)
+                    available.isNotBlank() -> getString(R.string.update_available, available)
+                    else -> getString(R.string.update_current, version)
+                }
+            }
         }
     }
-
 
     private fun explainLockdown() {
         MaterialAlertDialogBuilder(requireContext())
