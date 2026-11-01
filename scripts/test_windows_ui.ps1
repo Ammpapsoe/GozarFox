@@ -14,6 +14,10 @@ public static class GozarWindowProbe {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern int GetWindowRgn(IntPtr hWnd, IntPtr region);
+  [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+  [DllImport("gdi32.dll")] public static extern bool PtInRegion(IntPtr region, int x, int y);
+  [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
 }
 '@
 $env:GOZAR_CORE = $Core
@@ -42,6 +46,14 @@ try {
   $width = $rect.Right - $rect.Left
   $height = $rect.Bottom - $rect.Top
   if ($width -lt 320 -or $width -gt 900 -or $height -lt 320 -or $height -gt 900) { throw "Unexpected native window size: ${width}x${height}" }
+  $region = [GozarWindowProbe]::CreateRectRgn(0, 0, 0, 0)
+  if ($region -eq [IntPtr]::Zero) { throw 'Could not allocate the window region.' }
+  try {
+    if ([GozarWindowProbe]::GetWindowRgn($handle, $region) -eq 0) { throw 'The rounded native window region is missing.' }
+    if ([GozarWindowProbe]::PtInRegion($region, 0, 0) -or ![GozarWindowProbe]::PtInRegion($region, [int]($width / 2), [int]($height / 2))) { throw 'The native window region is not rounded.' }
+  } finally {
+    [void][GozarWindowProbe]::DeleteObject($region)
+  }
   try {
     Add-Type -AssemblyName System.Drawing
     [void][GozarWindowProbe]::SetForegroundWindow($handle)

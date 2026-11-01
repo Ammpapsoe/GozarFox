@@ -9,7 +9,7 @@ $destination = [System.IO.Path]::GetFullPath($InstallDir)
 if (Test-Path $destination) { throw 'Installer test directory already exists' }
 $process = Start-Process -FilePath $setup -ArgumentList @('/S', "/D=$destination") -Wait -PassThru
 if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
-$required = @('gozar.exe', 'gozar-core.exe', 'flutter_windows.dll', 'LICENSE', 'NOTICE', 'GO-DEPS-LICENSES.txt', 'data/flutter_assets/NOTICES.Z', 'Uninstall.exe')
+$required = @('gozar.exe', 'gozar-core.exe', 'flutter_windows.dll', 'screen_retriever_windows_plugin.dll', 'window_manager_plugin.dll', 'LICENSE', 'NOTICE', 'GO-DEPS-LICENSES.txt', 'data/flutter_assets/NOTICES.Z', 'Uninstall.exe')
 foreach ($name in $required) {
     if (!(Test-Path (Join-Path $destination $name))) { throw "Installed file missing: $name" }
 }
