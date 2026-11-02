@@ -16,13 +16,13 @@ type dataBlob struct {
 }
 
 var (
-	crypt32            = windows.NewLazySystemDLL("crypt32.dll")
-	kernel32           = windows.NewLazySystemDLL("kernel32.dll")
-	procProtect        = crypt32.NewProc("CryptProtectData")
-	procUnprotect      = crypt32.NewProc("CryptUnprotectData")
-	procLocalFree      = kernel32.NewProc("LocalFree")
-	entropy            = []byte("gozar.session.v1")
-	errProtectFailed   = errors.New("the session key could not be protected")
+	crypt32          = windows.NewLazySystemDLL("crypt32.dll")
+	kernel32         = windows.NewLazySystemDLL("kernel32.dll")
+	procProtect      = crypt32.NewProc("CryptProtectData")
+	procUnprotect    = crypt32.NewProc("CryptUnprotectData")
+	procLocalFree    = kernel32.NewProc("LocalFree")
+	entropy          = []byte("gozar.session.v1")
+	errProtectFailed = errors.New("the session key could not be protected")
 )
 
 func blob(data []byte) dataBlob {

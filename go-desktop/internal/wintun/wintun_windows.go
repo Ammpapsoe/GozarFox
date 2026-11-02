@@ -13,22 +13,30 @@ import (
 )
 
 func Ensure() error {
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		return errors.New("the per-user application folder is unavailable")
+	}
 	sum := sha256.Sum256(library)
-	name := "wintun-" + hex.EncodeToString(sum[:8]) + ".dll"
-	folder := filepath.Join(os.Getenv("LOCALAPPDATA"), "Gozar")
+	folder := filepath.Join(base, "Gozar", hex.EncodeToString(sum[:8]))
 	if err := os.MkdirAll(folder, 0o700); err != nil {
 		return err
 	}
-	target := filepath.Join(folder, name)
+	target := filepath.Join(folder, "wintun.dll")
 	if err := install(target, sum[:]); err != nil {
 		return err
 	}
-	loaded, err := windows.LoadLibraryEx(target, 0, windows.LOAD_LIBRARY_SEARCH_SYSTEM32|windows.LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR)
+	if _, err := windows.LoadLibraryEx(target, 0, windows.LOAD_LIBRARY_SEARCH_SYSTEM32|windows.LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR); err != nil {
+		return err
+	}
+	if err := windows.SetDefaultDllDirectories(windows.LOAD_LIBRARY_SEARCH_SYSTEM32 | windows.LOAD_LIBRARY_SEARCH_USER_DIRS); err != nil {
+		return err
+	}
+	wide, err := windows.UTF16PtrFromString(folder)
 	if err != nil {
 		return err
 	}
-	_ = loaded
-	if err := windows.SetDefaultDllDirectories(windows.LOAD_LIBRARY_SEARCH_SYSTEM32); err != nil {
+	if _, err := windows.AddDllDirectory(wide); err != nil {
 		return err
 	}
 	return nil
