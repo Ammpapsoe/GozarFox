@@ -29,6 +29,8 @@ class FoxProxy(
     @Volatile private var running = false
 
     fun boundPort(): Int = active
+
+    internal fun sessionCredential(): String = credential
     private val connections = Any()
     private val clients = mutableSetOf<Socket>()
     private val pipes = mutableSetOf<FoxPipe>()

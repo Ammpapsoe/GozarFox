@@ -28,6 +28,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class ProtectionTest {
+
+    private fun login(input: java.io.InputStream, output: java.io.OutputStream, credential: String) {
+        val raw = credential.toByteArray()
+        output.write(byteArrayOf(1, raw.size.toByte()) + raw + byteArrayOf(raw.size.toByte()) + raw)
+        assertTrue(input.readNBytes(2).contentEquals(byteArrayOf(1, 0)))
+    }
     @After
     fun clean() {
         RuntimeEnvironment.getApplication().getSharedPreferences("store", Context.MODE_PRIVATE).edit().clear().commit()
@@ -97,8 +103,9 @@ class ProtectionTest {
                     client.soTimeout = 3000
                     val input = client.getInputStream()
                     val output = client.getOutputStream()
-                    output.write(byteArrayOf(5, 1, 0))
-                    assertTrue(input.readNBytes(2).contentEquals(byteArrayOf(5, 0)))
+                    output.write(byteArrayOf(5, 1, 2))
+                    assertTrue(input.readNBytes(2).contentEquals(byteArrayOf(5, 2)))
+                    login(input, output, proxy.sessionCredential())
                     val targetPort = target.localPort
                     output.write(byteArrayOf(5, 1, 0, 3, 14) + "direct.example".toByteArray() +
                         byteArrayOf((targetPort shr 8).toByte(), targetPort.toByte()))
@@ -125,8 +132,34 @@ class ProtectionTest {
         try {
             Socket("127.0.0.1", port).use { client ->
                 client.soTimeout = 3000
-                client.getOutputStream().write(byteArrayOf(5, 1, 2))
+                client.getOutputStream().write(byteArrayOf(5, 1, 0))
                 assertTrue(client.getInputStream().readNBytes(2).contentEquals(byteArrayOf(5, 0xFF.toByte())))
+            }
+            Socket("127.0.0.1", port).use { client ->
+                client.soTimeout = 3000
+                client.getOutputStream().write(byteArrayOf(5, 1, 2))
+                assertTrue(client.getInputStream().readNBytes(2).contentEquals(byteArrayOf(5, 2)))
+            }
+        } finally {
+            proxy.stop()
+        }
+    }
+
+    @Test
+    fun socksRejectsAWrongSessionPassword() {
+        val port = availablePort()
+        val proxy = FoxProxy(port) { null }
+        assertTrue(proxy.start())
+        try {
+            Socket("127.0.0.1", port).use { client ->
+                client.soTimeout = 3000
+                val input = client.getInputStream()
+                val output = client.getOutputStream()
+                output.write(byteArrayOf(5, 1, 2))
+                assertTrue(input.readNBytes(2).contentEquals(byteArrayOf(5, 2)))
+                val wrong = "wrong".toByteArray()
+                output.write(byteArrayOf(1, wrong.size.toByte()) + wrong + byteArrayOf(wrong.size.toByte()) + wrong)
+                assertTrue(input.readNBytes(2).contentEquals(byteArrayOf(1, 1)))
             }
         } finally {
             proxy.stop()

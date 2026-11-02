@@ -3,18 +3,32 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
-func TestTokensAreNotWrittenInPlaintext(t *testing.T) {
+func sandbox(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("AppData", dir)
+	case "darwin":
+		t.Setenv("HOME", dir)
+	default:
+		t.Setenv("XDG_CONFIG_HOME", dir)
+	}
+	return filepath.Join(Dir(), "config.json")
+}
+
+func TestTokensAreNotWrittenInPlaintext(t *testing.T) {
+	target := sandbox(t)
 	saved := Config{Email: "person@example.test", UID: "uid", Access: "access-token-value", Refresh: "refresh-token-value", FullTunnel: true, Port: 10810, Theme: "system"}
 	if err := Save(saved); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "Gozar", "config.json"))
+	raw, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,11 +45,9 @@ func TestTokensAreNotWrittenInPlaintext(t *testing.T) {
 }
 
 func TestLegacyPlaintextConfigKeepsWorking(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	os.MkdirAll(filepath.Join(dir, "Gozar"), 0o700)
+	target := sandbox(t)
 	legacy := `{"email":"old@example.test","uid":"old","access":"plain-access","refresh":"plain-refresh","port":10810,"theme":"system"}`
-	if err := os.WriteFile(filepath.Join(dir, "Gozar", "config.json"), []byte(legacy), 0o600); err != nil {
+	if err := os.WriteFile(target, []byte(legacy), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	loaded := Load()
@@ -45,7 +57,7 @@ func TestLegacyPlaintextConfigKeepsWorking(t *testing.T) {
 	if err := Save(loaded); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "Gozar", "config.json"))
+	raw, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +67,7 @@ func TestLegacyPlaintextConfigKeepsWorking(t *testing.T) {
 }
 
 func TestSealingIsStableAndIdempotent(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", dir)
+	sandbox(t)
 	once := seal("token")
 	if !strings.HasPrefix(once, sealedPrefix) {
 		t.Fatalf("expected a sealed payload, got %q", once)
