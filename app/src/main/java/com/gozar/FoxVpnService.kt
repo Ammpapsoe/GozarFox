@@ -68,16 +68,22 @@ class FoxVpnService : VpnService() {
         if (descriptor != null) return
         FoxRoute.apply(Store.bypassLan(this), Store.bypassList(this))
         FoxRoute.applyChain(Store.chain(this))
+        if (!FoxLink.prepare(this)) {
+            abortStart(getString(R.string.fox_no_device))
+            return
+        }
         val builder = Builder()
             .setSession(getString(R.string.fox_title))
             .addAddress(LOCAL_ADDRESS, 32)
+            .addAddress(LOCAL_ADDRESS_V6, 128)
             .addDnsServer(DNS_ADDRESS)
             .addRoute("0.0.0.0", 0)
             .addRoute(DNS_ADDRESS, 32)
+            .addRoute("::", 0)
             .setMtu(FoxStack.MTU)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
-            builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", FoxLink.WEB_PORT))
+            builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", FoxLink.webPort))
         }
         val appsReady = applyAppSelection(
             Store.apps(this),
@@ -101,7 +107,7 @@ class FoxVpnService : VpnService() {
         descriptor = fd
         val app = applicationContext
         val resolver = FoxResolver(
-            FoxLink.DNS_PORT,
+            FoxLink.dnsPort,
             endpoints = DnsPolicy.endpoints(Store.dnsProfile(this), Store.customDns(this), Store.blockAds(this))
         )
         this.resolver = resolver
@@ -288,6 +294,7 @@ class FoxVpnService : VpnService() {
 
     companion object {
         const val LOCAL_ADDRESS = "10.111.0.2"
+        const val LOCAL_ADDRESS_V6 = "fd00:111:0:2::2"
         const val DNS_ADDRESS = "10.111.0.53"
         private const val CHANNEL = "fox_vpn"
         private const val NOTIFY = 7412

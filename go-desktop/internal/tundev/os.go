@@ -18,6 +18,7 @@ type Config struct {
 	Keep            []netip.Addr
 	AddedKeep       []netip.Addr
 	Routes          [2]bool
+	RoutesV6        [2]bool
 	DNSBefore       []byte
 	DNSChanged      bool
 	ServiceDNS      map[string][]string
@@ -88,3 +89,8 @@ func mustRun(name string, args ...string) error {
 }
 
 func itoa(value int) string { return strconv.Itoa(value) }
+
+func blackhole6(name string, args ...string) error {
+	_, err := command(name, args...)
+	return err
+}

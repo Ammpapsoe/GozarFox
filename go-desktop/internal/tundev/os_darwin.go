@@ -44,6 +44,11 @@ func configure(cfg *Config) error {
 		return err
 	}
 	cfg.Routes[1] = true
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if err := blackhole6("route", "-n", "add", "-net", prefix, "-interface", cfg.Interface); err == nil {
+			cfg.RoutesV6[index] = true
+		}
+	}
 	cfg.ServiceDNS = make(map[string][]string)
 	list, err := services()
 	if err != nil {
@@ -88,6 +93,12 @@ func restore(cfg *Config) {
 	if cfg.Routes[1] {
 		mustRun("route", "-n", "delete", "-net", "128.0.0.0/1", "-interface", cfg.Interface)
 		cfg.Routes[1] = false
+	}
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if cfg.RoutesV6[index] {
+			mustRun("route", "-n", "delete", "-net", prefix, "-interface", cfg.Interface)
+			cfg.RoutesV6[index] = false
+		}
 	}
 	for _, keep := range cfg.AddedKeep {
 		out, err := command("route", "-n", "get", "-host", keep.String())

@@ -148,6 +148,7 @@ func Load() Config {
 	if json.Unmarshal(data, &loaded) != nil {
 		return fresh
 	}
+	loaded.unsealTokens()
 	if loaded.Port == 0 {
 		loaded.Port = fresh.Port
 	}
@@ -164,7 +165,9 @@ func Load() Config {
 }
 
 func Save(current Config) error {
-	data, err := json.MarshalIndent(current.WithCurrentAccount(), "", "  ")
+	final := current.WithCurrentAccount()
+	final.sealTokens()
+	data, err := json.MarshalIndent(final, "", "  ")
 	if err != nil {
 		return err
 	}

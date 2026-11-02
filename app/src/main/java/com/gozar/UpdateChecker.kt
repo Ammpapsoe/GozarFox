@@ -15,7 +15,10 @@ import kotlin.concurrent.thread
 object UpdateChecker {
     private const val JOB_ID = 7_324
     private const val CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+    private const val OWNER = "bardia049b-stack"
+    private val REPOSITORIES = listOf("Gozar", "Gozar1")
     private const val LATEST_RELEASE = "https://api.github.com/repos/bardia049b-stack/Gozar1/releases/latest"
+    private val VERSION = Regex("^\\d{1,4}(\\.\\d{1,4}){1,3}(-[0-9A-Za-z.]{1,16})?$")
     private val main = Handler(Looper.getMainLooper())
     private val lock = Any()
     private val callbacks = mutableListOf<(Result) -> Unit>()
@@ -97,7 +100,8 @@ object UpdateChecker {
             } catch (_: Exception) {
                 ""
             }
-            if (version.isBlank() || url.isBlank() || installed.isBlank()) Result.Failed
+            if (!VERSION.matches(version) || installed.isBlank()) Result.Failed
+            else if (!trusted(url)) Result.Failed
             else if (isNewer(version, installed)) Result.Available(version, url)
             else Result.Current
         } catch (_: Exception) {
@@ -105,6 +109,18 @@ object UpdateChecker {
         } finally {
             connection?.disconnect()
         }
+    }
+
+    internal fun trusted(url: String): Boolean {
+        val parsed = try {
+            java.net.URI(url)
+        } catch (_: Exception) {
+            return false
+        }
+        if (!parsed.scheme.equals("https", true) || parsed.userInfo != null || parsed.port != -1) return false
+        if (!parsed.host.equals("github.com", true)) return false
+        val path = parsed.path ?: return false
+        return REPOSITORIES.any { path.startsWith("/$OWNER/$it/releases/") }
     }
 
     private fun isNewer(remote: String, local: String): Boolean {

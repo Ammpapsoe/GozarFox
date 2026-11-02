@@ -6,6 +6,9 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.concurrent.Semaphore
 import kotlin.concurrent.thread
 
 class FoxProxy(
@@ -17,8 +20,15 @@ class FoxProxy(
     private val pass: () -> String?
 ) {
 
+    private val credential = ByteArray(18).also { SecureRandom().nextBytes(it) }
+        .let { raw -> String(android.util.Base64.encode(raw, android.util.Base64.NO_WRAP)) }
+    private val slots = Semaphore(MAX_CLIENTS)
+    private var active: Int = port
+
     @Volatile private var server: ServerSocket? = null
     @Volatile private var running = false
+
+    fun boundPort(): Int = active
     private val connections = Any()
     private val clients = mutableSetOf<Socket>()
     private val pipes = mutableSetOf<FoxPipe>()
@@ -26,8 +36,9 @@ class FoxProxy(
     fun start(): Boolean {
         if (running) return true
         return try {
-            val socket = ServerSocket(port, 64, InetAddress.getByName("127.0.0.1"))
+            val socket = ServerSocket(port, 16, InetAddress.getByName("127.0.0.1"))
             server = socket
+            active = socket.localPort
             running = true
             thread(isDaemon = true, name = "fox-proxy") { acceptLoop(socket) }
             true
@@ -63,10 +74,15 @@ class FoxProxy(
             } catch (e: Exception) {
                 break
             }
+            if (!client.inetAddress.isLoopbackAddress || !slots.tryAcquire()) {
+                try { client.close() } catch (_: Exception) { }
+                continue
+            }
             val accepted = synchronized(connections) {
                 if (!running) false else clients.add(client)
             }
             if (!accepted) {
+                slots.release()
                 try { client.close() } catch (_: Exception) { }
                 continue
             }
@@ -85,6 +101,7 @@ class FoxProxy(
             if (first == 0x05) socks(input, output) else web(input, output)
         } catch (_: Exception) {
         } finally {
+            slots.release()
             synchronized(connections) { clients.remove(client) }
             try {
                 client.close()
@@ -99,13 +116,14 @@ class FoxProxy(
         if (count <= 0) return
         val methods = ByteArray(count)
         if (readFull(input, methods) < 0) return
-        if (methods.none { it.toInt() == 0x00 }) {
+        if (!methods.any { it.toInt() == 0x02 }) {
             output.write(byteArrayOf(0x05, 0xFF.toByte()))
             output.flush()
             return
         }
-        output.write(byteArrayOf(0x05, 0x00))
+        output.write(byteArrayOf(0x05, 0x02))
         output.flush()
+        if (!login(input, output)) return
         val head = ByteArray(4)
         if (readFull(input, head) < 0 || head[0].toInt() != 0x05 || head[2].toInt() != 0x00) return
         if (head[1].toInt() != 0x01) {
@@ -147,6 +165,19 @@ class FoxProxy(
         pump(input, output, tunnel)
     }
 
+    private fun login(input: InputStream, output: BufferedOutputStream): Boolean {
+        if (input.read() != 0x01) return false
+        val user = ByteArray(input.read().coerceAtLeast(0)).also { if (readFull(input, it) < 0) return false }
+        val length = input.read()
+        if (length < 0) return false
+        val word = ByteArray(length).also { if (readFull(input, it) < 0) return false }
+        val expected = credential.toByteArray(Charsets.UTF_8)
+        val ok = MessageDigest.isEqual(user, expected) && MessageDigest.isEqual(word, expected)
+        output.write(byteArrayOf(0x01, if (ok) 0x00 else 0x01))
+        output.flush()
+        return ok
+    }
+
     private fun web(input: InputStream, output: BufferedOutputStream) {
         val head = readHead(input) ?: return
         val lines = head.split("\r\n")
@@ -177,7 +208,7 @@ class FoxProxy(
             output.flush()
             return
         }
-        val url = java.net.URL(target)
+        val url = try { java.net.URL(target) } catch (e: Exception) { return }
         val secure = url.protocol == "https"
         val host = url.host
         val port = if (url.port > 0) url.port else if (secure) 443 else 80
@@ -276,6 +307,10 @@ class FoxProxy(
             last = c
         }
         return null
+    }
+
+    companion object {
+        private const val MAX_CLIENTS = 64
     }
 
     private fun readFull(input: InputStream, buffer: ByteArray): Int {

@@ -28,9 +28,9 @@ object DnsPolicy {
     fun endpoints(profile: String, custom: String, blockAds: Boolean): List<String> {
         if (blockAds) return listOf(ADGUARD)
         return when (profile) {
-            AUTO -> listOf(GOOGLE, MOZILLA)
-            CLOUDFLARE -> listOf(MOZILLA)
-            QUAD9 -> listOf(QUAD9_URL)
+            AUTO -> listOf(MOZILLA, GOOGLE, QUAD9_URL)
+            CLOUDFLARE -> listOf(MOZILLA, GOOGLE)
+            QUAD9 -> listOf(QUAD9_URL, MOZILLA)
             CUSTOM -> if (validCustom(custom)) listOf(custom) else emptyList()
             else -> emptyList()
         }

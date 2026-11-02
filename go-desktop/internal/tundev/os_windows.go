@@ -109,6 +109,11 @@ func configure(cfg *Config) error {
 		return err
 	}
 	cfg.Routes[1] = true
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if err := blackhole6("netsh", "interface", "ipv6", "add", "route", prefix, cfg.Interface); err == nil {
+			cfg.RoutesV6[index] = true
+		}
+	}
 	return nil
 }
 
@@ -120,6 +125,12 @@ func restore(cfg *Config) {
 	if cfg.Routes[1] {
 		mustRun("netsh", "interface", "ipv4", "delete", "route", "128.0.0.0/1", cfg.Interface)
 		cfg.Routes[1] = false
+	}
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if cfg.RoutesV6[index] {
+			mustRun("netsh", "interface", "ipv6", "delete", "route", prefix, cfg.Interface)
+			cfg.RoutesV6[index] = false
+		}
 	}
 	for _, keep := range cfg.AddedKeep {
 		mustRun("route", "delete", keep.String(), "mask", "255.255.255.255", cfg.windowsGateway, "if", cfg.windowsIndex)

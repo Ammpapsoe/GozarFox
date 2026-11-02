@@ -54,6 +54,11 @@ func configure(cfg *Config) error {
 		return err
 	}
 	cfg.Routes[1] = true
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if err := blackhole6("ip", "-6", "route", "add", prefix, "dev", cfg.Interface); err == nil {
+			cfg.RoutesV6[index] = true
+		}
+	}
 	before, err := os.ReadFile(resolvConf)
 	if err != nil {
 		return err
@@ -112,6 +117,12 @@ func restore(cfg *Config) {
 	if cfg.Routes[1] {
 		mustRun("ip", "route", "delete", "128.0.0.0/1", "dev", cfg.Interface)
 		cfg.Routes[1] = false
+	}
+	for index, prefix := range [2]string{"::/1", "8000::/1"} {
+		if cfg.RoutesV6[index] {
+			mustRun("ip", "-6", "route", "delete", prefix, "dev", cfg.Interface)
+			cfg.RoutesV6[index] = false
+		}
 	}
 	for _, route := range cfg.linuxKeepRoutes {
 		_ = mustRun("ip", route...)

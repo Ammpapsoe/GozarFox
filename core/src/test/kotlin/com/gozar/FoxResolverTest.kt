@@ -36,7 +36,7 @@ class FoxResolverTest {
         offline = false
         val recovered = resolver.answer(query(100))!!
         assertEquals(0, recovered[3].toInt() and 15)
-        assertEquals(83, calls.get())
+        assertEquals(41 * DnsPolicy.endpoints(DnsPolicy.AUTO, "", false).size + 1, calls.get())
     }
 
     @Test

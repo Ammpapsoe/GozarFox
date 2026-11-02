@@ -11,9 +11,12 @@ import kotlin.concurrent.thread
 
 object FoxLink {
 
-    const val SOCKS_PORT = 10810
-    const val WEB_PORT = 10811
-    const val DNS_PORT = 10812
+    @Volatile var socksPort: Int = 0
+        private set
+    @Volatile var webPort: Int = 0
+        private set
+    @Volatile var dnsPort: Int = 0
+        private set
 
     @Volatile var connected = false
     @Volatile var connecting = false
@@ -28,6 +31,7 @@ object FoxLink {
     @Volatile var downRate: Double = 0.0
     @Volatile var upRate: Double = 0.0
 
+    private var prepared = false
     private var socks: FoxProxy? = null
     private var web: FoxProxy? = null
     private var dns: FoxProxy? = null
@@ -65,6 +69,25 @@ object FoxLink {
 
     fun trafficHistory(): List<Pair<Float, Float>> = synchronized(historyLock) { history.toList() }
 
+    fun prepare(c: Context): Boolean {
+        val app = c.applicationContext
+        return synchronized(stateLock) {
+            if (prepared) return true
+            socks = FoxProxy(0) { FoxStore.pass(app).ifEmpty { null } }
+            web = FoxProxy(0) { FoxStore.pass(app).ifEmpty { null } }
+            dns = FoxProxy(0, forceTunnel = true, countTraffic = false) { FoxStore.pass(app).ifEmpty { null } }
+            if (socks?.start() != true || web?.start() != true || dns?.start() != true) {
+                stopServers()
+                return false
+            }
+            socksPort = socks?.boundPort() ?: 0
+            webPort = web?.boundPort() ?: 0
+            dnsPort = dns?.boundPort() ?: 0
+            prepared = socksPort > 0 && webPort > 0 && dnsPort > 0
+            prepared
+        }
+    }
+
     fun start(c: Context) {
         val app = c.applicationContext
         val attempt = synchronized(stateLock) {
@@ -92,15 +115,10 @@ object FoxLink {
                 val chosen = Fox.selectedLocation(app) ?: throw FoxError("No server available")
                 val lower = pass.limit > 0 && pass.remaining <= 0
                 if (lower) throw FoxError("Your 50 GB for this month is used up")
+                if (!prepare(app)) throw FoxError("The local proxy did not start")
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
                     location = chosen
-                    socks = FoxProxy(SOCKS_PORT) { FoxStore.pass(app).ifEmpty { null } }
-                    web = FoxProxy(WEB_PORT) { FoxStore.pass(app).ifEmpty { null } }
-                    dns = FoxProxy(DNS_PORT, forceTunnel = true, countTraffic = false) { FoxStore.pass(app).ifEmpty { null } }
-                    if (socks?.start() != true || web?.start() != true || dns?.start() != true) {
-                        throw FoxError("The local proxy did not start")
-                    }
                 }
                 try {
                     FoxTunnel.verify(chosen, pass.token)
@@ -200,6 +218,10 @@ object FoxLink {
         socks = null
         web = null
         dns = null
+        prepared = false
+        socksPort = 0
+        webPort = 0
+        dnsPort = 0
     }
 
     private fun startTicker(attempt: Long) {

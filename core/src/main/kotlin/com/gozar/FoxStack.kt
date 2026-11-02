@@ -46,11 +46,16 @@ class FoxStack(
         private const val UPLOAD_CAP = 512 * 1024
         private const val FLIGHT_CAP = 256 * 1024
         private const val MASK = 0xFFFFFFFFL
+        private const val MAX_FLOWS = 512
+        private const val MAX_NAMES = 4096
+        private const val SYN_BURST = 256
     }
 
     private val flows = ConcurrentHashMap<Long, Flow>()
     private val names = ConcurrentHashMap<Int, String>()
     private val stamp = AtomicInteger(1)
+    private val synTokens = AtomicInteger(SYN_BURST)
+    @Volatile private var synRefilledAt = System.currentTimeMillis()
     private val dnsWorkers = ThreadPoolExecutor(8, 8, 0, TimeUnit.SECONDS, ArrayBlockingQueue(128), { task ->
         Thread(task, "fox-dns").apply { isDaemon = true }
     })
@@ -144,6 +149,10 @@ class FoxStack(
                 send(target, remotePort, appPort, 0L, (seq + length) and MASK, RST or ACK, 0, null, 0, 0)
                 return
             }
+            if (!admit()) {
+                send(target, remotePort, appPort, 0L, (seq + length) and MASK, RST or ACK, 0, null, 0, 0)
+                return
+            }
             val created = Flow(key, appPort, target, remotePort, (seq + 1) and MASK)
             flows[key] = created
             send(target, remotePort, appPort, created.sent, created.expected, SYN or ACK, WINDOW, null, 0, 0)
@@ -160,6 +169,24 @@ class FoxStack(
         if (length > 0 || flags and FIN != 0) {
             send(target, remotePort, appPort, known.sent, known.expected, ACK, known.window(), null, 0, 0)
         }
+    }
+
+    private fun admit(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - synRefilledAt >= 1000) {
+            synRefilledAt = now
+            synTokens.set(SYN_BURST)
+        }
+        if (synTokens.getAndUpdate { if (it > 0) it - 1 else 0 } <= 0) return false
+        if (flows.size >= MAX_FLOWS) {
+            val oldest = flows.entries.minByOrNull { it.value.idleAt } ?: return false
+            flows.remove(oldest.key, oldest.value)
+            try {
+                oldest.value.shutdown()
+            } catch (_: Exception) {
+            }
+        }
+        return true
     }
 
     private fun datagram(packet: ByteArray, header: Int, total: Int, target: Int) {
@@ -192,6 +219,7 @@ class FoxStack(
     }
 
     private fun learn(query: ByteArray, answer: ByteArray) {
+        if (names.size >= MAX_NAMES) names.clear()
         val name = questionName(query) ?: return
         for (address in addresses(answer)) {
             if (address != 0) names[address] = name

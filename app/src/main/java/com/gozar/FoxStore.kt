@@ -14,12 +14,15 @@ object FoxStore {
     private val lock = Any()
     private fun p(c: Context) = c.getSharedPreferences("fox", Context.MODE_PRIVATE)
 
+    private fun secret(c: Context, prefs: SharedPreferences, key: String): String =
+        SecretBox.open(c, prefs.getString(key, "") ?: "")
+
     fun email(c: Context): String = p(c).getString("email", "") ?: ""
     fun uid(c: Context): String = p(c).getString("uid", "") ?: ""
-    fun access(c: Context): String = p(c).getString("access", "") ?: ""
-    fun refreshToken(c: Context): String = p(c).getString("refresh", "") ?: ""
+    fun access(c: Context): String = secret(c, p(c), "access")
+    fun refreshToken(c: Context): String = secret(c, p(c), "refresh")
     fun expiresAt(c: Context): Long = p(c).getLong("expires_at", 0L)
-    fun pass(c: Context): String = p(c).getString("pass", "") ?: ""
+    fun pass(c: Context): String = secret(c, p(c), "pass")
     fun passUntil(c: Context): Long = p(c).getLong("pass_until", 0L)
 
     internal fun passExpiry(token: String, now: Long = System.currentTimeMillis()): Long {
@@ -53,42 +56,46 @@ object FoxStore {
         val prefs = p(c)
         FoxCredentials(
             activeId(prefs),
-            prefs.getString("access", "").orEmpty(),
-            prefs.getString("refresh", "").orEmpty(),
+            secret(c, prefs, "access"),
+            secret(c, prefs, "refresh"),
             prefs.getLong("expires_at", 0L),
             prefs.getLong("session_revision", 0L)
         )
     }
 
-    private fun snapshot(prefs: SharedPreferences): JSONObject = JSONObject()
+    private fun snapshot(c: Context, prefs: SharedPreferences): JSONObject = JSONObject()
         .put("email", prefs.getString("email", "").orEmpty())
         .put("uid", prefs.getString("uid", "").orEmpty())
-        .put("access", prefs.getString("access", "").orEmpty())
-        .put("refresh", prefs.getString("refresh", "").orEmpty())
+        .put("access", secret(c, prefs, "access"))
+        .put("refresh", secret(c, prefs, "refresh"))
         .put("expires_at", prefs.getLong("expires_at", 0L))
-        .put("pass", prefs.getString("pass", "").orEmpty())
+        .put("pass", secret(c, prefs, "pass"))
         .put("pass_until", prefs.getLong("pass_until", 0L))
         .put("limit", prefs.getLong("limit", 0L))
         .put("remaining", prefs.getLong("remaining", 0L))
         .put("reset", prefs.getString("reset", "").orEmpty())
         .put("selected", prefs.getString("selected", "REC").orEmpty())
 
-    private fun entries(prefs: SharedPreferences): JSONObject {
+    private fun entries(c: Context, prefs: SharedPreferences): JSONObject {
         val stored = try {
-            JSONObject(prefs.getString("accounts", "{}").orEmpty())
+            JSONObject(SecretBox.open(c, prefs.getString("accounts", "{}").orEmpty()).ifEmpty { "{}" })
         } catch (e: Exception) {
             JSONObject()
         }
         val id = activeId(prefs)
-        if (id.isNotEmpty() && prefs.getString("refresh", "").orEmpty().isNotEmpty()) {
-            stored.put(id, snapshot(prefs))
+        if (id.isNotEmpty() && secret(c, prefs, "refresh").isNotEmpty()) {
+            stored.put(id, snapshot(c, prefs))
         }
         return stored
     }
 
-    private fun writeActive(edit: SharedPreferences.Editor, account: JSONObject) {
-        for (key in listOf("email", "uid", "access", "refresh", "pass", "reset", "selected")) {
+    private fun writeActive(c: Context, edit: SharedPreferences.Editor, account: JSONObject) {
+        for (key in listOf("email", "uid", "reset", "selected")) {
             edit.putString(key, account.optString(key, if (key == "selected") "REC" else ""))
+        }
+        for (key in listOf("access", "refresh", "pass")) {
+            val value = account.optString(key, "")
+            edit.putString(key, if (value.isEmpty()) value else SecretBox.seal(c, value))
         }
         for (key in listOf("expires_at", "pass_until", "limit", "remaining")) {
             edit.putLong(key, account.optLong(key, 0L))
@@ -97,7 +104,7 @@ object FoxStore {
 
     fun accounts(c: Context): List<SavedFoxAccount> = synchronized(lock) {
         val prefs = p(c)
-        val data = entries(prefs)
+        val data = entries(c, prefs)
         val active = activeId(prefs)
         val list = mutableListOf<SavedFoxAccount>()
         val keys = data.keys()
@@ -109,32 +116,32 @@ object FoxStore {
                 list.add(SavedFoxAccount(id, address, id == active))
             }
         }
-        prefs.edit().putString("accounts", data.toString()).apply()
+        prefs.edit().putString("accounts", SecretBox.seal(c, data.toString())).apply()
         list.sortedWith(compareByDescending<SavedFoxAccount> { it.active }.thenBy { it.email.lowercase(Locale.ROOT) })
     }
 
     fun switchAccount(c: Context, id: String): Boolean = synchronized(lock) {
         val prefs = p(c)
-        val data = entries(prefs)
+        val data = entries(c, prefs)
         val target = data.optJSONObject(id) ?: return@synchronized false
         if (target.optString("email").isBlank() || target.optString("refresh").isBlank()) return@synchronized false
-        val edit = prefs.edit().putString("accounts", data.toString())
+        val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))
             .putLong("session_revision", prefs.getLong("session_revision", 0L) + 1L)
-        writeActive(edit, target)
+        writeActive(c, edit, target)
         edit.commit()
     }
 
     fun setSelected(c: Context, code: String) = synchronized(lock) {
         val prefs = p(c)
-        val data = entries(prefs)
+        val data = entries(c, prefs)
         val id = activeId(prefs)
         data.optJSONObject(id)?.put("selected", code)
-        prefs.edit().putString("selected", code).putString("accounts", data.toString()).apply()
+        prefs.edit().putString("selected", code).putString("accounts", SecretBox.seal(c, data.toString())).apply()
     }
 
     fun saveAccount(c: Context, email: String, uid: String, tokens: FoxTokens, pass: FoxPass) = synchronized(lock) {
         val prefs = p(c)
-        val data = entries(prefs)
+        val data = entries(c, prefs)
         val id = accountId(email, uid)
         var existing = data.optJSONObject(id)
         val duplicateIds = mutableListOf<String>()
@@ -161,10 +168,10 @@ object FoxStore {
             .put("reset", pass.reset)
             .put("selected", existing?.optString("selected", "REC") ?: "REC")
         data.put(id, account)
-        val edit = prefs.edit().putString("accounts", data.toString())
+        val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))
             .putLong("auth_revision", prefs.getLong("auth_revision", 0L) + 1L)
             .putLong("session_revision", prefs.getLong("session_revision", 0L) + 1L)
-        writeActive(edit, account)
+        writeActive(c, edit, account)
         if (!edit.commit()) throw IllegalStateException("Could not save the account")
     }
 
@@ -172,13 +179,13 @@ object FoxStore {
         val prefs = p(c)
         val id = activeId(prefs)
         if (id.isEmpty() || id != expectedId || prefs.getLong("session_revision", 0L) != expectedRevision) return@synchronized false
-        val data = entries(prefs)
-        val account = data.optJSONObject(id) ?: snapshot(prefs)
+        val data = entries(c, prefs)
+        val account = data.optJSONObject(id) ?: snapshot(c, prefs)
         val expiry = System.currentTimeMillis() + tokens.expiresIn * 1000L
         account.put("access", tokens.access).put("refresh", tokens.refresh).put("expires_at", expiry)
         data.put(id, account)
-        val edit = prefs.edit().putString("accounts", data.toString())
-        writeActive(edit, account)
+        val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))
+        writeActive(c, edit, account)
         edit.commit()
     }
 
@@ -186,26 +193,26 @@ object FoxStore {
         val prefs = p(c)
         val id = activeId(prefs)
         if (id.isEmpty() || id != expectedId || prefs.getLong("session_revision", 0L) != expectedRevision) return@synchronized false
-        val data = entries(prefs)
-        val account = data.optJSONObject(id) ?: snapshot(prefs)
+        val data = entries(c, prefs)
+        val account = data.optJSONObject(id) ?: snapshot(c, prefs)
         account.put("pass", pass.token)
             .put("pass_until", passExpiry(pass.token))
             .put("limit", pass.limit)
             .put("remaining", pass.remaining)
             .put("reset", pass.reset)
         data.put(id, account)
-        val edit = prefs.edit().putString("accounts", data.toString())
-        writeActive(edit, account)
+        val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))
+        writeActive(c, edit, account)
         edit.commit()
     }
 
     fun clear(c: Context) = synchronized(lock) {
         val prefs = p(c)
-        val data = entries(prefs)
+        val data = entries(c, prefs)
         data.remove(activeId(prefs))
-        val edit = prefs.edit().putString("accounts", data.toString())
+        val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))
             .putLong("session_revision", prefs.getLong("session_revision", 0L) + 1L)
-        writeActive(edit, JSONObject().put("selected", "REC"))
+        writeActive(c, edit, JSONObject().put("selected", "REC"))
         edit.commit()
     }
 }
