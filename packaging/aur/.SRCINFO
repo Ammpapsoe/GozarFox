@@ -1,6 +1,6 @@
 pkgbase = gozar-bin
 	pkgdesc = Firefox Private Network client
-	pkgver = 1.10.3
+	pkgver = 1.10.4
 	pkgrel = 1
 	url = https://github.com/bardia049b-stack/Gozar
 	arch = x86_64
@@ -16,7 +16,7 @@ pkgbase = gozar-bin
 	provides = gozar
 	conflicts = gozar
 	options = !strip
-	source = gozar-bin-1.10.3.tar.xz::https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Linux-amd64.tar.xz
-	sha256sums = 7cb4fb83daa5e1abac553c317fc11e9e7826dcac71a5e285809b0fd9c70e03c5
+	source = gozar-bin-1.10.4.tar.xz::https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.4-desktop/Gozar-Linux-amd64.tar.xz
+	sha256sums = 2a206ef8d758620c8c81373f747782de11dff51cd39d85e4308bcc447fae46fb
 
 pkgname = gozar-bin
