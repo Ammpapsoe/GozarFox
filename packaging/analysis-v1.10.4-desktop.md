@@ -28,3 +28,12 @@ Unrelated tags `v1.10.4`, `v1.10.5`, `v1.10.6` are not ancestors of this line an
 - Real Firefox/Mozilla relay credentials are not available in CI; relay tests use TLS-verified local mock proxies.
 - Android emulator/RIL and OpenWrt hardware are not available in this environment; Android logic is covered by JVM/Robolectric tests and OpenWrt by cross-compilation/packaging.
 - Desktop kill switch is not implemented in this release line; Android relies on Always-on/lockdown. This is not claimed as a new desktop kill switch.
+
+## وضعیت نهایی v1.10.4
+
+- `:core:test` locally: **56 tests, 0 failures, 0 errors**.
+- `go test ./...` و `go vet ./...` در `go-desktop`: **PASS**.
+- Cross-build برای `windows/amd64`, `darwin/amd64`, `freebsd/amd64`: **PASS**.
+- تست soak پنج‌دقیقه‌ای idle به‌صورت محلی: **PASS (300.10s)**.
+- شبیه‌سازی CI روی GitHub با `workflow_dispatch` روی شاخهٔ `improve/v1.10.4-desktop` (run `42038328295`): **همهٔ jobهای android/desktop/cores/proof سبز**؛ `packages/publish` چون push از نوع tag نبود skip شدند.
+- نکتهٔ انتشار: checksumهای AUR/Flatpak برای باندل لینوکس باید پس از ساخته‌شدن assetهای `v1.10.4-desktop` تازه شوند؛ CI خودِ Flatpak را از باندل محلی همان run می‌سازد.
