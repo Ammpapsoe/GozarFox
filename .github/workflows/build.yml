@@ -412,8 +412,63 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  packages:
+    needs: [desktop]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-desktop/go.mod
+          cache-dependency-path: go-desktop/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: gozar-Linux-amd64
+          path: linux-bundle
+      - name: Install packaging tools
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rpm zstd squashfs-tools patchelf fakeroot libarchive-tools elfutils flatpak flatpak-builder
+      - name: Unpack the Linux bundle
+        run: |
+          set -e
+          mkdir -p work
+          tar -C work -xJf linux-bundle/Gozar-Linux-amd64.tar.xz
+          test -x work/bundle/gozar-core
+          test -x work/bundle/gozar
+      - name: Version
+        id: version
+        run: echo "version=$(grep -m1 '^version:' desktop_flutter/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)" >> "$GITHUB_OUTPUT"
+      - name: Build desktop packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          mkdir -p out
+          scripts/package_appimage.sh "$PWD/work/bundle" "$PWD/out/Gozar-$VERSION-x86_64.AppImage" "$VERSION"
+          scripts/package_snap.sh "$PWD/work/bundle" "$PWD/out/Gozar_${VERSION}_amd64.snap" "$VERSION"
+          scripts/package_rpm.sh "$PWD/work/bundle" "$PWD/out" "$VERSION"
+          scripts/package_arch.sh "$PWD/work/bundle" "$PWD/out/Gozar-$VERSION-x86_64.pkg.tar.zst" "$VERSION"
+          scripts/package_flatpak.sh "$PWD/out" "$VERSION" "$PWD/linux-bundle/Gozar-Linux-amd64.tar.xz"
+      - name: Build embedded packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -e
+          scripts/package_openwrt.sh "$VERSION" "$PWD/out"
+          scripts/package_raspberrypi.sh "$PWD/out"
+          python3 scripts/package_freebsd.py "$VERSION" "$PWD/out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: out/*
+          if-no-files-found: error
+
   publish:
-    needs: [android, desktop, cores]
+    needs: [android, desktop, cores, packages]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -438,9 +493,10 @@ jobs:
       - name: Check release files
         env:
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
+          DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
         run: |
           set -e
-          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz; do
+          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
             test -s "collected/$f" || { echo "::error::Missing release file: $f"; exit 1; }
           done
       - name: Import signing key
@@ -464,7 +520,7 @@ jobs:
         run: |
           set -e
           cd collected
-          for f in *.apk *.exe *.deb *.zip *.tar.xz; do
+          for f in *.apk *.exe *.deb *.zip *.tar.xz *.rpm *.AppImage *.snap *.flatpak *.pkg.tar.zst *.ipk *.pkg; do
             [ -e "$f" ] || continue
             gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output "$f.sig" "$f"
           done
@@ -474,7 +530,7 @@ jobs:
           mkdir -m 700 "$RUNNER_TEMP/verify-keyring"
           gpg --homedir "$RUNNER_TEMP/verify-keyring" --batch --import collected/gozar-public-key.asc
           cd collected
-          for f in *.apk *.exe *.deb *.zip *.tar.xz; do
+          for f in *.apk *.exe *.deb *.zip *.tar.xz *.rpm *.AppImage *.snap *.flatpak *.pkg.tar.zst *.ipk *.pkg; do
             [ -e "$f" ] || continue
             test -s "$f.sig"
             gpg --homedir "$RUNNER_TEMP/verify-keyring" --batch --verify "$f.sig" "$f"
@@ -494,10 +550,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
+          DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
         run: |
           set -e
           assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz; do
+          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
             printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done

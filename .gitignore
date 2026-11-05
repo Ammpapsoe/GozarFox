@@ -14,3 +14,8 @@ app/build
 .kotlin/
 core/build
 desktop/build
+
+.cache/
+packaging/flatpak/_local-*.yaml
+packaging/flatpak/.flatpak-builder/
+__pycache__/

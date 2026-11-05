@@ -32,8 +32,11 @@ type Device struct {
 
 func Open(mtu int) (*Device, error) {
 	name := Name
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		name = "utun"
+	case "freebsd":
+		name = "tun"
 	}
 	created, err := wtun.CreateTUN(name, mtu)
 	if err != nil {

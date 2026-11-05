@@ -1,0 +1,48 @@
+Gozar on OpenWrt
+================
+
+The package installs three things: the headless Go core at /usr/bin/gozar-core,
+a procd service at /etc/init.d/gozar, and its settings in /etc/config/gozar.
+The LuCI pages live in the separate luci-app-gozar package.
+
+Requirements
+------------
+
+  * The kmod-tun package, because the tunnel needs a TUN interface.
+  * A Mozilla account that is allowed to use the proxy.
+  * About 12 MB of free flash for the core; the binary is statically linked, so
+    no extra libraries are needed.
+
+Configuration
+-------------
+
+Edit /etc/config/gozar:
+
+  config gozar 'main'
+      option enabled '1'
+      option email 'name@example.com'
+      option password 'the password'
+      option code ''          # only for accounts with two-factor login
+      option server ''        # empty means the fastest location
+
+Then run:
+
+  /etc/init.d/gozar enable
+  /etc/init.d/gozar start
+
+The service signs in the first time it starts, writes the session to
+/etc/gozar/Gozar/config.json, and then keeps the tunnel up. Every start after
+that reuses the stored session.
+
+The same settings are available in LuCI under Services -> Gozar, with the
+state and the last log lines on the details page.
+
+Notes
+-----
+
+The tunnel owns the default route while it runs. Stop the service
+(/etc/init.d/gozar stop) to get the plain connection back; the service restores
+the routes and the DNS settings it changed.
+
+This package carries the core only. The graphical application is a desktop
+Flutter build and is not part of the OpenWrt package.

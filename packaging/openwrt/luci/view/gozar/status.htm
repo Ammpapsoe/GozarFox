@@ -1,0 +1,25 @@
+<%+header%>
+<%
+	local fs = require "nixio.fs"
+	local sys = require "luci.sys"
+	local running = sys.call("pidof gozar-core >/dev/null 2>&1") == 0
+	local signed = fs.access("/etc/gozar/Gozar/config.json")
+	local log = sys.exec("logread -e gozar 2>/dev/null | tail -n 40")
+%>
+<h2 name="content"><%:Gozar%></h2>
+
+<div class="cbi-map">
+	<div class="cbi-section">
+		<div class="cbi-section-node">
+			<p><%:State%>: <strong><%=running and translate("running") or translate("stopped")%></strong></p>
+			<p><%:Signed in%>: <strong><%=signed and translate("yes") or translate("no")%></strong></p>
+			<p><%:Server%>: <strong><%=luci.util.trim(sys.exec("uci -q get gozar.main.server") or "")%></strong></p>
+		</div>
+	</div>
+
+	<div class="cbi-section">
+		<h3><%:Log%></h3>
+		<textarea readonly="readonly" style="width:100%;height:20em;font-family:monospace"><%=log%></textarea>
+	</div>
+</div>
+<%+footer%>

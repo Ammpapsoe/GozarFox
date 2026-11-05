@@ -41,9 +41,12 @@ SECURITY = r"""## Gozar 1.10.3 — نسخهٔ سخت‌سازی امنیتی
 """
 
 
-def badge(label, value, colour, logo, filename):
+def badge(label, value, colour, logo, filename, prefix=None):
     query = urlencode({'logo': logo, 'logoColor': 'white'})
-    return f'[![{label} {value}](https://img.shields.io/badge/{label}-{value}-{colour}?{query})]({base}{filename})'
+    path = f'{label}-{value}-{colour}'.replace(' ', '%20')
+    target = (base if prefix is None else prefix) + filename
+    shown = value.replace('__', '_')
+    return f'[![{label} {shown}](https://img.shields.io/badge/{path}?{query})]({target})'
 
 
 def stack(*items):
@@ -51,7 +54,7 @@ def stack(*items):
 
 
 version = sys.argv[1]
-repo = sys.argv[2] if len(sys.argv) > 2 else 'bardia049b-stack/Gozar1'
+repo = sys.argv[2] if len(sys.argv) > 2 else 'bardia049b-stack/Gozar'
 android = sys.argv[3] if len(sys.argv) > 3 else version
 tag = sys.argv[4] if len(sys.argv) > 4 else f'v{version}'
 base = f'https://github.com/{repo}/releases/download/{tag}/'
@@ -75,6 +78,33 @@ rows = [
     ('**macOS**', stack(
         badge('TAR.XZ', 'Apple__Silicon', '24292f', 'apple', 'Gozar-macOS-ARM.tar.xz'),
         badge('TAR.XZ', 'Intel', '24292f', 'apple', 'Gozar-macOS-Intel.tar.xz'))),
+    ('**Flatpak**', stack(
+        badge('Flatpak', 'x86__64', '4a90d9', 'flatpak', f'Gozar-{version}-x86_64.flatpak'))),
+    ('**Snap**', stack(
+        badge('Snap', 'amd64', '82bea0', 'snapcraft', f'Gozar_{version}_amd64.snap'))),
+    ('**AppImage**', stack(
+        badge('AppImage', 'x86__64', '8e44ad', 'appimage', f'Gozar-{version}-x86_64.AppImage'))),
+    ('**Fedora**', stack(
+        badge('RPM', 'x86__64', '51a2da', 'fedora', 'Gozar-Fedora-x86_64.rpm'))),
+    ('**RHEL**', stack(
+        badge('RPM', 'x86__64', 'ee0000', 'redhat', 'Gozar-RHEL-x86_64.rpm'))),
+    ('**Arch Linux**', stack(
+        badge('Pkg', 'x86__64', '1793d1', 'archlinux', f'Gozar-{version}-x86_64.pkg.tar.zst'))),
+    ('**AUR**', stack(
+        badge('AUR', 'PKGBUILD', '2D5A8C', 'archlinux', '',
+              prefix=f'https://github.com/{repo}/tree/main/packaging/aur'))),
+    ('**OpenWrt**', stack(
+        badge('IPK', 'mips', '00a3e0', 'openwrt', 'Gozar-OpenWrt-mips_24kc.ipk'),
+        badge('IPK', 'mipsel', '00a3e0', 'openwrt', 'Gozar-OpenWrt-mipsel_24kc.ipk'),
+        badge('IPK', 'armv7', '00a3e0', 'openwrt', 'Gozar-OpenWrt-armv7.ipk'),
+        badge('IPK', 'aarch64', '00a3e0', 'openwrt', 'Gozar-OpenWrt-aarch64.ipk'),
+        badge('LuCI', 'all', '0074a6', 'openwrt', 'LuCI-Gozar-all.ipk'))),
+    ('**Raspberry Pi**', stack(
+        badge('Raspberry Pi', '64__ARM64', 'c51a4a', 'raspberrypi', 'Gozar-RaspberryPi-arm64.tar.xz'),
+        badge('Raspberry Pi', '32__ARMv7', 'c51a4a', 'raspberrypi', 'Gozar-RaspberryPi-armv7.tar.xz'))),
+    ('**FreeBSD**', stack(
+        badge('PKG', 'amd64', 'ab2b28', 'freebsd', 'Gozar-FreeBSD-amd64.pkg'),
+        badge('PKG', 'arm64', 'ab2b28', 'freebsd', 'Gozar-FreeBSD-arm64.pkg'))),
     ('**Separate cores**', stack(
         badge('Core', 'Windows__x64', '4b4b4b', windows_logo, 'Gozar-Core-Windows-x64.zip'),
         badge('Core', 'Windows__ARM64', '4b4b4b', windows_logo, 'Gozar-Core-Windows-arm64.zip'),

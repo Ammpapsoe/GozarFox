@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Gozar
+GenericName=Firefox VPN
+Comment=Gozar desktop VPN
+Exec=gozar
+Icon=${SNAP}/meta/gui/gozar.png
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true

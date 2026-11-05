@@ -1,0 +1,47 @@
+# Maintainer: Gozar contributors <noreply@github.com>
+pkgname=gozar-bin
+pkgver=1.10.3
+pkgrel=1
+pkgdesc='Firefox Private Network client'
+arch=('x86_64')
+url='https://github.com/bardia049b-stack/Gozar'
+license=('AGPL-3.0-or-later')
+depends=('gtk3' 'glib2' 'cairo' 'pango' 'harfbuzz' 'gdk-pixbuf2' 'zlib' 'iproute2')
+provides=('gozar')
+conflicts=('gozar')
+options=('!strip')
+source=("$pkgname-$pkgver.tar.xz::$url/releases/download/v$pkgver-desktop/Gozar-Linux-amd64.tar.xz")
+sha256sums=('7cb4fb83daa5e1abac553c317fc11e9e7826dcac71a5e285809b0fd9c70e03c5')
+
+package() {
+	install -dm755 "$pkgdir/usr/lib/gozar"
+	cp -a "$srcdir/bundle/." "$pkgdir/usr/lib/gozar/"
+
+	install -dm755 "$pkgdir/usr/bin"
+	printf '#!/bin/sh\nexec /usr/lib/gozar/gozar "$@"\n' > "$pkgdir/usr/bin/gozar"
+	chmod 755 "$pkgdir/usr/bin/gozar"
+
+	install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/gozar.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Gozar
+GenericName=Firefox VPN
+Comment=Gozar desktop VPN
+Exec=gozar
+Icon=gozar
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true
+DESKTOP
+
+	if [ -f "$pkgdir/usr/lib/gozar/data/flutter_assets/assets/gozar.png" ]; then
+		install -Dm644 "$pkgdir/usr/lib/gozar/data/flutter_assets/assets/gozar.png" "$pkgdir/usr/share/pixmaps/gozar.png"
+	fi
+
+	install -dm755 "$pkgdir/usr/share/licenses/gozar"
+	for file in LICENSE NOTICE WINTUN-LICENSE.txt QUIC-GO-LICENSE.txt QPACK-LICENSE.txt GO-DEPS-LICENSES.txt; do
+		if [ -f "$pkgdir/usr/lib/gozar/$file" ]; then
+			install -m644 "$pkgdir/usr/lib/gozar/$file" "$pkgdir/usr/share/licenses/gozar/$file"
+		fi
+	done
+}

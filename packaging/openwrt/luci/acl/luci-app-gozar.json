@@ -1,0 +1,15 @@
+{
+	"luci-app-gozar": {
+		"description": "Grant access to the Gozar configuration",
+		"read": {
+			"uci": ["gozar"],
+			"file": {
+				"/etc/gozar/Gozar/config.json": ["read"],
+				"/usr/bin/gozar-core": ["exec"]
+			}
+		},
+		"write": {
+			"uci": ["gozar"]
+		}
+	}
+}

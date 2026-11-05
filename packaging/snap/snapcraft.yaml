@@ -1,0 +1,38 @@
+name: gozar
+base: core22
+version: '1.10.3'
+summary: Firefox Private Network client
+description: |
+  Gozar connects a Linux desktop to the Firefox Private Network proxy and keeps
+  the whole system behind it. It ships a Flutter window and a separate Go core
+  that speaks the same tunnel to the same servers.
+
+  The tunnel creates a TUN interface and rewrites the routing table, which needs
+  administrator rights, so start Gozar with sudo: sudo gozar
+
+grade: stable
+confinement: classic
+architectures:
+  - amd64
+
+apps:
+  gozar:
+    command: bin/gozar
+    desktop: usr/share/applications/gozar.desktop
+
+parts:
+  gozar:
+    plugin: nil
+    source: .
+    override-build: |
+      set -e
+      version="$(craftctl get version)"
+      curl -fsSL -o "$CRAFT_PART_INSTALL/gozar.tar.xz" \
+        "https://github.com/bardia049b-stack/Gozar/releases/download/v${version}-desktop/Gozar-Linux-amd64.tar.xz"
+      mkdir -p "$CRAFT_PART_INSTALL/usr/lib"
+      tar -xJf "$CRAFT_PART_INSTALL/gozar.tar.xz" -C "$CRAFT_PART_INSTALL/usr/lib"
+      rm -f "$CRAFT_PART_INSTALL/gozar.tar.xz"
+      mv "$CRAFT_PART_INSTALL/usr/lib/bundle" "$CRAFT_PART_INSTALL/usr/lib/gozar"
+      install -Dm755 "$CRAFT_PROJECT_DIR/packaging/snap/gozar-wrapper.sh" "$CRAFT_PART_INSTALL/bin/gozar"
+      install -Dm644 "$CRAFT_PROJECT_DIR/packaging/snap/gozar.desktop" "$CRAFT_PART_INSTALL/usr/share/applications/gozar.desktop"
+      install -Dm644 "$CRAFT_PROJECT_DIR/desktop_flutter/assets/gozar.png" "$CRAFT_PART_INSTALL/usr/share/pixmaps/gozar.png"

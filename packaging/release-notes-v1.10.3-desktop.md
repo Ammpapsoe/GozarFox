@@ -1,0 +1,87 @@
+# Gozar v1.10.3
+
+**This is a mandatory security update. Please update immediately. Older versions contain critical vulnerabilities that expose your identity, Mozilla account credentials, and network traffic.**
+
+| Platform | Download |
+|:--:|:--|
+| **Android** | [![APK Universal](https://img.shields.io/badge/APK-Universal-1a7f37?logo=android&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_universal.apk)<br>[![APK ARM64](https://img.shields.io/badge/APK-ARM64-2da44e?logo=android&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_arm64-v8a.apk)<br>[![APK ARMv7](https://img.shields.io/badge/APK-ARMv7-2da44e?logo=android&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_armeabi-v7a.apk)<br>[![APK x86_64](https://img.shields.io/badge/APK-x86__64-2da44e?logo=android&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_x86_64.apk)<br>[![APK x86](https://img.shields.io/badge/APK-x86-2da44e?logo=android&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_x86.apk) |
+| **Windows** | [![Installer EXE_x64](https://img.shields.io/badge/Installer-EXE__x64-0550ae?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoN3Y3SDB6bTkgMGg3djdIOXpNMCA5aDd2N0gwem05IDBoN3Y3SDl6Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Windows-x64-Setup.exe)<br>[![Portable ZIP_x64](https://img.shields.io/badge/Portable-ZIP__x64-0550ae?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoN3Y3SDB6bTkgMGg3djdIOXpNMCA5aDd2N0gwem05IDBoN3Y3SDl6Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Windows-x64.zip) |
+| **Linux** | [![Package DEB_amd64](https://img.shields.io/badge/Package-DEB__amd64-e36209?logo=linux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Linux-amd64.deb)<br>[![Portable TAR.XZ_amd64](https://img.shields.io/badge/Portable-TAR.XZ__amd64-e36209?logo=linux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Linux-amd64.tar.xz) |
+| **macOS** | [![TAR.XZ Apple_Silicon](https://img.shields.io/badge/TAR.XZ-Apple__Silicon-24292f?logo=apple&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-macOS-ARM.tar.xz)<br>[![TAR.XZ Intel](https://img.shields.io/badge/TAR.XZ-Intel-24292f?logo=apple&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-macOS-Intel.tar.xz) |
+| **Flatpak** | [![Flatpak x86_64](https://img.shields.io/badge/Flatpak-x86__64-4a90d9?logo=flatpak&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-1.10.3-x86_64.flatpak) |
+| **Snap** | [![Snap amd64](https://img.shields.io/badge/Snap-amd64-82bea0?logo=snapcraft&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar_1.10.3_amd64.snap) |
+| **AppImage** | [![AppImage x86_64](https://img.shields.io/badge/AppImage-x86__64-8e44ad?logo=appimage&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-1.10.3-x86_64.AppImage) |
+| **Fedora** | [![RPM x86_64](https://img.shields.io/badge/RPM-x86__64-51a2da?logo=fedora&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Fedora-x86_64.rpm) |
+| **RHEL** | [![RPM x86_64](https://img.shields.io/badge/RPM-x86__64-ee0000?logo=redhat&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-RHEL-x86_64.rpm) |
+| **Arch Linux** | [![Pkg x86_64](https://img.shields.io/badge/Pkg-x86__64-1793d1?logo=archlinux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-1.10.3-x86_64.pkg.tar.zst) |
+| **AUR** | [![AUR PKGBUILD](https://img.shields.io/badge/AUR-PKGBUILD-2D5A8C?logo=archlinux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/tree/main/packaging/aur) |
+| **OpenWrt** | [![IPK mips](https://img.shields.io/badge/IPK-mips-00a3e0?logo=openwrt&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-OpenWrt-mips_24kc.ipk)<br>[![IPK mipsel](https://img.shields.io/badge/IPK-mipsel-00a3e0?logo=openwrt&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-OpenWrt-mipsel_24kc.ipk)<br>[![IPK armv7](https://img.shields.io/badge/IPK-armv7-00a3e0?logo=openwrt&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-OpenWrt-armv7.ipk)<br>[![IPK aarch64](https://img.shields.io/badge/IPK-aarch64-00a3e0?logo=openwrt&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-OpenWrt-aarch64.ipk)<br>[![LuCI all](https://img.shields.io/badge/LuCI-all-0074a6?logo=openwrt&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/LuCI-Gozar-all.ipk) |
+| **Raspberry Pi** | [![Raspberry Pi 64_ARM64](https://img.shields.io/badge/Raspberry%20Pi-64__ARM64-c51a4a?logo=raspberrypi&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-RaspberryPi-arm64.tar.xz)<br>[![Raspberry Pi 32_ARMv7](https://img.shields.io/badge/Raspberry%20Pi-32__ARMv7-c51a4a?logo=raspberrypi&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-RaspberryPi-armv7.tar.xz) |
+| **FreeBSD** | [![PKG amd64](https://img.shields.io/badge/PKG-amd64-ab2b28?logo=freebsd&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-FreeBSD-amd64.pkg)<br>[![PKG arm64](https://img.shields.io/badge/PKG-arm64-ab2b28?logo=freebsd&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-FreeBSD-arm64.pkg) |
+| **Separate Cores** | [![Core Windows_x64](https://img.shields.io/badge/Core-Windows__x64-4b4b4b?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoN3Y3SDB6bTkgMGg3djdIOXpNMCA5aDd2N0gwem05IDBoN3Y3SDl6Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-Windows-x64.zip)<br>[![Core Windows_ARM64](https://img.shields.io/badge/Core-Windows__ARM64-4b4b4b?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI%2BPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoN3Y3SDB6bTkgMGg3djdIOXpNMCA5aDd2N0gwem05IDBoN3Y3SDl6Ii8%2BPC9zdmc%2B&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-Windows-arm64.zip)<br>[![Core Linux_amd64](https://img.shields.io/badge/Core-Linux__amd64-4b4b4b?logo=linux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-Linux-amd64.tar.xz)<br>[![Core Linux_ARM64](https://img.shields.io/badge/Core-Linux__ARM64-4b4b4b?logo=linux&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-Linux-arm64.tar.xz)<br>[![Core macOS_Intel](https://img.shields.io/badge/Core-macOS__Intel-4b4b4b?logo=apple&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-macOS-Intel.tar.xz)<br>[![Core macOS_ARM64](https://img.shields.io/badge/Core-macOS__ARM64-4b4b4b?logo=apple&logoColor=white)](https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Core-macOS-ARM.tar.xz) |
+
+### Native packages
+
+The same build is now published through the package manager of every platform
+Gozar runs on, so an update arrives with the rest of the system instead of a
+manual download:
+
+- **Flatpak** — `flatpak install ./Gozar-1.10.3-x86_64.flatpak`. The window is sandboxed; the tunnel core runs on the host through `pkexec` because creating a network interface needs administrator rights the sandbox does not have. Your desktop asks for the password once per session.
+- **Snap** — `sudo snap install --dangerous ./Gozar_1.10.3_amd64.snap` for now, classic confinement, same bundle. Like every other Linux channel it starts with `sudo gozar`, because the core creates the interface.
+- **AppImage** — `chmod +x ./Gozar-1.10.3-x86_64.AppImage && sudo ./Gozar-1.10.3-x86_64.AppImage`. Nothing is installed, and the core is started from the directory the file sits in.
+- **Fedora** — `sudo dnf install ./Gozar-Fedora-x86_64.rpm`.
+- **RHEL, CentOS Stream, Rocky, Alma** — `sudo dnf install ./Gozar-RHEL-x86_64.rpm`. Both RPMs are built from one spec and only differ in the distribution tag.
+- **Arch Linux** — `sudo pacman -U ./Gozar-1.10.3-x86_64.pkg.tar.zst`, or build `gozar-bin` with `makepkg -si` from `packaging/aur`. The AUR entry itself is published once the maintainer account exists; the recipe that will be pushed is already in the repository and its checksum is pinned to this release.
+- **OpenWrt** — install `Gozar-OpenWrt-<arch>.ipk` together with `LuCI-Gozar-all.ipk`, then open *Services → Gozar* in LuCI. The core, a procd init script and the LuCI page are three small packages; mips, mipsel, armv7 and aarch64 builds are attached. The page only asks for the account, the code and the server, and shows whether the tunnel is up.
+- **Raspberry Pi** — the `arm64` archive is for 64-bit Raspberry Pi OS, `armv7` for the 32-bit system. Both are headless: extract, run `sudo ./install.sh`, sign in once, then `sudo systemctl start gozar`.
+- **FreeBSD** — `sudo pkg add -f ./Gozar-FreeBSD-amd64.pkg` installs the core and an rc.d script; `sysrc gozar_enable=YES` and `service gozar start`. The script loads `if_tun` when it is missing.
+
+The Raspberry Pi, FreeBSD and OpenWrt packages carry the headless core and a
+service script, not the Flutter window, because those systems have no desktop.
+The tunnel restores the routes and DNS servers it changed when the service
+stops, exactly like the desktop build.
+
+Over the past few weeks, we conducted an exhaustive security audit of the entire Gozar client (Android, Windows, macOS, Linux). Every vulnerability listed below was successfully reproduced in a test environment, patched at the source code level, and covered with automated regression tests to prevent regressions.
+
+The core tunnel connection method is completely unchanged. The MASQUE transport, TLS encryption, Firefox Account login flow, and server selection logic work exactly as before. Your existing session will seamlessly migrate to the new secure storage format without requiring you to log in again.
+
+Here are the details of what we found and fixed:
+
+- **IPv6 Leak Fixed**
+  Previously, the Android client only routed `0.0.0.0/0` to the VPN interface, and desktop clients only routed `0.0.0.0/1` and `128.0.0.0/1`. On networks supporting IPv6 (mobile carriers, modern home ISPs, etc.), IPv6 sockets completely bypassed the tunnel, and a simple `AAAA` query could expose your real device IP to the public internet.
+  With this fix, the Android interface claims `fd00:111:0:2::2/128` and the `::/0` route, while Windows/Linux/macOS add `::/1` and `8000::/1` routes. Since the userspace stack only processes IPv4, IPv6 packets are now pulled into the tunnel and dropped there instead of escaping through the physical link. The DNS resolver continues returning empty responses to `AAAA` queries, forcing apps to fall back to IPv4 immediately.
+
+- **Encrypted Token Storage**
+  On Android, access tokens, refresh tokens, and tunnel secrets were previously stored in standard `SharedPreferences`. Any backup, debugging tool, or root utility could extract them and take over the Mozilla account. On desktop, the same data was stored as plaintext JSON in `config.json`.
+  With this fix, all secrets on Android are encrypted using AES-256-GCM with a key stored in the Android Keystore (alias `gozar.session.v1`, random IV per value, package-dependent AAD). If a device lacks a usable Keystore, it falls back to a per-installation key in `noBackupFilesDir` which is excluded from backups. Legacy plaintext sessions migrate automatically on first write. If a sealed value is tampered with, it fails to unseal and becomes an empty session.
+  On desktop, Windows uses DPAPI scoped to the current user and machine. Linux and macOS use AES-256-GCM with a per-installation key protected by `0600` permissions. `config.json` no longer contains any readable token.
+
+- **Local Port Authentication**
+  The client used to accept unauthenticated connections on fixed local ports `10810` (SOCKS5), `10811` (HTTP), and `10812` (DNS). Any malicious app installed on the device could use the tunnel, burn through quota, bypass split-tunneling, or route traffic through your exit IP.
+  The fix: all three listeners now start on ephemeral ports unique to each session. The old fixed ports are gone. SOCKS5 enforces RFC 1929 authentication with a 144-bit per-session credential and constant-time comparison. It advertises `0x02` instead of `0x00` so unauthenticated clients are rejected immediately. Connections are capped at 64 per listener. Non-loopback peers are rejected before processing, and HTTP request lines are parsed defensively.
+
+- **Windows DLL Hijacking Fixed**
+  `wintun.dll` used to be written next to the executable or into `%LOCALAPPDATA%/Gozar` and loaded via a global `SetDllDirectory`. That is a textbook DLL search-order hijacking vulnerability. A malicious DLL dropped anywhere in the user profile could win the search and execute inside Gozar.
+  The fix: the DLL is verified against a hardcoded SHA-256 hash before loading. It is saved under a content-dependent name `wintun-<hash>.dll` inside a `0700` directory, written to a temp file and moved into place with atomic rename, then hashed again after writing. Loading uses `LoadLibraryEx` with `LOAD_LIBRARY_SEARCH_SYSTEM32` and `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR`. The global search path is restricted to `SYSTEM32` so a malicious DLL anywhere in the user profile is ignored.
+
+- **Unverified Updates Fixed**
+  The update checker pulled version data from GitHub without validating the binary or hash, opening the door to man-in-the-middle attacks on the update path.
+  The fix: the checker pins the repository owner and only accepts `https://github.com/bardia049b-stack/Gozar` and `Gozar1` releases. Anything with userinfo, non-default port, or a different host is rejected. Version tags are validated against a strict numeric pattern before display. Only the release page opens in the browser. Arbitrary URLs from an API response are never followed.
+
+- **Single Resolver Fixed**
+  Hardcoding one public DoH endpoint meant ISP interference or a provider hiccup could take down all domain resolution.
+  The fix: the `AUTO` profile now rotates between three independent DoH resolvers (Mozilla, Google, Quad9) with strict response validation, transaction ID re-tagging, and negative cache protection. If one provider goes down, the others keep resolving.
+
+- **Packet Stack Hardening**
+  Our userspace TCP stack could grow unbounded, leading to local denial-of-service or dropped sessions under load.
+  The fix: the stack is strictly bounded now. A token bucket enforces a flow rate limit of 256 packets per second. The flow table is capped at 512 entries with oldest-first eviction. The name table is capped at 4096 entries. SYN floods and forged ACK floods receive an `RST` without allocating state. Tests now push malformed packets and IPv6 frames through the parser, covering the attack surface rather than assuming it.
+
+- **Kill Switch Status**
+  We are not going to lie about this one. The desktop client still does not install WFP, pf, or nftables rules. We deliberately chose not to fake a system-level kill switch because shipping firewall changes without rigorous testing on all three operating systems risks cutting off the user's internet entirely. That is a worse outcome than what we have today.
+  What we did instead: IPv6 is blocked rather than leaked, the client reports the true tunnel state, and it will not silently fall back to a direct connection. On Android, Always-on and lockdown detection remain enforced, and direct routes are disabled the moment lockdown is detected. A real OS-level kill switch requires a signed helper service, which we will handle in a future update instead of half-building it now.
+
+### Engineering Validation and CI
+
+This release is backed by the automated pipeline. `./gradlew :core:test :app:testDebugUnitTest` and `go test ./...` run on all three operating systems in CI. New tests cover sealed value round-trips and tamper rejection, plaintext to sealed migration, SOCKS auth rejection, ephemeral port allocation and connection caps, IPv6 frame dropping, SYN flood mitigation, resolver fallback rotation, and URL whitelisting. Android, Windows, Linux, and macOS builds are compiled from this exact commit.
+
+Stay safe. Update now.

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+here=$(dirname "$(readlink -f "$0")")
+bundle="$here/usr/lib/gozar"
+export LD_LIBRARY_PATH="$bundle/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GOZAR_CORE="$bundle/gozar-core"
+export XDG_DATA_DIRS="$here/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+exec "$bundle/gozar" "$@"

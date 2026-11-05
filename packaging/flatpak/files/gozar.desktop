@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Gozar
+GenericName=Firefox VPN
+Comment=Gozar desktop VPN
+Exec=gozar
+Icon=io.github.bardia049b_stack.Gozar
+Terminal=false
+Categories=Network;Utility;
+Keywords=vpn;proxy;tunnel;warp;
+StartupNotify=true
+StartupWMClass=Gozar

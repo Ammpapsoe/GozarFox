@@ -50,7 +50,10 @@ For a separate local Android test installation, build with `-PgozarDiagnostic`. 
 credentials, a local build is not an update to the official Gozar installation.
 
 Desktop builds include a Windows EXE installer and Linux DEB alongside portable archives; macOS
-uses .tar.xz archives. They are not MSI or DMG installers. The Windows build contains Wintun. The desktop tunnel configures a
+uses .tar.xz archives. The same Linux build is also published as a Flatpak, a Snap, an AppImage,
+Fedora and RHEL RPMs and an Arch package, and the AUR recipe is in `packaging/aur`. OpenWrt,
+Raspberry Pi and FreeBSD receive the headless core with an init script instead of the Flutter
+window, because those systems have no desktop session. They are not MSI or DMG installers. The Windows build contains Wintun. The desktop tunnel configures a
 TUN interface and uses a userspace network stack; it needs administrator privileges. On Windows,
 the application requests elevation when it starts. On Linux and macOS, launch the application
 with appropriate administrator privileges to use the tunnel. The new desktop app does not set

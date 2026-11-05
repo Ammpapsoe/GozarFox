@@ -1,0 +1,22 @@
+pkgbase = gozar-bin
+	pkgdesc = Firefox Private Network client
+	pkgver = 1.10.3
+	pkgrel = 1
+	url = https://github.com/bardia049b-stack/Gozar
+	arch = x86_64
+	license = AGPL-3.0-or-later
+	depends = gtk3
+	depends = glib2
+	depends = cairo
+	depends = pango
+	depends = harfbuzz
+	depends = gdk-pixbuf2
+	depends = zlib
+	depends = iproute2
+	provides = gozar
+	conflicts = gozar
+	options = !strip
+	source = gozar-bin-1.10.3.tar.xz::https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Linux-amd64.tar.xz
+	sha256sums = 7cb4fb83daa5e1abac553c317fc11e9e7826dcac71a5e285809b0fd9c70e03c5
+
+pkgname = gozar-bin

@@ -1,0 +1,45 @@
+app-id: io.github.bardia049b_stack.Gozar
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: gozar
+separate-locales: false
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=~/.local/share/gozar-host:create
+  - --talk-name=org.freedesktop.Flatpak
+
+modules:
+  - name: gozar
+    buildsystem: simple
+    build-options:
+      strip: false
+    build-commands:
+      - install -dm755 /app/lib/gozar /app/lib/gozar/host /app/bin
+      - cp -a bundle-src/. /app/lib/gozar/
+      - mv /app/lib/gozar/gozar-core /app/lib/gozar/gozar-core.real
+      - install -m755 gozar-core-host.sh /app/lib/gozar/host/gozar-core
+      - install -m755 gozar.sh /app/bin/gozar
+      - install -Dm644 gozar.desktop /app/share/applications/io.github.bardia049b_stack.Gozar.desktop
+      - install -Dm644 io.github.bardia049b_stack.Gozar.metainfo.xml /app/share/metainfo/io.github.bardia049b_stack.Gozar.metainfo.xml
+      - install -Dm644 icons/128x128/io.github.bardia049b_stack.Gozar.png /app/share/icons/hicolor/128x128/apps/io.github.bardia049b_stack.Gozar.png
+      - install -Dm644 icons/256x256/io.github.bardia049b_stack.Gozar.png /app/share/icons/hicolor/256x256/apps/io.github.bardia049b_stack.Gozar.png
+      - install -Dm644 icons/512x512/io.github.bardia049b_stack.Gozar.png /app/share/icons/hicolor/512x512/apps/io.github.bardia049b_stack.Gozar.png
+      - install -Dm644 bundle-src/LICENSE /app/share/licenses/io.github.bardia049b_stack.Gozar/LICENSE
+      - install -Dm644 bundle-src/NOTICE /app/share/licenses/io.github.bardia049b_stack.Gozar/NOTICE
+      - install -Dm644 bundle-src/QUIC-GO-LICENSE.txt /app/share/licenses/io.github.bardia049b_stack.Gozar/QUIC-GO-LICENSE.txt
+      - install -Dm644 bundle-src/QPACK-LICENSE.txt /app/share/licenses/io.github.bardia049b_stack.Gozar/QPACK-LICENSE.txt
+      - install -Dm644 bundle-src/GO-DEPS-LICENSES.txt /app/share/licenses/io.github.bardia049b_stack.Gozar/GO-DEPS-LICENSES.txt
+      - chmod -R a+rX /app/lib/gozar
+    sources:
+      - type: archive
+        url: https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.3-desktop/Gozar-Linux-amd64.tar.xz
+        sha256: 7cb4fb83daa5e1abac553c317fc11e9e7826dcac71a5e285809b0fd9c70e03c5
+        dest: bundle-src
+      - type: dir
+        path: files
