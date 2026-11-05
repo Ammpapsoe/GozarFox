@@ -214,7 +214,7 @@ func TestLiveKernelTunnel(t *testing.T) {
 		}
 		keep = append(keep, address)
 	}
-	e, err := start("test.invalid", dial, keep, liveResolver{})
+	e, err := start("test.invalid", dial, keep, liveResolver{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

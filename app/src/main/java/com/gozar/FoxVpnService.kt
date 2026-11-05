@@ -72,6 +72,7 @@ class FoxVpnService : VpnService() {
             abortStart(getString(R.string.fox_no_device))
             return
         }
+        val mtu = FoxNetwork.mtu(this)
         val builder = Builder()
             .setSession(getString(R.string.fox_title))
             .addAddress(LOCAL_ADDRESS, 32)
@@ -80,7 +81,7 @@ class FoxVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addRoute(DNS_ADDRESS, 32)
             .addRoute("::", 0)
-            .setMtu(FoxStack.MTU)
+            .setMtu(mtu)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
             builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", FoxLink.webPort))
@@ -122,12 +123,13 @@ class FoxVpnService : VpnService() {
                     DirectPipe(pipe) { directRoutingAllowed() }
                 } else {
                     val location = FoxLink.location ?: throw IOException("not connected yet")
-                    val token = FoxStore.pass(app)
+                    val token = FoxLink.pass(app)
                     if (token.isEmpty()) throw IOException("no pass")
                     FoxTunnel.open(location, host, port, token)
                 }
             },
-            { inbound, size -> FoxLink.count(inbound, size) }
+            { inbound, size -> FoxLink.count(inbound, size) },
+            mtu
         )
         engine.start()
         stack = engine

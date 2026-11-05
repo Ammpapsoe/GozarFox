@@ -11,7 +11,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
 )
 
-func renewalDelay(token string, now time.Time) time.Duration {
+func tokenExpiry(token string, now time.Time) time.Time {
 	expiry := now.Add(4 * time.Minute)
 	parts := strings.Split(token, ".")
 	if len(parts) >= 2 {
@@ -24,7 +24,11 @@ func renewalDelay(token string, now time.Time) time.Duration {
 			}
 		}
 	}
-	delay := expiry.Sub(now) - 2*time.Minute
+	return expiry
+}
+
+func renewalDelay(token string, now time.Time) time.Duration {
+	delay := tokenExpiry(token, now).Sub(now) - 2*time.Minute
 	if delay < 15*time.Second {
 		return 15 * time.Second
 	}
@@ -34,13 +38,36 @@ func renewalDelay(token string, now time.Time) time.Duration {
 	return delay
 }
 
+func (a *App) noteActivity() {
+	a.lastActivity.Store(time.Now().UnixNano())
+}
+
 func (a *App) currentPass() (string, error) {
+	a.passMu.Lock()
+	defer a.passMu.Unlock()
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.pass == nil || a.pass.Token == "" {
+	pass := a.pass
+	a.mu.Unlock()
+	if pass == nil || pass.Token == "" {
 		return "", errors.New("no Firefox proxy pass")
 	}
-	return a.pass.Token, nil
+	now := time.Now()
+	if tokenExpiry(pass.Token, now).After(now.Add(2 * time.Minute)) {
+		return pass.Token, nil
+	}
+	access, err := a.access()
+	if err != nil {
+		return "", err
+	}
+	fresh, err := a.requestPass(access.token)
+	if err != nil {
+		return "", err
+	}
+	if err := a.saveRenewedUsage(context.Background(), fresh, access); err != nil {
+		return "", err
+	}
+	a.noteActivity()
+	return fresh.Token, nil
 }
 
 func (a *App) startRenewal() {
@@ -62,12 +89,17 @@ func (a *App) startRenewal() {
 
 func (a *App) renewPass(ctx context.Context) {
 	var retry time.Duration
+	lastSeen := a.lastActivity.Load()
 	for {
 		token, err := a.currentPass()
 		if err != nil {
 			return
 		}
-		delay := renewalDelay(token, time.Now())
+		delayFn := a.renewDelay
+		if delayFn == nil {
+			delayFn = renewalDelay
+		}
+		delay := delayFn(token, time.Now())
 		if retry > 0 {
 			delay = retry
 		}
@@ -78,6 +110,13 @@ func (a *App) renewPass(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
+		seen := a.lastActivity.Load()
+		if seen == lastSeen {
+			retry = 0
+			continue
+		}
+		lastSeen = seen
+		a.maybeRefreshGeo(false)
 		access, err := a.access()
 		if err == nil {
 			var passErr error

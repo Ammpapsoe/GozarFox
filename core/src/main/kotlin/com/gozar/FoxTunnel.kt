@@ -234,6 +234,7 @@ class FoxProxyRefusal(val status: Int, message: String) : java.io.IOException(me
 
 object FoxTunnel {
 
+    private const val READ_TIMEOUT_MS = 15000
     private const val AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
 
     private val adaptive = FoxAdaptive()
@@ -297,7 +298,7 @@ object FoxTunnel {
             val input = BufferedInputStream(socket.inputStream)
             val (status, headers) = response(input)
             if (status == 200) {
-                socket.soTimeout = 0
+                socket.soTimeout = READ_TIMEOUT_MS
                 return FoxDuplex(socket, input, output, false, 1)
             }
             socket.close()
@@ -396,7 +397,7 @@ object FoxTunnel {
                     val reply = status(complete) ?: throw java.io.IOException("the proxy did not answer with a status")
                     if (reply in 100..199) continue
                     if (reply in 200..299 && !ended) {
-                        socket.soTimeout = 0
+                        socket.soTimeout = READ_TIMEOUT_MS
                         return FoxDuplex(socket, input, output, true, 1, streamWindow, initialWindow, connectionWindow)
                     }
                     if (ended && reply in 200..299) throw java.io.IOException("the proxy ended the tunnel")
@@ -485,6 +486,8 @@ object FoxTunnel {
     private fun chain(host: String, port: Int, timeout: Int): Socket {
         val hops = FoxUpstream.hops
         val raw = Socket()
+        raw.keepAlive = false
+        raw.tcpNoDelay = true
         val first = if (hops.isEmpty()) host to port else hops.first().host to hops.first().port
         raw.connect(InetSocketAddress(first.first, first.second), timeout)
         raw.soTimeout = timeout

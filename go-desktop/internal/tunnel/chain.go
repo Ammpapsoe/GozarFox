@@ -49,6 +49,18 @@ func ParseChain(values []string) ([]Hop, error) {
 	return hops, nil
 }
 
+func dialTCP(host string, port int, timeout time.Duration) (net.Conn, error) {
+	dialer := net.Dialer{Timeout: timeout, KeepAlive: -1}
+	conn, err := dialer.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err != nil {
+		return nil, err
+	}
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.SetNoDelay(true)
+	}
+	return conn, nil
+}
+
 func dialChain(target Target, timeout time.Duration) (net.Conn, error) {
 	host := target.Host
 	port := target.Port
@@ -59,7 +71,7 @@ func dialChain(target Target, timeout time.Duration) (net.Conn, error) {
 	if target.DialHost != "" {
 		host = target.DialHost
 	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), timeout)
+	conn, err := dialTCP(host, port, timeout)
 	if err != nil {
 		return nil, err
 	}

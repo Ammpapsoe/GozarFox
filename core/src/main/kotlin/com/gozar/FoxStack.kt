@@ -29,12 +29,15 @@ class FoxStack(
     private val local: Int,
     private val resolver: FoxResolver,
     private val dial: (String, String, Int) -> FoxPipe,
-    private val meter: (Boolean, Long) -> Unit
+    private val meter: (Boolean, Long) -> Unit,
+    mtu: Int = MTU
 ) {
+
+    private val mtu = mtu.coerceIn(576, 65535)
+    private val mss = this.mtu - 40
 
     companion object {
         const val MTU = 1400
-        private const val MSS = MTU - 40
         private const val FIN = 0x01
         private const val SYN = 0x02
         private const val RST = 0x04
@@ -42,7 +45,7 @@ class FoxStack(
         private const val ACK = 0x10
         private const val TCP = 6
         private const val UDP = 17
-        private const val WINDOW = 64240
+        private const val WINDOW_SHIFT = 7
         private const val UPLOAD_CAP = 512 * 1024
         private const val FLIGHT_CAP = 256 * 1024
         private const val MASK = 0xFFFFFFFFL
@@ -153,9 +156,11 @@ class FoxStack(
                 send(target, remotePort, appPort, 0L, (seq + length) and MASK, RST or ACK, 0, null, 0, 0)
                 return
             }
-            val created = Flow(key, appPort, target, remotePort, (seq + 1) and MASK)
+            val (peerShift, peerMss) = tcpOptions(packet, header + 20, body)
+            val created = Flow(key, appPort, target, remotePort, (seq + 1) and MASK, peerShift, peerMss)
             flows[key] = created
-            send(target, remotePort, appPort, created.sent, created.expected, SYN or ACK, WINDOW, null, 0, 0)
+            val options = byteArrayOf(3, 3, WINDOW_SHIFT.toByte(), 0)
+            send(target, remotePort, appPort, created.sent, created.expected, SYN or ACK, created.window(), null, 0, 0, options)
             created.sent = (created.sent + 1) and MASK
             created.begin()
             return
@@ -169,6 +174,29 @@ class FoxStack(
         if (length > 0 || flags and FIN != 0) {
             send(target, remotePort, appPort, known.sent, known.expected, ACK, known.window(), null, 0, 0)
         }
+    }
+
+    private fun tcpOptions(packet: ByteArray, start: Int, end: Int): Pair<Int, Int> {
+        var shift = 0
+        var peerMss = mss
+        var index = start
+        while (index < end) {
+            val kind = packet[index].toInt() and 0xFF
+            if (kind == 0) break
+            if (kind == 1) {
+                index++
+                continue
+            }
+            if (index + 1 >= end) break
+            val length = packet[index + 1].toInt() and 0xFF
+            if (length < 2 || index + length > end) break
+            when (kind) {
+                2 -> if (length == 4) peerMss = minOf(peerMss, u16(packet, index + 2))
+                3 -> if (length == 3) shift = (packet[index + 2].toInt() and 0xFF).coerceAtMost(14)
+            }
+            index += length
+        }
+        return shift to peerMss.coerceAtLeast(536)
     }
 
     private fun admit(): Boolean {
@@ -209,7 +237,7 @@ class FoxStack(
                     null
                 } ?: return@execute
                 learn(query, answer)
-                val limited = resolver.truncate(query, answer, MTU - 28)
+                val limited = resolver.truncate(query, answer, mtu - 28)
                 if (limited.isNotEmpty()) replyUdp(target, appPort, serverPort, limited)
             }
         } catch (_: RejectedExecutionException) {
@@ -330,9 +358,11 @@ class FoxStack(
         window: Int,
         data: ByteArray?,
         offset: Int,
-        length: Int
+        length: Int,
+        options: ByteArray? = null
     ) {
-        val tcpLength = 20 + length
+        val optionLength = options?.size ?: 0
+        val tcpLength = 20 + optionLength + length
         val total = 20 + tcpLength
         val packet = ByteArray(total)
         packet[0] = 0x45
@@ -348,10 +378,11 @@ class FoxStack(
         putU16(packet, 22, sourcePort)
         putU32(packet, 24, seq)
         putU32(packet, 28, ack)
-        packet[32] = 0x50
+        packet[32] = (((20 + optionLength) / 4) shl 4).toByte()
         packet[33] = flags.toByte()
         putU16(packet, 34, window.coerceIn(0, 65535))
-        if (length > 0 && data != null) System.arraycopy(data, offset, packet, 40, length)
+        if (optionLength > 0 && options != null) System.arraycopy(options, 0, packet, 40, optionLength)
+        if (length > 0 && data != null) System.arraycopy(data, offset, packet, 40 + optionLength, length)
         val check = fold(pseudo(destination, local, TCP, tcpLength) + sum(packet, 20, tcpLength))
         putU16(packet, 36, if (check == 0) 0xFFFF else check)
         emit(packet)
@@ -434,11 +465,13 @@ class FoxStack(
         private val appPort: Int,
         private val remote: Int,
         private val remotePort: Int,
-        @Volatile var expected: Long
+        @Volatile var expected: Long,
+        private val peerShift: Int,
+        private val peerMss: Int
     ) {
         @Volatile var sent: Long = System.nanoTime() and MASK
         @Volatile private var acknowledged: Long = sent
-        @Volatile private var peer: Int = WINDOW
+        @Volatile private var peer: Long = 65535
         @Volatile var idleAt: Long = System.currentTimeMillis()
         @Volatile private var closed = false
         @Volatile private var pipe: FoxPipe? = null
@@ -451,10 +484,10 @@ class FoxStack(
 
         private fun available(): Int {
             val remaining = (UPLOAD_CAP - queued).coerceAtLeast(0)
-            return if (remaining < MSS) 0 else minOf(remaining, WINDOW)
+            return if (remaining < mss) 0 else remaining
         }
 
-        fun window(): Int = synchronized(lock) { available() }
+        fun window(): Int = synchronized(lock) { (available() ushr WINDOW_SHIFT).coerceIn(0, 65535) }
 
         fun push(packet: ByteArray, offset: Int, length: Int, sequence: Long): Boolean = synchronized(lock) {
             if (closed || appClosed || sequence != expected || length > UPLOAD_CAP - queued) return@synchronized false
@@ -470,7 +503,7 @@ class FoxStack(
                 val advance = gap(ack, acknowledged)
                 val outstanding = gap(sent, acknowledged)
                 if (advance < 0x80000000L && advance <= outstanding) acknowledged = ack
-                peer = window
+                peer = (window.toLong() shl peerShift).coerceAtMost(1L shl 20)
                 lock.notifyAll()
             }
         }
@@ -529,7 +562,7 @@ class FoxStack(
                 if (reopened) send(remote, remotePort, appPort, sent, expected, ACK, window(), null, 0, 0)
                 var offset = 0
                 while (offset < chunk.size) {
-                    val size = minOf(MSS, chunk.size - offset)
+                    val size = minOf(mss, chunk.size - offset)
                     try {
                         link.write(chunk, offset, size)
                     } catch (e: Exception) {
@@ -565,7 +598,7 @@ class FoxStack(
                 if (size == 0) continue
                 var offset = 0
                 while (offset < size) {
-                    val piece = minOf(MSS, size - offset)
+                    val piece = minOf(peerMss, size - offset)
                     if (!await(piece.toLong())) {
                         terminate()
                         return
@@ -590,7 +623,7 @@ class FoxStack(
             synchronized(lock) {
                 while (true) {
                     val flight = gap(sent + extra, acknowledged)
-                    val allowed = minOf(peer.toLong(), FLIGHT_CAP.toLong())
+                    val allowed = minOf(peer, FLIGHT_CAP.toLong())
                     if (flight <= allowed) return true
                     val left = deadline - System.currentTimeMillis()
                     if (left <= 0 || closed) return false

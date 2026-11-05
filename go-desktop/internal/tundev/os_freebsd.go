@@ -2,6 +2,7 @@ package tundev
 
 import (
 	"errors"
+	"net/netip"
 	"os"
 	"strings"
 )
@@ -93,3 +94,22 @@ func restore(cfg *Config) {
 }
 
 func privileged() bool { return isRoot() }
+
+func keep(cfg *Config, address netip.Addr) error {
+	if !address.Is4() {
+		return errors.New("direct split currently supports IPv4")
+	}
+	if cfg.darwinGateway == "" {
+		return errors.New("no usable default gateway")
+	}
+	for _, existing := range cfg.AddedKeep {
+		if existing == address {
+			return nil
+		}
+	}
+	if err := mustRun("route", "-n", "add", "-host", address.String(), cfg.darwinGateway); err != nil {
+		return err
+	}
+	cfg.AddedKeep = append(cfg.AddedKeep, address)
+	return nil
+}

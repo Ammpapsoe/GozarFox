@@ -3,8 +3,6 @@ package com.gozar
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import java.net.InetSocketAddress
-import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -19,7 +17,9 @@ object Fox {
     private const val STEP_LOGIN = 2
 
     private val main = Handler(Looper.getMainLooper())
-    private val delays = ConcurrentHashMap<String, Int>()
+    private class ProbeEntry(val sample: FoxPathSample, val at: Long)
+
+    private val probes = ConcurrentHashMap<String, ProbeEntry>()
     private val refreshLock = Any()
     private val operations = AtomicInteger()
 
@@ -275,14 +275,13 @@ object Fox {
         stage = c.getString(R.string.fox_stage_measure)
         notifyUi()
         thread {
-            for (location in servers) {
-                val key = location.host + ":" + location.port
-                if (delays.containsKey(key)) continue
-                delays[key] = ping(location.host, location.port)
+            val stale = servers.filter { freshProbe(it.host + ":" + it.port) == null }
+            for (sample in FoxPath.measure(stale)) {
+                probes[sample.host + ":" + sample.port] = ProbeEntry(sample, System.currentTimeMillis())
             }
             val chosen = FoxStore.selected(app)
-            if (chosen == "REC" || chosen.isEmpty() || servers.none { it.code == chosen }) {
-                val best = servers.filter { delayOf(it) > 0 }.minByOrNull { delayOf(it) }
+            if (chosen == "REC" || chosen == "AUTO" || chosen.isEmpty() || servers.none { it.code == chosen }) {
+                val best = autoCandidates(app).firstOrNull()
                 val current = FoxStore.credentials(app)
                 if (best != null && current.id == session.id && current.revision == session.revision) {
                     FoxStore.setSelected(app, best.code)
@@ -295,25 +294,21 @@ object Fox {
         }
     }
 
-    fun delayOf(location: FoxLocation): Int = delays[location.host + ":" + location.port] ?: -1
+    private fun freshProbe(key: String): FoxPathSample? {
+        val entry = probes[key] ?: return null
+        if (System.currentTimeMillis() - entry.at >= FoxPath.TTL_MS) {
+            probes.remove(key, entry)
+            return null
+        }
+        return entry.sample
+    }
+
+    fun delayOf(location: FoxLocation): Int {
+        val sample = freshProbe(location.host + ":" + location.port) ?: return -1
+        return if (sample.ok) sample.averageMs.toInt() else -1
+    }
 
     fun hasDelays(): Boolean = servers.any { delayOf(it) >= 0 }
-
-    private fun ping(host: String, port: Int): Int {
-        val start = System.nanoTime()
-        val socket = Socket()
-        return try {
-            socket.connect(InetSocketAddress(host, port), 4000)
-            ((System.nanoTime() - start) / 1_000_000L).toInt()
-        } catch (e: Exception) {
-            -1
-        } finally {
-            try {
-                socket.close()
-            } catch (e: Exception) {
-            }
-        }
-    }
 
     fun validAccess(c: Context): FoxAccess = synchronized(refreshLock) {
         val current = FoxStore.credentials(c)
@@ -332,6 +327,25 @@ object Fox {
         if (list.isEmpty()) return null
         return list.firstOrNull { it.code == code } ?: list.firstOrNull { it.recommended } ?: list.first()
     }
+
+    fun autoCandidates(c: Context): List<FoxLocation> {
+        val list = servers
+        if (list.isEmpty()) return emptyList()
+        val code = FoxStore.selected(c)
+        if (code != "REC" && code != "AUTO" && code.isNotEmpty() && list.any { it.code == code }) {
+            return listOf(list.first { it.code == code })
+        }
+        val stale = list.filter { freshProbe(it.host + ":" + it.port) == null }
+        for (sample in FoxPath.measure(stale)) {
+            probes[sample.host + ":" + sample.port] = ProbeEntry(sample, System.currentTimeMillis())
+        }
+        val samples = list.mapNotNull { freshProbe(it.host + ":" + it.port) }
+        val byKey = list.associateBy { it.host + ":" + it.port }
+        val ordered = FoxPath.rank(samples).mapNotNull { byKey[it.host + ":" + it.port] }
+        return if (ordered.isEmpty()) list else ordered
+    }
+
+    fun autoSelect(c: Context): FoxLocation? = autoCandidates(c).firstOrNull() ?: selectedLocation(c)
 
     fun select(c: Context, location: FoxLocation) {
         FoxStore.setSelected(c, location.code)
@@ -364,7 +378,7 @@ object Fox {
         FoxStore.clear(c)
         cancelLogin()
         load(c)
-        delays.clear()
+        probes.clear()
         notifyUi()
     }
 }

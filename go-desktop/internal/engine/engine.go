@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/dnsproxy"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -22,6 +23,36 @@ import (
 
 const mtu = 1500
 
+func setTCP[T any](created *stack.Stack, value T) error {
+	if err := created.SetTransportProtocolOption(tcp.ProtocolNumber, any(&value).(tcpip.SettableTransportProtocolOption)); err != nil {
+		return errors.New(err.String())
+	}
+	return nil
+}
+
+func tuneTCP(created *stack.Stack) error {
+	for _, option := range []func() error{
+		func() error { return setTCP(created, tcpip.TCPSACKEnabled(true)) },
+		func() error { return setTCP(created, tcpip.TCPRecovery(tcpip.TCPRACKLossDetection)) },
+		func() error { return setTCP(created, tcpip.TCPModerateReceiveBufferOption(true)) },
+		func() error { return setTCP(created, tcpip.TCPDelayEnabled(false)) },
+		func() error { return setTCP(created, tcpip.TCPMinRTOOption(200*time.Millisecond)) },
+		func() error { return setTCP(created, tcpip.TCPMaxRTOOption(60*time.Second)) },
+		func() error { return setTCP(created, tcpip.TCPSynRetriesOption(5)) },
+		func() error {
+			return setTCP(created, tcpip.TCPSendBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 4 << 20})
+		},
+		func() error {
+			return setTCP(created, tcpip.TCPReceiveBufferSizeRangeOption{Min: 4 << 10, Default: 64 << 10, Max: 4 << 20})
+		},
+	} {
+		if err := option(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type Dialer func(host string, port int) (io.ReadWriteCloser, error)
 
 type resolver interface {
@@ -34,17 +65,24 @@ type Engine struct {
 	device *tundev.Device
 	config tundev.Config
 	dial   Dialer
+	direct Dialer
+	split  *geo.Rules
 	dns    resolver
-	down   atomic.Int64
-	up     atomic.Int64
-	once   sync.Once
+	down    atomic.Int64
+	up      atomic.Int64
+	routeMu sync.Mutex
+	once    sync.Once
 }
 
 func Start(proxyHost string, dial Dialer, protect []netip.Addr) (*Engine, error) {
-	return start(proxyHost, dial, protect, nil)
+	return start(proxyHost, dial, protect, nil, nil, nil)
 }
 
-func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver) (*Engine, error) {
+func StartSplit(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules) (*Engine, error) {
+	return start(proxyHost, dial, protect, nil, direct, split)
+}
+
+func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules) (*Engine, error) {
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
 	}
@@ -54,8 +92,13 @@ func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver res
 	}
 	created := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
-		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol},
+		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocolCUBIC, udp.NewProtocol},
 	})
+	if err := tuneTCP(created); err != nil {
+		device.Close()
+		created.Close()
+		return nil, err
+	}
 	if err := created.CreateNIC(1, device.Endpoint()); err != nil {
 		device.Close()
 		return nil, errors.New(err.String())
@@ -82,7 +125,7 @@ func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver res
 		{Destination: header.IPv4EmptySubnet, NIC: 1},
 	})
 
-	engine := &Engine{stack: created, device: device, dial: dial, dns: testResolver}
+	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver}
 	if engine.dns == nil {
 		engine.dns = dnsproxy.New(dial)
 	}
@@ -120,7 +163,13 @@ func (e *Engine) handleTCP(request *tcp.ForwarderRequest) {
 			e.serveDNS(gonet.NewTCPConn(queue, endpoint))
 			return
 		}
-		remote, err := e.dial(host, port)
+		var remote io.ReadWriteCloser
+		var err error
+		if e.split != nil && e.direct != nil && e.split.DirectAddress(netip.MustParseAddr(host)) {
+			remote, err = e.direct(host, port)
+		} else {
+			remote, err = e.dial(host, port)
+		}
 		if err != nil {
 			request.Complete(true)
 			return
@@ -176,6 +225,9 @@ func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
 			}
 			if _, err := conn.Write(answer); err != nil {
 				return
+			}
+			if e.split != nil {
+				e.split.Learn(query, answer)
 			}
 			e.down.Add(int64(len(answer)))
 		}
@@ -244,6 +296,12 @@ func (e *Engine) Device() string {
 	return e.config.Interface
 }
 
+func (e *Engine) Bypass(address netip.Addr) error {
+	e.routeMu.Lock()
+	defer e.routeMu.Unlock()
+	return tundev.Keep(&e.config, address)
+}
+
 func (e *Engine) Failures() <-chan error {
 	return e.device.Failures()
 }
@@ -286,6 +344,9 @@ func (e *Engine) serveDNS(local io.ReadWriteCloser) {
 		}
 		if len(answer) == 0 || len(answer) > 65535 {
 			return
+		}
+		if e.split != nil {
+			e.split.Learn(query, answer)
 		}
 		framed := make([]byte, 2+len(answer))
 		framed[0] = byte(len(answer) >> 8)

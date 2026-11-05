@@ -385,6 +385,23 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     }
   }
 
+  Future<void> _selectAuto() async {
+    if (_busy || _state.live) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final reply = await _core.call('server', {'host': ''});
+      _apply(reply);
+      if (reply.error != null && mounted) setState(() => _error = reply.error);
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _signOut() async {
     if (_busy) return;
     setState(() {
@@ -514,6 +531,10 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         onSelect: (place) {
           Navigator.pop(dialogContext);
           unawaited(_selectServer(place));
+        },
+        onAuto: () {
+          Navigator.pop(dialogContext);
+          unawaited(_selectAuto());
         },
       ),
     );
@@ -863,7 +884,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           as Map<String, dynamic>;
       final tag = data['tag_name'] as String? ?? '';
       final url = data['html_url'] as String? ?? '';
-      const current = '1.10.1';
+      const current = '1.10.4';
       List<int> version(String value) => RegExp(r'\d+')
           .allMatches(value)
           .take(3)
@@ -1901,12 +1922,14 @@ class ServerDialog extends StatefulWidget {
     required this.selected,
     required this.words,
     required this.onSelect,
+    required this.onAuto,
   });
 
   final List<Place> places;
   final String? selected;
   final Words words;
   final ValueChanged<Place> onSelect;
+  final VoidCallback onAuto;
 
   @override
   State<ServerDialog> createState() => _ServerDialogState();
@@ -1929,6 +1952,15 @@ class _ServerDialogState extends State<ServerDialog> {
         height: 390,
         child: Column(
           children: [
+            ListTile(
+              leading: const Icon(Icons.auto_awesome, color: soft),
+              title: Text(widget.words.autoServer),
+              trailing: (widget.selected == null || widget.selected!.isEmpty)
+                  ? const Icon(Icons.check, color: soft)
+                  : null,
+              onTap: widget.onAuto,
+            ),
+            const Divider(height: 1),
             TextField(
               onChanged: (value) => setState(() => query = value.trim()),
               decoration: InputDecoration(

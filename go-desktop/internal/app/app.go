@@ -15,6 +15,8 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/engine"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/killswitch"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
@@ -67,6 +69,7 @@ type App struct {
 	authRevision    uint64
 	refreshToken    func(string) (*fxa.Tokens, error)
 	requestPass     func(string) (*fxa.Pass, error)
+	renewDelay      func(string, time.Time) time.Duration
 	renewCancel     context.CancelFunc
 	cfg             config.Config
 	servers         []fxa.Location
@@ -89,6 +92,11 @@ type App struct {
 	rateUp          atomic.Int64
 	lastDown        int64
 	lastUp          int64
+	lastActivity    atomic.Int64
+	passMu          sync.Mutex
+	geo             *geo.Rules
+	geoRefresh      atomic.Int64
+	killActive      bool
 	version         string
 	admin           bool
 }
@@ -101,7 +109,7 @@ func New(version string) *App {
 	} else {
 		cfg.Server = ""
 	}
-	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken}
+	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, geo: geo.Default()}
 	go created.sampler()
 	return created
 }
@@ -195,14 +203,6 @@ func (a *App) LoadServers() ([]fxa.Location, error) {
 	}
 	a.mu.Lock()
 	a.servers = servers
-	if a.cfg.Server == "" {
-		for _, place := range servers {
-			if place.Recommended {
-				a.cfg.Server = place.Code
-				break
-			}
-		}
-	}
 	err = config.Save(a.cfg)
 	a.mu.Unlock()
 	return servers, err
@@ -213,6 +213,15 @@ func (a *App) SetServer(key string) error {
 	defer a.mu.Unlock()
 	if a.live || a.connecting {
 		return errors.New("disconnect before changing the server")
+	}
+	if autoSelected(key) {
+		next := a.cfg
+		next.Server = ""
+		if err := config.Save(next); err != nil {
+			return err
+		}
+		a.cfg = next
+		return nil
 	}
 	for _, place := range a.servers {
 		if strings.EqualFold(place.Host, key) || strings.EqualFold(place.Code, key) {
@@ -687,73 +696,86 @@ func (a *App) connect() error {
 	servers := append([]fxa.Location(nil), a.servers...)
 	chain := append([]string(nil), a.cfg.Chain...)
 	a.mu.Unlock()
-	target, err := pick(servers, code)
-	if err != nil {
-		return err
-	}
-
 	hops, err := tunnel.ParseChain(chain)
 	if err != nil {
 		return err
 	}
-	target.Chain = hops
-	firstHost := target.Host
-	if len(hops) > 0 {
-		firstHost = hops[0].Host
-	}
-	addresses := tundev.Neighbours(firstHost)
-	var keep []netip.Addr
-	for _, address := range addresses {
-		if address.Is4() {
-			target.DialHost = address.String()
-			if !address.IsLoopback() {
-				keep = append(keep, address)
-			}
-			break
+	var candidates []pathCandidate
+	if autoSelected(code) {
+		a.setStage("سنجش مسیرها…")
+		candidates = autoCandidates(servers, hops, 2, 1200*time.Millisecond, 8)
+	} else {
+		place, err := pickLocation(servers, code)
+		if err != nil {
+			return err
 		}
+		candidates = []pathCandidate{preparePath(place, hops)}
 	}
-	if target.DialHost == "" {
-		return errors.New("could not resolve the first proxy to IPv4 before starting the tunnel")
+	a.setStage("برقراری تونل…")
+	chosen, transport, err := choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
+	if err != nil {
+		return err
 	}
-	transport := tunnel.NewManager(target)
 	dial := func(host string, remotePort int) (io.ReadWriteCloser, error) {
 		current, err := a.currentPass()
 		if err != nil {
 			return nil, err
 		}
+		a.noteActivity()
 		return transport.Open(host, remotePort, current, 15*time.Second)
 	}
-
-	a.mu.Lock()
-	a.stage = "برقراری تونل…"
-	a.mu.Unlock()
-
 	if err := wintun.Ensure(); err != nil {
 		transport.Close()
 		return err
 	}
-	created, err := engine.Start(target.Host, dial, keep)
+	var direct engine.Dialer
+	var split *geo.Rules
+	if a.cfg.SplitTunnel {
+		split = a.geo
+		direct = func(host string, remotePort int) (io.ReadWriteCloser, error) {
+			a.mu.Lock()
+			current := a.engine
+			a.mu.Unlock()
+			if current == nil {
+				return nil, errors.New("tunnel is not ready")
+			}
+			address, err := netip.ParseAddr(host)
+			if err != nil {
+				return nil, err
+			}
+			if err := current.Bypass(address); err != nil {
+				return nil, err
+			}
+			a.noteActivity()
+			return net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)), 15*time.Second)
+		}
+	}
+	created, err := engine.StartSplit(chosen.target.Host, dial, direct, chosen.keep, split)
 	if err != nil {
 		transport.Close()
 		return err
 	}
-	a.mu.Lock()
-	a.engine = created
-	a.transport = transport
-	for _, place := range servers {
-		if strings.EqualFold(place.Host, target.Host) {
-			a.activeServer = place
-			break
+	if a.cfg.KillSwitch {
+		if err := killswitch.Enable(killswitch.Config{Interface: created.Device(), Proxy: chosen.keep, AllowDirect: a.cfg.SplitTunnel}); err != nil {
+			created.Stop()
+			transport.Close()
+			return err
 		}
 	}
+	a.mu.Lock()
+	a.engine = created
+	a.killActive = a.cfg.KillSwitch
+	a.transport = transport
+	a.activeServer = chosen.place
 	a.live = true
 	a.since = time.Now().Unix()
+	a.lastActivity.Store(time.Now().UnixNano())
+	a.geoRefresh.Store(time.Now().UnixNano())
+	go a.maybeRefreshGeo(true)
 	if a.cfg.Recents {
-		a.cfg.LastServer = target.Host
+		a.cfg.LastServer = chosen.target.Host
 		_ = config.Save(a.cfg)
 	}
-	a.mu.Unlock()
-	a.mu.Lock()
 	a.stage = ""
 	a.mu.Unlock()
 	go a.watchTunnel(created)
@@ -789,6 +811,8 @@ func (a *App) teardown() {
 	a.mu.Lock()
 	engineNow := a.engine
 	transport := a.transport
+	killActive := a.killActive
+	a.killActive = false
 	a.transport = nil
 	cancel := a.renewCancel
 	a.renewCancel = nil
@@ -806,6 +830,9 @@ func (a *App) teardown() {
 	}
 	if engineNow != nil {
 		engineNow.Stop()
+	}
+	if killActive {
+		_ = killswitch.Disable()
 	}
 }
 
@@ -829,23 +856,6 @@ func (a *App) setStage(text string) {
 	a.mu.Lock()
 	a.stage = text
 	a.mu.Unlock()
-}
-
-func pick(servers []fxa.Location, code string) (tunnel.Target, error) {
-	if len(servers) == 0 {
-		return tunnel.Target{}, errors.New("no servers")
-	}
-	for _, place := range servers {
-		if code != "" && (strings.EqualFold(place.Code, code) || strings.EqualFold(place.Host, code)) {
-			return tunnel.Target{Host: place.Host, Port: place.Port}, nil
-		}
-	}
-	for _, place := range servers {
-		if place.Recommended {
-			return tunnel.Target{Host: place.Host, Port: place.Port}, nil
-		}
-	}
-	return tunnel.Target{Host: servers[0].Host, Port: servers[0].Port}, nil
 }
 
 func (a *App) Config() config.Config {

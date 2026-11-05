@@ -131,3 +131,37 @@ func restore(cfg *Config) {
 }
 
 func privileged() bool { return isRoot() }
+
+func keep(cfg *Config, address netip.Addr) error {
+	if !address.Is4() {
+		return errors.New("direct split currently supports IPv4")
+	}
+	for _, existing := range cfg.AddedKeep {
+		if existing == address {
+			return nil
+		}
+	}
+	existing, err := command("ip", "-4", "route", "show", "exact", address.String()+"/32")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(existing) != "" {
+		return nil
+	}
+	out, err := command("ip", "-4", "route", "get", address.String())
+	if err != nil {
+		return err
+	}
+	args, needed, err := routeForKeep(address, out)
+	if err != nil || !needed {
+		return err
+	}
+	if err := mustRun("ip", args...); err != nil {
+		return err
+	}
+	remove := append([]string(nil), args...)
+	remove[2] = "del"
+	cfg.linuxKeepRoutes = append(cfg.linuxKeepRoutes, remove)
+	cfg.AddedKeep = append(cfg.AddedKeep, address)
+	return nil
+}

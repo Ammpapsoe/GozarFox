@@ -1,6 +1,6 @@
 name: gozar
 base: core22
-version: '1.10.3'
+version: '1.10.4'
 summary: Firefox Private Network client
 description: |
   Gozar connects a Linux desktop to the Firefox Private Network proxy and keeps

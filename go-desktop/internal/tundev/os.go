@@ -41,6 +41,10 @@ func Restore(cfg *Config) {
 	restore(cfg)
 }
 
+func Keep(cfg *Config, address netip.Addr) error {
+	return keep(cfg, address.Unmap())
+}
+
 func Neighbours(host string) []netip.Addr {
 	if address, err := netip.ParseAddr(host); err == nil {
 		return []netip.Addr{address.Unmap()}

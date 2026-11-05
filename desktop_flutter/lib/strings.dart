@@ -84,7 +84,8 @@ class Words {
   String get connect => pick('اتصال', 'Connect');
   String get disconnect => pick('قطع اتصال', 'Disconnect');
   String get server => pick('سرور', 'Server');
-  String get bestServer => pick('بهترین سرور', 'Recommended server');
+  String get bestServer => pick('خودکار — بهترین مسیر', 'Auto — best path');
+  String get autoServer => pick('خودکار (بهترین مسیر)', 'Auto (best path)');
   String get chooseServer => pick('انتخاب سرور', 'Select server');
   String get loadingServers =>
       pick('در حال دریافت سرورها…', 'Loading servers…');

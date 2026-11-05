@@ -42,6 +42,8 @@ type Config struct {
 	LastServer      string    `json:"last_server"`
 	SettingsVersion int       `json:"settings_version"`
 	FullTunnel      bool      `json:"full_tunnel"`
+	KillSwitch      bool      `json:"kill_switch"`
+	SplitTunnel     bool      `json:"split_tunnel"`
 	BypassLAN       bool      `json:"bypass_lan"`
 	Bypass          []string  `json:"bypass"`
 	Chain           []string  `json:"chain"`
@@ -61,7 +63,7 @@ func Dir() string {
 func path() string { return filepath.Join(Dir(), "config.json") }
 
 func defaults() Config {
-	return Config{FullTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
+	return Config{FullTunnel: true, KillSwitch: true, SplitTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
 }
 
 func (c Config) ActiveAccount() Account {
@@ -157,6 +159,10 @@ func Load() Config {
 		loaded.Bypass = nil
 		loaded.BypassLAN = false
 		loaded.SettingsVersion = 1
+	}
+	if loaded.SettingsVersion < 2 {
+		loaded.KillSwitch = true
+		loaded.SplitTunnel = true
 	}
 	if loaded.Theme != "light" && loaded.Theme != "dark" {
 		loaded.Theme = "system"

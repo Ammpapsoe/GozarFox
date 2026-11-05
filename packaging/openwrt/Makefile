@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gozar
-PKG_VERSION:=1.10.3
+PKG_VERSION:=1.10.4
 PKG_RELEASE:=1
 PKG_LICENSE:=AGPL-3.0-or-later
 PKG_MAINTAINER:=Gozar contributors <noreply@github.com>

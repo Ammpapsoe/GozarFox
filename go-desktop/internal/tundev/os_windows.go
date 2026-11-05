@@ -1,6 +1,7 @@
 package tundev
 
 import (
+	"net/netip"
 	"errors"
 	"net"
 	"time"
@@ -140,3 +141,22 @@ func restore(cfg *Config) {
 }
 
 func privileged() bool { return isWindowsAdmin() }
+
+func keep(cfg *Config, address netip.Addr) error {
+	if !address.Is4() {
+		return errors.New("direct split currently supports IPv4")
+	}
+	if cfg.windowsGateway == "" || cfg.windowsIndex == "" {
+		return errors.New("no usable default gateway")
+	}
+	for _, existing := range cfg.AddedKeep {
+		if existing == address {
+			return nil
+		}
+	}
+	if err := mustRun("route", "add", address.String(), "mask", "255.255.255.255", cfg.windowsGateway, "metric", "1", "if", cfg.windowsIndex); err != nil {
+		return err
+	}
+	cfg.AddedKeep = append(cfg.AddedKeep, address)
+	return nil
+}

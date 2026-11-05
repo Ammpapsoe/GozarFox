@@ -352,6 +352,24 @@ jobs:
           path: desktop_flutter/out/*
           if-no-files-found: error
 
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: go-desktop
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.24.6'
+      - name: Auto selection, failover, split tunneling and idle proofs
+        run: go test ./internal/app ./internal/engine ./internal/geo ./internal/killswitch ./internal/tunnel -count=1
+      - name: Five minute idle soak
+        env:
+          GOZAR_IDLE_SOAK: '1'
+        run: go test ./internal/engine -run '^TestIdleFiveMinutesSoak$' -count=1 -timeout 10m
+
   cores:
     strategy:
       fail-fast: false
@@ -468,7 +486,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [android, desktop, cores, packages]
+    needs: [android, desktop, cores, packages, proof]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 30

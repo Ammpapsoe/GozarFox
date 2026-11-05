@@ -31,6 +31,7 @@ object FoxRoute {
         if (name.isEmpty()) return false
         if (name == "localhost" || name.endsWith(".localhost") || name.endsWith(".local")) return true
         if (extra.any { name == it || name.endsWith(".$it") }) return true
+        if (FoxGeo.direct(name)) return true
         if (!bypassLan) return false
         return isLan(name)
     }
@@ -79,7 +80,7 @@ class FoxSocketPipe private constructor(private val socket: Socket) : FoxPipe {
             return try {
                 socket.tcpNoDelay = true
                 socket.connect(InetSocketAddress(host, port), timeout)
-                socket.soTimeout = 0
+                socket.soTimeout = 15000
                 FoxSocketPipe(socket)
             } catch (e: Exception) {
                 try { socket.close() } catch (_: Exception) { }
