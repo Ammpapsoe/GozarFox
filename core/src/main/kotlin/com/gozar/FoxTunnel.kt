@@ -601,8 +601,13 @@ object FoxTunnel {
                         0x09 -> continuation(id, flags, payload)
                     }
                 }
+                // Mark the session dead before failing its streams: a reader
+                // woken by failAll could otherwise grab this session from the
+                // pool and write into a socket the proxy has already closed.
+                dead = true
                 failAll(java.io.IOException("the proxy closed the connection"))
             } catch (error: Exception) {
+                dead = true
                 failAll(error)
             } finally {
                 dead = true
@@ -627,8 +632,12 @@ object FoxTunnel {
             }
             if (size > 0) grow(id, size)
             val stream = streams[id] ?: return
-            if (flags and 0x01 != 0) stream.end()
+            // Deliver the payload before flagging the end: a reader woken by
+            // end() with an empty inbox would return EOF and truncate the
+            // final frame's data. read() drains the inbox before honoring
+            // ended, so this order is race-free.
             if (end > start) stream.deliver(payload.copyOfRange(start, end))
+            if (flags and 0x01 != 0) stream.end()
         }
 
         private fun grow(id: Int, amount: Int) {
