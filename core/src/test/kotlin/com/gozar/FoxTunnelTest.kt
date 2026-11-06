@@ -99,7 +99,22 @@ class FoxTunnelTest {
             try {
                 val request = "upload-over-tunnel".toByteArray(Charsets.US_ASCII)
                 pipe.write(request, 0, request.size)
-                assertArrayEquals(proxy.reply, done.poll(5, TimeUnit.SECONDS))
+                val received = done.poll(5, TimeUnit.SECONDS)
+                if (received == null || received.size != proxy.reply.size) {
+                    // Surface the internals so a rare race identifies itself.
+                    val probe = try {
+                        pipe.finishWrite()
+                        "session alive"
+                    } catch (error: Exception) {
+                        "session dead: ${error.message}"
+                    }
+                    fail(
+                        "reader got ${received?.size ?: -1} of ${proxy.reply.size} bytes; " +
+                            "proxy upload=${proxy.upload.size()}B protocols=${proxy.protocols} " +
+                            "problems=${proxy.problems} $probe"
+                    )
+                }
+                assertArrayEquals(proxy.reply, received)
                 assertEquals("upload-over-tunnel", String(proxy.upload.toByteArray(), Charsets.US_ASCII))
                 assertTrue(proxy.problems.isEmpty())
             } finally {
