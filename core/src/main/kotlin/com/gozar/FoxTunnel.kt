@@ -434,7 +434,7 @@ object FoxTunnel {
         private val output = BufferedOutputStream(socket.outputStream)
         private val outputLock = Any()
         private val streams = ConcurrentHashMap<Int, FoxDuplex.H2>()
-        private val stateLock = Any()
+        private val stateLock = Object()
         private val headerBlocks = HashMap<Int, ByteArrayOutputStream>()
         private val pendingWindows = HashMap<Int, Long>()
         private val sendWindows = HashMap<Int, Long>()
@@ -542,7 +542,7 @@ object FoxTunnel {
                         val streamWindow = sendWindows[id] ?: initialWindow
                         val available = minOf(streamWindow, connectionWindow)
                         if (available > 0) {
-                            granted = minOf(bytes.size - sent, available, 16384L).toInt()
+                            granted = minOf((bytes.size - sent).toLong(), available, 16384L).toInt()
                             sendWindows[id] = streamWindow - granted
                             connectionWindow -= granted
                             break
