@@ -87,7 +87,9 @@ class FoxTunnelPoolTest {
         EchoProxy().use { proxy ->
             val tunnels = ArrayList<FoxDuplex>()
             try {
-                for (index in 1..12) {
+                // MAX_STREAMS is 16: the first 16 land on one session, the
+                // rest spill onto a second one.
+                for (index in 1..20) {
                     val tunnel = open(proxy)
                     tunnels.add(tunnel)
                     assertEquals("payload-$index", echo(tunnel, "payload-$index"))
@@ -102,6 +104,29 @@ class FoxTunnelPoolTest {
                     }
                 }
             }
+        }
+    }
+
+    @Test
+    fun serverStreamLimitForcesNewSessionsInsteadOfOverloadingOne() {
+        EchoProxy(serverMaxStreams = 1).use { proxy ->
+            val first = open(proxy)
+            try {
+                // The proxy advertises MAX_CONCURRENT_STREAMS=1, so the second
+                // concurrent tunnel must land on a fresh session instead of
+                // overloading the first one past the server's own cap.
+                val second = open(proxy)
+                try {
+                    assertEquals(2, proxy.sessions.get())
+                    assertEquals("payload-a", echo(first, "payload-a"))
+                    assertEquals("payload-b", echo(second, "payload-b"))
+                } finally {
+                    second.close()
+                }
+            } finally {
+                first.close()
+            }
+            assertTrue(proxy.problems.isEmpty())
         }
     }
 
@@ -176,7 +201,8 @@ class FoxTunnelPoolTest {
     /** A loopback HTTP/2 CONNECT proxy that echoes every stream and counts sessions. */
     private class EchoProxy(
         private val goawayAfterEcho: Boolean = false,
-        private val refuseStatus: Int = 0
+        private val refuseStatus: Int = 0,
+        private val serverMaxStreams: Int = 0
     ) : Closeable {
         val sessions = AtomicInteger()
         val streamIds = Collections.synchronizedList(mutableListOf<Int>())
@@ -229,8 +255,17 @@ class FoxTunnelPoolTest {
             check(String(preface, Charsets.US_ASCII) == "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
             check(readFrame(input).type == 4)
             val output = socket.outputStream
+            val settings = if (serverMaxStreams > 0) {
+                byteArrayOf(
+                    0, 3, 0, 0,
+                    ((serverMaxStreams ushr 8) and 0xFF).toByte(),
+                    (serverMaxStreams and 0xFF).toByte()
+                )
+            } else {
+                ByteArray(0)
+            }
             synchronized(output) {
-                output.write(frame(4, 0, 0, ByteArray(0)))
+                output.write(frame(4, 0, 0, settings))
                 output.flush()
             }
             while (true) {

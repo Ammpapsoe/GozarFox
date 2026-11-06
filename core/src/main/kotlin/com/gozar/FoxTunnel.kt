@@ -182,8 +182,10 @@ class FoxDuplex private constructor(
     }
 
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
-        if (closed) throw java.io.IOException("the tunnel is closed")
         val ready: ByteArray? = synchronized(outputLock) {
+            // Checked under the lock so a write can never slip bytes in after
+            // close() has already drained the buffer.
+            if (closed) throw java.io.IOException("the tunnel is closed")
             outBuf.write(buffer, offset, length)
             if (outBuf.size() >= COALESCE_BYTES) {
                 take()
@@ -253,7 +255,7 @@ class FoxDuplex private constructor(
         private const val COALESCE_BYTES = 1360
         private const val COALESCE_DELAY_MS = 5L
         private const val STALL_RETRY_MS = 10L
-        private val FLUSHER = Executors.newScheduledThreadPool(2) { task ->
+        private val FLUSHER = Executors.newScheduledThreadPool(4) { task ->
             Thread(task, "fox-flush").apply { isDaemon = true }
         }
     }
@@ -280,9 +282,9 @@ class FoxProxyRefusal(val status: Int, message: String) : java.io.IOException(me
 object FoxTunnel {
 
     internal const val READ_TIMEOUT_MS = 15000
-    private const val AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
+    private const val AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
     private const val MAX_SESSIONS = 2
-    private const val MAX_STREAMS = 8
+    private const val MAX_STREAMS = 16
     private const val SESSION_IDLE_MS = 60_000L
     private const val UPLOAD_STALL_MS = 25_000L
 
@@ -332,7 +334,7 @@ object FoxTunnel {
             }
             var best: H2Session? = null
             for (session in list) {
-                if (session.activeCount() < MAX_STREAMS && (best == null || session.activeCount() < best.activeCount())) {
+                if (session.hasRoom(MAX_STREAMS) && (best == null || session.activeCount() < best.activeCount())) {
                     best = session
                 }
             }
@@ -443,6 +445,7 @@ object FoxTunnel {
         private var nextId = 1
         @Volatile private var dead = false
         @Volatile private var lastUse = System.currentTimeMillis()
+        @Volatile private var serverMaxStreams = Int.MAX_VALUE
 
         init {
             synchronized(outputLock) {
@@ -456,6 +459,7 @@ object FoxTunnel {
 
         fun alive(): Boolean = !dead && !socket.isClosed
         fun activeCount(): Int = streams.size
+        fun hasRoom(softLimit: Int): Boolean = activeCount() < softLimit && activeCount() < serverMaxStreams
         fun lastUse(): Long = lastUse
         fun touch() {
             lastUse = System.currentTimeMillis()
@@ -473,6 +477,7 @@ object FoxTunnel {
 
         fun openStream(host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
             if (dead) throw java.io.IOException("the tunnel session is gone")
+            if (activeCount() >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
             val deadline = System.currentTimeMillis() + timeout
             // RFC 9113 lets the client send frames right after its preface; waiting
             // for the server SETTINGS first would deadlock proxies that answer the
@@ -549,7 +554,7 @@ object FoxTunnel {
                     granted
                 }
                 if (chunk == 0) return bytes.copyOfRange(sent, bytes.size)
-                sendFrame(frame(0x00, 0, id, bytes.copyOfRange(sent, sent + chunk)))
+                sendFrame(frame(0x00, 0, id, bytes, sent, chunk))
                 sent += chunk
             }
             return ByteArray(0)
@@ -584,7 +589,10 @@ object FoxTunnel {
                         0x00 -> data(id, flags, size, payload)
                         0x01 -> headers(id, flags, payload)
                         0x03 -> {
-                            streams.remove(id)?.fail(java.io.IOException("the proxy reset the tunnel (${code(payload)})"))
+                            headerBlocks.remove(id)
+                            val stream = streams[id]
+                            removeStream(id)
+                            stream?.fail(java.io.IOException("the proxy reset the tunnel (${code(payload)})"))
                         }
                         0x04 -> settingsIn(flags, payload)
                         0x06 -> if (flags and 0x01 == 0) sendFrame(frame(0x06, 0x01, 0, payload))
@@ -598,6 +606,7 @@ object FoxTunnel {
                 failAll(error)
             } finally {
                 dead = true
+                headerBlocks.clear()
                 synchronized(stateLock) { stateLock.notifyAll() }
                 failAll(java.io.IOException("the tunnel session ended"))
                 try {
@@ -666,7 +675,13 @@ object FoxTunnel {
             val block = headerBlocks.remove(id) ?: return
             val stream = streams[id] ?: return
             val reply = status(block.toByteArray())
-            if (reply == null || reply in 100..199) return
+            if (reply == null) {
+                // Unparsable response headers: fail fast so the caller can fall
+                // back instead of hanging until the open timeout.
+                stream.fail(java.io.IOException("the proxy sent unparsable HTTP/2 headers"))
+                return
+            }
+            if (reply in 100..199) return
             if (reply in 200..299) stream.markOpen()
             else stream.fail(FoxProxyRefusal(reply, reason(reply, mapOf())))
         }
@@ -674,6 +689,17 @@ object FoxTunnel {
         private fun settingsIn(flags: Int, payload: ByteArray) {
             if (flags and 0x01 != 0) return
             val changed = h2InitialWindow(payload, synchronized(stateLock) { initialWindow })
+            // Honor the server's own concurrency cap (SETTINGS_MAX_CONCURRENT_STREAMS).
+            // h2InitialWindow has already validated that payload.size % 6 == 0.
+            for (index in payload.indices step 6) {
+                val id = ((payload[index].toInt() and 255) shl 8) or (payload[index + 1].toInt() and 255)
+                if (id == 3) {
+                    val value = ((payload[index + 2].toLong() and 255) shl 24) or
+                        ((payload[index + 3].toLong() and 255) shl 16) or
+                        ((payload[index + 4].toLong() and 255) shl 8) or (payload[index + 5].toLong() and 255)
+                    serverMaxStreams = if (value == 0L) 0 else value.toInt().coerceAtLeast(0)
+                }
+            }
             synchronized(stateLock) {
                 val delta = changed - initialWindow
                 initialWindow = changed
@@ -910,18 +936,22 @@ object FoxTunnel {
         out.write(bytes)
     }
 
-    internal fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {
-        val out = ByteArray(9 + payload.size)
-        out[0] = ((payload.size ushr 16) and 0xFF).toByte()
-        out[1] = ((payload.size ushr 8) and 0xFF).toByte()
-        out[2] = (payload.size and 0xFF).toByte()
+    internal fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray =
+        frame(type, flags, id, payload, 0, payload.size)
+
+    /** Builds a frame straight from a slice of [payload], with no intermediate copy. */
+    internal fun frame(type: Int, flags: Int, id: Int, payload: ByteArray, offset: Int, length: Int): ByteArray {
+        val out = ByteArray(9 + length)
+        out[0] = ((length ushr 16) and 0xFF).toByte()
+        out[1] = ((length ushr 8) and 0xFF).toByte()
+        out[2] = (length and 0xFF).toByte()
         out[3] = type.toByte()
         out[4] = flags.toByte()
         out[5] = ((id ushr 24) and 0x7F).toByte()
         out[6] = ((id ushr 16) and 0xFF).toByte()
         out[7] = ((id ushr 8) and 0xFF).toByte()
         out[8] = (id and 0xFF).toByte()
-        System.arraycopy(payload, 0, out, 9, payload.size)
+        System.arraycopy(payload, offset, out, 9, length)
         return out
     }
 

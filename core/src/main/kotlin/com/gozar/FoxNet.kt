@@ -13,7 +13,7 @@ class FoxReply(val code: Int, val body: String, val headers: Map<String, String>
 
 object FoxNet {
 
-    const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
+    const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
     const val CLIENT_ID = "5882386c6d801776"
     const val SCOPE = "profile https://identity.mozilla.com/apps/vpn"
     const val AUTH = "https://api.accounts.firefox.com/v1"
