@@ -239,7 +239,7 @@ class FoxTunnelPoolTest {
                     0x01 -> {
                         streamIds.add(next.id)
                         val reply = if (refuseStatus > 0) {
-                            frame(1, 0x04, next.id, byteArrayOf(0x08, 0x83.toByte(), 0x68, 0x03, 0x3F))
+                            frame(1, 0x04, next.id, byteArrayOf(0x08, 0x83.toByte(), 0x68, 0x0C, 0xFF.toByte()))
                         } else {
                             frame(1, 0x04, next.id, byteArrayOf(0x88.toByte()))
                         }
