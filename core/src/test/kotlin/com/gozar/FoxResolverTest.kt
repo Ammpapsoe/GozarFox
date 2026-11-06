@@ -21,7 +21,12 @@ class FoxResolverTest {
         copy[3] = (0x80 or rcode).toByte()
         if (rcode != 0) return copy
         copy[7] = 1
-        return copy + byteArrayOf(0xc0.toByte(), 0x0c, 0, 1, 0, 1, 0, 0, 0, ttl.toByte(), 0, 4, 1, 2, 3, 4)
+        return copy + byteArrayOf(
+            0xc0.toByte(), 0x0c, 0, 1, 0, 1,
+            ((ttl ushr 24) and 255).toByte(), ((ttl ushr 16) and 255).toByte(),
+            ((ttl ushr 8) and 255).toByte(), (ttl and 255).toByte(),
+            0, 4, 1, 2, 3, 4
+        )
     }
 
     @Test
@@ -45,7 +50,8 @@ class FoxResolverTest {
         var clock = 1000L
         val resolver = FoxResolver(0, { _, query -> calls.incrementAndGet(); answer(query) }, { clock })
         val first = resolver.answer(query(9))!!
-        clock += 1000
+        // The 2-second record TTL is lifted to the 60-second cache floor.
+        clock += 59_000
         val cached = resolver.answer(query(10))!!
         assertEquals(1, calls.get())
         assertEquals(10, cached[1].toInt() and 255)
@@ -53,9 +59,91 @@ class FoxResolverTest {
         assertEquals(2, first[ttlOffset + 3].toInt() and 255)
         assertEquals(1, cached[ttlOffset + 3].toInt() and 255)
         assertArrayEquals(first.copyOfRange(2, ttlOffset), cached.copyOfRange(2, ttlOffset))
-        clock += 1001
+        clock += 1_001
         resolver.answer(query(11))
         assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun longTtlsAreClampedToTheCacheCeiling() {
+        val calls = AtomicInteger()
+        var clock = 0L
+        val resolver = FoxResolver(0, { _, query -> calls.incrementAndGet(); answer(query, ttl = 86400) }, { clock })
+        resolver.answer(query(3))!!
+        assertEquals(1, calls.get())
+        clock += 299_000
+        resolver.answer(query(4))!!
+        assertEquals("a day-long TTL must be clamped to five minutes", 1, calls.get())
+        clock += 2_000
+        resolver.answer(query(5))!!
+        assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun nxdomainIsCachedForThirtySeconds() {
+        val calls = AtomicInteger()
+        var clock = 0L
+        val resolver = FoxResolver(0, { _, query -> calls.incrementAndGet(); answer(query, rcode = 3) }, { clock })
+        val first = resolver.answer(query(6))!!
+        assertEquals(3, first[3].toInt() and 15)
+        assertEquals(1, calls.get())
+        clock += 29_000
+        val cached = resolver.answer(query(7))!!
+        assertEquals(1, calls.get())
+        assertEquals(3, cached[3].toInt() and 15)
+        assertEquals(7, cached[1].toInt() and 255)
+        clock += 1_001
+        resolver.answer(query(8))!!
+        assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun parallelIdenticalQuestionsShareOneLookup() {
+        val calls = AtomicInteger()
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val resolver = FoxResolver(0, { _, query ->
+            calls.incrementAndGet()
+            entered.countDown()
+            release.await(3, TimeUnit.SECONDS)
+            answer(query)
+        })
+        val results = arrayOfNulls<ByteArray>(2)
+        val done = CountDownLatch(2)
+        for (index in 0..1) {
+            thread(isDaemon = true) {
+                try {
+                    results[index] = resolver.answer(query(7))
+                } finally {
+                    done.countDown()
+                }
+            }
+        }
+        assertTrue(entered.await(2, TimeUnit.SECONDS))
+        // Give the second thread time to queue on the in-flight lookup.
+        Thread.sleep(150)
+        release.countDown()
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+        assertEquals(1, calls.get())
+        for (result in results) assertTrue(result != null && result.size > 12)
+    }
+
+    @Test
+    fun slowEndpointDoesNotDelayTheAnswerWhenAnotherWins() {
+        val endpoints = listOf("https://one.example/dns-query", "https://two.example/dns-query")
+        val resolver = FoxResolver(0, { url, query ->
+            if (url == endpoints[0]) {
+                Thread.sleep(2000)
+                null
+            } else {
+                answer(query)
+            }
+        }, endpoints = endpoints, raceHeadStartMs = 50)
+        val started = System.nanoTime()
+        val body = resolver.answer(query(21))!!
+        val elapsed = (System.nanoTime() - started) / 1_000_000
+        assertEquals(0, body[3].toInt() and 15)
+        assertTrue("the healthy endpoint should win the race, took ${elapsed}ms", elapsed < 1900)
     }
 
     @Test

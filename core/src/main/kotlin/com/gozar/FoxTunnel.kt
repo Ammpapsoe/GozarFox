@@ -6,211 +6,256 @@ import java.io.ByteArrayOutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 
-class FoxDuplex(
-    private val socket: SSLSocket,
-    private val input: BufferedInputStream,
-    private val output: BufferedOutputStream,
-    private val h2: Boolean,
-    private val streamId: Int,
-    initialSendWindow: Long = 65535L,
-    initialWindowSetting: Long = 65535L,
-    initialConnectionWindow: Long = 65535L
+/**
+ * One bidirectional tunnel to the proxy.
+ *
+ * On HTTP/1.1 the duplex owns its socket, as before. On HTTP/2 the duplex is
+ * one stream on a shared [FoxTunnel.H2Session], so a page load of a hundred
+ * connections costs one or two handshakes instead of a hundred. Small writes
+ * are coalesced for a few milliseconds so a chatty application does not turn
+ * every few bytes into a TLS record of its own.
+ */
+class FoxDuplex private constructor(
+    private val link: Link
 ) : FoxPipe {
 
-    private val lock = Object()
-    private val outputLock = Any()
-    private var sendWindow = initialSendWindow
-    private var initialWindow = initialWindowSetting
-    private var connectionWindow = initialConnectionWindow
-    private var pending = ByteArray(0)
-    private var pendingOffset = 0
-    private var ended = false
-    @Volatile private var closed = false
-
-    internal fun setReadTimeout(timeout: Int) {
-        socket.soTimeout = timeout
+    private interface Link {
+        fun read(buffer: ByteArray, offset: Int, length: Int, timeoutMs: Int): Int
+        fun sendBlocking(bytes: ByteArray)
+        fun sendIfPossible(bytes: ByteArray): ByteArray
+        fun halfClose()
+        fun teardown()
+        fun setTimeout(timeout: Int)
     }
 
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        if (!h2) return input.read(buffer, offset, length)
-        if (length == 0) return 0
-        if (pendingOffset < pending.size) {
-            val take = minOf(pending.size - pendingOffset, length)
-            System.arraycopy(pending, pendingOffset, buffer, offset, take)
-            pendingOffset += take
-            if (pendingOffset == pending.size) {
-                pending = ByteArray(0)
-                pendingOffset = 0
-            }
-            return take
+    private class H1(
+        val socket: SSLSocket,
+        val input: BufferedInputStream,
+        val output: BufferedOutputStream
+    ) : Link {
+        override fun read(buffer: ByteArray, offset: Int, length: Int, timeoutMs: Int): Int =
+            input.read(buffer, offset, length)
+
+        override fun sendBlocking(bytes: ByteArray) {
+            output.write(bytes)
+            output.flush()
         }
-        if (ended) return -1
-        while (true) {
-            val header = ByteArray(9)
-            if (!fill(header)) return -1
-            val size = ((header[0].toInt() and 0xFF) shl 16) or ((header[1].toInt() and 0xFF) shl 8) or
-                (header[2].toInt() and 0xFF)
-            val type = header[3].toInt() and 0xFF
-            val flags = header[4].toInt() and 0xFF
-            val id = ((header[5].toInt() and 0x7F) shl 24) or ((header[6].toInt() and 0xFF) shl 16) or
-                ((header[7].toInt() and 0xFF) shl 8) or (header[8].toInt() and 0xFF)
-            if (size > 16384) throw java.io.IOException("the proxy sent an oversized HTTP/2 frame")
-            val payload = ByteArray(size)
-            if (size > 0 && !fill(payload)) return -1
-            when (type) {
-                0x00 -> if (id == streamId) {
-                    if (flags and 0x01 != 0) ended = true
-                    var start = 0
-                    var end = size
-                    if (flags and 0x08 != 0) {
-                        if (size == 0) throw java.io.IOException("invalid HTTP/2 padding")
-                        start = 1
-                        end -= payload[0].toInt() and 0xFF
-                        if (end < start) throw java.io.IOException("invalid HTTP/2 padding")
-                    }
-                    if (size > 0) grow(size)
-                    if (end > start) {
-                        val take = minOf(end - start, length)
-                        System.arraycopy(payload, start, buffer, offset, take)
-                        if (start + take < end) {
-                            pending = payload.copyOfRange(start, end)
-                            pendingOffset = take
+
+        override fun sendIfPossible(bytes: ByteArray): ByteArray {
+            sendBlocking(bytes)
+            return ByteArray(0)
+        }
+
+        override fun halfClose() = socket.shutdownOutput()
+        override fun teardown() = socket.close()
+        override fun setTimeout(timeout: Int) {
+            socket.soTimeout = timeout
+        }
+    }
+
+    internal class H2(private val session: FoxTunnel.H2Session, val id: Int) : Link {
+        private val lock = Object()
+        private val inbox = ArrayDeque<ByteArray>()
+        private var head = ByteArray(0)
+        private var headOffset = 0
+        private var ended = false
+        private var failure: Exception? = null
+        private var open = false
+
+        @Volatile
+        private var readTimeoutMs: Int = FoxTunnel.READ_TIMEOUT_MS
+
+        fun timeout(): Int = readTimeoutMs
+
+        fun deliver(payload: ByteArray) = synchronized(lock) {
+            inbox.addLast(payload)
+            lock.notifyAll()
+        }
+
+        fun end() = synchronized(lock) {
+            ended = true
+            lock.notifyAll()
+        }
+
+        fun fail(error: Exception) = synchronized(lock) {
+            failure = error
+            ended = true
+            lock.notifyAll()
+        }
+
+        fun markOpen() = synchronized(lock) {
+            open = true
+            lock.notifyAll()
+        }
+
+        fun awaitOpen(timeoutMs: Int): Boolean = synchronized(lock) {
+            val deadline = System.currentTimeMillis() + timeoutMs
+            while (!open && failure == null) {
+                val left = deadline - System.currentTimeMillis()
+                if (left <= 0) return false
+                lock.wait(left)
+            }
+            failure == null
+        }
+
+        fun refusal(): Exception? = synchronized(lock) { failure }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int, timeoutMs: Int): Int {
+            val deadline = if (timeoutMs > 0) System.currentTimeMillis() + timeoutMs else 0L
+            synchronized(lock) {
+                while (true) {
+                    if (headOffset < head.size) {
+                        val take = minOf(head.size - headOffset, length)
+                        System.arraycopy(head, headOffset, buffer, offset, take)
+                        headOffset += take
+                        if (headOffset == head.size) {
+                            head = ByteArray(0)
+                            headOffset = 0
                         }
                         return take
                     }
-                    if (ended) return -1
-                }
-                0x01 -> if (id == streamId && flags and 0x01 != 0) {
-                    ended = true
-                    return -1
-                }
-                0x03, 0x07 -> return -1
-                0x04 -> if (flags and 0x01 == 0) {
-                    val changed = h2InitialWindow(payload, initialWindow)
-                    synchronized(lock) {
-                        sendWindow += changed - initialWindow
-                        initialWindow = changed
-                        lock.notifyAll()
-                    }
-                    send(frame(0x04, 0x01, 0, ByteArray(0)))
-                }
-                0x06 -> if (flags and 0x01 == 0) send(frame(0x06, 0x01, 0, payload))
-                0x08 -> {
-                    val grow = if (payload.size >= 4) {
-                        ((payload[0].toInt() and 0x7F) shl 24) or ((payload[1].toInt() and 0xFF) shl 16) or
-                            ((payload[2].toInt() and 0xFF) shl 8) or (payload[3].toInt() and 0xFF)
-                    } else 0
-                    if (grow <= 0) throw java.io.IOException("invalid HTTP/2 window update")
-                    synchronized(lock) {
-                        if (id == 0) {
-                            connectionWindow += grow
-                            if (connectionWindow > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
-                        } else if (id == streamId) {
-                            sendWindow += grow
-                            if (sendWindow > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
+                    failure?.let { throw java.io.IOException("the tunnel failed: ${it.message}", it) }
+                    if (inbox.isEmpty()) {
+                        // The peer may have ended the stream with a final payload;
+                        // only report the end once the inbox is truly drained.
+                        if (ended) return -1
+                        val left = if (deadline == 0L) 0L else deadline - System.currentTimeMillis()
+                        if (deadline != 0L && left <= 0) {
+                            throw java.net.SocketTimeoutException("the tunnel read timed out")
                         }
-                        lock.notifyAll()
+                        lock.wait(if (deadline == 0L) 0L else left)
+                        continue
                     }
+                    head = inbox.removeFirst()
+                    headOffset = 0
                 }
             }
         }
+
+        override fun sendBlocking(bytes: ByteArray) {
+            session.sendData(id, bytes, blocking = true)
+        }
+
+        override fun sendIfPossible(bytes: ByteArray): ByteArray = session.sendData(id, bytes, blocking = false)
+
+        override fun halfClose() {
+            session.sendFrame(FoxTunnel.frame(0x00, 0x01, id, ByteArray(0)))
+        }
+
+        override fun teardown() {
+            try {
+                session.sendFrame(FoxTunnel.frame(0x03, 0, id, byteArrayOf(0, 0, 0, 8)))
+            } catch (_: Exception) {
+            }
+            session.removeStream(id)
+        }
+
+        override fun setTimeout(timeout: Int) {
+            readTimeoutMs = timeout
+        }
+    }
+
+    private val lock = Any()
+    private val outputLock = Any()
+    private val outBuf = ByteArrayOutputStream()
+    private var remainder = ByteArray(0)
+    private var flushScheduled = false
+    @Volatile private var closed = false
+
+    internal constructor(socket: SSLSocket, input: BufferedInputStream, output: BufferedOutputStream) :
+        this(H1(socket, input, output))
+
+    internal constructor(stream: H2) : this(stream as Link)
+
+    internal fun setReadTimeout(timeout: Int) = link.setTimeout(timeout)
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        val timeout = (link as? H2)?.timeout() ?: 0
+        flushQuietly()
+        return link.read(buffer, offset, length, timeout)
     }
 
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
-        if (!h2) {
-            output.write(buffer, offset, length)
-            output.flush()
-            return
-        }
-        var sent = 0
-        while (sent < length) {
-            val size = reserveWindow(minOf(length - sent, 16384))
-            send(frame(0x00, 0, streamId, buffer.copyOfRange(offset + sent, offset + sent + size)))
-            sent += size
-        }
-    }
-
-    private fun reserveWindow(maximum: Int): Int {
-        val deadline = System.currentTimeMillis() + 25000
-        synchronized(lock) {
-            while ((sendWindow <= 0 || connectionWindow <= 0) && !closed) {
-                val left = deadline - System.currentTimeMillis()
-                if (left <= 0) throw java.io.IOException("upload stalled")
-                lock.wait(left)
+        if (closed) throw java.io.IOException("the tunnel is closed")
+        val ready: ByteArray? = synchronized(outputLock) {
+            outBuf.write(buffer, offset, length)
+            if (outBuf.size() >= COALESCE_BYTES) {
+                take()
+            } else {
+                if (!flushScheduled) {
+                    flushScheduled = true
+                    FLUSHER.schedule({ flushQuietly() }, COALESCE_DELAY_MS, TimeUnit.MILLISECONDS)
+                }
+                null
             }
-            if (closed) throw java.io.IOException("the tunnel is closed")
-            val size = minOf(maximum.toLong(), sendWindow, connectionWindow).toInt()
-            sendWindow -= size
-            connectionWindow -= size
-            return size
         }
-    }
-
-    private fun grow(size: Int) {
-        val update = byteArrayOf(
-            ((size ushr 24) and 0x7F).toByte(),
-            ((size ushr 16) and 0xFF).toByte(),
-            ((size ushr 8) and 0xFF).toByte(),
-            (size and 0xFF).toByte()
-        )
-        send(frame(0x08, 0, 0, update))
-        send(frame(0x08, 0, streamId, update))
+        if (ready != null) link.sendBlocking(ready)
     }
 
     override fun finishWrite() {
         if (closed) return
-        if (h2) send(frame(0x00, 0x01, streamId, ByteArray(0))) else socket.shutdownOutput()
+        val ready = synchronized(outputLock) {
+            if (outBuf.size() > 0 || remainder.isNotEmpty()) take() else ByteArray(0)
+        }
+        if (ready.isNotEmpty()) link.sendBlocking(ready)
+        link.halfClose()
     }
 
     override fun close() {
         synchronized(lock) {
             if (closed) return
             closed = true
-            lock.notifyAll()
         }
+        flushQuietly()
         try {
-            socket.close()
+            link.teardown()
         } catch (_: Exception) {
         }
     }
 
-    private fun send(bytes: ByteArray) {
-        synchronized(outputLock) {
-            output.write(bytes)
-            output.flush()
+    /** Runs the buffered bytes out; on a flow-control stall the rest is kept and retried. */
+    private fun flushQuietly() {
+        val bytes = synchronized(outputLock) {
+            flushScheduled = false
+            if (outBuf.size() == 0 && remainder.isEmpty()) ByteArray(0) else take()
         }
-    }
-
-    private fun fill(buffer: ByteArray): Boolean {
-        var done = 0
-        while (done < buffer.size) {
-            val n = try {
-                input.read(buffer, done, buffer.size - done)
-            } catch (e: Exception) {
-                return false
+        if (bytes.isEmpty()) return
+        val left = try {
+            link.sendIfPossible(bytes)
+        } catch (_: Exception) {
+            return
+        }
+        if (left.isNotEmpty()) {
+            synchronized(outputLock) {
+                remainder = left + remainder
+                if (!flushScheduled) {
+                    flushScheduled = true
+                    FLUSHER.schedule({ flushQuietly() }, STALL_RETRY_MS, TimeUnit.MILLISECONDS)
+                }
             }
-            if (n < 0) return false
-            done += n
         }
-        return true
     }
 
-    private fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {
-        val out = ByteArray(9 + payload.size)
-        out[0] = ((payload.size ushr 16) and 0xFF).toByte()
-        out[1] = ((payload.size ushr 8) and 0xFF).toByte()
-        out[2] = (payload.size and 0xFF).toByte()
-        out[3] = type.toByte()
-        out[4] = flags.toByte()
-        out[5] = ((id ushr 24) and 0x7F).toByte()
-        out[6] = ((id ushr 16) and 0xFF).toByte()
-        out[7] = ((id ushr 8) and 0xFF).toByte()
-        out[8] = (id and 0xFF).toByte()
-        System.arraycopy(payload, 0, out, 9, payload.size)
-        return out
+    private fun take(): ByteArray {
+        val bytes = if (remainder.isEmpty()) outBuf.toByteArray() else remainder + outBuf.toByteArray()
+        outBuf.reset()
+        remainder = ByteArray(0)
+        return bytes
+    }
+
+    companion object {
+        private const val COALESCE_BYTES = 1360
+        private const val COALESCE_DELAY_MS = 5L
+        private const val STALL_RETRY_MS = 10L
+        private val FLUSHER = Executors.newScheduledThreadPool(2) { task ->
+            Thread(task, "fox-flush").apply { isDaemon = true }
+        }
     }
 }
 
@@ -234,12 +279,23 @@ class FoxProxyRefusal(val status: Int, message: String) : java.io.IOException(me
 
 object FoxTunnel {
 
-    private const val READ_TIMEOUT_MS = 15000
+    internal const val READ_TIMEOUT_MS = 15000
     private const val AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
+    private const val MAX_SESSIONS = 2
+    private const val MAX_STREAMS = 8
+    private const val SESSION_IDLE_MS = 60_000L
+    private const val UPLOAD_STALL_MS = 25_000L
 
     private val adaptive = FoxAdaptive()
+    private val sessions = HashMap<String, MutableList<H2Session>>()
 
-    fun resetTransport() = adaptive.clear()
+    fun resetTransport() {
+        adaptive.clear()
+        synchronized(sessions) {
+            for (list in sessions.values) for (session in list) session.shutdown()
+            sessions.clear()
+        }
+    }
 
     fun open(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int = 15000): FoxDuplex {
         val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
@@ -247,17 +303,69 @@ object FoxTunnel {
         for (h2 in adaptive.order(key)) {
             val started = System.nanoTime()
             try {
-                val result = if (h2) openH2(location, host, port, pass, timeout) else openH1(location, host, port, pass, timeout)
+                val result = if (h2) {
+                    acquireSession(location, key, timeout).openStream(host, port, pass, timeout)
+                } else {
+                    openH1(location, host, port, pass, timeout)
+                }
                 adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
                 return result
             } catch (e: Exception) {
                 if (isCertificateFailure(e) || e is FoxError ||
-                    e is FoxProxyRefusal && e.status in setOf(401, 403, 407, 429, 451)) throw e
+                    e is FoxProxyRefusal && e.status in setOf(401, 403, 407, 429, 451)
+                ) throw e
                 adaptive.failed(key, h2)
                 if (firstError == null) firstError = e
             }
         }
         throw firstError ?: java.io.IOException("the proxy did not answer")
+    }
+
+    private fun acquireSession(location: FoxLocation, key: String, timeout: Int): H2Session {
+        synchronized(sessions) {
+            val list = sessions.getOrPut(key) { mutableListOf() }
+            val now = System.currentTimeMillis()
+            list.removeAll { session ->
+                val gone = !session.alive() || (session.activeCount() == 0 && now - session.lastUse() > SESSION_IDLE_MS)
+                if (gone) session.shutdown()
+                gone
+            }
+            var best: H2Session? = null
+            for (session in list) {
+                if (session.activeCount() < MAX_STREAMS && (best == null || session.activeCount() < best.activeCount())) {
+                    best = session
+                }
+            }
+            best?.let {
+                it.touch()
+                return it
+            }
+            // Every session is at the soft stream limit: grow the pool while
+            // there is room, otherwise share the least busy session rather
+            // than making the caller wait.
+            if (list.isNotEmpty() && list.size >= MAX_SESSIONS) {
+                val fallback = list.minByOrNull { it.activeCount() }!!
+                fallback.touch()
+                return fallback
+            }
+        }
+        val fresh = H2Session(location, timeout)
+        synchronized(sessions) {
+            val list = sessions.getOrPut(key) { mutableListOf() }
+            list.removeAll { session ->
+                val gone = !session.alive()
+                if (gone) session.shutdown()
+                gone
+            }
+            if (list.size >= MAX_SESSIONS) {
+                fresh.shutdown()
+                val fallback = list.minByOrNull { it.activeCount() }!!
+                fallback.touch()
+                return fallback
+            }
+            list.add(fresh)
+        }
+        return fresh
     }
 
     private fun isCertificateFailure(error: Throwable): Boolean {
@@ -266,7 +374,8 @@ object FoxTunnel {
         while (current != null && seen.add(current)) {
             if (current is javax.net.ssl.SSLPeerUnverifiedException ||
                 current is java.security.cert.CertificateException ||
-                current is java.security.cert.CertPathValidatorException) return true
+                current is java.security.cert.CertPathValidatorException
+            ) return true
             current = current.cause
         }
         return false
@@ -278,13 +387,14 @@ object FoxTunnel {
         while (current != null && seen.add(current)) {
             if (current is javax.net.ssl.SSLException ||
                 current is java.security.cert.CertificateException ||
-                current is java.security.cert.CertPathValidatorException) return true
+                current is java.security.cert.CertPathValidatorException
+            ) return true
             current = current.cause
         }
         return false
     }
 
-    private fun authority(host: String, port: Int) = "$host:$port"
+    internal fun authority(host: String, port: Int) = "$host:$port"
 
     private fun openH1(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
         val socket = connect(location, arrayOf("http/1.1"), timeout)
@@ -299,7 +409,7 @@ object FoxTunnel {
             val (status, headers) = response(input)
             if (status == 200) {
                 socket.soTimeout = READ_TIMEOUT_MS
-                return FoxDuplex(socket, input, output, false, 1)
+                return FoxDuplex(socket, input, output)
             }
             socket.close()
             throw if (status == 0) java.io.IOException(reason(status, headers)) else FoxProxyRefusal(status, reason(status, headers))
@@ -312,106 +422,299 @@ object FoxTunnel {
         }
     }
 
-    private fun openH2(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
-        val socket = connect(location, arrayOf("h2"), timeout)
-        try {
-            val output = BufferedOutputStream(socket.outputStream)
-            val target = authority(host, port)
-            output.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".toByteArray(Charsets.US_ASCII))
-            output.write(frame(0x04, 0, 0, settings()))
-            val block = ByteArrayOutputStream()
-            block.write(pair(":method", "CONNECT"))
-            block.write(pair(":authority", target))
-            block.write(pair("proxy-authorization", "Bearer $pass"))
-            block.write(pair("user-agent", AGENT))
-            output.write(frame(0x01, 0x04, 1, block.toByteArray()))
-            output.flush()
+    /**
+     * One HTTP/2 connection to the proxy, shared by up to a handful of tunnels.
+     * A reader thread demultiplexes the frames; each stream keeps its own inbox
+     * and half of the flow-control state lives here, under [stateLock].
+     */
+    internal class H2Session(location: FoxLocation, timeout: Int) {
 
-            val input = BufferedInputStream(socket.inputStream)
-            val deadline = System.currentTimeMillis() + timeout
-            var initialWindow = 65535L
-            var streamWindow = 65535L
-            var connectionWindow = 65535L
-            var fragments: ByteArrayOutputStream? = null
-            var ended = false
-            while (System.currentTimeMillis() < deadline) {
-                val header = ByteArray(9)
-                if (!readFully(input, header)) throw java.io.IOException("the proxy closed the connection")
-                val size = ((header[0].toInt() and 0xFF) shl 16) or ((header[1].toInt() and 0xFF) shl 8) or
-                    (header[2].toInt() and 0xFF)
-                val type = header[3].toInt() and 0xFF
-                val flags = header[4].toInt() and 0xFF
-                val id = ((header[5].toInt() and 0x7F) shl 24) or ((header[6].toInt() and 0xFF) shl 16) or
-                    ((header[7].toInt() and 0xFF) shl 8) or (header[8].toInt() and 0xFF)
-                if (size > 16384) throw java.io.IOException("the proxy sent an oversized HTTP/2 frame")
-                val payload = ByteArray(size)
-                if (size > 0 && !readFully(input, payload)) throw java.io.IOException("the proxy closed the connection")
-                if (fragments != null && (type != 0x09 || id != 1)) throw java.io.IOException("invalid HTTP/2 continuation")
-                var complete: ByteArray? = null
-                when (type) {
-                    0x04 -> if (flags and 0x01 == 0) {
-                        val changed = h2InitialWindow(payload, initialWindow)
-                        streamWindow += changed - initialWindow
-                        initialWindow = changed
-                        output.write(frame(0x04, 0x01, 0, ByteArray(0)))
-                        output.flush()
-                    }
-                    0x06 -> if (flags and 0x01 == 0) {
-                        output.write(frame(0x06, 0x01, 0, payload))
-                        output.flush()
-                    }
-                    0x01 -> {
-                        if (id != 1) continue
-                        var from = 0
-                        var to = payload.size
-                        if (flags and 0x08 != 0) {
-                            if (payload.isEmpty()) throw java.io.IOException("invalid HTTP/2 header padding")
-                            from++
-                            to -= payload[0].toInt() and 255
-                        }
-                        if (flags and 0x20 != 0) from += 5
-                        if (from > to) throw java.io.IOException("invalid HTTP/2 headers")
-                        fragments = ByteArrayOutputStream().apply { write(payload, from, to - from) }
-                        ended = flags and 0x01 != 0
-                        if (flags and 0x04 != 0) { complete = fragments.toByteArray(); fragments = null }
-                    }
-                    0x09 -> {
-                        val block = fragments ?: throw java.io.IOException("unexpected HTTP/2 continuation")
-                        if (block.size() + payload.size > 65536) throw java.io.IOException("HTTP/2 headers too large")
-                        block.write(payload)
-                        if (flags and 0x04 != 0) { complete = block.toByteArray(); fragments = null }
-                    }
-                    0x08 -> {
-                        if (payload.size != 4) throw java.io.IOException("invalid HTTP/2 window update")
-                        val increase = ((payload[0].toLong() and 0x7f) shl 24) or
-                            ((payload[1].toLong() and 255) shl 16) or ((payload[2].toLong() and 255) shl 8) or
-                            (payload[3].toLong() and 255)
-                        if (increase == 0L) throw java.io.IOException("invalid HTTP/2 window update")
-                        if (id == 0) connectionWindow += increase else if (id == 1) streamWindow += increase
-                        if (connectionWindow > 0x7fffffffL || streamWindow > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
-                    }
-                    0x03 -> throw java.io.IOException("the proxy reset the tunnel (${code(payload)})")
-                    0x07 -> throw java.io.IOException("the proxy closed the connection (${code(payload)})")
-                }
-                if (complete != null) {
-                    val reply = status(complete) ?: throw java.io.IOException("the proxy did not answer with a status")
-                    if (reply in 100..199) continue
-                    if (reply in 200..299 && !ended) {
-                        socket.soTimeout = READ_TIMEOUT_MS
-                        return FoxDuplex(socket, input, output, true, 1, streamWindow, initialWindow, connectionWindow)
-                    }
-                    if (ended && reply in 200..299) throw java.io.IOException("the proxy ended the tunnel")
-                    throw FoxProxyRefusal(reply, reason(reply, mapOf()))
-                }
+        private val socket: SSLSocket = connect(location, arrayOf("h2"), timeout)
+        private val input = BufferedInputStream(socket.inputStream)
+        private val output = BufferedOutputStream(socket.outputStream)
+        private val outputLock = Any()
+        private val streams = ConcurrentHashMap<Int, FoxDuplex.H2>()
+        private val stateLock = Any()
+        private val headerBlocks = HashMap<Int, ByteArrayOutputStream>()
+        private val pendingWindows = HashMap<Int, Long>()
+        private val sendWindows = HashMap<Int, Long>()
+        private var connectionWindow = 65535L
+        private var initialWindow = 65535L
+        private var nextId = 1
+        private var settingsSeen = false
+        @Volatile private var dead = false
+        @Volatile private var lastUse = System.currentTimeMillis()
+
+        init {
+            synchronized(outputLock) {
+                output.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".toByteArray(Charsets.US_ASCII))
+                output.write(frame(0x04, 0, 0, settings()))
+                output.flush()
             }
-            socket.close()
-            throw java.io.IOException("the proxy did not answer in time")
-        } catch (e: Exception) {
+        }
+
+        private val reader = kotlin.concurrent.thread(isDaemon = true, name = "fox-h2-reader") { readLoop() }
+
+        fun alive(): Boolean = !dead && !socket.isClosed
+        fun activeCount(): Int = streams.size
+        fun lastUse(): Long = lastUse
+        fun touch() {
+            lastUse = System.currentTimeMillis()
+        }
+
+        fun shutdown() {
+            dead = true
+            synchronized(stateLock) { stateLock.notifyAll() }
+            failAll(java.io.IOException("the tunnel session was closed"))
             try {
                 socket.close()
             } catch (_: Exception) {
             }
-            throw e
+        }
+
+        fun openStream(host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
+            if (dead) throw java.io.IOException("the tunnel session is gone")
+            val deadline = System.currentTimeMillis() + timeout
+            synchronized(stateLock) {
+                while (!settingsSeen && !dead) {
+                    val left = deadline - System.currentTimeMillis()
+                    if (left <= 0) throw java.io.IOException("the proxy sent no settings in time")
+                    stateLock.wait(left)
+                }
+            }
+            if (dead) throw java.io.IOException("the tunnel session is gone")
+            val id = synchronized(stateLock) {
+                val id = nextId
+                nextId += 2
+                // A window update may have arrived before the stream was known.
+                val pending = pendingWindows.remove(id) ?: 0L
+                if (pending != 0L) sendWindows[id] = initialWindow + pending
+                id
+            }
+            val stream = FoxDuplex.H2(this, id)
+            streams[id] = stream
+            touch()
+            try {
+                val block = ByteArrayOutputStream()
+                block.write(pair(":method", "CONNECT"))
+                block.write(pair(":authority", authority(host, port)))
+                block.write(pair("proxy-authorization", "Bearer $pass"))
+                block.write(pair("user-agent", AGENT))
+                sendFrame(frame(0x01, 0x04, id, block.toByteArray()))
+                if (!stream.awaitOpen((deadline - System.currentTimeMillis()).toInt().coerceAtLeast(1))) {
+                    val refusal = stream.refusal()
+                    streams.remove(id)
+                    cancel(id)
+                    throw refusal ?: java.io.IOException("the proxy did not answer in time")
+                }
+                return FoxDuplex(stream)
+            } catch (e: Exception) {
+                streams.remove(id)
+                cancel(id)
+                throw e
+            }
+        }
+
+        fun removeStream(id: Int) {
+            streams.remove(id)
+            synchronized(stateLock) {
+                sendWindows.remove(id)
+                pendingWindows.remove(id)
+            }
+        }
+
+        private fun cancel(id: Int) {
+            try {
+                sendFrame(frame(0x03, 0, id, byteArrayOf(0, 0, 0, 8)))
+            } catch (_: Exception) {
+            }
+        }
+
+        /** Sends [bytes] as DATA of [id]; non-blocking sends return the tail that did not fit. */
+        fun sendData(id: Int, bytes: ByteArray, blocking: Boolean): ByteArray {
+            var sent = 0
+            val deadline = System.currentTimeMillis() + UPLOAD_STALL_MS
+            while (sent < bytes.size) {
+                val chunk = synchronized(stateLock) {
+                    var granted = 0
+                    while (granted == 0) {
+                        if (dead) throw java.io.IOException("the tunnel is closed")
+                        val streamWindow = sendWindows[id] ?: initialWindow
+                        val available = minOf(streamWindow, connectionWindow)
+                        if (available > 0) {
+                            granted = minOf(bytes.size - sent, available, 16384L).toInt()
+                            sendWindows[id] = streamWindow - granted
+                            connectionWindow -= granted
+                            break
+                        }
+                        if (!blocking) break
+                        val left = deadline - System.currentTimeMillis()
+                        if (left <= 0) throw java.io.IOException("upload stalled")
+                        stateLock.wait(left)
+                    }
+                    granted
+                }
+                if (chunk == 0) return bytes.copyOfRange(sent, bytes.size)
+                sendFrame(frame(0x00, 0, id, bytes.copyOfRange(sent, sent + chunk)))
+                sent += chunk
+            }
+            return ByteArray(0)
+        }
+
+        fun sendFrame(bytes: ByteArray) {
+            synchronized(outputLock) {
+                output.write(bytes)
+                output.flush()
+            }
+        }
+
+        private fun failAll(error: Exception) {
+            for (stream in streams.values) stream.fail(error)
+        }
+
+        private fun readLoop() {
+            try {
+                while (true) {
+                    val header = ByteArray(9)
+                    if (!fill(input, header)) break
+                    val size = ((header[0].toInt() and 0xFF) shl 16) or ((header[1].toInt() and 0xFF) shl 8) or
+                        (header[2].toInt() and 0xFF)
+                    val type = header[3].toInt() and 0xFF
+                    val flags = header[4].toInt() and 0xFF
+                    val id = ((header[5].toInt() and 0x7F) shl 24) or ((header[6].toInt() and 0xFF) shl 16) or
+                        ((header[7].toInt() and 0xFF) shl 8) or (header[8].toInt() and 0xFF)
+                    if (size > 16384) throw java.io.IOException("the proxy sent an oversized HTTP/2 frame")
+                    val payload = ByteArray(size)
+                    if (size > 0 && !fill(input, payload)) break
+                    when (type) {
+                        0x00 -> data(id, flags, size, payload)
+                        0x01 -> headers(id, flags, payload)
+                        0x03 -> {
+                            streams.remove(id)?.fail(java.io.IOException("the proxy reset the tunnel (${code(payload)})"))
+                        }
+                        0x04 -> settingsIn(flags, payload)
+                        0x06 -> if (flags and 0x01 == 0) sendFrame(frame(0x06, 0x01, 0, payload))
+                        0x07 -> throw java.io.IOException("the proxy closed the connection (${code(payload)})")
+                        0x08 -> windowUpdate(id, payload)
+                        0x09 -> continuation(id, flags, payload)
+                    }
+                }
+                failAll(java.io.IOException("the proxy closed the connection"))
+            } catch (error: Exception) {
+                failAll(error)
+            } finally {
+                dead = true
+                synchronized(stateLock) { stateLock.notifyAll() }
+                failAll(java.io.IOException("the tunnel session ended"))
+                try {
+                    socket.close()
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        private fun data(id: Int, flags: Int, size: Int, payload: ByteArray) {
+            var start = 0
+            var end = size
+            if (flags and 0x08 != 0) {
+                if (size == 0) return
+                start = 1
+                end -= payload[0].toInt() and 0xFF
+                if (end < start) return
+            }
+            if (size > 0) grow(id, size)
+            val stream = streams[id] ?: return
+            if (flags and 0x01 != 0) stream.end()
+            if (end > start) stream.deliver(payload.copyOfRange(start, end))
+        }
+
+        private fun grow(id: Int, amount: Int) {
+            val update = byteArrayOf(
+                ((amount ushr 24) and 0x7F).toByte(),
+                ((amount ushr 16) and 0xFF).toByte(),
+                ((amount ushr 8) and 0xFF).toByte(),
+                (amount and 0xFF).toByte()
+            )
+            try {
+                sendFrame(frame(0x08, 0, 0, update))
+                if (streams.containsKey(id)) sendFrame(frame(0x08, 0, id, update))
+            } catch (_: Exception) {
+            }
+        }
+
+        private fun headers(id: Int, flags: Int, payload: ByteArray) {
+            var from = 0
+            var to = payload.size
+            if (flags and 0x08 != 0) {
+                if (payload.isEmpty()) return
+                from++
+                to -= payload[0].toInt() and 255
+            }
+            if (flags and 0x20 != 0) from += 5
+            if (from > to) return
+            val block = headerBlocks.getOrPut(id) { ByteArrayOutputStream() }
+            block.write(payload, from, to - from)
+            if (flags and 0x04 != 0) completeHeaders(id)
+        }
+
+        private fun continuation(id: Int, flags: Int, payload: ByteArray) {
+            val block = headerBlocks[id] ?: return
+            if (block.size() + payload.size > 65536) {
+                headerBlocks.remove(id)
+                streams.remove(id)?.fail(java.io.IOException("HTTP/2 headers too large"))
+                return
+            }
+            block.write(payload)
+            if (flags and 0x04 != 0) completeHeaders(id)
+        }
+
+        private fun completeHeaders(id: Int) {
+            val block = headerBlocks.remove(id) ?: return
+            val stream = streams[id] ?: return
+            val reply = status(block.toByteArray())
+            if (reply == null || reply in 100..199) return
+            if (reply in 200..299) stream.markOpen()
+            else stream.fail(FoxProxyRefusal(reply, reason(reply, mapOf())))
+        }
+
+        private fun settingsIn(flags: Int, payload: ByteArray) {
+            if (flags and 0x01 != 0) return
+            val changed = h2InitialWindow(payload, synchronized(stateLock) { initialWindow })
+            synchronized(stateLock) {
+                val delta = changed - initialWindow
+                initialWindow = changed
+                if (delta != 0L) {
+                    for ((id, window) in sendWindows) {
+                        val updated = window + delta
+                        if (updated > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
+                        sendWindows[id] = updated
+                    }
+                }
+                settingsSeen = true
+                stateLock.notifyAll()
+            }
+            sendFrame(frame(0x04, 0x01, 0, ByteArray(0)))
+        }
+
+        private fun windowUpdate(id: Int, payload: ByteArray) {
+            if (payload.size != 4) return
+            val increase = ((payload[0].toLong() and 0x7F) shl 24) or ((payload[1].toLong() and 255) shl 16) or
+                ((payload[2].toLong() and 255) shl 8) or (payload[3].toLong() and 255)
+            if (increase == 0L) return
+            synchronized(stateLock) {
+                if (id == 0) {
+                    connectionWindow += increase
+                    if (connectionWindow > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
+                } else if (streams.containsKey(id)) {
+                    val updated = (sendWindows[id] ?: initialWindow) + increase
+                    if (updated > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
+                    sendWindows[id] = updated
+                } else {
+                    // A window update may arrive before the stream is registered; keep it.
+                    pendingWindows[id] = (pendingWindows[id] ?: 0L) + increase
+                }
+                stateLock.notifyAll()
+            }
         }
     }
 
@@ -448,7 +751,7 @@ object FoxTunnel {
         }
     }
 
-    private fun connect(location: FoxLocation, protocols: Array<String>, timeout: Int): SSLSocket {
+    internal fun connect(location: FoxLocation, protocols: Array<String>, timeout: Int): SSLSocket {
         val raw = chain(location.host, location.port, timeout)
         var tls: SSLSocket? = null
         try {
@@ -469,6 +772,7 @@ object FoxTunnel {
                 val selected = try { tls.applicationProtocol } catch (_: NoSuchMethodError) { "" }
                 if (selected != "h2") throw java.io.IOException("the proxy did not negotiate HTTP/2")
             }
+            tls.soTimeout = 0
             return tls
         } catch (e: Exception) {
             try {
@@ -504,7 +808,7 @@ object FoxTunnel {
                 raw.close()
             } catch (ignored: Exception) {
             }
-            throw if (e is FoxError) e else FoxError("The proxy chain did not answer: " + (e.message ?: "no reply"))
+            throw if (e is FoxError) e else FoxError("The proxy chain did not answer: ${e.message ?: "no reply"}")
         }
     }
 
@@ -523,8 +827,7 @@ object FoxTunnel {
                 head.append(c.toChar())
                 if (head.length > 8192) throw FoxError("The proxy sent a very long reply")
             }
-            val status = head.lineSequence().firstOrNull()
-                ?.split(' ')?.getOrNull(1)?.toIntOrNull() ?: 0
+            val status = head.lineSequence().firstOrNull()?.split(" ")?.getOrNull(1)?.toIntOrNull() ?: 0
             if (status != 200) throw FoxError("The proxy refused the chain ($status)")
             return
         }
@@ -567,7 +870,7 @@ object FoxTunnel {
     private fun isAddress(host: String): Boolean =
         host.isNotEmpty() && host.all { it.isDigit() || it == '.' } || host.contains(':')
 
-    private fun fill(input: BufferedInputStream, buffer: ByteArray): Boolean {
+    internal fun fill(input: BufferedInputStream, buffer: ByteArray): Boolean {
         var done = 0
         while (done < buffer.size) {
             val size = input.read(buffer, done, buffer.size - done)
@@ -577,7 +880,7 @@ object FoxTunnel {
         return true
     }
 
-    private fun settings(): ByteArray {
+    internal fun settings(): ByteArray {
         fun entry(id: Int, value: Int): ByteArray = byteArrayOf(
             ((id ushr 8) and 0xFF).toByte(), (id and 0xFF).toByte(),
             ((value ushr 24) and 0xFF).toByte(), ((value ushr 16) and 0xFF).toByte(),
@@ -589,7 +892,7 @@ object FoxTunnel {
         return out.toByteArray()
     }
 
-    private fun pair(name: String, value: String): ByteArray {
+    internal fun pair(name: String, value: String): ByteArray {
         val out = ByteArrayOutputStream()
         out.write(0x00)
         literal(out, name)
@@ -614,7 +917,7 @@ object FoxTunnel {
         out.write(bytes)
     }
 
-    private fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {
+    internal fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {
         val out = ByteArray(9 + payload.size)
         out[0] = ((payload.size ushr 16) and 0xFF).toByte()
         out[1] = ((payload.size ushr 8) and 0xFF).toByte()
@@ -629,7 +932,7 @@ object FoxTunnel {
         return out
     }
 
-    private fun code(payload: ByteArray): Int {
+    internal fun code(payload: ByteArray): Int {
         if (payload.size < 4) return 0
         return ((payload[0].toInt() and 0xFF) shl 24) or ((payload[1].toInt() and 0xFF) shl 16) or
             ((payload[2].toInt() and 0xFF) shl 8) or (payload[3].toInt() and 0xFF)
@@ -678,7 +981,7 @@ object FoxTunnel {
         return ByteArray(length / 8) { index -> (bits ushr (length - 8 * (index + 1))).toByte() }
     }
 
-    private fun status(block: ByteArray): Int? {
+    internal fun status(block: ByteArray): Int? {
         var at = 0
         while (at < block.size) {
             val first = block[at].toInt() and 255
@@ -740,7 +1043,7 @@ object FoxTunnel {
         return status to headers
     }
 
-    private fun reason(status: Int?, headers: Map<String, String>): String {
+    internal fun reason(status: Int?, headers: Map<String, String>): String {
         val failure = headers["x-fastly-proxy-auth-failed"]
         return when {
             status == null -> "the proxy did not answer with a status"

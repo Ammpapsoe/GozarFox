@@ -6,13 +6,19 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URL
+import java.util.Collections
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.HttpsURLConnection
 import kotlin.concurrent.thread
 
@@ -22,6 +28,11 @@ interface FoxPipe {
     fun finishWrite() = Unit
     fun close()
 }
+
+private const val MIN_TTL_SECONDS = 60L
+private const val MAX_TTL_SECONDS = 300L
+private const val NEGATIVE_TTL_MS = 30_000L
+private const val RACE_HEAD_START_MS = 250L
 
 class FoxStack(
     private val incoming: InputStream,
@@ -46,22 +57,40 @@ class FoxStack(
         private const val TCP = 6
         private const val UDP = 17
         private const val WINDOW_SHIFT = 7
-        private const val UPLOAD_CAP = 512 * 1024
+        private const val UPLOAD_CAP = 128 * 1024
+        private const val GLOBAL_QUEUE_CAP = 8L * 1024 * 1024
         private const val FLIGHT_CAP = 256 * 1024
         private const val MASK = 0xFFFFFFFFL
-        private const val MAX_FLOWS = 512
+        private const val MAX_FLOWS = 256
         private const val MAX_NAMES = 4096
         private const val SYN_BURST = 256
+        private const val MAX_PENDING = 10
+        private const val CHUNK_SIZE = 2048
+        private const val RECEIVE_SIZE = 32768
     }
 
     private val flows = ConcurrentHashMap<Long, Flow>()
-    private val names = ConcurrentHashMap<Int, String>()
+
+    /** Bounded LRU: the resolver learns a name per address and forgets the oldest instead of all. */
+    private val names: MutableMap<Int, String> =
+        Collections.synchronizedMap(object : LinkedHashMap<Int, String>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, String>?): Boolean =
+                size > MAX_NAMES
+        })
     private val stamp = AtomicInteger(1)
     private val synTokens = AtomicInteger(SYN_BURST)
     @Volatile private var synRefilledAt = System.currentTimeMillis()
+    private val globalQueued = AtomicLong(0)
+    private val chunkPool = ConcurrentLinkedQueue<ByteArray>()
+    private val receivePool = ConcurrentLinkedQueue<ByteArray>()
     private val dnsWorkers = ThreadPoolExecutor(8, 8, 0, TimeUnit.SECONDS, ArrayBlockingQueue(128), { task ->
         Thread(task, "fox-dns").apply { isDaemon = true }
     })
+
+    /** Every flow shares this pool instead of keeping two dedicated threads alive. */
+    private val workers = Executors.newCachedThreadPool { task ->
+        Thread(task, "fox-flow").apply { isDaemon = true }
+    }
     @Volatile private var running = false
 
     fun start() {
@@ -90,6 +119,7 @@ class FoxStack(
         }
         flows.clear()
         dnsWorkers.shutdownNow()
+        workers.shutdownNow()
     }
 
     fun active(): Int = flows.size
@@ -247,7 +277,6 @@ class FoxStack(
     }
 
     private fun learn(query: ByteArray, answer: ByteArray) {
-        if (names.size >= MAX_NAMES) names.clear()
         val name = questionName(query) ?: return
         for (address in addresses(answer)) {
             if (address != 0) names[address] = name
@@ -460,6 +489,21 @@ class FoxStack(
 
     private fun gap(newer: Long, older: Long): Long = (newer - older) and MASK
 
+    private class Chunk(val bytes: ByteArray, val size: Int)
+
+    private fun chunkOf(packet: ByteArray, offset: Int, length: Int): Chunk {
+        if (length <= CHUNK_SIZE) {
+            val bytes = chunkPool.poll() ?: ByteArray(CHUNK_SIZE)
+            System.arraycopy(packet, offset, bytes, 0, length)
+            return Chunk(bytes, length)
+        }
+        return Chunk(packet.copyOfRange(offset, offset + length), length)
+    }
+
+    private fun release(chunk: Chunk) {
+        if (chunk.bytes.size == CHUNK_SIZE && chunkPool.size < 64) chunkPool.offer(chunk.bytes)
+    }
+
     private inner class Flow(
         private val key: Long,
         private val appPort: Int,
@@ -475,7 +519,10 @@ class FoxStack(
         @Volatile var idleAt: Long = System.currentTimeMillis()
         @Volatile private var closed = false
         @Volatile private var pipe: FoxPipe? = null
-        private val queue = ArrayDeque<ByteArray>()
+        private val queue = ArrayDeque<Chunk>()
+        private val pending = HashMap<Int, Chunk>()
+        private val sendTimes = HashMap<Long, Long>()
+        private var rttEwma = 0L
         private val lock = Object()
         private var queued = 0
         private var appClosed = false
@@ -490,19 +537,62 @@ class FoxStack(
         fun window(): Int = synchronized(lock) { (available() ushr WINDOW_SHIFT).coerceIn(0, 65535) }
 
         fun push(packet: ByteArray, offset: Int, length: Int, sequence: Long): Boolean = synchronized(lock) {
-            if (closed || appClosed || sequence != expected || length > UPLOAD_CAP - queued) return@synchronized false
-            queue.addLast(packet.copyOfRange(offset, offset + length))
-            queued += length
-            expected = (expected + length) and MASK
-            lock.notifyAll()
-            true
+            if (closed || appClosed || length == 0) return@synchronized false
+            if (sequence == expected) {
+                if (length > UPLOAD_CAP - queued || globalQueued.get() + length > GLOBAL_QUEUE_CAP) {
+                    return@synchronized false
+                }
+                queue.addLast(chunkOf(packet, offset, length))
+                queued += length
+                globalQueued.addAndGet(length.toLong())
+                expected = (expected + length) and MASK
+                // Release any out-of-order segments this one completed.
+                while (true) {
+                    val next = pending.remove(expected.toInt()) ?: break
+                    queue.addLast(next)
+                    expected = (expected + next.size) and MASK
+                }
+                lock.notifyAll()
+                true
+            } else {
+                // A small, bounded reorder window: near-future segments are kept
+                // instead of forcing a retransmit of everything after the hole.
+                val ahead = gap(sequence, expected)
+                if (ahead in 1..0x40000000L && pending.size < MAX_PENDING &&
+                    length <= UPLOAD_CAP - queued && globalQueued.get() + length <= GLOBAL_QUEUE_CAP
+                ) {
+                    val previous = pending.put(sequence.toInt(), chunkOf(packet, offset, length))
+                    if (previous != null) {
+                        queued -= previous.size
+                        globalQueued.addAndGet(-previous.size.toLong())
+                        release(previous)
+                    }
+                    queued += length
+                    globalQueued.addAndGet(length.toLong())
+                    true
+                } else false
+            }
         }
 
         fun confirm(ack: Long, window: Int) {
             synchronized(lock) {
                 val advance = gap(ack, acknowledged)
                 val outstanding = gap(sent, acknowledged)
-                if (advance < 0x80000000L && advance <= outstanding) acknowledged = ack
+                if (advance < 0x80000000L && advance <= outstanding) {
+                    acknowledged = ack
+                    val nowMs = System.currentTimeMillis()
+                    val iterator = sendTimes.entries.iterator()
+                    while (iterator.hasNext()) {
+                        val entry = iterator.next()
+                        if (gap(ack, entry.key) in 1..0x7fffffffL) {
+                            iterator.remove()
+                            val sample = nowMs - entry.value
+                            if (sample in 1..60000) {
+                                rttEwma = if (rttEwma <= 0) sample else (4 * rttEwma + sample) / 5
+                            }
+                        }
+                    }
+                }
                 peer = (window.toLong() shl peerShift).coerceAtMost(1L shl 20)
                 lock.notifyAll()
             }
@@ -518,7 +608,7 @@ class FoxStack(
         }
 
         fun begin() {
-            thread(isDaemon = true, name = "fox-flow") {
+            workers.execute {
                 val destination = address(remote)
                 val host = names[remote] ?: destination
                 val link = try {
@@ -526,7 +616,7 @@ class FoxStack(
                 } catch (e: Exception) {
                     if (!closed) send(remote, remotePort, appPort, sent, expected, RST or ACK, 0, null, 0, 0)
                     flows.remove(key, this)
-                    return@thread
+                    return@execute
                 }
                 val accepted = synchronized(lock) {
                     if (closed) false else {
@@ -536,9 +626,9 @@ class FoxStack(
                 }
                 if (!accepted) {
                     try { link.close() } catch (_: Exception) { }
-                    return@thread
+                    return@execute
                 }
-                thread(isDaemon = true, name = "fox-flow-up") { drain(link) }
+                workers.execute { drain(link) }
                 receive(link)
             }
         }
@@ -553,6 +643,7 @@ class FoxStack(
                         queue.isNotEmpty() -> queue.removeFirst().also {
                             val before = available()
                             queued -= it.size
+                            globalQueued.addAndGet(-it.size.toLong())
                             reopened = before == 0 && available() > 0
                             lock.notifyAll()
                         }
@@ -564,13 +655,15 @@ class FoxStack(
                 while (offset < chunk.size) {
                     val size = minOf(mss, chunk.size - offset)
                     try {
-                        link.write(chunk, offset, size)
+                        link.write(chunk.bytes, offset, size)
                     } catch (e: Exception) {
+                        release(chunk)
                         terminate()
                         return
                     }
                     offset += size
                 }
+                release(chunk)
             }
             if (appClosed && !closed) {
                 try {
@@ -587,7 +680,15 @@ class FoxStack(
         }
 
         private fun receive(link: FoxPipe) {
-            val buffer = ByteArray(32768)
+            val buffer = receivePool.poll() ?: ByteArray(RECEIVE_SIZE)
+            try {
+                receiveWith(link, buffer)
+            } finally {
+                if (receivePool.size < 16) receivePool.offer(buffer)
+            }
+        }
+
+        private fun receiveWith(link: FoxPipe, buffer: ByteArray) {
             while (true) {
                 val size = try {
                     link.read(buffer, 0, buffer.size)
@@ -602,6 +703,10 @@ class FoxStack(
                     if (!await(piece.toLong())) {
                         terminate()
                         return
+                    }
+                    synchronized(lock) {
+                        if (sendTimes.size >= 64) sendTimes.clear()
+                        sendTimes[sent] = System.currentTimeMillis()
                     }
                     send(remote, remotePort, appPort, sent, expected, ACK or PSH, window(), buffer, offset, piece)
                     synchronized(lock) { sent = (sent + piece) and MASK }
@@ -619,7 +724,11 @@ class FoxStack(
         }
 
         private fun await(extra: Long): Boolean {
-            val deadline = System.currentTimeMillis() + 25000
+            // Scale the stall budget with the measured RTT; a dead path fails
+            // in a few seconds instead of always burning the full timeout.
+            val rtt = synchronized(lock) { rttEwma }
+            val budget = if (rtt <= 0) 25000L else (3 * rtt).coerceIn(3000L, 25000L)
+            val deadline = System.currentTimeMillis() + budget
             synchronized(lock) {
                 while (true) {
                     val flight = gap(sent + extra, acknowledged)
@@ -632,8 +741,23 @@ class FoxStack(
             }
         }
 
+        private fun discard() {
+            while (queue.isNotEmpty()) {
+                val chunk = queue.removeFirst()
+                queued -= chunk.size
+                globalQueued.addAndGet(-chunk.size.toLong())
+                release(chunk)
+            }
+            for (chunk in pending.values) {
+                queued -= chunk.size
+                globalQueued.addAndGet(-chunk.size.toLong())
+                release(chunk)
+            }
+            pending.clear()
+        }
+
         private fun flowDone() {
-            synchronized(lock) { closed = true; lock.notifyAll() }
+            synchronized(lock) { closed = true; discard(); lock.notifyAll() }
             try {
                 pipe?.close()
             } catch (_: Exception) {
@@ -642,7 +766,7 @@ class FoxStack(
         }
 
         fun shutdown() {
-            synchronized(lock) { closed = true; lock.notifyAll() }
+            synchronized(lock) { closed = true; discard(); lock.notifyAll() }
             try {
                 pipe?.close()
             } catch (_: Exception) {
@@ -664,12 +788,14 @@ class FoxResolver(
     private val proxyPort: Int,
     private val request: ((String, ByteArray) -> ByteArray?)? = null,
     private val now: () -> Long = { System.nanoTime() / 1_000_000L },
-    private val endpoints: List<String> = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false)
+    private val endpoints: List<String> = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false),
+    private val raceHeadStartMs: Long = RACE_HEAD_START_MS
 ) {
 
     private class Entry(val body: ByteArray, val storedAt: Long, val expires: Long)
 
     private val cache = ConcurrentHashMap<String, Entry>()
+    private val monitors = ConcurrentHashMap<String, Any>()
     private val slots = Semaphore(8)
 
     fun answer(query: ByteArray): ByteArray? {
@@ -685,17 +811,40 @@ class FoxResolver(
             if (time < hit.expires) return retag(query, hit.body, (time - hit.storedAt).coerceAtLeast(0) / 1000)
             cache.remove(key, hit)
         }
-        val body = exchange(query) ?: return failure(query)
-        if (!valid(query, body)) return failure(query)
-        val ttl = ttl(body)
-        if (ttl > 0) {
-            if (cache.size >= 512) {
-                cache.entries.removeAll { it.value.expires <= time }
-                if (cache.size >= 512) cache.clear()
+        // Single flight: one lookup per name, everyone else waits for its result
+        // instead of repeating the same query in parallel.
+        val monitor = monitors.getOrPut(key) { Any() }
+        val body: ByteArray?
+        try {
+            synchronized(monitor) {
+                val waited = cache[key]
+                if (waited != null) {
+                    val at = now()
+                    if (at < waited.expires) return retag(query, waited.body, (at - waited.storedAt).coerceAtLeast(0) / 1000)
+                    cache.remove(key, waited)
+                }
+                body = exchange(query)
+                if (body != null && valid(query, body)) store(key, body, time)
             }
-            cache[key] = Entry(body, time, time + ttl)
+        } finally {
+            monitors.remove(key, monitor)
         }
+        if (body == null || !valid(query, body)) return failure(query)
         return retag(query, body)
+    }
+
+    private fun store(key: String, body: ByteArray, time: Long) {
+        val lifetime = when (body[3].toInt() and 0x0F) {
+            0 -> ttl(body)
+            3 -> NEGATIVE_TTL_MS
+            else -> 0L
+        }
+        if (lifetime <= 0) return
+        if (cache.size >= 512) {
+            cache.entries.removeAll { it.value.expires <= time }
+            if (cache.size >= 512) cache.clear()
+        }
+        cache[key] = Entry(body, time, time + lifetime)
     }
 
     fun directAddress(host: String): String? {
@@ -815,17 +964,56 @@ class FoxResolver(
         return copy
     }
 
+    /**
+     * The primary endpoint gets a short head start; if it has not answered the
+     * rest race in parallel and the first valid reply wins. A slow or blocked
+     * endpoint therefore costs milliseconds, not its whole timeout.
+     */
     private fun exchange(query: ByteArray): ByteArray? {
+        if (endpoints.isEmpty()) return null
         if (!slots.tryAcquire(2, TimeUnit.SECONDS)) return null
         try {
-            for (url in endpoints) {
-                val body = try { over(url, query) } catch (_: Exception) { null }
-                if (body != null && valid(query, body) && body[3].toInt() and 0x0F != 2) return body
+            val winner = AtomicReference<ByteArray?>(null)
+            val settled = CountDownLatch(1)
+            val remaining = AtomicInteger(endpoints.size)
+            fun settle(body: ByteArray?) {
+                if (body != null && winner.compareAndSet(null, body)) settled.countDown()
+                if (remaining.decrementAndGet() == 0) settled.countDown()
             }
-            return null
+            val rest = endpoints.drop(1)
+            val gate = CountDownLatch(1)
+            val stagger = thread(isDaemon = true, name = "fox-dns-race") {
+                try {
+                    gate.await(raceHeadStartMs, TimeUnit.MILLISECONDS)
+                    if (winner.get() != null) {
+                        repeat(rest.size) { if (remaining.decrementAndGet() == 0) settled.countDown() }
+                        return@thread
+                    }
+                    val others = ArrayList<Thread>(rest.size)
+                    for (url in rest) {
+                        if (winner.get() != null) break
+                        others.add(thread(isDaemon = true) { settle(attempt(url, query)) })
+                    }
+                    repeat(rest.size - others.size) { if (remaining.decrementAndGet() == 0) settled.countDown() }
+                    for (worker in others) worker.join(30000)
+                } catch (_: Exception) {
+                }
+            }
+            thread(isDaemon = true, name = "fox-dns-first") {
+                val body = attempt(endpoints[0], query)
+                settle(body)
+                if (body == null) gate.countDown()
+            }
+            settled.await(30, TimeUnit.SECONDS)
+            return winner.get()
         } finally {
             slots.release()
         }
+    }
+
+    private fun attempt(url: String, query: ByteArray): ByteArray? {
+        val body = try { over(url, query) } catch (_: Exception) { null }
+        return if (body != null && valid(query, body) && body[3].toInt() and 0x0F != 2) body else null
     }
 
     private fun over(url: String, query: ByteArray): ByteArray? {
@@ -878,7 +1066,7 @@ class FoxResolver(
             if (at < 0 || at + 4 > body.size) return 0
             at += 4
         }
-        var minimum = 120L
+        var minimum = Long.MAX_VALUE
         repeat(count) {
             at = questionEnd(body, at)
             if (at < 0 || at + 10 > body.size) return 0
@@ -890,7 +1078,9 @@ class FoxResolver(
             minimum = minOf(minimum, seconds)
             at += 10 + size
         }
-        return minimum * 1000L
+        // Honor the server's TTL but stay inside sane bounds: a 60 second floor
+        // avoids pointless refetches, a 5 minute cap bounds stale answers.
+        return minimum.coerceIn(MIN_TTL_SECONDS, MAX_TTL_SECONDS) * 1000L
     }
 
     private fun questionEnd(data: ByteArray, start: Int): Int {
