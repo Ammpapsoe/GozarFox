@@ -120,20 +120,20 @@ class FoxDuplex private constructor(
                         }
                         return take
                     }
-                    failure?.let { throw java.io.IOException("the tunnel failed: ${it.message}", it) }
-                    if (inbox.isEmpty()) {
-                        // The peer may have ended the stream with a final payload;
-                        // only report the end once the inbox is truly drained.
-                        if (ended) return -1
-                        val left = if (deadline == 0L) 0L else deadline - System.currentTimeMillis()
-                        if (deadline != 0L && left <= 0) {
-                            throw java.net.SocketTimeoutException("the tunnel read timed out")
-                        }
-                        lock.wait(if (deadline == 0L) 0L else left)
+                    if (inbox.isNotEmpty()) {
+                        head = inbox.removeFirst()
+                        headOffset = 0
                         continue
                     }
-                    head = inbox.removeFirst()
-                    headOffset = 0
+                    // Report the end only once every delivered byte has been
+                    // consumed; a reset or GOAWAY ends the stream like the
+                    // original implementation's EOF, without throwing.
+                    if (ended) return -1
+                    val left = if (deadline == 0L) 0L else deadline - System.currentTimeMillis()
+                    if (deadline != 0L && left <= 0) {
+                        throw java.net.SocketTimeoutException("the tunnel read timed out")
+                    }
+                    lock.wait(if (deadline == 0L) 0L else left)
                 }
             }
         }
@@ -441,7 +441,6 @@ object FoxTunnel {
         private var connectionWindow = 65535L
         private var initialWindow = 65535L
         private var nextId = 1
-        private var settingsSeen = false
         @Volatile private var dead = false
         @Volatile private var lastUse = System.currentTimeMillis()
 
@@ -475,14 +474,9 @@ object FoxTunnel {
         fun openStream(host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
             if (dead) throw java.io.IOException("the tunnel session is gone")
             val deadline = System.currentTimeMillis() + timeout
-            synchronized(stateLock) {
-                while (!settingsSeen && !dead) {
-                    val left = deadline - System.currentTimeMillis()
-                    if (left <= 0) throw java.io.IOException("the proxy sent no settings in time")
-                    stateLock.wait(left)
-                }
-            }
-            if (dead) throw java.io.IOException("the tunnel session is gone")
+            // RFC 9113 lets the client send frames right after its preface; waiting
+            // for the server SETTINGS first would deadlock proxies that answer the
+            // request before advertising settings.
             val id = synchronized(stateLock) {
                 val id = nextId
                 nextId += 2
@@ -690,7 +684,6 @@ object FoxTunnel {
                         sendWindows[id] = updated
                     }
                 }
-                settingsSeen = true
                 stateLock.notifyAll()
             }
             sendFrame(frame(0x04, 0x01, 0, ByteArray(0)))

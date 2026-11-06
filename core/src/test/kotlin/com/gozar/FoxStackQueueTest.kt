@@ -236,8 +236,9 @@ class FoxStackQueueTest {
             sourcePort: Int = 40000,
             options: ByteArray? = null
         ): ByteArray {
-            val header = 20 + (options?.size ?: 0)
-            val packet = ByteArray(header + data.size)
+            // 20-byte IPv4 header, then the TCP header (plus options), then data.
+            val tcpHeader = 20 + (options?.size ?: 0)
+            val packet = ByteArray(20 + tcpHeader + data.size)
             packet[0] = 0x45
             packet[8] = 64
             packet[9] = 6
@@ -248,11 +249,11 @@ class FoxStackQueueTest {
             put16(packet, 22, 443)
             put32(packet, 24, sequence)
             put32(packet, 28, acknowledgment)
-            packet[32] = ((header / 4) shl 4).toByte()
+            packet[32] = ((tcpHeader / 4) shl 4).toByte()
             packet[33] = flags.toByte()
             put16(packet, 34, 64000)
             options?.copyInto(packet, 40)
-            data.copyInto(packet, header)
+            data.copyInto(packet, 20 + tcpHeader)
             return packet
         }
 

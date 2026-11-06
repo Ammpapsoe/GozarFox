@@ -844,7 +844,34 @@ class FoxResolver(
             cache.entries.removeAll { it.value.expires <= time }
             if (cache.size >= 512) cache.clear()
         }
-        cache[key] = Entry(body, time, time + lifetime)
+        // Rewrite the record TTLs to the enforced lifetime so cache hits can
+        // count the age down against the value that actually bounds the entry.
+        cache[key] = Entry(normalizeTtl(body, lifetime / 1000), time, time + lifetime)
+    }
+
+    private fun normalizeTtl(body: ByteArray, seconds: Long): ByteArray {
+        if (body.size < 12) return body
+        val copy = body.copyOf()
+        var at = 12
+        repeat(short(copy, 4)) {
+            at = questionEnd(copy, at)
+            if (at < 0 || at + 4 > copy.size) return body
+            at += 4
+        }
+        val records = short(copy, 6) + short(copy, 8) + short(copy, 10)
+        if (records > 512) return body
+        repeat(records) {
+            at = questionEnd(copy, at)
+            if (at < 0 || at + 10 > copy.size) return body
+            val type = short(copy, at)
+            val size = short(copy, at + 8)
+            if (at + 10 + size > copy.size) return body
+            if (type != 41) {
+                for (part in 0..3) copy[at + 4 + part] = (seconds ushr (24 - part * 8)).toByte()
+            }
+            at += 10 + size
+        }
+        return copy
     }
 
     fun directAddress(host: String): String? {
