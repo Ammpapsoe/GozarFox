@@ -84,7 +84,10 @@ class FoxDuplex private constructor(
         }
 
         fun fail(error: Exception) = synchronized(lock) {
-            failure = error
+            // Keep the first failure: a stream refused with a 407 must not be
+            // overwritten by the session-level EOF error that follows it, or
+            // callers would retry a proxy that definitively refused.
+            if (failure == null) failure = error
             ended = true
             lock.notifyAll()
         }
