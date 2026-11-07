@@ -9,6 +9,15 @@ object FoxCrypto {
     private const val PREFIX = "identity.mozilla.com/picl/v1/"
     private const val MAC = "HmacSHA256"
 
+    /**
+     * Zeroes key material as soon as it is spent, so derived secrets do not
+     * linger in the heap waiting for a memory dump. JVM strings cannot be
+     * zeroed — that is why secrets move through this codebase as ByteArray.
+     */
+    fun burn(vararg buffers: ByteArray?) {
+        for (buffer in buffers) buffer?.fill(0)
+    }
+
     fun hmac(key: ByteArray, data: ByteArray): ByteArray {
         val mac = Mac.getInstance(MAC)
         mac.init(SecretKeySpec(key, MAC))
@@ -60,20 +69,30 @@ object FoxCrypto {
 
     fun authPw(email: String, password: String): ByteArray {
         val salt = (PREFIX + "quickStretch:" + email).toByteArray(Charsets.UTF_8)
-        val stretched = pbkdf2(password.toByteArray(Charsets.UTF_8), salt, 1000, 32)
-        return hkdf(stretched, byteArrayOf(0), (PREFIX + "authPW").toByteArray(Charsets.UTF_8), 32)
+        val passwordBytes = password.toByteArray(Charsets.UTF_8)
+        val stretched = pbkdf2(passwordBytes, salt, 1000, 32)
+        burn(passwordBytes)
+        val auth = hkdf(stretched, byteArrayOf(0), (PREFIX + "authPW").toByteArray(Charsets.UTF_8), 32)
+        burn(stretched)
+        return auth
     }
 
     fun hawkId(tokenHex: String): String {
         val raw = unhex(tokenHex)
         val keys = hkdf(raw, null, (PREFIX + "sessionToken").toByteArray(Charsets.UTF_8), 96)
-        return hex(keys.copyOfRange(0, 32))
+        burn(raw)
+        val id = hex(keys.copyOfRange(0, 32))
+        burn(keys)
+        return id
     }
 
     fun hawkKey(tokenHex: String): ByteArray {
         val raw = unhex(tokenHex)
         val keys = hkdf(raw, null, (PREFIX + "sessionToken").toByteArray(Charsets.UTF_8), 96)
-        return keys.copyOfRange(32, 64)
+        burn(raw)
+        val key = keys.copyOfRange(32, 64)
+        burn(keys)
+        return key
     }
 
     fun hawk(method: String, url: java.net.URL, id: String, key: ByteArray, payload: String): String {

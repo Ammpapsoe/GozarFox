@@ -24,6 +24,7 @@ import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -105,6 +106,51 @@ class FoxTunnelPoolTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun prewarmCreatesASessionThatTheNextOpenReuses() {
+        EchoProxy().use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            FoxTunnel.prewarm(location)
+            // Prewarm itself must have established the session (bounded wait
+            // for the mock's counter thread).
+            val deadline = System.currentTimeMillis() + 3000
+            while (proxy.sessions.get() < 1 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+            }
+            assertEquals(1, proxy.sessions.get())
+            val tunnel = open(proxy)
+            try {
+                assertEquals("payload-warm", echo(tunnel, "payload-warm"))
+            } finally {
+                tunnel.close()
+            }
+            // ...and the open reused it instead of building a second one.
+            assertEquals(1, proxy.sessions.get())
+            assertTrue(proxy.problems.isEmpty())
+        }
+    }
+
+    @Test
+    fun powerSavingWidensTheCoalesceWindowWithoutBreakingTunnels() {
+        try {
+            assertFalse(FoxTunnel.powerSaving())
+            FoxTunnel.setPowerSaving(true)
+            assertTrue(FoxTunnel.powerSaving())
+            EchoProxy().use { proxy ->
+                val tunnel = open(proxy)
+                try {
+                    assertEquals("payload-save", echo(tunnel, "payload-save"))
+                } finally {
+                    tunnel.close()
+                }
+            }
+        } finally {
+            FoxTunnel.setPowerSaving(false)
+        }
+        assertFalse(FoxTunnel.powerSaving())
     }
 
     @Test

@@ -53,13 +53,93 @@ class FoxLeakGuardTest {
 
     @Test
     fun ipv6FramesAreDroppedInsteadOfLeakingOutOfTheTunnel() {
+        FoxLeakGuard.reset()
         Tunnel().use { tunnel ->
             tunnel.stack.start()
             repeat(8) { tunnel.input.offer(ipv6Syn()) }
             Thread.sleep(300)
             assertEquals(0, tunnel.dialed.get())
             assertNull(tunnel.output.poll(200, TimeUnit.MILLISECONDS))
+            // The guard must have accounted for every stopped frame.
+            assertEquals(8L, FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED))
+            assertEquals(mapOf(FoxLeakGuard.IPV6_DROPPED to 8L), FoxLeakGuard.snapshot())
         }
+    }
+
+    @Test
+    fun selfTestPassesWhenDnsAndExitBothComeFromTheTunnel() {
+        FoxLeakGuard.reset()
+        val report = FoxLeakGuard.selfTest(
+            now = 1000L,
+            baselineIp = "2.176.10.5",
+            resolve = { listOf("93.184.216.34") },
+            exitIp = { "45.131.7.9" }
+        )
+        assertTrue(report.passed)
+        assertEquals("45.131.7.9", report.exitIp)
+        assertEquals(report, FoxLeakGuard.lastReport())
+        assertEquals("", report.detail)
+    }
+
+    @Test
+    fun selfTestFailsEveryLeakShape() {
+        // No DNS answer at all.
+        var report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { emptyList() }, exitIp = { "45.1.1.1" })
+        assertTrue(!report.dnsLeakFree && report.exitVerified)
+        // DNS answered with a private address (the classic ISP-hijack leak).
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("10.10.10.10") }, exitIp = { "45.1.1.1" })
+        assertTrue(!report.dnsLeakFree)
+        // Exit still on the baseline IP: traffic is not going through the tunnel.
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "2.2.2.2" })
+        assertTrue(report.dnsLeakFree && !report.exitVerified)
+        assertTrue(report.detail.contains("unchanged"))
+        // Exit unavailable.
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "" })
+        assertTrue(!report.exitVerified)
+        // Exit on a local address.
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "192.168.1.1" })
+        assertTrue(!report.exitVerified)
+        // A throwing probe is a failure, not a crash.
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { throw RuntimeException() }, exitIp = { throw RuntimeException() })
+        assertTrue(!report.passed)
+        // Without a baseline, any non-local exit passes.
+        report = FoxLeakGuard.selfTest(baselineIp = "", resolve = { listOf("93.184.216.34") }, exitIp = { "45.1.1.1" })
+        assertTrue(report.passed)
+    }
+
+    @Test
+    fun localAddressClassificationCoversBothFamilies() {
+        assertTrue(FoxLeakGuard.isLocalAddress("127.0.0.1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("10.1.2.3"))
+        assertTrue(FoxLeakGuard.isLocalAddress("172.16.0.1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("172.31.255.255"))
+        assertTrue(FoxLeakGuard.isLocalAddress("192.168.0.1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("169.254.1.1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("100.64.0.1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("0.0.0.0"))
+        assertTrue(FoxLeakGuard.isLocalAddress("224.0.0.5"))
+        assertTrue(FoxLeakGuard.isLocalAddress("::1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("fd12:3456::1"))
+        assertTrue(FoxLeakGuard.isLocalAddress("fe80::1"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("172.15.0.1"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("172.32.0.1"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("100.128.0.1"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("8.8.8.8"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("2606:4700:4700::1111"))
+        assertTrue(!FoxLeakGuard.isLocalAddress("not-an-ip"))
+    }
+
+    @Test
+    fun countersAccumulateAndReset() {
+        FoxLeakGuard.reset()
+        FoxLeakGuard.note(FoxLeakGuard.KILL_SWITCH_BLOCKED)
+        FoxLeakGuard.note(FoxLeakGuard.KILL_SWITCH_BLOCKED)
+        FoxLeakGuard.note(FoxLeakGuard.DNS_OUTSIDE_TUNNEL)
+        assertEquals(2L, FoxLeakGuard.count(FoxLeakGuard.KILL_SWITCH_BLOCKED))
+        assertEquals(0L, FoxLeakGuard.count("never-noted"))
+        FoxLeakGuard.reset()
+        assertEquals(0L, FoxLeakGuard.count(FoxLeakGuard.KILL_SWITCH_BLOCKED))
+        assertNull(FoxLeakGuard.lastReport())
     }
 
     @Test
