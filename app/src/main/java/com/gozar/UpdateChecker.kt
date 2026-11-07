@@ -99,7 +99,7 @@ object UpdateChecker {
                     is Result.Available -> {
                         Store.setUpdate(appContext, published.version, published.url, published.sha256, published.size)
                         if (shouldNotify && Store.notifiedUpdate(appContext) != published.version &&
-                            Notify.updateAvailable(appContext, published.version, published.url)
+                            Notify.updateAvailable(appContext, published.version)
                         ) {
                             Store.setNotifiedUpdate(appContext, published.version)
                         }

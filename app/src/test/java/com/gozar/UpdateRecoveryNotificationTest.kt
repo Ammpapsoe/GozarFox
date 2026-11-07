@@ -19,6 +19,17 @@ import org.robolectric.annotation.Config
 @Config(sdk = [28], application = Application::class)
 class UpdateRecoveryNotificationTest {
     @Test
+    fun tappingTheUpdateNoticeUsesTheVerifiedDownloader() {
+        val context = RuntimeEnvironment.getApplication()
+        assertTrue(Notify.updateAvailable(context, "1.12.0"))
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val note = shadowOf(manager).allNotifications.single()
+        val intent = shadowOf(note.contentIntent).savedIntent
+        assertEquals(UpdateActionReceiver::class.java.name, intent.component?.className)
+        assertEquals(UpdateActionReceiver.ACTION_DOWNLOAD, intent.action)
+    }
+
+    @Test
     fun recoveryNoticeOpensARealNonExportedUpdateCheck() {
         val context = RuntimeEnvironment.getApplication()
         assertTrue(Notify.recoveryRecommended(context, "1.11.0"))

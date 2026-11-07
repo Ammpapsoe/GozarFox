@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import androidx.core.content.ContextCompat
 
@@ -31,18 +30,12 @@ object Notify {
         if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         else PendingIntent.FLAG_UPDATE_CURRENT
 
-    fun updateAvailable(c: Context, version: String, url: String): Boolean {
+    fun updateAvailable(c: Context, version: String): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(c, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
         return try {
             updateChannel(c)
-            val open = PendingIntent.getActivity(
-                c,
-                3,
-                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                flags()
-            )
             val download = PendingIntent.getBroadcast(
                 c,
                 5,
@@ -53,7 +46,7 @@ object Notify {
             note.setSmallIcon(R.drawable.ic_refresh)
                 .setContentTitle(c.getString(R.string.update_notification_title))
                 .setContentText(c.getString(R.string.update_notification_text, version))
-                .setContentIntent(open)
+                .setContentIntent(download)
                 .addAction(0, c.getString(R.string.update_action_download), download)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)
@@ -99,7 +92,7 @@ object Notify {
         }
     }
 
-    /** Confirms or reports the outcome of a download/rollback attempt. */
+    /** Report download/handoff failure; a successful handoff is not installation. */
     fun installResult(c: Context, success: Boolean) {
         if (!success) {
             try {
