@@ -562,10 +562,11 @@ jobs:
             test -s "$f.sig"
             gpg --homedir "$RUNNER_TEMP/verify-keyring" --batch --verify "$f.sig" "$f"
           done
-      - name: Sign Android update manifest
+      - name: Sign Android and desktop update manifests
         env:
           GOZAR_UPDATE_KEY: ${{ secrets.GOZAR_UPDATE_KEY }}
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
+          DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
           GOZAR_RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -e
@@ -575,8 +576,8 @@ jobs:
           trap 'rm -f "$key"' EXIT
           printf '%s\n' "$GOZAR_UPDATE_KEY" > "$key"
           GOZAR_RELEASE_KEY="$key" bash tools/sign-update-manifest.sh "$ANDROID_VERSION" "1.8.0" collected "Gozar Android $ANDROID_VERSION"
-          test -s collected/update.json
-          test -s collected/update.json.sig
+          GOZAR_RELEASE_KEY="$key" bash tools/sign-desktop-manifest.sh "$DESKTOP_VERSION" collected "Gozar desktop $DESKTOP_VERSION"
+          for f in update.json update.json.sig desktop-update.json desktop-update.json.sig; do test -s "collected/$f"; done
       - name: Notes
         env:
           GOZAR_ALLOW_DRAFT_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release && '1' || '0' }}
@@ -589,6 +590,8 @@ jobs:
           path: |
             collected/update.json
             collected/update.json.sig
+            collected/desktop-update.json
+            collected/desktop-update.json.sig
             collected/gozar-public-key.asc
           if-no-files-found: error
       - name: Publish
@@ -614,7 +617,7 @@ jobs:
             printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done
-          for f in gozar-public-key.asc update.json update.json.sig; do printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null; done
+          for f in gozar-public-key.asc update.json update.json.sig desktop-update.json desktop-update.json.sig; do printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null; done
           mkdir -p "$RUNNER_TEMP/published"
           gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/published"
           for f in collected/*; do
