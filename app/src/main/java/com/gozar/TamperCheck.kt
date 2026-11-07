@@ -16,8 +16,10 @@ object TamperCheck {
     fun trusted(hashes: List<String>): Boolean = hashes.any { it.equals(PINNED, true) }
 
     fun verify(context: Context): Boolean {
-        // Debug and unit-test builds carry the debug key by design.
-        if (BuildConfig.DEBUG) return true
+        // Debug and unit-test builds carry the debug key by design; ask the
+        // OS rather than a compile-time constant, so the flag reflects the
+        // binary actually running.
+        if ((context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true
         return try {
             val signatures = if (Build.VERSION.SDK_INT >= 28) {
                 val info = context.packageManager
