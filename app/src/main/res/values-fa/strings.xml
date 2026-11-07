@@ -323,6 +323,9 @@ AGPL-3.0-or-later</string>
     <string name="login_check_title">ایمیل خود را ببینید</string>
     <string name="login_check_code">موزیلا یک کد ۶ رقمی فرستاده است. آن را وارد کنید.</string>
     <string name="login_check_link">موزیلا یک لینک تأیید فرستاده است. یک بار بازش کنید و سپس تأیید را بزنید.</string>
+    <string name="login_retry_title">تأیید انجام شد</string>
+    <string name="login_retry_sub">برای تکمیل ورود دوباره تلاش کنید؛ به کد تأیید جدید نیازی نیست.</string>
+    <string name="login_retry_action">تلاش دوباره برای ورود</string>
     <string name="login_continue">ادامه</string>
     <string name="login_confirm_action">تأیید</string>
     <string name="login_fill">ایمیل و رمز عبور را وارد کنید.</string>

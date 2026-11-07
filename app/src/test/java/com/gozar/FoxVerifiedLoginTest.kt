@@ -2,8 +2,11 @@ package com.gozar
 
 import android.app.Application
 import android.content.Context
+import android.view.View
+import com.google.android.material.button.MaterialButton
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -12,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
@@ -24,18 +28,22 @@ class FoxVerifiedLoginTest {
 
     private class FakeProvider : FoxLoginProvider {
         val verifies = AtomicInteger()
+        val verified = AtomicBoolean()
         val tokenRequests = AtomicInteger()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         @Volatile var blockVerification = false
+        @Volatile var failFirstVerification = false
         @Volatile var failFirstToken = true
+        @Volatile var needsCode = true
 
-        override fun signIn(email: String, password: String) = FoxSession("fake-uid", "fake-session", true, false)
+        override fun signIn(email: String, password: String) = FoxSession("fake-uid", "fake-session", needsCode, false)
         override fun verifySession(sessionToken: String, code: String) {
             val call = verifies.incrementAndGet()
             entered.countDown()
             if (blockVerification) check(release.await(10, TimeUnit.SECONDS))
-            if (call > 1) throw FoxError("Synthetic code already used")
+            if (failFirstVerification && call == 1) throw FoxError("Synthetic code rejected")
+            if (!verified.compareAndSet(false, true)) throw FoxError("Synthetic code already used")
         }
         override fun tokens(sessionToken: String): FoxTokens {
             if (tokenRequests.incrementAndGet() == 1 && failFirstToken) {
@@ -83,12 +91,91 @@ class FoxVerifiedLoginTest {
         await { !Fox.busy && Fox.message == "Synthetic OAuth failure" }
         assertEquals(1, provider.verifies.get())
         assertFalse(Fox.signedIn(context))
+        assertTrue(Fox.canRetryLogin())
+        assertFalse(Fox.needsCode())
 
         Fox.submitCode(context, "123456")
         await { !Fox.busy && (Fox.signedIn(context) || Fox.message == "Synthetic code already used") }
         assertEquals("a verified session must not consume the same code again", 1, provider.verifies.get())
         assertEquals(2, provider.tokenRequests.get())
         assertTrue(Fox.signedIn(context))
+    }
+
+    @Test
+    fun alreadyVerifiedSessionCanRetryOauthWithoutCode() {
+        provider.needsCode = false
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        await { !Fox.busy && Fox.canRetryLogin() && Fox.message == "Synthetic OAuth failure" }
+        assertFalse(Fox.needsCode())
+        Fox.retryLogin(context)
+        await { !Fox.busy && Fox.signedIn(context) }
+        assertEquals(0, provider.verifies.get())
+        assertEquals(2, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun rejectedCodeDoesNotMarkTheSessionVerified() {
+        provider.failFirstVerification = true
+        provider.failFirstToken = false
+        start()
+        Fox.submitCode(context, "incorrect")
+        await { !Fox.busy && Fox.message == "Synthetic code rejected" }
+        assertFalse(Fox.canRetryLogin())
+        assertTrue(Fox.needsCode())
+        assertEquals(0, provider.tokenRequests.get())
+        Fox.submitCode(context, "correct")
+        await { !Fox.busy && Fox.signedIn(context) }
+        assertEquals(2, provider.verifies.get())
+        assertEquals(1, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun retryScreenHidesTheCodeFieldAndRetriesWithoutAnotherCode() {
+        start()
+        Fox.submitCode(context, "123456")
+        await { !Fox.busy && Fox.canRetryLogin() && Fox.message == "Synthetic OAuth failure" }
+        val controller = Robolectric.buildActivity(LoginActivity::class.java).setup()
+        try {
+            val activity = controller.get()
+            assertEquals(View.GONE, activity.findViewById<View>(R.id.loginCodeBox).visibility)
+            val primary = activity.findViewById<MaterialButton>(R.id.loginPrimary)
+            assertEquals(activity.getString(R.string.login_retry_action), primary.text.toString())
+            primary.performClick()
+            await { !Fox.busy && Fox.signedIn(context) }
+            assertEquals(1, provider.verifies.get())
+            assertEquals(2, provider.tokenRequests.get())
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test
+    fun cancellingVerifiedAttemptClearsItsRetryState() {
+        start()
+        Fox.submitCode(context, "123456")
+        await { !Fox.busy && Fox.canRetryLogin() }
+        Fox.cancelLogin()
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.canRetryLogin())
+        Fox.retryLogin(context)
+        assertEquals(1, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun fiftyOverlappingSubmissionsVerifyOnlyOncePerAttempt() {
+        repeat(50) { index ->
+            Fox.cancelLogin()
+            provider = FakeProvider().apply { blockVerification = true }
+            Fox.loginProvider = provider
+            start()
+            Fox.submitCode(context, "123456")
+            assertTrue("first verification did not start at $index", provider.entered.await(5, TimeUnit.SECONDS))
+            Fox.submitCode(context, "123456")
+            provider.release.countDown()
+            await { !Fox.busy && Fox.canRetryLogin() }
+            assertEquals("duplicate verification at $index", 1, provider.verifies.get())
+            assertEquals("unexpected token request at $index", 1, provider.tokenRequests.get())
+        }
     }
 
     @Test

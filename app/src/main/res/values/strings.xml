@@ -323,6 +323,9 @@ AGPL-3.0-or-later</string>
     <string name="login_check_title">Check your email</string>
     <string name="login_check_code">Mozilla emailed a 6-digit code. Enter it below.</string>
     <string name="login_check_link">Mozilla sent a confirmation link. Open it once, then press Confirm.</string>
+    <string name="login_retry_title">Verification complete</string>
+    <string name="login_retry_sub">Retry to finish signing in; no new verification code is needed.</string>
+    <string name="login_retry_action">Retry sign-in</string>
     <string name="login_continue">Continue</string>
     <string name="login_confirm_action">Confirm</string>
     <string name="login_fill">Enter your email and password.</string>

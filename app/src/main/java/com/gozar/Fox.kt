@@ -22,6 +22,8 @@ object Fox {
     private val probes = ConcurrentHashMap<String, ProbeEntry>()
     private val refreshLock = Any()
     private val operations = AtomicInteger()
+    private val authLock = Any()
+    private var authInFlight = false
 
     @Volatile internal var loginProvider: FoxLoginProvider = MozillaLoginProvider
 
@@ -35,11 +37,13 @@ object Fox {
     @Volatile var servers: List<FoxLocation> = emptyList()
 
     @Volatile private var byLink = false
-    private var step = STEP_NONE
+    @Volatile private var step = STEP_NONE
+    // Once verified, the one-time code must never be submitted again for this session.
+    @Volatile private var loginSessionVerified = false
     private var pendingEmail = ""
     private var pendingPassword = ""
     private var pendingUid = ""
-    private var pendingToken = ""
+    @Volatile private var pendingToken = ""
 
     var onChange: (() -> Unit)? = null
 
@@ -62,9 +66,11 @@ object Fox {
 
     fun signedIn(c: Context): Boolean = FoxStore.email(c).isNotEmpty() && FoxStore.refreshToken(c).isNotEmpty()
 
-    fun needsCode(): Boolean = step != STEP_NONE && !byLink
+    fun needsCode(): Boolean = step != STEP_NONE && !byLink && !canRetryLogin()
 
     fun needsStep(): Boolean = step != STEP_NONE
+
+    fun canRetryLogin(): Boolean = step == STEP_LOGIN && loginSessionVerified
 
     private fun notifyUi() {
         main.post {
@@ -107,15 +113,37 @@ object Fox {
         }
     }
 
+    // UI clicks normally honor busy, but serialize auth bodies as well so two
+    // callers cannot verify a single one-time code concurrently.
+    private fun authWork(c: Context, first: Int = 0, body: () -> Unit) {
+        synchronized(authLock) {
+            if (authInFlight) return
+            authInFlight = true
+        }
+        try {
+            work(c, first) {
+                try {
+                    body()
+                } finally {
+                    synchronized(authLock) { authInFlight = false }
+                }
+            }
+        } catch (e: Throwable) {
+            synchronized(authLock) { authInFlight = false }
+            throw e
+        }
+    }
+
     fun signUp(c: Context, mail: String, password: String) {
         val clean = mail.trim()
-        work(c, R.string.fox_stage_signup) {
+        authWork(c, R.string.fox_stage_signup) {
+            loginSessionVerified = false
             val session = try {
                 FoxApi.register(clean, password)
             } catch (e: FoxError) {
                 if (e.errno == 101 || e.errno == 144) {
                     signInNow(c.applicationContext, clean, password, true)
-                    return@work
+                    return@authWork
                 }
                 throw e
             }
@@ -136,6 +164,7 @@ object Fox {
     private fun signInNow(c: Context, mail: String, password: String, created: Boolean) {
         if (created) message = ""
         val session = loginProvider.signIn(mail, password)
+        loginSessionVerified = false
         pendingEmail = mail
         pendingPassword = password
         pendingUid = session.uid
@@ -145,6 +174,10 @@ object Fox {
             step = STEP_LOGIN
             message = if (byLink) "link" else "code"
         } else {
+            // A session may already be verified, even when no code was sent.
+            step = STEP_LOGIN
+            byLink = false
+            loginSessionVerified = true
             finish(c, session.token, session.uid, mail, password)
         }
     }
@@ -152,8 +185,10 @@ object Fox {
     fun isLinkStep(): Boolean = step != STEP_NONE && byLink
 
     fun confirmLink(c: Context) {
-        if (step == STEP_NONE) return
-        work(c) {
+        if (step == STEP_NONE || canRetryLogin()) return
+        val token = pendingToken
+        authWork(c) {
+            if (step == STEP_NONE || pendingToken != token || canRetryLogin()) return@authWork
             say(c, R.string.fox_stage_link)
             try {
                 if (FoxApi.emailVerified(pendingToken)) {
@@ -162,7 +197,7 @@ object Fox {
                     pendingUid = again.uid
                     if (!again.needsCode) {
                         finish(c.applicationContext, again.token, again.uid, pendingEmail, pendingPassword)
-                        return@work
+                        return@authWork
                     }
                     byLink = again.byLink
                     message = if (byLink) "link" else "code"
@@ -184,16 +219,24 @@ object Fox {
 
     fun signIn(c: Context, mail: String, password: String) {
         val clean = mail.trim()
-        work(c, R.string.fox_stage_signin) {
+        authWork(c, R.string.fox_stage_signin) {
             signInNow(c.applicationContext, clean, password, false)
         }
     }
 
     fun submitCode(c: Context, raw: String) {
+        if (canRetryLogin()) {
+            retryLogin(c)
+            return
+        }
         val clean = cleanCode(raw)
         if (clean.isEmpty() || step == STEP_NONE) return
         val mode = step
-        work(c) {
+        val token = pendingToken
+        authWork(c) {
+            // A cancel or a replacement session may have won before this
+            // operation reserved the authentication slot.
+            if (step != mode || pendingToken != token) return@authWork
             say(c, R.string.fox_stage_code)
             if (mode == STEP_SIGNUP) {
                 FoxApi.verifyEmail(pendingToken, pendingUid, clean)
@@ -211,8 +254,20 @@ object Fox {
                 }
             } else {
                 loginProvider.verifySession(pendingToken, clean)
+                // Verification consumes this session's code. Remember success
+                // even if OAuth, pass acquisition, or local persistence fails.
+                loginSessionVerified = true
                 finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
             }
+        }
+    }
+
+    fun retryLogin(c: Context) {
+        if (!canRetryLogin()) return
+        val token = pendingToken
+        authWork(c) {
+            if (!canRetryLogin() || pendingToken != token) return@authWork
+            finish(c.applicationContext, token, pendingUid, pendingEmail, pendingPassword)
         }
     }
 
@@ -226,10 +281,12 @@ object Fox {
     }
 
     fun resend(c: Context) {
-        if (step == STEP_NONE) return
+        if (step == STEP_NONE || canRetryLogin()) return
         val mode = step
+        val token = pendingToken
         val app = c.applicationContext
-        work(c) {
+        authWork(c) {
+            if (step != mode || pendingToken != token || canRetryLogin()) return@authWork
             if (mode == STEP_SIGNUP) {
                 FoxApi.resendSignupCode(pendingToken)
                 message = "code"
@@ -245,6 +302,7 @@ object Fox {
         val pass = loginProvider.pass(tokens.access)
         FoxStore.saveAccount(c, mail, uid, tokens, pass)
         step = STEP_NONE
+        loginSessionVerified = false
         byLink = false
         pendingPassword = ""
         pendingToken = ""
@@ -354,14 +412,17 @@ object Fox {
     }
 
     fun cancelLogin() {
-        if (busy) return
-        step = STEP_NONE
-        byLink = false
-        pendingEmail = ""
-        pendingPassword = ""
-        pendingUid = ""
-        pendingToken = ""
-        message = ""
+        synchronized(authLock) {
+            if (busy || authInFlight) return
+            step = STEP_NONE
+            loginSessionVerified = false
+            byLink = false
+            pendingEmail = ""
+            pendingPassword = ""
+            pendingUid = ""
+            pendingToken = ""
+            message = ""
+        }
         notifyUi()
     }
 

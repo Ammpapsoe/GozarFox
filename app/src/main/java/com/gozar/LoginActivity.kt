@@ -219,7 +219,11 @@ class LoginActivity : BaseActivity() {
         if (Fox.busy) return
         error.visibility = View.GONE
         if (Fox.needsStep()) {
-            if (Fox.isLinkStep()) Fox.confirmLink(this) else Fox.submitCode(this, codeInput.text?.toString().orEmpty().trim())
+            when {
+                Fox.canRetryLogin() -> Fox.retryLogin(this)
+                Fox.isLinkStep() -> Fox.confirmLink(this)
+                else -> Fox.submitCode(this, codeInput.text?.toString().orEmpty().trim())
+            }
             render()
             return
         }
@@ -249,27 +253,31 @@ class LoginActivity : BaseActivity() {
         }
         val step = Fox.needsStep()
         val link = Fox.isLinkStep()
+        val retry = Fox.canRetryLogin()
         mailBox.visibility = if (step) View.GONE else View.VISIBLE
         secretBox.visibility = if (step) View.GONE else View.VISIBLE
         confirmBox.visibility = if (create && !step) View.VISIBLE else View.GONE
-        codeBox.visibility = if (step && !link) View.VISIBLE else View.GONE
+        codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
         forgot.visibility = if (step || create) View.GONE else View.VISIBLE
         switchButton.visibility = if (step) View.GONE else View.VISIBLE
         savedAccounts.visibility = if (!adding && !step && FoxStore.accounts(this).isNotEmpty()) View.VISIBLE else View.GONE
         cancelAdd.visibility = if (adding) View.VISIBLE else View.GONE
 
         title.text = when {
+            step && retry -> getString(R.string.login_retry_title)
             step -> getString(R.string.login_check_title)
             create -> getString(R.string.login_create_title)
             else -> getString(R.string.login_signin_title)
         }
         subtitle.text = when {
+            step && retry -> getString(R.string.login_retry_sub)
             step && link -> getString(R.string.login_check_link)
             step -> getString(R.string.login_check_code)
             create -> getString(R.string.login_create_sub)
             else -> getString(R.string.login_signin_sub)
         }
         val action = when {
+            step && retry -> getString(R.string.login_retry_action)
             step && link -> getString(R.string.login_confirm_action)
             step -> getString(R.string.login_continue)
             create -> getString(R.string.login_create_action)
