@@ -242,6 +242,26 @@ class FoxVerifiedLoginTest {
     }
 
     @Test
+    fun signOutDuringRetryCannotRestoreAConsumedSession() {
+        start()
+        Fox.submitCode(context, "123456")
+        await { !Fox.busy && Fox.canRetryLogin() && Fox.message == "Synthetic OAuth failure" }
+        provider = FakeProvider().apply {
+            failFirstToken = false
+            blockTokens = true
+        }
+        Fox.loginProvider = provider
+        Fox.retryLogin(context)
+        assertTrue(provider.tokenEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.tokenRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.passRequests.get())
+    }
+
+    @Test
     fun signOutDuringPassAcquisitionDoesNotPublishLateCredentials() {
         provider.needsCode = false
         provider.failFirstToken = false
@@ -253,6 +273,23 @@ class FoxVerifiedLoginTest {
         await { !Fox.busy }
         assertFalse(Fox.needsStep())
         assertFalse(Fox.signedIn(context))
+    }
+
+    @Test
+    fun newLoginCanSucceedAfterTheRevokedWorkerFinishes() {
+        provider.needsCode = false
+        provider.failFirstToken = false
+        provider.blockTokens = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        assertTrue(provider.tokenEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.tokenRelease.countDown()
+        await { !Fox.busy }
+        provider = FakeProvider().apply { needsCode = false; failFirstToken = false }
+        Fox.loginProvider = provider
+        Fox.signIn(context, "new-fake@example.invalid", "fake-password")
+        await { !Fox.busy && Fox.signedIn(context) }
+        assertEquals("new-fake@example.invalid", FoxStore.email(context))
     }
 
     @Test

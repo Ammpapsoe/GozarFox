@@ -151,7 +151,8 @@ object Fox {
         }
     }
 
-    private data class PendingLogin(val token: String, val uid: String, val mail: String, val password: String)
+    // Avoid data-class toString(): this snapshot contains a password and token.
+    private class PendingLogin(val token: String, val uid: String, val mail: String, val password: String)
 
     fun signUp(c: Context, mail: String, password: String) {
         val clean = mail.trim()
@@ -509,13 +510,16 @@ object Fox {
     }
 
     fun signOut(c: Context) {
-        FoxVpnService.stop(c)
-        synchronized(authLock) {
-            // In-flight responses may still arrive, but cannot publish account
-            // data or a pending verification step after this epoch changes.
-            authEpoch++
-            FoxStore.clear(c)
-            clearPendingLocked()
+        try {
+            synchronized(authLock) {
+                // Revoke publication before stopping transport, so a late
+                // login cannot replace the active account during sign-out.
+                authEpoch++
+                clearPendingLocked()
+                FoxStore.clear(c)
+            }
+        } finally {
+            FoxVpnService.stop(c)
         }
         load(c)
         probes.clear()
