@@ -41,12 +41,14 @@ within the supplied per-attempt timeout.
 Synthetic loopback HTTP/2 tests cover target and credential headers, TLS
 verification, explicit response acceptance, rejection without extended CONNECT
 settings, capsule round trips including empty and maximum-sized payloads, and
-pooled-session reuse. The test-only x/net server runs in a subprocess with
-`GODEBUG=http2xconnect=1` because that server implementation disables extended
-CONNECT by default; the setting is not changed in the application. Separate
-50-iteration race tests exercise close while opening and concurrent capsule
-writes / blocked-I/O cancellation. CI results must be checked on the actual
-commit before treating any tests as passed.
+pooled-session reuse. A separate synthetic proxy test forwards bounded capsules
+to a real loopback-only UDP echo socket; it does not exercise the app packet
+engine or an external relay. The test-only x/net server runs in a subprocess
+with `GODEBUG=http2xconnect=1` because that server implementation disables
+extended CONNECT by default; the setting is not changed in the application.
+Separate 50-iteration race tests exercise close while opening and concurrent
+capsule writes / blocked-I/O cancellation. CI results must be checked on the
+actual commit before treating any tests as passed.
 
 ## Remaining work before any routing is enabled
 
