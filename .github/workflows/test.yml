@@ -20,8 +20,6 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    env:
-      GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -34,6 +32,8 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Build debug upgrade fixtures
+        env:
+          GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
         run: bash scripts/build_recovery_test_apks.sh
       - name: Enable KVM
         run: |
@@ -43,6 +43,8 @@ jobs:
           test -r /dev/kvm -a -w /dev/kvm
       - name: Test Android forward recovery on an emulator
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
         with:
           api-level: 29
           arch: x86_64
