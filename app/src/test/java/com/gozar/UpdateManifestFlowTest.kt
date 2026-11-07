@@ -88,6 +88,24 @@ class UpdateManifestFlowTest {
     }
 
     @Test
+    fun theDeviceAbiSelectsItsArtifactWithUniversalFallback() {
+        val multi = """{"version":"1.12.0","channel_min":"1.8.0","rollback":false,"issued_at":1793000000,"notes":"n","artifacts":[""" +
+            """{"name":"Gozar_1.12.0_arm64-v8a.apk","sha256":"${"a".repeat(64)}","size":1000,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/Gozar_1.12.0_arm64-v8a.apk"},""" +
+            """{"name":"Gozar_1.12.0_universal.apk","sha256":"${"b".repeat(64)}","size":2000,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/Gozar_1.12.0_universal.apk"}]}"""
+        val release = release("update.json", "update.json.sig")
+        val arm = UpdateChecker.verdictFrom(release, "1.11.0", keyHex, listOf("arm64-v8a", "armeabi-v7a")) { name ->
+            if (name == "update.json") multi else if (name == "update.json.sig") signed(multi) else null
+        } as UpdateChecker.Result.Available
+        assertEquals(1000L, arm.size)
+        assertTrue(arm.url.endsWith("arm64-v8a.apk"))
+        val other = UpdateChecker.verdictFrom(release, "1.11.0", keyHex, listOf("riscv64")) { name ->
+            if (name == "update.json") multi else if (name == "update.json.sig") signed(multi) else null
+        } as UpdateChecker.Result.Available
+        assertEquals(2000L, other.size)
+        assertTrue(other.url.endsWith("universal.apk"))
+    }
+
+    @Test
     fun theStoreRoundTripsTheArtifactProof() {
         val context = RuntimeEnvironment.getApplication()
         Store.setUpdate(context, "1.12.0", "https://github.com/x", "ab".repeat(32), 4096)

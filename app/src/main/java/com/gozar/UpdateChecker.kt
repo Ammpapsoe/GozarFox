@@ -44,6 +44,7 @@ object UpdateChecker {
         releaseJson: JSONObject,
         installed: String,
         keyHex: String = FoxUpdate.KEY_HEX,
+        abis: List<String> = android.os.Build.SUPPORTED_ABIS.toList(),
         fetchAsset: (String) -> String?
     ): Result {
         val assets = releaseJson.optJSONArray("assets") ?: return Result.Failed
@@ -76,7 +77,12 @@ object UpdateChecker {
                 Result.Failed
             }
         }
-        val apk = accepted.manifest.artifactFor(".apk") ?: return Result.Failed
+        // Prefer this device's ABI, then any ABI the device supports, then universal.
+        val apk = abis.firstNotNullOfOrNull { abi ->
+                accepted.manifest.artifacts.firstOrNull { it.name.contains(abi) && it.name.endsWith(".apk") }
+            } ?: accepted.manifest.artifactFor("universal.apk")
+            ?: accepted.manifest.artifactFor(".apk")
+            ?: return Result.Failed
         return Result.Available(accepted.manifest.version, apk.url, apk.sha256, apk.size)
     }
 
