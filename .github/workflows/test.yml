@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Test release signing and notes
-        run: python3 -m unittest discover -s scripts/tests -p 'test_release_tools.py' -v
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
   core:
     runs-on: ubuntu-latest

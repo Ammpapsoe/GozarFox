@@ -89,6 +89,28 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertNotEqual(0, command("openssl", "pkeyutl", "-verify", "-rawin", "-pubin", "-inkey", str(self.public),
                                        "-in", str(self.apkdir / "update.json"), "-sigfile", str(sigfile)).returncode)
 
+    def test_forward_recovery_metadata_is_signed_and_invalid_code_is_rejected(self):
+        recovery = {"affected_version": "1.11.0", "affected_code": 37, "affected_commit": "a" * 40,
+                    "restores_version": "1.10.0", "restores_code": 36, "restores_commit": "b" * 40,
+                    "recovery_code": 38}
+        plan = self.apkdir / "recovery.json"
+        plan.write_text(json.dumps(recovery), encoding="utf-8")
+        self.env["GOZAR_RECOVERY_PLAN"] = str(plan)
+        result = self.sign()
+        self.assertEqual(0, result.returncode, result.stderr)
+        raw = (self.apkdir / "update.json").read_bytes()
+        self.assertEqual(recovery, json.loads(raw)["recovery"])
+        signature = base64.b64decode((self.apkdir / "update.json.sig").read_bytes(), validate=True)
+        sigfile = self.apkdir / "recovery.sig.raw"
+        sigfile.write_bytes(signature)
+        verified = command("openssl", "pkeyutl", "-verify", "-rawin", "-pubin", "-inkey", str(self.public),
+                           "-in", str(self.apkdir / "update.json"), "-sigfile", str(sigfile))
+        self.assertEqual(0, verified.returncode, verified.stderr)
+        recovery["recovery_code"] = 37
+        plan.write_text(json.dumps(recovery), encoding="utf-8")
+        self.assertNotEqual(0, self.sign().returncode)
+        self.assertEqual(raw, (self.apkdir / "update.json").read_bytes())
+
     def test_desktop_suffixed_tag_points_to_the_actual_release(self):
         self.env["GOZAR_RELEASE_TAG"] = "v1.11.1-desktop"
         result = self.sign()

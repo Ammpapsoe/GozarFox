@@ -55,6 +55,33 @@ if not artifacts:
     raise SystemExit(f"no APK files found in {apk_dir}")
 manifest = {"version": version, "channel_min": channel_min, "rollback": False,
     "issued_at": int(time.time()), "notes": notes, "artifacts": artifacts}
+plan_path = os.environ.get("GOZAR_RECOVERY_PLAN")
+if plan_path:
+    def unique(pairs):
+        out = {}
+        for key, value in pairs:
+            if key in out:
+                raise ValueError("duplicate recovery field")
+            out[key] = value
+        return out
+    with open(plan_path, encoding="utf-8") as handle:
+        recovery = json.load(handle, object_pairs_hook=unique)
+    fields = {"affected_version", "affected_code", "affected_commit", "restores_version",
+              "restores_code", "restores_commit", "recovery_code"}
+    if not isinstance(recovery, dict) or set(recovery) != fields:
+        raise SystemExit("invalid recovery metadata fields")
+    stable = re.compile(r"[0-9]{1,4}(?:\.[0-9]{1,4}){2}\Z")
+    versions = [recovery["restores_version"], recovery["affected_version"], version]
+    if not all(isinstance(v, str) and stable.fullmatch(v) for v in versions):
+        raise SystemExit("invalid recovery version")
+    ordered = [tuple(map(int, v.split("."))) for v in versions]
+    codes = [recovery["restores_code"], recovery["affected_code"], recovery["recovery_code"]]
+    commits = [recovery["restores_commit"], recovery["affected_commit"]]
+    if not (ordered[0] < ordered[1] < ordered[2]) or not all(type(c) is int and 0 < c <= 2_100_000_000 for c in codes) or not (codes[0] < codes[1] < codes[2]):
+        raise SystemExit("recovery versions or codes are not increasing")
+    if not all(isinstance(c, str) and re.fullmatch(r"[0-9a-f]{40}", c) for c in commits) or commits[0] == commits[1]:
+        raise SystemExit("invalid recovery commits")
+    manifest["recovery"] = recovery
 raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 if len(raw) > 65_536:
     raise SystemExit("manifest exceeds client limit")

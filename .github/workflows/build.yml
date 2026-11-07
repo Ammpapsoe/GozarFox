@@ -503,6 +503,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: collected
@@ -585,7 +587,14 @@ jobs:
           key="$RUNNER_TEMP/gozar-update-key.pem"
           trap 'rm -f "$key"' EXIT
           printf '%s\n' "$GOZAR_UPDATE_KEY" > "$key"
-          GOZAR_RELEASE_KEY="$key" bash tools/sign-update-manifest.sh "$ANDROID_VERSION" "1.8.0" collected "Gozar Android $ANDROID_VERSION"
+          plan="docs/recovery-plans/$ANDROID_VERSION.json"
+          if [ -f "$plan" ]; then
+            git ls-files --error-unmatch "$plan" >/dev/null
+            python3 tools/validate-forward-recovery.py --plan "$plan" > "$RUNNER_TEMP/recovery-metadata.json"
+            GOZAR_RECOVERY_PLAN="$RUNNER_TEMP/recovery-metadata.json" GOZAR_RELEASE_KEY="$key" bash tools/sign-update-manifest.sh "$ANDROID_VERSION" "1.8.0" collected "Gozar Android $ANDROID_VERSION"
+          else
+            GOZAR_RELEASE_KEY="$key" bash tools/sign-update-manifest.sh "$ANDROID_VERSION" "1.8.0" collected "Gozar Android $ANDROID_VERSION"
+          fi
           GOZAR_RELEASE_KEY="$key" bash tools/sign-desktop-manifest.sh "$DESKTOP_VERSION" collected "Gozar desktop $DESKTOP_VERSION"
           for f in update.json update.json.sig desktop-update.json desktop-update.json.sig; do test -s "collected/$f"; done
       - name: Notes

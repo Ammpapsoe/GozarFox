@@ -64,6 +64,18 @@ prepare a *forward recovery* release:
    policy, disabled install permission, incompatible data, or refusal can
    prevent recovery. This is not an automatic or fully proven rollback.
 
+To label a forward recovery in its signed manifest, commit
+`docs/recovery-plans/X.Y.Z.json` containing exactly `known_good_commit` and
+`affected_commit`, both full lowercase commit hashes. The publication workflow
+runs `tools/validate-forward-recovery.py` over full Git history. It checks
+ancestry, application ID, increasing version names and increasing version
+codes, then signs the resulting provenance into `update.json`. The client only
+labels the update as targeted recovery when the installed affected version and
+versionCode match. **Git ancestry and version ordering do not prove that the
+known-good behavior was restored, that data migrated safely, or that every
+published versionCode is below the recovery code.** Those require separate
+review and testing before the draft release can be approved.
+
 A full rollback feature, including data compatibility, delivery when the app
 cannot start, user consent and desktop support, remains a separate incomplete
 requirement. Do not claim completion from journal state or an installer intent.
