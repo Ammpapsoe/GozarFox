@@ -65,6 +65,20 @@ class UpdateManifestFlowTest {
     }
 
     @Test
+    fun forwardRecoveryMustAdvanceVersionCodeAndMatchTheAffectedBuild() {
+        val metadata = """"recovery":{"affected_version":"1.11.0","affected_code":37,"affected_commit":"${"a".repeat(40)}","restores_version":"1.10.0","restores_code":36,"restores_commit":"${"b".repeat(40)}","recovery_code":38}"""
+        val body = manifestBody.replace("\"notes\":\"n\",", "\"notes\":\"n\",$metadata,")
+        val release = release("update.json", "update.json.sig")
+        fun check(code: Long): UpdateChecker.Result = UpdateChecker.verdictFrom(
+            release, "1.11.0", keyHex, listOf("x86_64"), installedCode = code
+        ) { name -> if (name == "update.json") body else signed(body) }
+        val targeted = check(37) as UpdateChecker.Result.Available
+        assertEquals("1.10.0", targeted.recovery?.restoresVersion)
+        assertTrue(check(38) is UpdateChecker.Result.Failed)
+        assertEquals(null, (check(36) as UpdateChecker.Result.Available).recovery)
+    }
+
+    @Test
     fun tamperedManifestsAreFailedNotDowngraded() {
         val tampered = manifestBody.replace("1.12.0", "9.9.9")
         assertTrue(

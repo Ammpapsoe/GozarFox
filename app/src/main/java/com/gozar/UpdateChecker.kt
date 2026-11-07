@@ -26,7 +26,13 @@ object UpdateChecker {
     private val flight = FoxUpdateFlight<Result>()
 
     sealed class Result {
-        data class Available(val version: String, val url: String, val sha256: String = "", val size: Long = 0L) : Result()
+        data class Available(
+            val version: String,
+            val url: String,
+            val sha256: String = "",
+            val size: Long = 0L,
+            val recovery: FoxUpdate.Recovery? = null
+        ) : Result()
         data object Current : Result()
         data object Failed : Result()
     }
@@ -42,6 +48,7 @@ object UpdateChecker {
         installed: String,
         keyHex: String = FoxUpdate.KEY_HEX,
         abis: List<String> = android.os.Build.SUPPORTED_ABIS.toList(),
+        installedCode: Long? = null,
         fetchAsset: (String) -> String?
     ): Result {
         val assets = releaseJson.optJSONArray("assets") ?: return Result.Failed
@@ -67,12 +74,17 @@ object UpdateChecker {
         // A normal Android installer will reject a lower versionCode even if
         // an old manifest is signed. Recovery must be a newer, signed build.
         if (accepted.rollback || !FoxUpdate.isNewer(accepted.version, installed)) return Result.Failed
+        val recovery = accepted.recovery
+        if (recovery != null && installedCode != null && recovery.recoveryCode <= installedCode) return Result.Failed
+        val targetedRecovery = recovery?.takeIf {
+            it.affectedVersion == installed && (installedCode == null || it.affectedCode == installedCode)
+        }
         // An APK for an unknown ABI is not a safe fallback.
         val apk = abis.firstNotNullOfOrNull { abi ->
                 accepted.artifacts.firstOrNull { it.name.endsWith("_$abi.apk") }
             } ?: accepted.artifactFor("_universal.apk")
             ?: return Result.Failed
-        return Result.Available(accepted.version, apk.url, apk.sha256, apk.size)
+        return Result.Available(accepted.version, apk.url, apk.sha256, apk.size, targetedRecovery)
     }
 
     /** Runs at app startup and then at most once per day while Android permits background work. */
@@ -132,13 +144,17 @@ object UpdateChecker {
             if (connection.responseCode !in 200..299) return Result.Failed
             val jsonText = connection.inputStream.use { readLimited(it, RELEASE_JSON_LIMIT) } ?: return Result.Failed
             val json = JSONObject(jsonText)
-            val installed = try {
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+            val packageInfo = try {
+                context.packageManager.getPackageInfo(context.packageName, 0)
             } catch (_: Exception) {
-                ""
+                return Result.Failed
             }
+            val installed = packageInfo.versionName.orEmpty()
             if (installed.isBlank()) return Result.Failed
-            verdictFrom(json, installed) { name -> assetText(json, name) }
+            @Suppress("DEPRECATION")
+            val installedCode = if (android.os.Build.VERSION.SDK_INT >= 28) packageInfo.longVersionCode else packageInfo.versionCode.toLong()
+            if (installedCode <= 0) return Result.Failed
+            verdictFrom(json, installed, installedCode = installedCode) { name -> assetText(json, name) }
         } catch (_: Exception) {
             Result.Failed
         } finally {

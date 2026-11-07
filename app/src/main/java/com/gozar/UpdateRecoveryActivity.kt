@@ -30,7 +30,10 @@ class UpdateRecoveryActivity : BaseActivity() {
             dialog = when (result) {
                 is UpdateChecker.Result.Available -> MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.update_title)
-                    .setMessage(getString(R.string.recovery_available, result.version))
+                    .setMessage(
+                        result.recovery?.let { getString(R.string.recovery_identified, result.version, it.restoresVersion) }
+                            ?: getString(R.string.recovery_available, result.version)
+                    )
                     .setNegativeButton(R.string.close) { _, _ -> finish() }
                     .setPositiveButton(R.string.update_action_download) { _, _ ->
                         UpdateInstaller.start(this)

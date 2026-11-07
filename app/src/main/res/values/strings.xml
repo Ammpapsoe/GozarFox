@@ -224,6 +224,7 @@
     <string name="rollback_notification_text">Previous version: %s. Check for a newer signed update.</string>
     <string name="rollback_action">Check for recovery</string>
     <string name="recovery_available">Signed version %s is available and may resolve the issue. Android will ask you to confirm installation.</string>
+    <string name="recovery_identified">The publisher identifies signed version %1$s as a forward recovery based on %2$s. Android requires installation confirmation; data compatibility is not guaranteed.</string>
     <string name="recovery_no_update">There is no newer signed update yet. Android normally cannot install an older version over this one.</string>
     <string name="recovery_check_failed">Could not verify an update. Check the connection and try again.</string>
     <string name="recovery_retry">Try again</string>

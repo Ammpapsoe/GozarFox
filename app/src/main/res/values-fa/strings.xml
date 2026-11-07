@@ -224,6 +224,7 @@
     <string name="rollback_notification_text">نسخهٔ پیشین: %s. به‌روزرسانی امضاشدهٔ جدیدتر را بررسی کنید.</string>
     <string name="rollback_action">بررسی بازیابی</string>
     <string name="recovery_available">نسخهٔ امضاشدهٔ %s آماده است و ممکن است مشکل را رفع کند. اندروید برای نصب تأیید شما را می‌خواهد.</string>
+    <string name="recovery_identified">منتشرکننده نسخهٔ امضاشدهٔ %1$s را بازیابیِ رو به جلو بر پایهٔ %2$s معرفی کرده است. نصب به تأیید اندروید نیاز دارد و سازگاری داده‌ها تضمین‌شده نیست.</string>
     <string name="recovery_no_update">هنوز به‌روزرسانی امضاشدهٔ جدیدتری موجود نیست. اندروید معمولاً نصب نسخهٔ قدیمی روی نسخهٔ فعلی را نمی‌پذیرد.</string>
     <string name="recovery_check_failed">تأیید به‌روزرسانی ممکن نشد. اتصال را بررسی و دوباره تلاش کنید.</string>
     <string name="recovery_retry">تلاش دوباره</string>

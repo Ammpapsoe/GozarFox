@@ -16,6 +16,7 @@ import org.json.JSONObject
  *   "rollback":    false,                       // true only for a rollback build
  *   "issued_at":   1793000000,                  // epoch seconds, sanity-checked
  *   "notes":       "...",                       // user-visible changelog text
+ *   "recovery":    { ... },                       // optional signed forward-recovery provenance
  *   "artifacts": [ { "name": "...", "sha256": "<64 hex>", "size": 123, "url": "https://github.com/..." } ]
  * }
  */
@@ -33,13 +34,25 @@ object FoxUpdate {
 
     class Artifact(val name: String, val sha256: String, val size: Long, val url: String)
 
+    /** Publisher-signed provenance for a forward recovery build, not proof of data compatibility. */
+    data class Recovery(
+        val affectedVersion: String,
+        val affectedCode: Long,
+        val affectedCommit: String,
+        val restoresVersion: String,
+        val restoresCode: Long,
+        val restoresCommit: String,
+        val recoveryCode: Long
+    )
+
     class Manifest(
         val version: String,
         val channelMin: String,
         val rollback: Boolean,
         val issuedAt: Long,
         val notes: String,
-        val artifacts: List<Artifact>
+        val artifacts: List<Artifact>,
+        val recovery: Recovery? = null
     ) {
         fun artifactFor(suffix: String): Artifact? = artifacts.firstOrNull { it.name.endsWith(suffix) }
     }
@@ -97,7 +110,12 @@ object FoxUpdate {
             return Verdict.Reject(error.message ?: "artifacts are malformed")
         }
         if (artifacts.isEmpty()) return Verdict.Reject("manifest lists no artifacts")
-        val manifest = Manifest(version, channelMin, rollback, issuedAt, json.optString("notes"), artifacts)
+        val recovery = try {
+            if (!json.has("recovery")) null else parseRecovery(json.getJSONObject("recovery"), version, rollback)
+        } catch (error: Exception) {
+            return Verdict.Reject(error.message ?: "recovery metadata is malformed")
+        }
+        val manifest = Manifest(version, channelMin, rollback, issuedAt, json.optString("notes"), artifacts, recovery)
 
         if (rollback) {
             if (installed.isEmpty()) return Verdict.Reject("a rollback needs a known installed version")
@@ -108,6 +126,38 @@ object FoxUpdate {
             if (!isNewer(version, installed)) return Verdict.Reject("the manifest is older than the installed build")
         }
         return Verdict.Accept(manifest)
+    }
+
+    private fun parseRecovery(json: JSONObject, version: String, rollback: Boolean): Recovery {
+        val fields = setOf("affected_version", "affected_code", "affected_commit", "restores_version", "restores_code", "restores_commit", "recovery_code")
+        if (json.length() != fields.size || fields.any { !json.has(it) } || rollback) {
+            throw IllegalArgumentException("recovery metadata is malformed")
+        }
+        fun string(name: String): String = json.opt(name) as? String
+            ?: throw IllegalArgumentException("recovery field is malformed")
+        fun code(name: String): Long {
+            val value = when (val raw = json.opt(name)) {
+                is Int -> raw.toLong()
+                is Long -> raw
+                else -> throw IllegalArgumentException("recovery versionCode is malformed")
+            }
+            if (value <= 0 || value > 2_100_000_000L) throw IllegalArgumentException("recovery versionCode is malformed")
+            return value
+        }
+        val affected = string("affected_version")
+        val restored = string("restores_version")
+        val affectedCommit = string("affected_commit")
+        val restoredCommit = string("restores_commit")
+        val affectedCode = code("affected_code")
+        val restoredCode = code("restores_code")
+        val recoveryCode = code("recovery_code")
+        val commitPattern = Regex("[0-9a-f]{40}")
+        if (!validVersion(affected) || !validVersion(restored) ||
+            !isNewer(version, affected) || !isNewer(affected, restored) ||
+            affectedCode <= restoredCode || recoveryCode <= affectedCode ||
+            !commitPattern.matches(affectedCommit) || !commitPattern.matches(restoredCommit) || affectedCommit == restoredCommit
+        ) throw IllegalArgumentException("recovery provenance is inconsistent")
+        return Recovery(affected, affectedCode, affectedCommit, restored, restoredCode, restoredCommit, recoveryCode)
     }
 
     private fun parseArtifacts(array: JSONArray, version: String): List<Artifact> {

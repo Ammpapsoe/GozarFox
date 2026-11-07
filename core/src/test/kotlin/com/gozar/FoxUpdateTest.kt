@@ -148,6 +148,26 @@ class FoxUpdateTest {
     }
 
     @Test
+    fun signedForwardRecoveryCarriesConsistentVersionCodesAndProvenance() {
+        val recovery = """"recovery":{"affected_version":"1.11.0","affected_code":37,"affected_commit":"${"a".repeat(40)}","restores_version":"1.10.0","restores_code":36,"restores_commit":"${"b".repeat(40)}","recovery_code":38}"""
+        val body = manifest().replace("\"notes\":\"n\",", "\"notes\":\"n\",$recovery,")
+        val accepted = expect(body, sign(body)) as FoxUpdate.Verdict.Accept
+        assertEquals("1.11.0", accepted.manifest.recovery?.affectedVersion)
+        assertEquals("1.10.0", accepted.manifest.recovery?.restoresVersion)
+        assertEquals(38L, accepted.manifest.recovery?.recoveryCode)
+        assertTrue(expect(body.replace("\"recovery_code\":38", "\"recovery_code\":39"), sign(body)) is FoxUpdate.Verdict.Reject)
+        for (invalid in listOf(
+            body.replace("\"recovery_code\":38", "\"recovery_code\":37"),
+            body.replace("\"affected_code\":37", "\"affected_code\":\"37\""),
+            body.replace("\"restores_version\":\"1.10.0\"", "\"restores_version\":\"1.12.0\""),
+            body.replace("\"restores_commit\":\"${"b".repeat(40)}\"", "\"restores_commit\":\"bad\""),
+            body.replace("\"rollback\":false", "\"rollback\":true")
+        )) {
+            assertTrue(expect(invalid, sign(invalid)) is FoxUpdate.Verdict.Reject)
+        }
+    }
+
+    @Test
     fun tamperingWithTheManifestAfterSigningIsRejected() {
         val body = manifest()
         val signature = sign(body)
