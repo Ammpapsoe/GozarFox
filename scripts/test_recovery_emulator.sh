@@ -144,6 +144,9 @@ PY
 
 run_fixture() {
   local mode="$1" expected="$2"
+  # ActivityManager may reuse an existing task while ignoring changed extras.
+  # Start each fixture from a stopped process so the new input is consumed.
+  adb shell am force-stop "$PKG"
   adb shell run-as "$PKG" rm -f files/recovery-fixture-result
   if [ "$mode" = probe ]; then
     adb shell am start -W -n "$PKG/.RecoveryFixtureActivity" --es mode probe >/dev/null

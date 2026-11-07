@@ -80,6 +80,8 @@ class RecoveryFixtureActivity : Activity() {
                 record(if (handedOff) "installer-started" else "download-rejected")
             } catch (error: Exception) {
                 record("exception:${error.javaClass.simpleName}:${error.message.orEmpty()}")
+            } finally {
+                runOnUiThread { finish() }
             }
         }
     }
