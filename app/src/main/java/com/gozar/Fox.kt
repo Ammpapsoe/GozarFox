@@ -24,6 +24,14 @@ object Fox {
     private val operations = AtomicInteger()
     private val authLock = Any()
     private var authInFlight = false
+    private var authEpoch = 0L
+
+    private class LoginCancelled : Exception()
+
+    private inline fun <T> currentAuth(epoch: Long, block: () -> T): T = synchronized(authLock) {
+        if (epoch != authEpoch) throw LoginCancelled()
+        block()
+    }
 
     @Volatile internal var loginProvider: FoxLoginProvider = MozillaLoginProvider
 
@@ -57,7 +65,7 @@ object Fox {
         listeners.remove(listener)
     }
 
-    fun load(c: Context) {
+    fun load(c: Context) = synchronized(authLock) {
         email = FoxStore.email(c)
         limit = FoxStore.limit(c)
         remaining = FoxStore.remaining(c)
@@ -89,7 +97,7 @@ object Fox {
         notifyUi()
     }
 
-    private fun work(c: Context, first: Int = 0, body: () -> Unit) {
+    private fun work(c: Context, first: Int = 0, failureEpoch: Long? = null, body: () -> Unit) {
         operations.incrementAndGet()
         busy = true
         message = ""
@@ -107,7 +115,11 @@ object Fox {
             }
             busy = operations.decrementAndGet() > 0
             if (!busy) stage = ""
-            if (failure != null) message = failure
+            failure?.let { text ->
+                synchronized(authLock) {
+                    if (failureEpoch == null || failureEpoch == authEpoch) message = text
+                }
+            }
             load(app)
             notifyUi()
         }
@@ -115,15 +127,20 @@ object Fox {
 
     // UI clicks normally honor busy, but serialize auth bodies as well so two
     // callers cannot verify a single one-time code concurrently.
-    private fun authWork(c: Context, first: Int = 0, body: () -> Unit) {
-        synchronized(authLock) {
+    private fun authWork(c: Context, first: Int = 0, body: (Long) -> Unit) {
+        val epoch = synchronized(authLock) {
             if (authInFlight) return
             authInFlight = true
+            authEpoch
         }
         try {
-            work(c, first) {
+            work(c, first, failureEpoch = epoch) {
                 try {
-                    body()
+                    currentAuth(epoch) { }
+                    body(epoch)
+                } catch (_: LoginCancelled) {
+                    // Logout or cancellation revoked this job's authority to
+                    // publish state. Already-started network requests may finish.
                 } finally {
                     synchronized(authLock) { authInFlight = false }
                 }
@@ -134,52 +151,57 @@ object Fox {
         }
     }
 
+    private data class PendingLogin(val token: String, val uid: String, val mail: String, val password: String)
+
     fun signUp(c: Context, mail: String, password: String) {
         val clean = mail.trim()
-        authWork(c, R.string.fox_stage_signup) {
-            loginSessionVerified = false
+        authWork(c, R.string.fox_stage_signup) { epoch ->
+            currentAuth(epoch) { loginSessionVerified = false }
             val session = try {
-                FoxApi.register(clean, password)
+                loginProvider.register(clean, password)
             } catch (e: FoxError) {
+                currentAuth(epoch) { }
                 if (e.errno == 101 || e.errno == 144) {
-                    signInNow(c.applicationContext, clean, password, true)
+                    signInNow(c.applicationContext, clean, password, true, epoch)
                     return@authWork
                 }
                 throw e
             }
-            pendingEmail = clean
-            pendingPassword = password
-            pendingUid = session.uid
-            pendingToken = session.token
-            byLink = false
-            if (session.needsCode) {
-                step = STEP_SIGNUP
-                message = "code"
-            } else {
-                finish(c.applicationContext, session.token, session.uid, clean, password)
+            currentAuth(epoch) {
+                pendingEmail = clean
+                pendingPassword = password
+                pendingUid = session.uid
+                pendingToken = session.token
+                byLink = false
+                if (session.needsCode) {
+                    step = STEP_SIGNUP
+                    message = "code"
+                }
             }
+            if (!session.needsCode) finish(c.applicationContext, session.token, session.uid, clean, epoch)
         }
     }
 
-    private fun signInNow(c: Context, mail: String, password: String, created: Boolean) {
-        if (created) message = ""
+    private fun signInNow(c: Context, mail: String, password: String, created: Boolean, epoch: Long) {
+        if (created) currentAuth(epoch) { message = "" }
         val session = loginProvider.signIn(mail, password)
-        loginSessionVerified = false
-        pendingEmail = mail
-        pendingPassword = password
-        pendingUid = session.uid
-        pendingToken = session.token
-        byLink = session.byLink
-        if (session.needsCode) {
-            step = STEP_LOGIN
-            message = if (byLink) "link" else "code"
-        } else {
-            // A session may already be verified, even when no code was sent.
-            step = STEP_LOGIN
-            byLink = false
-            loginSessionVerified = true
-            finish(c, session.token, session.uid, mail, password)
+        currentAuth(epoch) {
+            loginSessionVerified = false
+            pendingEmail = mail
+            pendingPassword = password
+            pendingUid = session.uid
+            pendingToken = session.token
+            byLink = session.byLink
+            if (session.needsCode) {
+                step = STEP_LOGIN
+                message = if (byLink) "link" else "code"
+            } else {
+                step = STEP_LOGIN
+                byLink = false
+                loginSessionVerified = true
+            }
         }
+        if (!session.needsCode) finish(c, session.token, session.uid, mail, epoch)
     }
 
     fun isLinkStep(): Boolean = step != STEP_NONE && byLink
@@ -187,40 +209,54 @@ object Fox {
     fun confirmLink(c: Context) {
         if (step == STEP_NONE || canRetryLogin()) return
         val token = pendingToken
-        authWork(c) {
-            if (step == STEP_NONE || pendingToken != token || canRetryLogin()) return@authWork
+        authWork(c) { epoch ->
+            val pending = currentAuth(epoch) {
+                if (step == STEP_NONE || pendingToken != token || canRetryLogin()) return@authWork
+                PendingLogin(pendingToken, pendingUid, pendingEmail, pendingPassword)
+            }
             say(c, R.string.fox_stage_link)
             try {
-                if (FoxApi.emailVerified(pendingToken)) {
-                    val again = loginProvider.signIn(pendingEmail, pendingPassword)
-                    pendingToken = again.token
-                    pendingUid = again.uid
+                if (loginProvider.emailVerified(pending.token)) {
+                    currentAuth(epoch) { }
+                    val again = loginProvider.signIn(pending.mail, pending.password)
+                    currentAuth(epoch) {
+                        pendingToken = again.token
+                        pendingUid = again.uid
+                    }
                     if (!again.needsCode) {
-                        finish(c.applicationContext, again.token, again.uid, pendingEmail, pendingPassword)
+                        finish(c.applicationContext, again.token, again.uid, pending.mail, epoch)
                         return@authWork
                     }
-                    byLink = again.byLink
-                    message = if (byLink) "link" else "code"
-                    throw FoxError(if (byLink) "The email link is not confirmed yet" else "Mozilla emailed a code to finish signing in")
+                    currentAuth(epoch) {
+                        byLink = again.byLink
+                        message = if (byLink) "link" else "code"
+                    }
+                    throw FoxError(if (again.byLink) "The email link is not confirmed yet" else "Mozilla emailed a code to finish signing in")
                 }
-                finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
+                finish(c.applicationContext, pending.token, pending.uid, pending.mail, epoch)
             } catch (e: FoxError) {
-                val again = loginProvider.signIn(pendingEmail, pendingPassword)
-                pendingToken = again.token
-                if (again.needsCode) {
-                    byLink = again.byLink
-                    message = if (byLink) "link" else "code"
-                    throw FoxError(if (byLink) "The email link is not confirmed yet" else "Mozilla now wants the emailed code")
+                currentAuth(epoch) { }
+                val again = loginProvider.signIn(pending.mail, pending.password)
+                currentAuth(epoch) {
+                    pendingToken = again.token
+                    pendingUid = again.uid
                 }
-                finish(c.applicationContext, again.token, again.uid, pendingEmail, pendingPassword)
+                if (again.needsCode) {
+                    currentAuth(epoch) {
+                        byLink = again.byLink
+                        message = if (byLink) "link" else "code"
+                    }
+                    throw FoxError(if (again.byLink) "The email link is not confirmed yet" else "Mozilla now wants the emailed code")
+                }
+                finish(c.applicationContext, again.token, again.uid, pending.mail, epoch)
             }
         }
     }
 
     fun signIn(c: Context, mail: String, password: String) {
         val clean = mail.trim()
-        authWork(c, R.string.fox_stage_signin) {
-            signInNow(c.applicationContext, clean, password, false)
+        authWork(c, R.string.fox_stage_signin) { epoch ->
+            signInNow(c.applicationContext, clean, password, false, epoch)
         }
     }
 
@@ -233,31 +269,39 @@ object Fox {
         if (clean.isEmpty() || step == STEP_NONE) return
         val mode = step
         val token = pendingToken
-        authWork(c) {
-            // A cancel or a replacement session may have won before this
-            // operation reserved the authentication slot.
-            if (step != mode || pendingToken != token) return@authWork
+        authWork(c) { epoch ->
+            val pending = currentAuth(epoch) {
+                if (step != mode || pendingToken != token) return@authWork
+                PendingLogin(pendingToken, pendingUid, pendingEmail, pendingPassword)
+            }
             say(c, R.string.fox_stage_code)
             if (mode == STEP_SIGNUP) {
-                FoxApi.verifyEmail(pendingToken, pendingUid, clean)
+                loginProvider.verifyEmail(pending.token, pending.uid, clean)
+                currentAuth(epoch) { }
                 try {
-                    finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
+                    finish(c.applicationContext, pending.token, pending.uid, pending.mail, epoch)
                 } catch (e: FoxError) {
-                    val again = loginProvider.signIn(pendingEmail, pendingPassword)
-                    pendingToken = again.token
-                    if (again.needsCode) {
-                        step = STEP_LOGIN
-                        message = "code"
-                    } else {
-                        finish(c.applicationContext, again.token, again.uid, pendingEmail, pendingPassword)
+                    currentAuth(epoch) { }
+                    val again = loginProvider.signIn(pending.mail, pending.password)
+                    currentAuth(epoch) {
+                        pendingToken = again.token
+                        pendingUid = again.uid
+                        if (again.needsCode) {
+                            step = STEP_LOGIN
+                            byLink = again.byLink
+                            message = if (byLink) "link" else "code"
+                        }
                     }
+                    if (!again.needsCode) finish(c.applicationContext, again.token, again.uid, pending.mail, epoch)
                 }
             } else {
-                loginProvider.verifySession(pendingToken, clean)
-                // Verification consumes this session's code. Remember success
-                // even if OAuth, pass acquisition, or local persistence fails.
-                loginSessionVerified = true
-                finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
+                loginProvider.verifySession(pending.token, clean)
+                currentAuth(epoch) {
+                    // A successful verification consumes the code even if a
+                    // later OAuth, pass, or persistence operation fails.
+                    loginSessionVerified = true
+                }
+                finish(c.applicationContext, pending.token, pending.uid, pending.mail, epoch)
             }
         }
     }
@@ -265,9 +309,12 @@ object Fox {
     fun retryLogin(c: Context) {
         if (!canRetryLogin()) return
         val token = pendingToken
-        authWork(c) {
-            if (!canRetryLogin() || pendingToken != token) return@authWork
-            finish(c.applicationContext, token, pendingUid, pendingEmail, pendingPassword)
+        authWork(c) { epoch ->
+            val pending = currentAuth(epoch) {
+                if (!canRetryLogin() || pendingToken != token) return@authWork
+                PendingLogin(pendingToken, pendingUid, pendingEmail, pendingPassword)
+            }
+            finish(c.applicationContext, pending.token, pending.uid, pending.mail, epoch)
         }
     }
 
@@ -285,28 +332,32 @@ object Fox {
         val mode = step
         val token = pendingToken
         val app = c.applicationContext
-        authWork(c) {
-            if (step != mode || pendingToken != token || canRetryLogin()) return@authWork
+        authWork(c) { epoch ->
+            val pending = currentAuth(epoch) {
+                if (step != mode || pendingToken != token || canRetryLogin()) return@authWork
+                PendingLogin(pendingToken, pendingUid, pendingEmail, pendingPassword)
+            }
             if (mode == STEP_SIGNUP) {
-                FoxApi.resendSignupCode(pendingToken)
-                message = "code"
+                loginProvider.resendSignupCode(pending.token)
+                currentAuth(epoch) { message = "code" }
             } else {
-                signInNow(app, pendingEmail, pendingPassword, false)
+                signInNow(app, pending.mail, pending.password, false, epoch)
             }
         }
     }
 
-    private fun finish(c: Context, sessionToken: String, uid: String, mail: String, password: String) {
+    private fun finish(c: Context, sessionToken: String, uid: String, mail: String, epoch: Long) {
+        currentAuth(epoch) { }
         say(c, R.string.fox_stage_pass)
         val tokens = loginProvider.tokens(sessionToken)
+        // Do not start a new pass request after logout has invalidated the job.
+        currentAuth(epoch) { }
         val pass = loginProvider.pass(tokens.access)
-        FoxStore.saveAccount(c, mail, uid, tokens, pass)
-        step = STEP_NONE
-        loginSessionVerified = false
-        byLink = false
-        pendingPassword = ""
-        pendingToken = ""
-        message = ""
+        currentAuth(epoch) {
+            // Store publication and logout are ordered by the same lock.
+            FoxStore.saveAccount(c, mail, uid, tokens, pass)
+            clearPendingLocked()
+        }
     }
 
     fun refreshUsage(c: Context) {
@@ -411,35 +462,61 @@ object Fox {
         FoxStore.setSelected(c, location.code)
     }
 
+    // Caller must hold authLock. Credentials are retained only for a pending flow.
+    private fun clearPendingLocked() {
+        step = STEP_NONE
+        loginSessionVerified = false
+        byLink = false
+        pendingEmail = ""
+        pendingPassword = ""
+        pendingUid = ""
+        pendingToken = ""
+        message = ""
+    }
+
     fun cancelLogin() {
         synchronized(authLock) {
             if (busy || authInFlight) return
-            step = STEP_NONE
-            loginSessionVerified = false
-            byLink = false
-            pendingEmail = ""
-            pendingPassword = ""
-            pendingUid = ""
-            pendingToken = ""
-            message = ""
+            authEpoch++
+            clearPendingLocked()
         }
         notifyUi()
     }
 
     fun switchAccount(c: Context, id: String): Boolean {
-        if (busy) return false
-        FoxVpnService.stop(c)
-        if (!FoxStore.switchAccount(c, id)) return false
-        cancelLogin()
-        load(c)
-        notifyUi()
-        return true
+        val epoch = synchronized(authLock) {
+            if (busy || authInFlight) return false
+            authInFlight = true
+            authEpoch
+        }
+        try {
+            FoxVpnService.stop(c)
+            val switched = synchronized(authLock) {
+                if (epoch != authEpoch || !FoxStore.switchAccount(c, id)) false
+                else {
+                    authEpoch++
+                    clearPendingLocked()
+                    true
+                }
+            }
+            if (!switched) return false
+            load(c)
+            notifyUi()
+            return true
+        } finally {
+            synchronized(authLock) { authInFlight = false }
+        }
     }
 
     fun signOut(c: Context) {
         FoxVpnService.stop(c)
-        FoxStore.clear(c)
-        cancelLogin()
+        synchronized(authLock) {
+            // In-flight responses may still arrive, but cannot publish account
+            // data or a pending verification step after this epoch changes.
+            authEpoch++
+            FoxStore.clear(c)
+            clearPendingLocked()
+        }
         load(c)
         probes.clear()
         notifyUi()

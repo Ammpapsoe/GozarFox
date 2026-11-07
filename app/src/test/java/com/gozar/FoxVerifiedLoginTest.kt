@@ -30,17 +30,53 @@ class FoxVerifiedLoginTest {
         val verifies = AtomicInteger()
         val verified = AtomicBoolean()
         val tokenRequests = AtomicInteger()
+        val passRequests = AtomicInteger()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
+        val loginEntered = CountDownLatch(1)
+        val loginRelease = CountDownLatch(1)
+        val linkEntered = CountDownLatch(1)
+        val linkRelease = CountDownLatch(1)
+        val signupVerifyEntered = CountDownLatch(1)
+        val signupVerifyRelease = CountDownLatch(1)
+        val registerEntered = CountDownLatch(1)
+        val registerRelease = CountDownLatch(1)
         val tokenEntered = CountDownLatch(1)
         val tokenRelease = CountDownLatch(1)
+        val passEntered = CountDownLatch(1)
+        val passRelease = CountDownLatch(1)
         @Volatile var blockVerification = false
+        @Volatile var blockLogin = false
+        @Volatile var blockLink = false
+        @Volatile var blockSignupVerification = false
+        @Volatile var blockRegister = false
         @Volatile var blockTokens = false
+        @Volatile var blockPass = false
         @Volatile var failFirstVerification = false
         @Volatile var failFirstToken = true
         @Volatile var needsCode = true
+        @Volatile var byLink = false
 
-        override fun signIn(email: String, password: String) = FoxSession("fake-uid", "fake-session", needsCode, false)
+        override fun register(email: String, password: String): FoxSession {
+            registerEntered.countDown()
+            if (blockRegister) check(registerRelease.await(10, TimeUnit.SECONDS))
+            return FoxSession("fake-uid", "fake-session", needsCode, false)
+        }
+        override fun signIn(email: String, password: String): FoxSession {
+            loginEntered.countDown()
+            if (blockLogin) check(loginRelease.await(10, TimeUnit.SECONDS))
+            return FoxSession("fake-uid", "fake-session", needsCode, byLink)
+        }
+        override fun emailVerified(sessionToken: String): Boolean {
+            linkEntered.countDown()
+            if (blockLink) check(linkRelease.await(10, TimeUnit.SECONDS))
+            return true
+        }
+        override fun verifyEmail(sessionToken: String, uid: String, code: String) {
+            signupVerifyEntered.countDown()
+            if (blockSignupVerification) check(signupVerifyRelease.await(10, TimeUnit.SECONDS))
+        }
+        override fun resendSignupCode(sessionToken: String) = Unit
         override fun verifySession(sessionToken: String, code: String) {
             val call = verifies.incrementAndGet()
             entered.countDown()
@@ -56,7 +92,12 @@ class FoxVerifiedLoginTest {
             }
             return FoxTokens("fake-access", "fake-refresh", 3600)
         }
-        override fun pass(access: String) = FoxPass("fake-pass", 100, 50, "")
+        override fun pass(access: String): FoxPass {
+            passRequests.incrementAndGet()
+            passEntered.countDown()
+            if (blockPass) check(passRelease.await(10, TimeUnit.SECONDS))
+            return FoxPass("fake-pass", 100, 50, "")
+        }
     }
 
     @Before
@@ -73,6 +114,11 @@ class FoxVerifiedLoginTest {
     fun tearDown() {
         provider.release.countDown()
         provider.tokenRelease.countDown()
+        provider.loginRelease.countDown()
+        provider.linkRelease.countDown()
+        provider.signupVerifyRelease.countDown()
+        provider.registerRelease.countDown()
+        provider.passRelease.countDown()
         await { !Fox.busy }
         Fox.cancelLogin()
         Fox.loginProvider = MozillaLoginProvider
@@ -120,6 +166,113 @@ class FoxVerifiedLoginTest {
         await { !Fox.busy }
         assertFalse("late login must not recreate a signed-out account", Fox.signedIn(context))
         assertFalse("late login must not expose a pending retry", Fox.needsStep())
+        assertEquals("revoked OAuth response must not start pass acquisition", 0, provider.passRequests.get())
+    }
+
+    @Test
+    fun signOutDuringSignInDiscardsTheLateSessionAndVerificationPrompt() {
+        provider.blockLogin = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        assertTrue(provider.loginEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.loginRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun signOutDuringRegistrationDiscardsTheLateSession() {
+        provider.blockRegister = true
+        Fox.signUp(context, "fake@example.invalid", "fake-password")
+        assertTrue(provider.registerEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.registerRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun signOutDuringLinkConfirmationCannotPublishAReauthenticatedSession() {
+        provider.byLink = true
+        provider.blockLink = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        await { !Fox.busy && Fox.isLinkStep() }
+        Fox.confirmLink(context)
+        assertTrue(provider.linkEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.linkRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun signOutDuringSignupVerificationCannotPublishAnAccount() {
+        provider.blockSignupVerification = true
+        Fox.signUp(context, "fake@example.invalid", "fake-password")
+        await { !Fox.busy && Fox.needsCode() }
+        Fox.submitCode(context, "123456")
+        assertTrue(provider.signupVerifyEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.signupVerifyRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun signOutDuringVerificationDoesNotPublishTheVerifiedSession() {
+        provider.blockVerification = true
+        start()
+        Fox.submitCode(context, "123456")
+        assertTrue(provider.entered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.release.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.canRetryLogin())
+        assertFalse(Fox.signedIn(context))
+        assertEquals(0, provider.tokenRequests.get())
+    }
+
+    @Test
+    fun signOutDuringPassAcquisitionDoesNotPublishLateCredentials() {
+        provider.needsCode = false
+        provider.failFirstToken = false
+        provider.blockPass = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        assertTrue(provider.passEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        provider.passRelease.countDown()
+        await { !Fox.busy }
+        assertFalse(Fox.needsStep())
+        assertFalse(Fox.signedIn(context))
+    }
+
+    @Test
+    fun fiftyLogoutRacesDoNotRestoreLateAccounts() {
+        repeat(50) { index ->
+            provider = FakeProvider().apply {
+                needsCode = false
+                failFirstToken = false
+                blockTokens = true
+            }
+            Fox.loginProvider = provider
+            Fox.signIn(context, "fake@example.invalid", "fake-password")
+            assertTrue("token request did not start at $index", provider.tokenEntered.await(5, TimeUnit.SECONDS))
+            Fox.signOut(context)
+            provider.tokenRelease.countDown()
+            await { !Fox.busy }
+            assertFalse("late account at $index", Fox.signedIn(context))
+            assertFalse("late pending state at $index", Fox.needsStep())
+            assertEquals("late pass request at $index", 0, provider.passRequests.get())
+        }
     }
 
     @Test
