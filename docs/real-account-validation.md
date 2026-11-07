@@ -13,10 +13,16 @@ sign-in or a test of a production relay.
 An earlier real-account run, 42401549245, also accepted an email code and then
 failed during OAuth; its original diagnostics did not record the HTTP status.
 An unauthenticated comparison on another runner returned HTTP 401 for both gzip
-and identity variants (run 42401992344). That comparison cannot establish the
-cause of the authenticated 406. The observed error may depend on the runner,
-network, headers, or Mozilla's security checks; it is not evidence of a general
-Mozilla outage or of all devices failing. Public OAuth client metadata lists the
+and identity variants (run 42401992344). Later synthetic-only comparisons on a
+single runner (run 42404144300) returned HTTP 401 and Mozilla errno 110 for
+Python's unauthenticated HTTP/1.1 request, but HTTP 406 for Go over HTTP/2 both
+without authorization and with a made-up Hawk session. `curl` over HTTP/1.1
+also returned 406, while forced HTTP/1.1 through Go ended in EOF. Changing
+compression, JSON formatting, or the Go user-agent did not remove those 406s.
+These differing observations do not identify the cause of the real account's
+406, and the fake-session result must not be presented as account validation.
+They do not establish a general Mozilla outage or failure on all devices.
+Public OAuth client metadata lists the
 current Firefox client redirect as `urn:ietf:wg:oauth:2.0:oob:oauth-redirect-webchannel`;
 that does not establish an app- or loopback-compatible redirect. A browser
 flow needs an appropriately registered client and redirect.
