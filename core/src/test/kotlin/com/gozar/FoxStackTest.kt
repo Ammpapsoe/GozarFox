@@ -3,6 +3,7 @@ package com.gozar
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
@@ -78,6 +79,56 @@ class FoxStackTest {
             input.offer(tcp(1001, peer + 1, 0x11, payload))
             assertTrue(finished.await(3, TimeUnit.SECONDS))
             assertArrayEquals(payload, uploaded.toByteArray())
+        } finally {
+            stack.stop()
+            input.close()
+        }
+    }
+
+    @Test
+    fun flowCapturesItsScopeBeforeDelayedWorkerAcrossFiftyRaces() {
+        data class Gate(val entered: CountDownLatch, val release: CountDownLatch, val denied: CountDownLatch)
+        val input = PacketInput()
+        val output = PacketOutput()
+        val epoch = AtomicInteger(1)
+        val gates = LinkedBlockingQueue<Gate>()
+        val opened = AtomicInteger(0)
+        val unscoped = AtomicInteger(0)
+        val stack = FoxStack(
+            input, output, 0x0a6f0002, FoxResolver(0),
+            { _, _, _ -> unscoped.incrementAndGet(); throw IOException("unscoped") },
+            { _, _ -> },
+            prepareDial = { _, _, _ ->
+                val ticket = epoch.get()
+                val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing test gate")
+                val open: () -> FoxPipe = {
+                    gate.entered.countDown()
+                    if (!gate.release.await(5, TimeUnit.SECONDS)) throw IOException("test gate timed out")
+                    if (ticket != epoch.get()) {
+                        gate.denied.countDown()
+                        throw IOException("stale scope")
+                    }
+                    opened.incrementAndGet()
+                    EchoPipe()
+                }
+                open
+            }
+        )
+        stack.start()
+        try {
+            repeat(50) { iteration ->
+                val gate = Gate(CountDownLatch(1), CountDownLatch(1), CountDownLatch(1))
+                gates.put(gate)
+                val packet = tcp(1000, 0, 0x02, byteArrayOf())
+                put16(packet, 20, 40000 + iteration)
+                input.offer(packet)
+                assertTrue("worker did not enter at iteration $iteration", gate.entered.await(5, TimeUnit.SECONDS))
+                epoch.incrementAndGet() // stop and reconnect while the old worker is paused
+                gate.release.countDown()
+                assertTrue("stale scope not rejected at iteration $iteration", gate.denied.await(5, TimeUnit.SECONDS))
+            }
+            assertEquals(0, opened.get())
+            assertEquals(0, unscoped.get())
         } finally {
             stack.stop()
             input.close()

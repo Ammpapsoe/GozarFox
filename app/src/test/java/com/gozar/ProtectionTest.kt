@@ -10,6 +10,8 @@ import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -41,6 +43,21 @@ class ProtectionTest {
     }
 
     private fun availablePort(): Int = ServerSocket(0).use { it.localPort }
+
+    @Test
+    fun linkStopDisablesItsTransportAcrossFiftyTransitions() {
+        try {
+            repeat(50) { iteration ->
+                val ticket = FoxTunnel.startTransport()
+                assertTrue(FoxTunnel.transportIsCurrent(ticket))
+                FoxLink.stop()
+                assertNull("transport remained enabled at iteration $iteration", FoxTunnel.currentTransport())
+                assertFalse(FoxTunnel.transportIsCurrent(ticket))
+            }
+        } finally {
+            FoxTunnel.startTransport()
+        }
+    }
 
     @Test
     fun securityPreferencesPersistWithoutChangingTheChosenResolver() {
@@ -96,7 +113,8 @@ class ProtectionTest {
             val proxy = FoxProxy(port, directAllowed = { true }, directAddress = { host ->
                 resolved.offer(host)
                 "127.0.0.1"
-            }) { null }
+            }, tunnelScope = { FoxLink.TransportScope(FoxLocation("", "", "", "local-test.invalid", 443, false), 1L) },
+                scopeCurrent = { true }) { null }
             assertTrue(proxy.start())
             try {
                 Socket("127.0.0.1", port).use { client ->
@@ -121,6 +139,48 @@ class ProtectionTest {
                 proxy.stop()
                 worker.join(4000)
             }
+        }
+    }
+
+    @Test
+    fun delayedDirectLookupCannotUseNewAttemptAcrossFiftyRaces() {
+        data class Gate(val entered: CountDownLatch, val release: CountDownLatch)
+        val epoch = AtomicLong(1)
+        val gates = LinkedBlockingQueue<Gate>()
+        val accepted = AtomicInteger()
+        val target = ServerSocket(0)
+        val server = thread(isDaemon = true) {
+            try {
+                while (!target.isClosed) target.accept().use { accepted.incrementAndGet() }
+            } catch (_: java.net.SocketException) { }
+        }
+        FoxRoute.apply(false, "direct.example")
+        val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
+        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = {
+            val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing gate")
+            gate.entered.countDown()
+            if (!gate.release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
+            "127.0.0.1"
+        }, tunnelScope = { FoxLink.TransportScope(place, epoch.get()) }, scopeCurrent = { it == epoch.get() }) { null }
+        assertTrue(proxy.start())
+        try {
+            repeat(50) { iteration ->
+                val gate = Gate(CountDownLatch(1), CountDownLatch(1))
+                gates.put(gate)
+                Socket("127.0.0.1", proxy.boundPort()).use { client ->
+                    client.soTimeout = 5000
+                    client.getOutputStream().write("CONNECT direct.example:${target.localPort} HTTP/1.1\r\nHost: direct.example\r\n\r\n".toByteArray())
+                    assertTrue("lookup did not enter at iteration $iteration", gate.entered.await(5, TimeUnit.SECONDS))
+                    epoch.incrementAndGet()
+                    gate.release.countDown()
+                    assertEquals("HTTP/1.1 502 Bad Gateway", client.getInputStream().bufferedReader().readLine())
+                }
+            }
+            assertEquals("stale direct lookup reached the network", 0, accepted.get())
+        } finally {
+            proxy.stop()
+            target.close()
+            server.join(5000)
         }
     }
 

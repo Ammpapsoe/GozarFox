@@ -170,6 +170,8 @@ class FoxDuplex private constructor(
     private var remainder = ByteArray(0)
     private var flushScheduled = false
     @Volatile private var closed = false
+    @Volatile private var aborted = false
+    private var closeCallback: (() -> Unit)? = null
 
     internal constructor(socket: SSLSocket, input: BufferedInputStream, output: BufferedOutputStream) :
         this(H1(socket, input, output))
@@ -179,9 +181,13 @@ class FoxDuplex private constructor(
     internal fun setReadTimeout(timeout: Int) = link.setTimeout(timeout)
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (aborted) throw java.io.IOException("the tunnel was reset")
         val timeout = (link as? H2)?.timeout() ?: 0
         flushQuietly()
-        return link.read(buffer, offset, length, timeout)
+        val count = link.read(buffer, offset, length, timeout)
+        // A buffered HTTP/1 read may complete while reset is closing its socket.
+        if (aborted) throw java.io.IOException("the tunnel was reset")
+        return count
     }
 
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
@@ -212,15 +218,58 @@ class FoxDuplex private constructor(
         link.halfClose()
     }
 
+    // Register before publishing the duplex so reset can revoke even a socket
+    // whose ordinary close is already flushing. No callback runs under lock.
+    internal fun onClosed(callback: () -> Unit) {
+        val done = synchronized(lock) {
+            if (closed) true else {
+                closeCallback = callback
+                false
+            }
+        }
+        if (done) callback()
+    }
+
+    private fun notifyClosed() {
+        val callback = synchronized(lock) {
+            val saved = closeCallback
+            closeCallback = null
+            saved
+        }
+        callback?.invoke()
+    }
+
     override fun close() {
         synchronized(lock) {
             if (closed) return
             closed = true
         }
-        flushQuietly()
+        try {
+            flushQuietly()
+            link.teardown()
+        } catch (_: Exception) {
+        } finally {
+            notifyClosed()
+        }
+    }
+
+    // Transport reset is different from graceful close: discard unsent bytes
+    // and close the socket even if a concurrent graceful close has started.
+    internal fun abort() {
+        synchronized(lock) {
+            closed = true
+            aborted = true
+        }
+        synchronized(outputLock) {
+            outBuf.reset()
+            remainder = ByteArray(0)
+            flushScheduled = false
+        }
         try {
             link.teardown()
         } catch (_: Exception) {
+        } finally {
+            notifyClosed()
         }
     }
 
@@ -228,7 +277,11 @@ class FoxDuplex private constructor(
     private fun flushQuietly() {
         val bytes = synchronized(outputLock) {
             flushScheduled = false
-            if (outBuf.size() == 0 && remainder.isEmpty()) ByteArray(0) else take()
+            if (aborted) {
+                outBuf.reset()
+                remainder = ByteArray(0)
+                ByteArray(0)
+            } else if (outBuf.size() == 0 && remainder.isEmpty()) ByteArray(0) else take()
         }
         if (bytes.isEmpty()) return
         val left = try {
@@ -238,10 +291,12 @@ class FoxDuplex private constructor(
         }
         if (left.isNotEmpty()) {
             synchronized(outputLock) {
-                remainder = left + remainder
-                if (!flushScheduled) {
-                    flushScheduled = true
-                    FLUSHER.schedule({ flushQuietly() }, STALL_RETRY_MS, TimeUnit.MILLISECONDS)
+                if (!aborted) {
+                    remainder = left + remainder
+                    if (!flushScheduled) {
+                        flushScheduled = true
+                        FLUSHER.schedule({ flushQuietly() }, STALL_RETRY_MS, TimeUnit.MILLISECONDS)
+                    }
                 }
             }
         }
@@ -305,19 +360,21 @@ object FoxTunnel {
 
     private val adaptive = FoxAdaptive()
     private val sessions = HashMap<String, MutableList<H2Session>>()
+    private val h1Streams = HashSet<FoxDuplex>()
     // Handshakes run outside the pool lock. A transport reset invalidates
     // in-flight handshakes so they cannot reinsert an obsolete session.
     private var sessionGeneration = 0L
+    private var transportEnabled = true
 
     /**
      * Warms the session pool for [location] so the first real flow does not
      * pay the handshake. Best effort: failures are silent because the regular
      * open path reports them anyway.
      */
-    fun prewarm(location: FoxLocation, timeout: Int = 15000) {
+    fun prewarm(location: FoxLocation, timeout: Int = 15000, expectedTransport: Long? = null) {
         try {
             val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
-            acquireSession(location, key, timeout).touch()
+            acquireSession(location, key, timeout, expectedTransport).touch()
         } catch (_: Exception) {
         }
     }
@@ -330,20 +387,55 @@ object FoxTunnel {
 
     fun powerSaving(): Boolean = FoxDuplex.coalesceDelayed()
 
-    fun resetTransport() {
+    fun resetTransport() { changeTransport(null) }
+
+    /** Start a new generation and return the ticket that belongs to it. */
+    fun startTransport(): Long = changeTransport(true)
+
+    /** Revoke pooled sessions and established H1 streams, and reject new opens. */
+    fun stopTransport() { changeTransport(false) }
+
+    fun currentTransport(): Long? = synchronized(sessions) {
+        if (transportEnabled) sessionGeneration else null
+    }
+
+    fun transportIsCurrent(ticket: Long): Boolean = synchronized(sessions) {
+        transportEnabled && sessionGeneration == ticket
+    }
+
+    private fun changeTransport(enabled: Boolean?): Long {
+        val oldSessions: List<H2Session>
+        val oldH1: List<FoxDuplex>
+        val ticket: Long
         synchronized(sessions) {
             sessionGeneration += 1
+            if (enabled != null) transportEnabled = enabled
+            ticket = sessionGeneration
             adaptive.clear()
-            for (list in sessions.values) for (session in list) session.shutdown()
+            oldSessions = sessions.values.flatMap { it.toList() }
+            oldH1 = h1Streams.toList()
             sessions.clear()
+            h1Streams.clear()
         }
+        // Closing outside the pool lock permits callbacks and new generations
+        // to progress without letting old resources be put back into the pool.
+        for (session in oldSessions) session.shutdown()
+        for (stream in oldH1) stream.abort()
+        return ticket
     }
 
     internal fun pooledSessionCount(): Int = synchronized(sessions) { sessions.values.sumOf { it.size } }
+    internal fun activeH1Count(): Int = synchronized(sessions) { h1Streams.size }
 
-    fun open(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int = 15000): FoxDuplex {
+    fun open(
+        location: FoxLocation, host: String, port: Int, pass: String,
+        timeout: Int = 15000, expectedTransport: Long? = null
+    ): FoxDuplex {
         val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
-        val (generation, order) = synchronized(sessions) { sessionGeneration to adaptive.order(key) }
+        val (generation, order) = synchronized(sessions) {
+            if (!transportEnabled || (expectedTransport != null && expectedTransport != sessionGeneration)) throw TransportReset()
+            sessionGeneration to adaptive.order(key)
+        }
         var firstError: Exception? = null
         for (h2 in order) {
             synchronized(sessions) {
@@ -377,11 +469,15 @@ object FoxTunnel {
             val accepted = synchronized(sessions) {
                 if (generation != sessionGeneration) false else {
                     adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
+                    if (!h2) {
+                        h1Streams.add(result)
+                        result.onClosed { synchronized(sessions) { h1Streams.remove(result) } }
+                    }
                     true
                 }
             }
             if (!accepted) {
-                try { result.close() } catch (_: Exception) { }
+                try { result.abort() } catch (_: Exception) { }
                 throw TransportReset()
             }
             return result
@@ -391,7 +487,7 @@ object FoxTunnel {
 
     private fun acquireSession(location: FoxLocation, key: String, timeout: Int, expectedGeneration: Long? = null): H2Session {
         val generation = synchronized(sessions) {
-            if (expectedGeneration != null && expectedGeneration != sessionGeneration) throw TransportReset()
+            if (!transportEnabled || (expectedGeneration != null && expectedGeneration != sessionGeneration)) throw TransportReset()
             val list = sessions.getOrPut(key) { mutableListOf() }
             val now = System.currentTimeMillis()
             list.removeAll { session ->
@@ -818,14 +914,14 @@ object FoxTunnel {
         }
     }
 
-    fun verify(location: FoxLocation, pass: String) {
-        RelayCheck.verify { target -> open(location, target, 443, pass, 8000) }
+    fun verify(location: FoxLocation, pass: String, expectedTransport: Long? = null) {
+        RelayCheck.verify { target -> open(location, target, 443, pass, 8000, expectedTransport) }
     }
 
     fun passRejected(error: Exception): Boolean = RelayCheck.passRejected(error)
 
-    fun probe(location: FoxLocation, pass: String): String {
-        val tunnel = open(location, "ifconfig.me", 80, pass, 8000)
+    fun probe(location: FoxLocation, pass: String, expectedTransport: Long? = null): String {
+        val tunnel = open(location, "ifconfig.me", 80, pass, 8000, expectedTransport)
         try {
             tunnel.setReadTimeout(8000)
             val request = "GET /ip HTTP/1.1\r\nHost: ifconfig.me\r\nUser-Agent: curl/8\r\nAccept: */*\r\nConnection: close\r\n\r\n"

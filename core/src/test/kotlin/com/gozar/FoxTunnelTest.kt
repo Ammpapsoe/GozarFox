@@ -18,6 +18,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
@@ -166,6 +167,100 @@ class FoxTunnelTest {
                 assertFalse("H1 open did not finish at iteration $iteration", worker.isAlive)
                 assertFalse("obsolete H1 open escaped to the caller at iteration $iteration", handedOff.get())
                 assertEquals(0, FoxTunnel.pooledSessionCount())
+            }
+        }
+    }
+
+    @Test
+    fun establishedH1IsRevokedOnResetAcrossFiftyRaces() {
+        LocalProxy(h1Only = true).use { proxy ->
+            repeat(50) { iteration ->
+                resetH2()
+                val tunnel = open(proxy)
+                try {
+                    assertEquals("H1 stream not tracked at iteration $iteration", 1, FoxTunnel.activeH1Count())
+                    FoxTunnel.resetTransport()
+                    assertEquals("H1 registry not cleared at iteration $iteration", 0, FoxTunnel.activeH1Count())
+                    var accepted = false
+                    try {
+                        tunnel.write(byteArrayOf(1), 0, 1)
+                        accepted = true
+                    } catch (_: Exception) { }
+                    assertFalse("established H1 survived reset at iteration $iteration", accepted)
+                } finally {
+                    tunnel.close()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun staleTransportTicketCannotOpenAfterRestartAcrossFiftyRaces() {
+        LocalProxy(h1Only = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            try {
+                repeat(50) { iteration ->
+                    val stale = FoxTunnel.startTransport()
+                    val entered = CountDownLatch(1)
+                    val release = CountDownLatch(1)
+                    val opened = AtomicBoolean(false)
+                    val failure = AtomicReference("")
+                    val worker = thread(isDaemon = true) {
+                        entered.countDown()
+                        if (!release.await(10, TimeUnit.SECONDS)) {
+                            failure.set("test gate timed out")
+                        } else try {
+                            val pipe = FoxTunnel.open(location, "target.example.invalid", 443, "local-test-only", 4000, stale)
+                            opened.set(true)
+                            pipe.close()
+                        } catch (error: Exception) { failure.set(error.message ?: "") }
+                    }
+                    assertTrue(entered.await(5, TimeUnit.SECONDS))
+                    FoxTunnel.stopTransport()
+                    assertEquals(null, FoxTunnel.currentTransport())
+                    val stoppedError = try {
+                        FoxTunnel.open(location, "target.example.invalid", 443, "local-test-only", 4000).close()
+                        ""
+                    } catch (error: Exception) { error.message }
+                    assertEquals("transport reset during session creation", stoppedError)
+                    val fresh = FoxTunnel.startTransport()
+                    assertTrue(fresh != stale && FoxTunnel.transportIsCurrent(fresh))
+                    release.countDown()
+                    worker.join(10000)
+                    assertFalse("stale worker blocked at iteration $iteration", worker.isAlive)
+                    assertFalse("stale ticket opened at iteration $iteration", opened.get())
+                    assertEquals("transport reset during session creation", failure.get())
+                    assertEquals("stale ticket reached a network socket at iteration $iteration", 0, proxy.connectHeads.size)
+                }
+            } finally {
+                FoxTunnel.startTransport()
+            }
+        }
+    }
+
+    @Test
+    fun establishedH1CloseAndResetCompleteAcrossFiftyRaces() {
+        LocalProxy(h1Only = true).use { proxy ->
+            repeat(50) { iteration ->
+                resetH2()
+                val tunnel = open(proxy)
+                tunnel.write(byteArrayOf(1, 2, 3), 0, 3)
+                val start = CountDownLatch(1)
+                val closer = thread(isDaemon = true) { start.await(); tunnel.close() }
+                val resetter = thread(isDaemon = true) { start.await(); FoxTunnel.resetTransport() }
+                start.countDown()
+                closer.join(10000)
+                resetter.join(10000)
+                assertFalse("H1 close blocked at iteration $iteration", closer.isAlive)
+                assertFalse("H1 reset blocked at iteration $iteration", resetter.isAlive)
+                assertEquals("H1 stream leaked at iteration $iteration", 0, FoxTunnel.activeH1Count())
+                var accepted = false
+                try {
+                    tunnel.write(byteArrayOf(1), 0, 1)
+                    accepted = true
+                } catch (_: Exception) { }
+                assertFalse("closed H1 accepted a write at iteration $iteration", accepted)
             }
         }
     }

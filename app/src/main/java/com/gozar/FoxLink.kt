@@ -42,8 +42,10 @@ object FoxLink {
     private var dns: FoxProxy? = null
     private val historyLock = Any()
     private val history = ArrayDeque<Pair<Float, Float>>()
-    private val stateLock = Any()
-    private var generation = 0L
+    private val attempts = FoxAttemptFence()
+    private val stateLock = attempts.monitor
+    private val generation: Long get() = attempts.generation
+    private var transportTicket: Long? = null
     private val main = Handler(Looper.getMainLooper())
     private var ticker: Thread? = null
     private var renewer: Thread? = null
@@ -98,34 +100,41 @@ object FoxLink {
         val app = c.applicationContext
         val attempt = synchronized(stateLock) {
             if (connected || connecting) return
-            generation += 1
+            val next = attempts.advance()
             FoxLeakGuard.clearReport()
             connecting = true
             error = ""
-            generation
+            next
         }
         tick()
         thread {
             try {
                 // A repackaged build gets no tunnel.
                 if (!TamperCheck.verify(app)) throw FoxError(app.getString(R.string.tamper_detected))
-                FoxRoute.apply(Store.bypassLan(app), Store.bypassList(app))
-                FoxRoute.applyChain(Store.chain(app))
-                FoxTunnel.resetTransport()
+                val bypassLan = Store.bypassLan(app)
+                val bypassList = Store.bypassList(app)
+                val chain = Store.chain(app)
+                // Check and mutate under the same monitor used by stop/start;
+                // an obsolete worker cannot reset a newer transport.
+                val ticket = attempts.ifCurrent(attempt) {
+                    FoxRoute.apply(bypassLan, bypassList)
+                    FoxRoute.applyChain(chain)
+                    FoxTunnel.startTransport().also { transportTicket = it }
+                } ?: return@thread
                 val access = Fox.validAccess(app)
                 if (!current(attempt)) return@thread
                 var pass = FoxApi.pass(access.token)
                 if (!storePass(app, pass, access, attempt)) return@thread
                 if (Fox.servers.isEmpty()) {
                     val servers = FoxApi.servers()
-                    if (!current(attempt)) return@thread
-                    Fox.servers = servers
+                    if (attempts.ifCurrent(attempt) { Fox.servers = servers } == null) return@thread
                 }
                 val candidates = Fox.autoCandidates(app)
                 if (candidates.isEmpty()) throw FoxError("No server available")
                 val lower = pass.limit > 0 && pass.remaining <= 0
                 if (lower) throw FoxError("Your 50 GB for this month is used up")
-                if (!prepare(app)) throw FoxError("The local proxy did not start")
+                val prepared = attempts.ifCurrent(attempt) { prepare(app) } ?: return@thread
+                if (!prepared) throw FoxError("The local proxy did not start")
                 var chosen: FoxLocation? = null
                 var lastError: Exception? = null
                 var renewed = false
@@ -137,7 +146,7 @@ object FoxLink {
                     }
                     try {
                         try {
-                            FoxTunnel.verify(candidate, pass.token)
+                            FoxTunnel.verify(candidate, pass.token, ticket)
                         } catch (e: Exception) {
                             if (!FoxTunnel.passRejected(e) || renewed) throw e
                             renewed = true
@@ -145,7 +154,7 @@ object FoxLink {
                             val fresh = Fox.validAccess(app)
                             pass = FoxApi.pass(fresh.token)
                             if (!storePass(app, pass, fresh, attempt)) return@thread
-                            FoxTunnel.verify(candidate, pass.token)
+                            FoxTunnel.verify(candidate, pass.token, ticket)
                         }
                         chosen = candidate
                         break
@@ -176,20 +185,22 @@ object FoxLink {
                     } catch (_: Exception) {
                     }
                     startTicker(attempt)
-                    startRenewal(app, attempt)
+                    startRenewal(app, attempt, ticket)
                 }
                 tick()
                 FoxVpnService.activateRoot()
-                detectExit(verified, pass.token, attempt)
+                detectExit(verified, pass.token, attempt, ticket)
                 geoRefresh.set(System.currentTimeMillis())
                 thread(isDaemon = true, name = "fox-geo") {
-                    FoxGeo.refresh(verified, pass(app))
+                    FoxGeo.refresh(verified, pass.token, ticket)
                 }
             } catch (e: Exception) {
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
                     connected = false
                     connecting = false
+                    transportTicket = null
+                    FoxTunnel.stopTransport()
                     error = if (FoxTunnel.isTlsFailure(e)) {
                         app.getString(R.string.fox_secure_connection_error)
                     } else {
@@ -207,10 +218,10 @@ object FoxLink {
         }
     }
 
-    private fun detectExit(location: FoxLocation, token: String, attempt: Long) {
+    private fun detectExit(location: FoxLocation, token: String, attempt: Long, ticket: Long) {
         if (exitAttempt.getAndSet(attempt) == attempt) return
         thread(isDaemon = true, name = "fox-exit-ip") {
-            val value = try { FoxTunnel.probe(location, token) } catch (_: Exception) { "" }
+            val value = try { FoxTunnel.probe(location, token, ticket) } catch (_: Exception) { "" }
             val active = synchronized(stateLock) {
                 if (attempt != generation || !connected) false else {
                     exitIp = value
@@ -262,6 +273,20 @@ object FoxLink {
 
     private fun current(attempt: Long): Boolean = synchronized(stateLock) { attempt == generation }
 
+    data class TransportScope(val location: FoxLocation, val ticket: Long)
+
+    /** The proxy identity prevents an old listener from borrowing a new attempt. */
+    internal fun transportScope(proxy: FoxProxy? = null): TransportScope? = synchronized(stateLock) {
+        if (!connected || (proxy != null && proxy !== socks && proxy !== web && proxy !== dns)) return@synchronized null
+        val place = location ?: return@synchronized null
+        val ticket = transportTicket ?: return@synchronized null
+        TransportScope(place, ticket)
+    }
+
+    internal fun transportIsCurrent(ticket: Long): Boolean = synchronized(stateLock) {
+        connected && transportTicket == ticket && FoxTunnel.transportIsCurrent(ticket)
+    }
+
     private fun storePass(app: Context, pass: FoxPass, access: FoxAccess, attempt: Long, live: Boolean = false): Boolean =
         synchronized(stateLock) {
             if (attempt != generation || (live && !connected)) false
@@ -273,7 +298,9 @@ object FoxLink {
     private fun stopAttempt(attempt: Long?, reason: String) {
         synchronized(stateLock) {
             if (attempt != null && attempt != generation) return
-            generation += 1
+            attempts.advance()
+            transportTicket = null
+            FoxTunnel.stopTransport()
             FoxLeakGuard.clearReport()
             stopServers()
             if (connected && FoxVpnService.lockdownState() == 3) {
@@ -349,7 +376,7 @@ object FoxLink {
         }
     }
 
-    private fun startRenewal(app: Context, attempt: Long) {
+    private fun startRenewal(app: Context, attempt: Long, ticket: Long) {
         stopRenewal()
         renewer = thread(isDaemon = true, name = "fox-renew") {
             var retry = 0L
@@ -382,7 +409,7 @@ object FoxLink {
                         geoRefresh.set(now)
                         val place = location
                         if (place != null) {
-                            thread(isDaemon = true, name = "fox-geo") { FoxGeo.refresh(place, pass(app)) }
+                            thread(isDaemon = true, name = "fox-geo") { FoxGeo.refresh(place, pass.token, ticket) }
                         }
                     }
                 } catch (_: Exception) {
@@ -394,18 +421,19 @@ object FoxLink {
 
     fun pass(app: Context): String {
         val token = FoxStore.pass(app)
-        if (!connected || token.isEmpty()) return token
+        val attempt = synchronized(stateLock) { if (connected) generation else null } ?: return token
+        if (token.isEmpty()) return token
         if (FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return token
         return synchronized(renewLock) {
-            val current = FoxStore.pass(app)
-            if (current.isEmpty() || FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return@synchronized current
+            val saved = FoxStore.pass(app)
+            if (!current(attempt) || !connected || saved.isEmpty() ||
+                FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return@synchronized saved
             try {
                 val access = Fox.validAccess(app)
                 val fresh = FoxApi.pass(access.token)
-                val attempt = synchronized(stateLock) { generation }
-                if (storePass(app, fresh, access, attempt, true)) fresh.token else current
+                if (storePass(app, fresh, access, attempt, true)) fresh.token else saved
             } catch (_: Exception) {
-                current
+                saved
             }
         }
     }

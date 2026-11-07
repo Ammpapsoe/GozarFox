@@ -20,12 +20,14 @@ import androidx.core.app.NotificationCompat
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 
 class FoxVpnService : VpnService() {
 
     private var descriptor: ParcelFileDescriptor? = null
 
     private var stack: FoxStack? = null
+    @Volatile private var stackLifetime: AtomicBoolean? = null
     @Volatile private var resolver: FoxResolver? = null
     private var rootSession: RootSession? = null
     private var startFailure = ""
@@ -112,24 +114,41 @@ class FoxVpnService : VpnService() {
             endpoints = DnsPolicy.endpoints(Store.dnsProfile(this), Store.customDns(this), Store.blockAds(this))
         )
         this.resolver = resolver
+        val lifetime = AtomicBoolean(true)
+        stackLifetime = lifetime
         val engine = FoxStack(
             FileInputStream(fd.fileDescriptor),
             FileOutputStream(fd.fileDescriptor),
             addressOf(LOCAL_ADDRESS),
             resolver,
-            { host, address, port ->
-                if (directRoutingAllowed() && FoxRoute.direct(host)) {
-                    val pipe = FoxSocketPipe.connect(address, port) ?: throw IOException("direct connection failed")
-                    DirectPipe(pipe) { directRoutingAllowed() }
-                } else {
-                    val location = FoxLink.location ?: throw IOException("not connected yet")
-                    val token = FoxLink.pass(app)
-                    if (token.isEmpty()) throw IOException("no pass")
-                    FoxTunnel.open(location, host, port, token)
-                }
-            },
+            { _, _, _ -> throw IOException("unscoped TUN dial is disabled") },
             { inbound, size -> FoxLink.count(inbound, size) },
-            mtu
+            mtu,
+            prepareDial = { host, address, port ->
+                // Capture the attempt while the flow is admitted, not later
+                // when a delayed worker happens to start running.
+                val scope = if (lifetime.get()) FoxLink.transportScope() else null
+                val open: () -> FoxPipe = {
+                    val expected = scope ?: throw IOException("not connected yet")
+                    if (!lifetime.get() || !FoxLink.transportIsCurrent(expected.ticket)) throw IOException("tunnel stopped")
+                    if (directRoutingAllowed() && FoxRoute.direct(host)) {
+                        val pipe = FoxSocketPipe.connect(address, port) ?: throw IOException("direct connection failed")
+                        val guarded = DirectPipe(pipe) {
+                            lifetime.get() && directRoutingAllowed() && FoxLink.transportIsCurrent(expected.ticket)
+                        }
+                        if (!lifetime.get() || !directRoutingAllowed() || !FoxLink.transportIsCurrent(expected.ticket)) {
+                            guarded.close()
+                            throw IOException("tunnel stopped")
+                        }
+                        guarded
+                    } else {
+                        val token = FoxLink.pass(app)
+                        if (token.isEmpty()) throw IOException("no pass")
+                        FoxTunnel.open(expected.location, host, port, token, expectedTransport = expected.ticket)
+                    }
+                }
+                open
+            }
         )
         engine.start()
         stack = engine
@@ -165,6 +184,8 @@ class FoxVpnService : VpnService() {
     }
 
     private fun release() {
+        stackLifetime?.set(false)
+        stackLifetime = null
         val root = synchronized(this) {
             val current = rootSession
             rootSession = null
