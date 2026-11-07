@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Exercise Android package-manager behavior with debug fixtures. This checks
+# forward installation and persistence, not production recovery correctness.
+set -euo pipefail
+DEST="${GOZAR_APK_DIR:?set GOZAR_APK_DIR}"
+PKG=com.gozar
+trap 'adb logcat -d -s AndroidRuntime:E | tail -100 || true' ERR
+for apk in old affected forward; do test -s "$DEST/$apk.apk"; done
+
+adb install -r "$DEST/old.apk"
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell run-as "$PKG" sh -c 'printf recovery-ci-sentinel > files/recovery-ci-sentinel'
+
+adb install -r "$DEST/affected.apk"
+# The first launch detects the external upgrade; three more launches leave
+# the trial unconfirmed and should create the actionable recovery notice.
+for _ in 1 2 3 4; do
+  adb shell am force-stop "$PKG"
+  adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+done
+adb shell run-as "$PKG" cat files/journal/update.json | tr -d '\r' > "$DEST/affected-journal.json"
+python3 - "$DEST/affected-journal.json" <<'PY'
+import json, sys
+state = json.load(open(sys.argv[1], encoding="utf-8"))
+assert state["installed"] == "1.11.1", state
+assert state["previous"] == "1.11.0", state
+assert state["attempts"] == 3 and not state["healthy"], state
+PY
+adb shell dumpsys notification --noredact | tr -d '\r' > "$DEST/notifications.txt"
+if ! grep -E '(pkg=com\.gozar.*id=4098|id=4098.*pkg=com\.gozar)' "$DEST/notifications.txt" >/dev/null; then
+  echo 'expected actionable recovery notification was not posted' >&2
+  exit 1
+fi
+
+# Open the actual notice via the system notification shade and confirm that it
+# leads to the non-exported recovery activity rather than an inert action.
+adb shell cmd statusbar expand-notifications
+adb shell uiautomator dump /sdcard/gozar-recovery.xml >/dev/null
+adb shell cat /sdcard/gozar-recovery.xml | tr -d '\r' > "$DEST/window.xml"
+coords=$(python3 - "$DEST/window.xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+for node in root.iter("node"):
+    if "Update health not yet confirmed" not in node.attrib.get("text", ""):
+        continue
+    match = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+    if match:
+        x1, y1, x2, y2 = map(int, match.groups())
+        if x2 > x1 and y2 > y1:
+            print((x1+x2)//2, (y1+y2)//2)
+            break
+else:
+    raise SystemExit("recovery notice not visible in notification shade")
+PY
+)
+# shellcheck disable=SC2086
+adb shell input tap $coords
+python3 - <<'PY'
+import subprocess, time
+end = time.monotonic() + 12
+while time.monotonic() < end:
+    out = subprocess.run(["adb", "shell", "dumpsys", "activity", "activities"], capture_output=True, text=True, check=True).stdout
+    if any("UpdateRecoveryActivity" in line and ("ResumedActivity" in line or "topResumedActivity" in line) for line in out.splitlines()):
+        break
+    time.sleep(0.3)
+else:
+    raise SystemExit("recovery notification did not open the recovery activity")
+PY
+
+# A normal replace-install must not silently downgrade an installed version.
+adb shell am force-stop "$PKG"
+if adb install -r "$DEST/old.apk" > "$DEST/downgrade.log" 2>&1; then
+  echo 'unexpectedly allowed ordinary downgrade' >&2
+  exit 1
+fi
+grep -F 'INSTALL_FAILED_VERSION_DOWNGRADE' "$DEST/downgrade.log" >/dev/null
+
+# A higher-version, same-key debug build can be installed while keeping data.
+adb install -r "$DEST/forward.apk"
+sentinel=$(adb shell run-as "$PKG" cat files/recovery-ci-sentinel | tr -d '\r')
+test "$sentinel" = recovery-ci-sentinel
+adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
+adb shell run-as "$PKG" cat files/journal/update.json | tr -d '\r' > "$DEST/forward-journal.json"
+python3 - "$DEST/forward-journal.json" <<'PY'
+import json, sys
+state = json.load(open(sys.argv[1], encoding="utf-8"))
+assert state["installed"] == "1.11.2", state
+assert state["previous"] == "1.11.1", state
+PY
+printf '%s\n' 'Android emulator: downgrade rejected; forward install kept data and recovery notice opened.'
