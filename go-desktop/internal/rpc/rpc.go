@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/app"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/systemaccounts"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/update"
 )
 
 type Request struct {
@@ -26,23 +28,43 @@ type Response struct {
 	Reply any        `json:"reply,omitempty"`
 }
 
+type updateService interface {
+	Check(context.Context, string) (update.Summary, error)
+	Download(context.Context, string) (string, error)
+	Cancel()
+}
+
 type Server struct {
-	app   *app.App
-	write sync.Mutex
-	out   io.Writer
+	app     *app.App
+	write   sync.Mutex
+	out     io.Writer
+	updates updateService
+	ctx     context.Context
 }
 
 func Run(current *app.App) {
 	ignorePipe()
-	server := &Server{app: current, out: os.Stdout}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := &Server{app: current, out: os.Stdout, updates: update.NewService(), ctx: ctx}
 	reader := bufio.NewReaderSize(os.Stdin, 1<<20)
 	for {
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
 			var request Request
 			if json.Unmarshal(line, &request) == nil {
-				if err := server.emit(server.handle(request)); err != nil || request.Method == "quit" {
-					return
+				switch request.Method {
+				case "check_update", "download_update":
+					// Network I/O must not block disconnect, quit or cancellation.
+					server.startUpdate(request, current.State().Version)
+				case "cancel_update":
+					if err := server.emit(server.handleUpdate(request, "")); err != nil {
+						return
+					}
+				default:
+					if err := server.emit(server.handle(request)); err != nil || request.Method == "quit" {
+						return
+					}
 				}
 			}
 		}
@@ -50,6 +72,55 @@ func Run(current *app.App) {
 			return
 		}
 	}
+}
+
+func (s *Server) startUpdate(request Request, installed string) {
+	go func() {
+		_ = s.emit(s.handleUpdate(request, installed))
+	}()
+}
+
+func (s *Server) handleUpdate(request Request, installed string) Response {
+	response := Response{ID: request.ID}
+	if s.updates == nil {
+		response.Error = "update service unavailable"
+		return response
+	}
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var err error
+	switch request.Method {
+	case "check_update":
+		response.Reply, err = s.updates.Check(ctx, installed)
+	case "download_update":
+		var body struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(request.Params, &body) != nil || body.ID == "" {
+			response.Error = "invalid update artifact"
+			return response
+		}
+		var path string
+		path, err = s.updates.Download(ctx, body.ID)
+		if err == nil {
+			response.Reply = map[string]string{"downloaded_path": path}
+		}
+	case "cancel_update":
+		s.updates.Cancel()
+	default:
+		response.Error = "unknown update method"
+		return response
+	}
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			response.Error = "update operation cancelled"
+		} else {
+			response.Error = "signed update operation failed"
+		}
+	}
+	return response
 }
 
 func (s *Server) handle(request Request) Response {
