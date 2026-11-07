@@ -35,6 +35,15 @@ jobs:
         env:
           GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
         run: bash scripts/build_recovery_test_apks.sh
+      - name: Build and authenticate official-signed upgrade APKs
+        env:
+          GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
+          XIAOMI_APP_ID: ${{ secrets.XIAOMI_APP_ID }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: bash scripts/build_official_upgrade_test_apks.sh
       - name: Configure emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -59,7 +68,7 @@ jobs:
           disable-animations: true
           disable-linux-hw-accel: ${{ env.GOZAR_DISABLE_KVM }}
           emulator-boot-timeout: 1800
-          script: bash scripts/test_recovery_emulator.sh
+          script: bash scripts/test_official_upgrade_emulator.sh && bash scripts/test_recovery_emulator.sh
       - name: Upload emulator evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,6 +79,9 @@ jobs:
             ${{ runner.temp }}/recovery-apks/downgrade.log
             ${{ runner.temp }}/recovery-apks/window.xml
             ${{ runner.temp }}/recovery-apks/installer-window.xml
+            ${{ runner.temp }}/recovery-apks/official-*-badging.txt
+            ${{ runner.temp }}/recovery-apks/official-*-package.txt
+            ${{ runner.temp }}/recovery-apks/official-*-launch.txt
           if-no-files-found: ignore
 
   desktop-ui:

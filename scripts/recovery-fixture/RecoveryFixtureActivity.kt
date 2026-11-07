@@ -73,7 +73,7 @@ class RecoveryFixtureActivity : Activity() {
                         override fun connect() = Unit
                         override fun disconnect() = Unit
                         override fun usingProxy() = false
-                        override fun getResponseCode() = HTTP_OK
+                        override fun getResponseCode() = HttpURLConnection.HTTP_OK
                         override fun getInputStream(): InputStream = FileInputStream(payload)
                     }
                 }

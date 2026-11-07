@@ -86,6 +86,13 @@ file. It does not test the production key, live GitHub delivery, real faulty
 production behavior, or arbitrary data migrations. The exported fixture activity
 is injected only into the three test APKs, never a release APK.
 
+The same optional workflow separately builds an officially signed release APK,
+checks both certificates, and attempts an emulator replace-install over the
+published 1.10.4 APK. It checks the app launch and package identity; an app-private
+sentinel is also checked when the emulator exposes root ADB. This uses `adb`
+rather than the interactive installer, covers one emulator/API level only, and
+does not prove data migration or recovery from a faulty production build.
+
 A full rollback feature, including data compatibility, delivery when the app
 cannot start, user consent and desktop support, remains a separate incomplete
 requirement. Do not claim completion from journal state or an installer intent.
