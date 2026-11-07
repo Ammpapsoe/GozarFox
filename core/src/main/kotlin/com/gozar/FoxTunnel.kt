@@ -364,6 +364,7 @@ object FoxTunnel {
     private val adaptive = FoxAdaptive()
     private val sessions = HashMap<String, MutableList<H2Session>>()
     private val h1Streams = HashSet<FoxDuplex>()
+    private val h2Streams = HashSet<FoxDuplex>()
     private val pendingRelays = HashSet<Socket>()
     // TLS wraps the raw socket; close the raw socket on reset so buffered TLS
     // output is not intentionally flushed during revocation.
@@ -424,6 +425,7 @@ object FoxTunnel {
     private fun changeTransport(enabled: Boolean?): Long {
         val oldSessions: List<H2Session>
         val oldH1: List<FoxDuplex>
+        val oldH2: List<FoxDuplex>
         val oldPending: List<Socket>
         val ticket: Long
         synchronized(sessions) {
@@ -433,22 +435,28 @@ object FoxTunnel {
             adaptive.clear()
             oldSessions = sessions.values.flatMap { it.toList() }
             oldH1 = h1Streams.toList()
+            oldH2 = h2Streams.toList()
             oldPending = pendingRelays.toList()
             sessions.clear()
             h1Streams.clear()
+            h2Streams.clear()
             pendingRelays.clear()
             pendingTls.clear()
         }
         // Closing outside the pool lock permits callbacks and new generations
         // to progress without letting old resources be put back into the pool.
         for (socket in oldPending) try { socket.close() } catch (_: Exception) { }
+        // Close pooled sockets before aborting H2 streams, so their teardown
+        // cannot flush an obsolete session while discarding queued writes.
         for (session in oldSessions) session.shutdown()
+        for (stream in oldH2) stream.abort()
         for (stream in oldH1) stream.abort()
         return ticket
     }
 
     internal fun pooledSessionCount(): Int = synchronized(sessions) { sessions.values.sumOf { it.size } }
     internal fun activeH1Count(): Int = synchronized(sessions) { h1Streams.size }
+    internal fun activeH2Count(): Int = synchronized(sessions) { h2Streams.size }
     internal fun pendingRelayCount(): Int = synchronized(sessions) { pendingRelays.size }
 
     fun open(
@@ -496,7 +504,13 @@ object FoxTunnel {
                     if (!h2) {
                         result.pendingSocket()?.let { releasePendingLocked(it) }
                         h1Streams.add(result)
-                        result.onClosed { synchronized(sessions) { h1Streams.remove(result) } }
+                    } else {
+                        h2Streams.add(result)
+                    }
+                    result.onClosed {
+                        synchronized(sessions) {
+                            if (h2) h2Streams.remove(result) else h1Streams.remove(result)
+                        }
                     }
                     true
                 }

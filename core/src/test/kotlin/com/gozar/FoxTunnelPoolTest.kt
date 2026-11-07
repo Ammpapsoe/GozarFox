@@ -87,6 +87,55 @@ class FoxTunnelPoolTest {
     }
 
     @Test
+    fun establishedH2RejectsWritesAfterResetAcrossFiftyRaces() {
+        EchoProxy().use { proxy ->
+            repeat(50) { iteration ->
+                FoxTunnel.resetTransport()
+                val tunnel = open(proxy)
+                try {
+                    FoxTunnel.resetTransport()
+                    val payload = "after-reset".toByteArray(Charsets.US_ASCII)
+                    val result = runCatching { tunnel.write(payload, 0, payload.size) }
+                    assertTrue("H2 accepted a post-reset write at $iteration", result.isFailure)
+                } finally {
+                    tunnel.close()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun concurrentH2CloseAndResetRevokeAllStreamsAcrossFiftyRaces() {
+        EchoProxy().use { proxy ->
+            repeat(50) { iteration ->
+                FoxTunnel.resetTransport()
+                val first = open(proxy)
+                val second = open(proxy)
+                val gate = CountDownLatch(1)
+                val closer = thread(isDaemon = true) {
+                    gate.await()
+                    first.close()
+                }
+                try {
+                    assertEquals(2, FoxTunnel.activeH2Count())
+                    gate.countDown()
+                    FoxTunnel.resetTransport()
+                    closer.join(5000)
+                    assertFalse("H2 close/reset deadlocked at $iteration", closer.isAlive)
+                    val payload = byteArrayOf(7)
+                    assertTrue("first stream accepted a post-reset write at $iteration", runCatching { first.write(payload, 0, 1) }.isFailure)
+                    assertTrue("second stream accepted a post-reset write at $iteration", runCatching { second.write(payload, 0, 1) }.isFailure)
+                    assertEquals(0, FoxTunnel.activeH2Count())
+                } finally {
+                    gate.countDown()
+                    first.close()
+                    second.close()
+                }
+            }
+        }
+    }
+
+    @Test
     fun successfulH2TransfersOutOfPendingAcrossFiftyTransitions() {
         EchoProxy().use { proxy ->
             repeat(50) { iteration ->
@@ -94,9 +143,11 @@ class FoxTunnelPoolTest {
                 try {
                     assertEquals("H2 stayed pending at $iteration", 0, FoxTunnel.pendingRelayCount())
                     assertEquals("H2 was not pooled at $iteration", 1, FoxTunnel.pooledSessionCount())
+                    assertEquals("H2 duplex was not tracked at $iteration", 1, FoxTunnel.activeH2Count())
                 } finally {
                     tunnel.close()
                 }
+                assertEquals("H2 duplex remained registered at $iteration", 0, FoxTunnel.activeH2Count())
             }
         }
     }

@@ -128,6 +128,17 @@ reset stresses. These are JVM/loopback observations; GitHub Actions and Android
 physical-device behavior still need verification. Closing a socket cannot take
 back packets already sent and does not establish device-wide traffic safety.
 
+## Established H2 stream revocation (candidate change)
+
+A controlled 50-race loopback regression found that an established H2 duplex
+could accept a small buffered write after its session had been reset; it failed
+at iteration zero on the prior code. The observation does not establish that
+the buffered bytes left the device. The candidate tracks H2 duplexes alongside
+H1, closes the old sessions, and aborts every tracked duplex to discard queued
+bytes and reject subsequent writes. Local 50-race checks passed for post-reset
+writes, concurrent close/reset of two streams, and successful handoff/cleanup.
+Full GitHub Actions and real-device/real-relay behavior still require testing.
+
 ## Remaining limitations
 
 - OS DNS resolution and other network work may not be promptly interruptible;
