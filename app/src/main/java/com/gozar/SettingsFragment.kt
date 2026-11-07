@@ -591,7 +591,7 @@ class SettingsFragment : Fragment() {
             updateChecking = false
             when (result) {
                 is UpdateChecker.Result.Available -> {
-                    Store.setUpdate(requireContext(), result.version, result.url)
+                    Store.setUpdate(requireContext(), result.version, result.url, result.sha256, result.size)
                     paint()
                     MaterialAlertDialogBuilder(requireContext())
                         .setTitle(R.string.update_title)

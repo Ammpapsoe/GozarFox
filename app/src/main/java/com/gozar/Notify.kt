@@ -15,6 +15,8 @@ object Notify {
 
     private const val CHANNEL_UPDATE = "updates"
     private const val ID_UPDATE = 4097
+    private const val ID_ROLLBACK = 4098
+    private const val ID_RESULT = 4099
 
     private fun mgr(c: Context) = c.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -41,11 +43,18 @@ object Notify {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 flags()
             )
+            val download = PendingIntent.getBroadcast(
+                c,
+                5,
+                Intent(c, UpdateActionReceiver::class.java).setAction(UpdateActionReceiver.ACTION_DOWNLOAD),
+                flags()
+            )
             val note = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL_UPDATE) else Notification.Builder(c)
             note.setSmallIcon(R.drawable.ic_refresh)
                 .setContentTitle(c.getString(R.string.update_notification_title))
                 .setContentText(c.getString(R.string.update_notification_text, version))
                 .setContentIntent(open)
+                .addAction(0, c.getString(R.string.update_action_download), download)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
@@ -55,6 +64,65 @@ object Notify {
             true
         } catch (e: Exception) {
             false
+        }
+    }
+
+    /**
+     * Offers the signed rollback when the running build failed its trial.
+     * With a cached APK the rollback is one tap; without it the previous
+     * release page is the fallback.
+     */
+    fun rollbackAvailable(c: Context, version: String, cachedFile: Boolean): Boolean {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(c, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        return try {
+            updateChannel(c)
+            val action = PendingIntent.getBroadcast(
+                c,
+                6,
+                Intent(c, UpdateActionReceiver::class.java).setAction(UpdateActionReceiver.ACTION_ROLLBACK),
+                flags()
+            )
+            val note = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL_UPDATE) else Notification.Builder(c)
+            note.setSmallIcon(R.drawable.ic_refresh)
+                .setContentTitle(c.getString(R.string.rollback_notification_title))
+                .setContentText(c.getString(R.string.rollback_notification_text, version))
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setCategory(Notification.CATEGORY_SERVICE)
+            if (cachedFile) {
+                note.addAction(0, c.getString(R.string.rollback_action), action)
+            }
+            if (Build.VERSION.SDK_INT < 26) note.setPriority(Notification.PRIORITY_DEFAULT)
+            mgr(c).notify(ID_ROLLBACK, note.build())
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Confirms or reports the outcome of a download/rollback attempt. */
+    fun installResult(c: Context, success: Boolean) {
+        if (!success) {
+            try {
+                updateChannel(c)
+                val note = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL_UPDATE) else Notification.Builder(c)
+                note.setSmallIcon(R.drawable.ic_refresh)
+                    .setContentTitle(c.getString(R.string.update_download_failed))
+                    .setAutoCancel(true)
+                    .setOnlyAlertOnce(true)
+                    .setShowWhen(false)
+                if (Build.VERSION.SDK_INT < 26) note.setPriority(Notification.PRIORITY_DEFAULT)
+                mgr(c).notify(ID_RESULT, note.build())
+            } catch (_: Exception) {
+            }
+        } else {
+            try {
+                mgr(c).cancel(ID_UPDATE)
+            } catch (_: Exception) {
+            }
         }
     }
 }

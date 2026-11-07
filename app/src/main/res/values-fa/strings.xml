@@ -218,6 +218,11 @@
     <string name="update_notification_channel">به‌روزرسانی برنامه</string>
     <string name="update_notification_title">به‌روزرسانی گذر آماده است</string>
     <string name="update_notification_text">نسخهٔ %s آمادهٔ دریافت است</string>
+    <string name="update_action_download">دریافت و نصب</string>
+    <string name="update_download_failed">دریافت به‌روزرسانی ناموفق بود</string>
+    <string name="rollback_notification_title">این به‌روزرسانی پایدار نماند</string>
+    <string name="rollback_notification_text">نسخهٔ %s برای بازگردانی آماده است</string>
+    <string name="rollback_action">بازگردانی نسخهٔ پیشین</string>
     <string name="legal_notice">Gozar
 AGPL-3.0-or-later</string>
     <string name="mode_wireguard">وایرگارد</string>

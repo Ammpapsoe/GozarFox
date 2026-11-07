@@ -43,12 +43,17 @@ object Store {
 
     fun updateVersion(c: Context) = p(c).getString("update_version", "") ?: ""
     fun updateUrl(c: Context) = p(c).getString("update_url", "") ?: ""
-    fun setUpdate(c: Context, version: String, url: String) = p(c).edit()
+    fun updateSha(c: Context) = p(c).getString("update_sha", "") ?: ""
+    fun updateSize(c: Context) = p(c).getLong("update_size", 0L)
+    fun setUpdate(c: Context, version: String, url: String, sha256: String = "", size: Long = 0L) = p(c).edit()
         .putString("update_version", version)
         .putString("update_url", url)
+        .putString("update_sha", sha256)
+        .putLong("update_size", size)
         .apply()
 
-    fun clearUpdate(c: Context) = p(c).edit().remove("update_version").remove("update_url").apply()
+    fun clearUpdate(c: Context) = p(c).edit().remove("update_version").remove("update_url")
+        .remove("update_sha").remove("update_size").apply()
     fun notifiedUpdate(c: Context) = p(c).getString("update_notified", "") ?: ""
     fun setNotifiedUpdate(c: Context, version: String) = p(c).edit().putString("update_notified", version).apply()
     fun updateCheckedAt(c: Context) = p(c).getLong("update_checked_at", 0L)

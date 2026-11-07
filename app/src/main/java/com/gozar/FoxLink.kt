@@ -167,6 +167,11 @@ object FoxLink {
                     synchronized(historyLock) { history.clear() }
                     error = ""
                     if (Store.recents(app)) Store.setLastServer(app, verified.host)
+                    // The tunnel is proven up: this build passes its update trial.
+                    try {
+                        App.markTunnelHealthy(app)
+                    } catch (_: Exception) {
+                    }
                     startTicker(attempt)
                     startRenewal(app, attempt)
                 }
