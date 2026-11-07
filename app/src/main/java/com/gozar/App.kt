@@ -1,7 +1,11 @@
 package com.gozar
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PowerManager
 import androidx.appcompat.app.AppCompatDelegate
 import java.io.File
 
@@ -28,8 +32,31 @@ class App : Application() {
         deleteFile("last-crash.txt")
         AppCompatDelegate.setDefaultNightMode(nightModeOf(Store.theme(this)))
         startUpdateTrial()
+        watchPower()
         UpdateChecker.schedule(this)
         UpdateChecker.check(this)
+    }
+
+    /** Respect the system battery-saver setting without penalizing normal use. */
+    private fun watchPower() {
+        applyPowerProfile()
+        try {
+            registerReceiver(
+                object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) = applyPowerProfile()
+                },
+                IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun applyPowerProfile() {
+        try {
+            val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+            FoxTunnel.setPowerSaving(power.isPowerSaveMode)
+        } catch (_: Exception) {
+        }
     }
 
     /** Three unconfirmed launches prompt a check for a newer signed recovery

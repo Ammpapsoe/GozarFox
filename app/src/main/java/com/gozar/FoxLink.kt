@@ -99,6 +99,7 @@ object FoxLink {
         val attempt = synchronized(stateLock) {
             if (connected || connecting) return
             generation += 1
+            FoxLeakGuard.clearReport()
             connecting = true
             error = ""
             generation
@@ -106,6 +107,8 @@ object FoxLink {
         tick()
         thread {
             try {
+                // A repackaged build gets no tunnel.
+                if (!TamperCheck.verify(app)) throw FoxError(app.getString(R.string.tamper_detected))
                 FoxRoute.apply(Store.bypassLan(app), Store.bypassList(app))
                 FoxRoute.applyChain(Store.chain(app))
                 FoxTunnel.resetTransport()
@@ -208,15 +211,53 @@ object FoxLink {
         if (exitAttempt.getAndSet(attempt) == attempt) return
         thread(isDaemon = true, name = "fox-exit-ip") {
             val value = try { FoxTunnel.probe(location, token) } catch (_: Exception) { "" }
-            if (value.isEmpty()) return@thread
-            val changed = synchronized(stateLock) {
+            val active = synchronized(stateLock) {
                 if (attempt != generation || !connected) false else {
                     exitIp = value
                     true
                 }
             }
-            if (changed) tick()
+            if (active) {
+                tick()
+                // Run even if the exit lookup failed, so DNS diagnostics do
+                // not silently disappear when that third-party site is down.
+                runLeakDiagnosticFor(attempt, null)
+            }
         }
+    }
+
+    /**
+     * Test the configured tunnel resolver without sending OS DNS queries from
+     * the VPN-excluded app UID. A tunnel-only probe cannot prove device-wide
+     * leak freedom; the UI explicitly reports that limitation.
+     */
+    fun runLeakDiagnostic(onComplete: (() -> Unit)? = null): Boolean = runLeakDiagnosticFor(null, onComplete)
+
+    private fun runLeakDiagnosticFor(expectedAttempt: Long?, onComplete: (() -> Unit)?): Boolean {
+        val ticket = synchronized(stateLock) {
+            if (!connected || !FoxVpnService.isAlive() ||
+                (expectedAttempt != null && expectedAttempt != generation)) return false
+            generation to FoxLeakGuard.beginReport()
+        }
+        thread(isDaemon = true, name = "fox-leak-diagnostic") {
+            try {
+                val result = FoxLeakGuard.diagnose(
+                    positiveHost = "api.accounts.firefox.com",
+                    resolve = { host -> FoxVpnService.diagnosticDns(host) },
+                    exitIp = exitIp
+                )
+                val published = synchronized(stateLock) {
+                    if (!connected || ticket.first != generation) false
+                    else FoxLeakGuard.publish(ticket.second, result)
+                }
+                if (published) tick()
+            } catch (error: Exception) {
+                Log.w("Gozar", "Tunnel diagnostic did not complete", error)
+            } finally {
+                onComplete?.let { callback -> main.post { callback() } }
+            }
+        }
+        return true
     }
 
     private fun current(attempt: Long): Boolean = synchronized(stateLock) { attempt == generation }
@@ -233,7 +274,13 @@ object FoxLink {
         synchronized(stateLock) {
             if (attempt != null && attempt != generation) return
             generation += 1
+            FoxLeakGuard.clearReport()
             stopServers()
+            if (connected && FoxVpnService.lockdownState() == 3) {
+                // This is an observed disconnection while lockdown is enabled,
+                // not a claim that an individual packet was blocked.
+                FoxLeakGuard.note(FoxLeakGuard.LOCKDOWN_INTERRUPTION)
+            }
             connected = false
             connecting = false
             exitIp = ""

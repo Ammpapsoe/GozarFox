@@ -137,7 +137,14 @@ class FoxStack(
                 break
             }
             if (size < 0) break
-            if (size < 20 || (buffer[0].toInt() and 0xF0) != 0x40) continue
+            if (size < 20 || (buffer[0].toInt() and 0xF0) != 0x40) {
+                // Count what the guard stopped instead of letting it leak.
+                FoxLeakGuard.note(
+                    if (size > 0 && (buffer[0].toInt() and 0xF0) == 0x60) FoxLeakGuard.IPV6_DROPPED
+                    else FoxLeakGuard.MALFORMED_DROPPED
+                )
+                continue
+            }
             val header = (buffer[0].toInt() and 0x0F) * 4
             if (header < 20 || size < header + 8) continue
             val total = u16(buffer, 2)

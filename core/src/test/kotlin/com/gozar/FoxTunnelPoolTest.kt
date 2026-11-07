@@ -153,6 +153,79 @@ class FoxTunnelPoolTest {
     }
 
     @Test
+    fun prewarmCreatesASessionThatTheNextOpenReuses() {
+        EchoProxy().use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            FoxTunnel.prewarm(location)
+            // Prewarm itself must have established the session (bounded wait
+            // for the mock's counter thread).
+            val deadline = System.currentTimeMillis() + 3000
+            while (proxy.sessions.get() < 1 && System.currentTimeMillis() < deadline) {
+                Thread.sleep(20)
+            }
+            assertEquals(1, proxy.sessions.get())
+            val tunnel = open(proxy)
+            try {
+                assertEquals("payload-warm", echo(tunnel, "payload-warm"))
+            } finally {
+                tunnel.close()
+            }
+            // ...and the open reused it instead of building a second one.
+            assertEquals(1, proxy.sessions.get())
+            assertTrue(proxy.problems.isEmpty())
+        }
+    }
+
+    @Test
+    fun prewarmCannotResurrectResetSessionAcrossFiftyRaces() {
+        val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
+        EchoProxy(beforeReply = {
+            val (entered, release) = gates.poll(10, TimeUnit.SECONDS) ?: error("missing handshake gate")
+            entered.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+        }).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            repeat(50) { iteration ->
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                gates.put(entered to release)
+                val worker = thread(isDaemon = true) { FoxTunnel.prewarm(location, 8000) }
+                try {
+                    assertTrue("handshake did not enter at iteration $iteration", entered.await(8, TimeUnit.SECONDS))
+                    FoxTunnel.resetTransport()
+                } finally {
+                    release.countDown()
+                }
+                worker.join(10000)
+                assertFalse("prewarm did not finish at iteration $iteration", worker.isAlive)
+                assertEquals("obsolete session was reinserted at iteration $iteration", 0, FoxTunnel.pooledSessionCount())
+            }
+        }
+    }
+
+    @Test
+    fun powerSavingWidensTheCoalesceWindowWithoutBreakingTunnels() {
+        try {
+            assertFalse(FoxTunnel.powerSaving())
+            FoxTunnel.setPowerSaving(true)
+            assertTrue(FoxTunnel.powerSaving())
+            EchoProxy().use { proxy ->
+                val tunnel = open(proxy)
+                try {
+                    assertEquals("payload-save", echo(tunnel, "payload-save"))
+                } finally {
+                    tunnel.close()
+                }
+            }
+        } finally {
+            FoxTunnel.setPowerSaving(false)
+        }
+        assertFalse(FoxTunnel.powerSaving())
+    }
+
+    @Test
     fun serverStreamLimitForcesNewSessionsInsteadOfOverloadingOne() {
         EchoProxy(serverMaxStreams = 1).use { proxy ->
             val first = open(proxy)

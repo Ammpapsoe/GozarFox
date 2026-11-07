@@ -219,6 +219,15 @@
     <string name="update_notification_title">به‌روزرسانی گذر آماده است</string>
     <string name="update_notification_text">نسخهٔ %s آمادهٔ دریافت است</string>
     <string name="update_action_download">دریافت و نصب</string>
+    <string name="leak_title">نگهبان نشت</string>
+    <string name="leak_idle">بررسی تونل؛ نبود نشت در کل دستگاه تأیید نشده است</string>
+    <string name="leak_connect_first">برای بررسی تونل، ابتدا به وی‌پی‌ان وصل شوید.</string>
+    <string name="leak_running">در حال آزمایش تونل…</string>
+    <string name="leak_tunnel_ok">DNS و خروجی تونل پاسخ دادند؛ نبود نشت در کل دستگاه تأیید نشده است</string>
+    <string name="leak_issue">پاسخ غیرمنتظرهٔ DNS؛ نبود نشت در کل دستگاه تأیید نشده است</string>
+    <string name="leak_inconclusive">نتیجهٔ بررسی تونل نامشخص است؛ نبود نشت در کل دستگاه تأیید نشده است</string>
+    <string name="leak_blocked">%s بسته در تونل حذف شد</string>
+    <string name="tamper_detected">این نسخه از گذر با کلید رسمی امضا نشده و نمی‌تواند وصل شود</string>
     <string name="update_download_failed">دریافت به‌روزرسانی ناموفق بود</string>
     <string name="rollback_notification_title">سلامت به‌روزرسانی هنوز تأیید نشده است</string>
     <string name="rollback_notification_text">نسخهٔ پیشین: %s. به‌روزرسانی امضاشدهٔ جدیدتر را بررسی کنید.</string>

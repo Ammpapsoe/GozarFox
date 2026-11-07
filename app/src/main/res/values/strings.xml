@@ -219,6 +219,15 @@
     <string name="update_notification_title">Gozar update available</string>
     <string name="update_notification_text">Version %s is ready to download</string>
     <string name="update_action_download">Download and install</string>
+    <string name="leak_title">Leak Guard</string>
+    <string name="leak_idle">Tunnel diagnostic; device-wide leaks are not verified</string>
+    <string name="leak_connect_first">Connect the VPN before running the tunnel diagnostic.</string>
+    <string name="leak_running">Testing the tunnel…</string>
+    <string name="leak_tunnel_ok">Tunnel DNS and exit responded; device-wide leaks are not verified</string>
+    <string name="leak_issue">Unexpected DNS answer; device-wide leaks are not verified</string>
+    <string name="leak_inconclusive">Tunnel check inconclusive; device-wide leaks are not verified</string>
+    <string name="leak_blocked">%s packets dropped by the tunnel</string>
+    <string name="tamper_detected">This copy of Gozar is not signed with the official key and cannot connect</string>
     <string name="update_download_failed">The update could not be downloaded</string>
     <string name="rollback_notification_title">Update health not yet confirmed</string>
     <string name="rollback_notification_text">Previous version: %s. Check for a newer signed update.</string>

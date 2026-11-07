@@ -195,7 +195,7 @@ class FoxDuplex private constructor(
             } else {
                 if (!flushScheduled) {
                     flushScheduled = true
-                    FLUSHER.schedule({ flushQuietly() }, COALESCE_DELAY_MS, TimeUnit.MILLISECONDS)
+                    FLUSHER.schedule({ flushQuietly() }, coalesceDelayMs, TimeUnit.MILLISECONDS)
                 }
                 null
             }
@@ -257,7 +257,17 @@ class FoxDuplex private constructor(
     companion object {
         private const val COALESCE_BYTES = 1360
         private const val COALESCE_DELAY_MS = 5L
+        private const val POWER_SAVE_COALESCE_MS = 40L
         private const val STALL_RETRY_MS = 10L
+
+        @Volatile
+        private var coalesceDelayMs = COALESCE_DELAY_MS
+
+        internal fun setCoalesceDelay(powerSaving: Boolean) {
+            coalesceDelayMs = if (powerSaving) POWER_SAVE_COALESCE_MS else COALESCE_DELAY_MS
+        }
+
+        internal fun coalesceDelayed(): Boolean = coalesceDelayMs != COALESCE_DELAY_MS
         private val FLUSHER = Executors.newScheduledThreadPool(4) { task ->
             Thread(task, "fox-flush").apply { isDaemon = true }
         }
@@ -298,6 +308,27 @@ object FoxTunnel {
     // Handshakes run outside the pool lock. A transport reset invalidates
     // in-flight handshakes so they cannot reinsert an obsolete session.
     private var sessionGeneration = 0L
+
+    /**
+     * Warms the session pool for [location] so the first real flow does not
+     * pay the handshake. Best effort: failures are silent because the regular
+     * open path reports them anyway.
+     */
+    fun prewarm(location: FoxLocation, timeout: Int = 15000) {
+        try {
+            val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
+            acquireSession(location, key, timeout).touch()
+        } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * On battery, coalesce uploads over a longer window: fewer radio wakeups,
+     * at most a few tens of milliseconds of extra latency.
+     */
+    fun setPowerSaving(enabled: Boolean) = FoxDuplex.setCoalesceDelay(enabled)
+
+    fun powerSaving(): Boolean = FoxDuplex.coalesceDelayed()
 
     fun resetTransport() {
         adaptive.clear()

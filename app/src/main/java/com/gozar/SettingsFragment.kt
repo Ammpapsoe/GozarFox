@@ -24,11 +24,13 @@ class SettingsFragment : Fragment() {
 
     private val tonAddress = "UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3"
     private var updateChecking = false
+    private var leakRunning = false
     private var rootChecking = false
     private var appPicker: AppPicker? = null
     private var section = ""
     private var changingSwitch = false
     private var linkState: List<Boolean>? = null
+    private var shownLeakReport: FoxLeakGuard.Report? = null
     private var usageState: Pair<Long, Long>? = null
     private var versionName: String? = null
     private val accountListener: () -> Unit = { if (isAdded && view != null && !isHidden) paint() }
@@ -36,7 +38,8 @@ class SettingsFragment : Fragment() {
         if (isAdded && view != null && !isHidden) {
             if (section == "security" || section == "connection") {
                 val current = connectionState()
-                if (current != linkState) {
+                if (current != linkState ||
+                    (section == "security" && FoxLeakGuard.lastReport() !== shownLeakReport)) {
                     linkState = current
                     paint()
                 }
@@ -66,6 +69,7 @@ class SettingsFragment : Fragment() {
         find<View>(R.id.rowKillSwitch).setOnClickListener { explainLockdown() }
         find<View>(R.id.rowDns).setOnClickListener { pickDns() }
         find<View>(R.id.rowNotifications).setOnClickListener { openNotificationSettings() }
+        find<View>(R.id.rowLeak).setOnClickListener { runLeakTest() }
         find<View>(R.id.rowAds).setOnClickListener { requestAdBlocking(!Store.blockAds(requireContext())) }
         find<MaterialSwitch>(R.id.swAds).setOnCheckedChangeListener { _, checked ->
             if (!changingSwitch) requestAdBlocking(checked)
@@ -194,6 +198,23 @@ class SettingsFragment : Fragment() {
                 find<View>(R.id.btnAccountRefresh).isEnabled = signed
             }
             "security" -> {
+                find<TextView>(R.id.tvLeak).text = when {
+                    leakRunning -> getString(R.string.leak_running)
+                    else -> {
+                        val report = FoxLeakGuard.lastReport()
+                        shownLeakReport = report
+                        val blocked = FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED) +
+                            FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED)
+                        val base = when {
+                            report == null -> getString(R.string.leak_idle)
+                            report.dnsCheck == FoxLeakGuard.Check.ISSUE -> getString(R.string.leak_issue)
+                            report.dnsCheck == FoxLeakGuard.Check.OK && report.exitCheck == FoxLeakGuard.Check.OK ->
+                                getString(R.string.leak_tunnel_ok)
+                            else -> getString(R.string.leak_inconclusive)
+                        }
+                        if (blocked > 0) base + " · " + getString(R.string.leak_blocked, ltr(plain(blocked))) else base
+                    }
+                }
                 linkState = connectionState()
                 find<TextView>(R.id.tvKillSwitch).setText(when (FoxVpnService.lockdownState()) {
                     3 -> R.string.kill_active
@@ -363,6 +384,26 @@ class SettingsFragment : Fragment() {
             }
         }
         dialog.show()
+    }
+
+    /** Runs the tunnel diagnostic on demand; it cannot certify all device traffic. */
+    private fun runLeakTest() {
+        if (leakRunning) return
+        leakRunning = true
+        paint()
+        val started = FoxLink.runLeakDiagnostic {
+            leakRunning = false
+            if (isAdded && view != null) paint()
+        }
+        if (!started) {
+            leakRunning = false
+            paint()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.leak_title)
+                .setMessage(R.string.leak_connect_first)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
     }
 
     private fun openNotificationSettings() {

@@ -10,12 +10,16 @@ android {
     namespace 'com.gozar'
     compileSdk 36
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId 'com.gozar'
         minSdk 24
         targetSdk 35
-        versionCode 38
-        versionName '1.11.2'
+        versionCode 39
+        versionName '1.11.3'
         manifestPlaceholders.appLabel = '@string/app_name'
         manifestPlaceholders.xiaomiAppId = System.getenv('XIAOMI_APP_ID') ?: ''
         manifestPlaceholders.xiaomiDebug = 'false'

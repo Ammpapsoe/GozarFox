@@ -161,7 +161,7 @@ class UpdateManifestFlowTest {
 
     @Test
     fun theStoreRoundTripsTheArtifactProof() {
-        val context = RuntimeEnvironment.getApplication()
+        val context: android.content.Context = RuntimeEnvironment.getApplication()
         Store.setUpdate(context, "1.12.0", "https://github.com/x", "ab".repeat(32), 4096)
         assertEquals("1.12.0", Store.updateVersion(context))
         assertEquals("ab".repeat(32), Store.updateSha(context))
