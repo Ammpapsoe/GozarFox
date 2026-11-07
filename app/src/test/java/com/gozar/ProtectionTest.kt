@@ -11,6 +11,7 @@ import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -303,6 +304,54 @@ class ProtectionTest {
             FoxTunnel.startTransport()
         }
         assertEquals(0, FoxLink.dnsPort)
+    }
+
+    @Test
+    fun oldServiceDestroyCannotResetReplacementAcrossFiftyTransitions() {
+        val context = RuntimeEnvironment.getApplication()
+        val descriptorField = FoxVpnService::class.java.getDeclaredField("descriptor").apply { isAccessible = true }
+        try {
+            repeat(50) { iteration ->
+                FoxLink.stop()
+                val oldController = Robolectric.buildService(FoxVpnService::class.java).create()
+                val oldDescriptors = ParcelFileDescriptor.createPipe()
+                descriptorField.set(oldController.get(), oldDescriptors[0])
+                assertTrue(FoxLink.prepare(context))
+                val ports = listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort)
+                val newController = Robolectric.buildService(FoxVpnService::class.java).create()
+                val newDescriptors = ParcelFileDescriptor.createPipe()
+                descriptorField.set(newController.get(), newDescriptors[0])
+                val ticket = FoxTunnel.startTransport()
+                val closed = AtomicBoolean(false)
+                val direct = DirectPipe(object : FoxPipe {
+                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = -1
+                    override fun write(buffer: ByteArray, offset: Int, length: Int) = Unit
+                    override fun close() { closed.set(true) }
+                }) { true }
+                var oldDestroyed = false
+                try {
+                    oldController.destroy()
+                    oldDestroyed = true
+                    assertTrue("replacement lost liveness at iteration $iteration", FoxVpnService.isAlive())
+                    assertTrue("replacement lost interface at iteration $iteration", FoxVpnService.hasInterface())
+                    assertTrue("replacement transport reset at iteration $iteration", FoxTunnel.transportIsCurrent(ticket))
+                    assertEquals("replacement ports changed at iteration $iteration", ports,
+                        listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort))
+                    assertFalse("replacement direct pipe closed at iteration $iteration", closed.get())
+                } finally {
+                    if (!oldDestroyed) oldController.destroy()
+                    newController.destroy()
+                    direct.close()
+                    oldDescriptors[1].close()
+                    newDescriptors[1].close()
+                }
+                assertNull("current service teardown did not stop transport", FoxTunnel.currentTransport())
+                assertEquals(0, FoxLink.dnsPort)
+            }
+        } finally {
+            FoxLink.stop()
+            FoxTunnel.startTransport()
+        }
     }
 
     @Test
