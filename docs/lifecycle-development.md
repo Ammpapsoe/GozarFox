@@ -71,6 +71,15 @@ checks liveness, the current transport, ports, direct-pipe ownership, and stale
 error reporting. Check the corresponding GitHub Actions run before treating
 this candidate as verified.
 
+## Closed TCP DNS flow (candidate change)
+
+A gated local regression found that `FoxDnsPipe` could publish a learned DNS
+answer after its pipe had been closed; the test failed at iteration zero on
+the earlier code. This is a stale name-to-address update, not evidence of a
+packet leak. The candidate checks closure and publishes the answer under the
+same lock. Its targeted 50-iteration local stress passed. GitHub Actions and
+real reconnect scenarios must still be checked.
+
 ## Remaining limitations
 
 - In-flight raw TCP/TLS connect calls are not centrally interruptible; a

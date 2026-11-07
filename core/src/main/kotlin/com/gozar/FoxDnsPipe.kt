@@ -31,13 +31,16 @@ class FoxDnsPipe(
         }
         for (query in messages) {
             val answer = resolver.answer(query) ?: throw IOException("invalid DNS query")
-            onAnswer(query, answer)
             if (answer.size > 65535) throw IOException("DNS reply is too large")
             val framed = ByteArray(answer.size + 2)
             framed[0] = (answer.size ushr 8).toByte()
             framed[1] = answer.size.toByte()
             answer.copyInto(framed, 2)
             synchronized(lock) {
+                if (closed) throw IOException("DNS connection is closed")
+                // Publishing the learned name and checking closure must be
+                // atomic: a slow lookup cannot teach a flow after it closes.
+                onAnswer(query, answer)
                 while (queued + framed.size > 512 * 1024 && !closed) lock.wait()
                 if (closed) throw IOException("DNS connection is closed")
                 outgoing.addLast(framed)

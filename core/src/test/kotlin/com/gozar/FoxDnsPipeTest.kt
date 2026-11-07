@@ -1,5 +1,11 @@
 package com.gozar
 
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -24,6 +30,40 @@ class FoxDnsPipeTest {
         pipe.write(framed, 0, framed.size)
         assertEquals("www.test", stack.nameOf(0x01020304))
         pipe.close()
+    }
+
+    @Test
+    fun closedPipeCannotPublishLateDnsAnswerAcrossFiftyRaces() {
+        repeat(50) { iteration ->
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val learned = AtomicInteger()
+            val failure = AtomicReference<Throwable?>()
+            val resolver = FoxResolver(0, { _, q ->
+                entered.countDown()
+                if (!release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
+                q.copyOf().apply { this[2] = 0x81.toByte(); this[3] = 0x80.toByte() }
+            }, endpoints = listOf("synthetic"))
+            val pipe = FoxDnsPipe(resolver) { _, _ -> learned.incrementAndGet() }
+            val request = query(iteration)
+            val framed = byteArrayOf(0, request.size.toByte()) + request
+            val writer = thread(isDaemon = true) {
+                try { pipe.write(framed, 0, framed.size) } catch (error: Throwable) { failure.set(error) }
+            }
+            try {
+                assertTrue("lookup did not start at $iteration", entered.await(5, TimeUnit.SECONDS))
+                pipe.close()
+                release.countDown()
+                writer.join(5000)
+                assertTrue("writer did not exit at $iteration", !writer.isAlive)
+                assertTrue("closed writer should fail at $iteration", failure.get() is IOException)
+                assertEquals("closed pipe published an answer at $iteration", 0, learned.get())
+            } finally {
+                release.countDown()
+                pipe.close()
+                writer.join(5000)
+            }
+        }
     }
 
     @Test
