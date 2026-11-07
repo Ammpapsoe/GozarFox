@@ -10,10 +10,12 @@ platform package installer independently checks the APK signing certificate.
 An attacker can still block updates and can replay an older, correctly signed
 manifest; the format currently has no expiry or revocation mechanism.
 
-This describes the **Android** updater. The desktop app currently opens a
-GitHub release page; it does not implement signed in-app download, install or
-rollback. GPG signatures for release files can be verified separately, but
-that is not an automatic desktop updater.
+On the recovery-hardening branch, the desktop core verifies a separate signed
+`desktop-update.json` and can download a selected platform package after
+checking its signed size and digest. The UI opens the downloaded file's folder;
+it does not automatically install it or roll back the installation. This is
+not yet a published, end-to-end-validated desktop recovery system. GPG
+signatures for release files can also be verified separately.
 
 ## What the Android client verifies
 
@@ -69,10 +71,10 @@ requirement. Do not claim completion from journal state or an installer intent.
 ## Release procedure and safe validation
 
 `build.yml` verifies the official APK certificate and GPG-signs the artifacts.
-The publication job uses `GOZAR_UPDATE_KEY` to generate `update.json` and
-`update.json.sig`, verifies the Ed25519 signing key and signature, includes the
-manifest with the release assets, and compares every published asset with the
-built file. The private key stays outside the repository. The tag must match
+The publication job uses `GOZAR_UPDATE_KEY` to generate the Android `update.json`
+and desktop `desktop-update.json` with their detached `.sig` files, verifies
+the Ed25519 signing key and signatures, includes them with the release assets,
+and compares every published asset with the built file. The private key stays outside the repository. The tag must match
 the Android version (`vX.Y.Z` or `vX.Y.Z-desktop`); desktop and Android package
 versions can differ and the notes use both actual versions.
 

@@ -41,6 +41,9 @@ func NewService() *Service {
 }
 
 func (s *Service) begin(parent context.Context, clear bool) (context.Context, context.CancelFunc, *Verified, error) {
+	if err := parent.Err(); err != nil {
+		return nil, nil, nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.busy {

@@ -45,6 +45,31 @@ func (w *captureWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+func TestCancellationBeforeWorkerStartupAcrossFiftyRaces(t *testing.T) {
+	for round := 0; round < 50; round++ {
+		backend := &blockedUpdate{started: make(chan struct{}), cancelled: make(chan struct{})}
+		server := &Server{updates: backend, ctx: context.Background()}
+		ctx, done := server.registerUpdate()
+		response := server.handleUpdate(Request{ID: 2, Method: "cancel_update"}, "")
+		if response.Error != "" || ctx.Err() != context.Canceled {
+			done()
+			t.Fatalf("early cancellation did not reach pending worker: %v", ctx.Err())
+		}
+		response = server.handleUpdateContext(ctx, Request{ID: 1, Method: "check_update"}, "1.10.4")
+		if response.Error != "update operation cancelled" {
+			done()
+			t.Fatalf("cancelled worker started: %+v", response)
+		}
+		done()
+		server.pendingMu.Lock()
+		remaining := len(server.pending)
+		server.pendingMu.Unlock()
+		if remaining != 0 {
+			t.Fatal("pending update registration leaked")
+		}
+	}
+}
+
 func TestUpdateRPCRemainsResponsiveAcrossFiftyCancellationRaces(t *testing.T) {
 	for round := 0; round < 50; round++ {
 		backend := &blockedUpdate{started: make(chan struct{}), cancelled: make(chan struct{})}

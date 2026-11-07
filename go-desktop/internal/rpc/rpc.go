@@ -34,12 +34,16 @@ type updateService interface {
 	Cancel()
 }
 
+type pendingUpdate struct{ cancel context.CancelFunc }
+
 type Server struct {
-	app     *app.App
-	write   sync.Mutex
-	out     io.Writer
-	updates updateService
-	ctx     context.Context
+	app       *app.App
+	write     sync.Mutex
+	out       io.Writer
+	updates   updateService
+	ctx       context.Context
+	pendingMu sync.Mutex
+	pending   map[*pendingUpdate]struct{}
 }
 
 func Run(current *app.App) {
@@ -74,21 +78,62 @@ func Run(current *app.App) {
 	}
 }
 
+func (s *Server) registerUpdate() (context.Context, func()) {
+	parent := s.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
+	pending := &pendingUpdate{cancel: cancel}
+	s.pendingMu.Lock()
+	if s.pending == nil {
+		s.pending = make(map[*pendingUpdate]struct{})
+	}
+	s.pending[pending] = struct{}{}
+	s.pendingMu.Unlock()
+	return ctx, func() {
+		cancel()
+		s.pendingMu.Lock()
+		delete(s.pending, pending)
+		s.pendingMu.Unlock()
+	}
+}
+
+func (s *Server) cancelUpdates() {
+	s.pendingMu.Lock()
+	for pending := range s.pending {
+		pending.cancel()
+	}
+	s.pendingMu.Unlock()
+}
+
 func (s *Server) startUpdate(request Request, installed string) {
+	// Register before starting the goroutine, so an immediately following
+	// cancel cannot slip through before the service begins its network work.
+	ctx, done := s.registerUpdate()
 	go func() {
-		_ = s.emit(s.handleUpdate(request, installed))
+		defer done()
+		_ = s.emit(s.handleUpdateContext(ctx, request, installed))
 	}()
 }
 
 func (s *Server) handleUpdate(request Request, installed string) Response {
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return s.handleUpdateContext(ctx, request, installed)
+}
+
+func (s *Server) handleUpdateContext(ctx context.Context, request Request, installed string) Response {
 	response := Response{ID: request.ID}
 	if s.updates == nil {
 		response.Error = "update service unavailable"
 		return response
 	}
-	ctx := s.ctx
-	if ctx == nil {
-		ctx = context.Background()
+	if request.Method != "cancel_update" && ctx.Err() != nil {
+		response.Error = "update operation cancelled"
+		return response
 	}
 	var err error
 	switch request.Method {
@@ -108,6 +153,7 @@ func (s *Server) handleUpdate(request Request, installed string) Response {
 			response.Reply = map[string]string{"downloaded_path": path}
 		}
 	case "cancel_update":
+		s.cancelUpdates()
 		s.updates.Cancel()
 	default:
 		response.Error = "unknown update method"
