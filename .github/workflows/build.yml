@@ -553,6 +553,20 @@ jobs:
             test -s "$f.sig"
             gpg --homedir "$RUNNER_TEMP/verify-keyring" --batch --verify "$f.sig" "$f"
           done
+      - name: Signed update manifest
+        env:
+          GOZAR_UPDATE_KEY: ${{ secrets.GOZAR_UPDATE_KEY }}
+        run: |
+          set -e
+          test -n "$GOZAR_UPDATE_KEY"
+          printf '%s\n' "$GOZAR_UPDATE_KEY" > "$RUNNER_TEMP/update-key.pem"
+          chmod 600 "$RUNNER_TEMP/update-key.pem"
+          GOZAR_RELEASE_KEY="$RUNNER_TEMP/update-key.pem" \
+            tools/sign-update-manifest.sh "${{ steps.version.outputs.android }}" "1.10.0" collected \
+            "Gozar Android ${{ steps.version.outputs.android }}"
+          test -s collected/update.json
+          test -s collected/update.json.sig
+          shred -u "$RUNNER_TEMP/update-key.pem" 2>/dev/null || rm -f "$RUNNER_TEMP/update-key.pem"
       - name: Notes
         run: python3 scripts/notes.py "${{ steps.version.outputs.desktop }}" "${{ github.repository }}" "${{ steps.version.outputs.android }}" "${{ github.ref_name }}" > "$RUNNER_TEMP/notes.md"
       - name: Publish
@@ -577,6 +591,8 @@ jobs:
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done
           printf '%s\n' "$assets" | grep -Fx gozar-public-key.asc >/dev/null
+          printf '%s\n' "$assets" | grep -Fx update.json >/dev/null
+          printf '%s\n' "$assets" | grep -Fx update.json.sig >/dev/null
           mkdir -p "$RUNNER_TEMP/published"
           gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/published"
           for f in collected/*; do
