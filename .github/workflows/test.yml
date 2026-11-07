@@ -19,7 +19,7 @@ jobs:
   android-recovery-emulator:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -35,12 +35,19 @@ jobs:
         env:
           GOZAR_APK_DIR: ${{ runner.temp }}/recovery-apks
         run: bash scripts/build_recovery_test_apks.sh
-      - name: Enable KVM
+      - name: Configure emulator acceleration
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -r /dev/kvm -a -w /dev/kvm
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; ls -l /dev/kvm; fi
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo 'GOZAR_DISABLE_KVM=false' >> "$GITHUB_ENV"
+          else
+            echo '::warning::KVM is unavailable; using slower software emulation'
+            echo 'GOZAR_DISABLE_KVM=true' >> "$GITHUB_ENV"
+          fi
       - name: Test Android forward recovery on an emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -50,6 +57,8 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
+          disable-linux-hw-accel: ${{ env.GOZAR_DISABLE_KVM }}
+          emulator-boot-timeout: 1800
           script: bash scripts/test_recovery_emulator.sh
       - name: Upload emulator evidence
         if: always()
