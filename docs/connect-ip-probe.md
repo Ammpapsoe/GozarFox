@@ -22,25 +22,23 @@ production Mozilla VPN relay.
 | `SETTINGS_HEADER_TABLE_SIZE` | 8192 |
 | Unauthenticated CONNECT with any `:protocol` | `RST_STREAM(PROTOCOL_ERROR)` — uniformly |
 
-The blanket reset for unauthenticated requests means the proxy rejects before
-protocol dispatch, so **connect-ip acceptance cannot be confirmed or denied
-without a valid Bearer token**. `connect-udp` (RFC 9298) is known to work in
-production with authentication (reference clients ship it against these same
-relays).
+The blanket reset for unauthenticated requests does not distinguish rejection
+by authentication from lack of a particular protocol. **Neither CONNECT-IP nor
+CONNECT-UDP acceptance was established by this probe.** Other client projects
+report authenticated CONNECT-UDP support, but that is not a production test of
+this client, account, endpoint, or fallback behavior.
 
 ## Decision
 
-Do not implement CONNECT-IP (RFC 9484) blindly. Ship it in Phase 7 (UDP) with
-runtime negotiation instead:
+Do not enable CONNECT-IP (RFC 9484) or CONNECT-UDP (RFC 9298) solely on this
+probe. Extended CONNECT was advertised, but each protocol needs an authenticated
+in-app test of its actual request, response and datagram formats. CONNECT-IP
+and CONNECT-UDP have different semantics and requirements; they are not
+interchangeable simply by changing the `:protocol` header.
 
-1. On the first UDP flow, try `:protocol = connect-ip` on an authenticated
-   session.
-2. On `RST_STREAM` or a 4xx/5xx for that attempt, permanently fall back to
-   `:protocol = connect-udp` (DATAGRAM capsules, RFC 9297) for the session and
-   record the outcome so later sessions skip the probe.
-
-This gives CONNECT-IP where the backend accepts it and the proven
-CONNECT-UDP path everywhere else, with no user-visible failure either way.
-The prerequisite (extended CONNECT enabled on the relays) is verified; the
-remaining unknown is backend protocol acceptance, which only an
-authenticated in-app probe can settle.
+A failed request, timeout, connection reset or 4xx/5xx does not necessarily
+mean permanent lack of protocol support: authentication, rate limits, server
+health or the network may be responsible. Never cache those failures as a
+permanent downgrade, and never silently send unsupported UDP outside the VPN.
+See `masque-udp-development.md` for the disabled codec foundation and remaining
+validation work.
