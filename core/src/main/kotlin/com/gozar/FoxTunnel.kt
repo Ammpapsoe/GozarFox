@@ -180,6 +180,9 @@ class FoxDuplex private constructor(
 
     internal fun setReadTimeout(timeout: Int) = link.setTimeout(timeout)
 
+    /** Used only while transferring an H1 socket into the active registry. */
+    internal fun pendingSocket(): SSLSocket? = (link as? H1)?.socket
+
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (aborted) throw java.io.IOException("the tunnel was reset")
         val timeout = (link as? H2)?.timeout() ?: 0
@@ -361,6 +364,10 @@ object FoxTunnel {
     private val adaptive = FoxAdaptive()
     private val sessions = HashMap<String, MutableList<H2Session>>()
     private val h1Streams = HashSet<FoxDuplex>()
+    private val pendingRelays = HashSet<Socket>()
+    // TLS wraps the raw socket; close the raw socket on reset so buffered TLS
+    // output is not intentionally flushed during revocation.
+    private val pendingTls = HashMap<SSLSocket, Socket>()
     // Handshakes run outside the pool lock. A transport reset invalidates
     // in-flight handshakes so they cannot reinsert an obsolete session.
     private var sessionGeneration = 0L
@@ -403,9 +410,21 @@ object FoxTunnel {
         transportEnabled && sessionGeneration == ticket
     }
 
+    private fun releasePendingLocked(socket: SSLSocket) {
+        pendingTls.remove(socket)?.let { pendingRelays.remove(it) }
+    }
+
+    private fun abortPending(socket: SSLSocket) {
+        val raw = synchronized(sessions) { pendingTls[socket] }
+        try { raw?.close() } catch (_: Exception) { }
+        try { socket.close() } catch (_: Exception) { }
+        synchronized(sessions) { releasePendingLocked(socket) }
+    }
+
     private fun changeTransport(enabled: Boolean?): Long {
         val oldSessions: List<H2Session>
         val oldH1: List<FoxDuplex>
+        val oldPending: List<Socket>
         val ticket: Long
         synchronized(sessions) {
             sessionGeneration += 1
@@ -414,11 +433,15 @@ object FoxTunnel {
             adaptive.clear()
             oldSessions = sessions.values.flatMap { it.toList() }
             oldH1 = h1Streams.toList()
+            oldPending = pendingRelays.toList()
             sessions.clear()
             h1Streams.clear()
+            pendingRelays.clear()
+            pendingTls.clear()
         }
         // Closing outside the pool lock permits callbacks and new generations
         // to progress without letting old resources be put back into the pool.
+        for (socket in oldPending) try { socket.close() } catch (_: Exception) { }
         for (session in oldSessions) session.shutdown()
         for (stream in oldH1) stream.abort()
         return ticket
@@ -426,6 +449,7 @@ object FoxTunnel {
 
     internal fun pooledSessionCount(): Int = synchronized(sessions) { sessions.values.sumOf { it.size } }
     internal fun activeH1Count(): Int = synchronized(sessions) { h1Streams.size }
+    internal fun pendingRelayCount(): Int = synchronized(sessions) { pendingRelays.size }
 
     fun open(
         location: FoxLocation, host: String, port: Int, pass: String,
@@ -446,7 +470,7 @@ object FoxTunnel {
                 if (h2) {
                     acquireSession(location, key, timeout, generation).openStream(host, port, pass, timeout)
                 } else {
-                    openH1(location, host, port, pass, timeout)
+                    openH1(location, host, port, pass, timeout, generation)
                 }
             } catch (e: Exception) {
                 val fatal = e is TransportReset || isCertificateFailure(e) || e is FoxError ||
@@ -470,6 +494,7 @@ object FoxTunnel {
                 if (generation != sessionGeneration) false else {
                     adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
                     if (!h2) {
+                        result.pendingSocket()?.let { releasePendingLocked(it) }
                         h1Streams.add(result)
                         result.onClosed { synchronized(sessions) { h1Streams.remove(result) } }
                     }
@@ -515,12 +540,15 @@ object FoxTunnel {
             }
             sessionGeneration
         }
-        val fresh = H2Session(location, timeout)
+        val fresh = H2Session(location, timeout, generation)
         synchronized(sessions) {
             if (generation != sessionGeneration) {
                 fresh.shutdown()
                 throw TransportReset()
             }
+            // Move the raw socket from pending ownership to the H2 pool while
+            // holding the same lock as reset, leaving no untracked interval.
+            releasePendingLocked(fresh.socket)
             val list = sessions.getOrPut(key) { mutableListOf() }
             list.removeAll { session ->
                 val gone = !session.alive()
@@ -566,8 +594,8 @@ object FoxTunnel {
 
     internal fun authority(host: String, port: Int) = "$host:$port"
 
-    private fun openH1(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
-        val socket = connect(location, arrayOf("http/1.1"), timeout)
+    private fun openH1(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int, generation: Long): FoxDuplex {
+        val socket = connect(location, arrayOf("http/1.1"), timeout, generation)
         try {
             val target = authority(host, port)
             val output = BufferedOutputStream(socket.outputStream)
@@ -581,13 +609,9 @@ object FoxTunnel {
                 socket.soTimeout = READ_TIMEOUT_MS
                 return FoxDuplex(socket, input, output)
             }
-            socket.close()
             throw if (status == 0) java.io.IOException(reason(status, headers)) else FoxProxyRefusal(status, reason(status, headers))
         } catch (e: Exception) {
-            try {
-                socket.close()
-            } catch (_: Exception) {
-            }
+            abortPending(socket)
             throw e
         }
     }
@@ -597,11 +621,11 @@ object FoxTunnel {
      * A reader thread demultiplexes the frames; each stream keeps its own inbox
      * and half of the flow-control state lives here, under [stateLock].
      */
-    internal class H2Session(location: FoxLocation, timeout: Int) {
+    internal class H2Session(location: FoxLocation, timeout: Int, generation: Long) {
 
-        private val socket: SSLSocket = connect(location, arrayOf("h2"), timeout)
-        private val input = BufferedInputStream(socket.inputStream)
-        private val output = BufferedOutputStream(socket.outputStream)
+        internal val socket: SSLSocket = connect(location, arrayOf("h2"), timeout, generation)
+        private val input: BufferedInputStream
+        private val output: BufferedOutputStream
         private val outputLock = Any()
         private val streams = ConcurrentHashMap<Int, FoxDuplex.H2>()
         private val stateLock = Object()
@@ -616,10 +640,17 @@ object FoxTunnel {
         @Volatile private var serverMaxStreams = Int.MAX_VALUE
 
         init {
-            synchronized(outputLock) {
-                output.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".toByteArray(Charsets.US_ASCII))
-                output.write(frame(0x04, 0, 0, settings()))
-                output.flush()
+            try {
+                input = BufferedInputStream(socket.inputStream)
+                output = BufferedOutputStream(socket.outputStream)
+                synchronized(outputLock) {
+                    output.write("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".toByteArray(Charsets.US_ASCII))
+                    output.write(frame(0x04, 0, 0, settings()))
+                    output.flush()
+                }
+            } catch (e: Exception) {
+                abortPending(socket)
+                throw e
             }
         }
 
@@ -947,10 +978,19 @@ object FoxTunnel {
         }
     }
 
-    internal fun connect(location: FoxLocation, protocols: Array<String>, timeout: Int): SSLSocket {
-        val raw = chain(location.host, location.port, timeout)
+    internal fun connect(location: FoxLocation, protocols: Array<String>, timeout: Int, generation: Long): SSLSocket {
+        val raw = Socket()
+        val admitted = synchronized(sessions) {
+            if (!transportEnabled || generation != sessionGeneration) false else pendingRelays.add(raw)
+        }
+        if (!admitted) {
+            try { raw.close() } catch (_: Exception) { }
+            throw TransportReset()
+        }
         var tls: SSLSocket? = null
+        var handedOff = false
         try {
+            chain(location.host, location.port, timeout, raw)
             raw.soTimeout = timeout
             tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                 .createSocket(raw, location.host, location.port, true) as SSLSocket
@@ -969,28 +1009,38 @@ object FoxTunnel {
                 if (selected != "h2") throw java.io.IOException("the proxy did not negotiate HTTP/2")
             }
             tls.soTimeout = 0
-            return tls
+            val ready: SSLSocket = tls
+            synchronized(sessions) {
+                if (!transportEnabled || generation != sessionGeneration) throw TransportReset()
+                // Keep the underlying raw socket tracked through H1 response
+                // or H2 preface/session registration, not just the handshake.
+                pendingTls[ready] = raw
+                handedOff = true
+            }
+            return ready
         } catch (e: Exception) {
-            try {
-                tls?.close()
-            } catch (_: Exception) {
-            }
-            try {
-                raw.close()
-            } catch (_: Exception) {
-            }
+            try { raw.close() } catch (_: Exception) { }
+            try { tls?.close() } catch (_: Exception) { }
             throw e
+        } finally {
+            if (!handedOff) synchronized(sessions) { pendingRelays.remove(raw) }
         }
     }
 
-    private fun chain(host: String, port: Int, timeout: Int): Socket {
+    internal fun chain(host: String, port: Int, timeout: Int, raw: Socket = Socket()): Socket {
         val hops = FoxUpstream.hops
-        val raw = Socket()
-        raw.keepAlive = false
-        raw.tcpNoDelay = true
-        val first = if (hops.isEmpty()) host to port else hops.first().host to hops.first().port
-        raw.connect(InetSocketAddress(first.first, first.second), timeout)
-        raw.soTimeout = timeout
+        try {
+            raw.keepAlive = false
+            raw.tcpNoDelay = true
+            val first = if (hops.isEmpty()) host to port else hops.first().host to hops.first().port
+            raw.connect(InetSocketAddress(first.first, first.second), timeout)
+            raw.soTimeout = timeout
+        } catch (e: Exception) {
+            try { raw.close() } catch (_: Exception) { }
+            // Preserve the original exception type; the adaptive fallback
+            // policy distinguishes I/O failures from explicit proxy errors.
+            throw e
+        }
         if (hops.isEmpty()) return raw
         try {
             for (index in 1 until hops.size) {

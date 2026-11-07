@@ -172,6 +172,53 @@ class FoxTunnelTest {
     }
 
     @Test
+    fun resetClosesPendingH1ResponseAcrossFiftyRaces() {
+        val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
+        LocalProxy(h1Only = true, beforeH1Reply = {
+            val (entered, release) = gates.poll(10, TimeUnit.SECONDS) ?: error("missing H1 gate")
+            entered.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+        }).use { proxy ->
+            repeat(50) { iteration ->
+                resetH2()
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                gates.put(entered to release)
+                val worker = thread(isDaemon = true) {
+                    try { open(proxy).close() } catch (_: Exception) { }
+                }
+                try {
+                    assertTrue("H1 response did not block at $iteration", entered.await(8, TimeUnit.SECONDS))
+                    FoxTunnel.resetTransport()
+                    worker.join(2000)
+                    assertFalse("reset left H1 response pending at $iteration", worker.isAlive)
+                    assertEquals("pending H1 relay leaked at $iteration", 0, FoxTunnel.pendingRelayCount())
+                } finally {
+                    release.countDown()
+                    worker.join(10000)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun successfulH1TransfersOutOfPendingAcrossFiftyTransitions() {
+        LocalProxy(h1Only = true).use { proxy ->
+            repeat(50) { iteration ->
+                resetH2()
+                val tunnel = open(proxy)
+                try {
+                    assertEquals("H1 stayed pending at $iteration", 0, FoxTunnel.pendingRelayCount())
+                    assertEquals("H1 was not tracked at $iteration", 1, FoxTunnel.activeH1Count())
+                } finally {
+                    tunnel.close()
+                }
+                assertEquals(0, FoxTunnel.activeH1Count())
+            }
+        }
+    }
+
+    @Test
     fun establishedH1IsRevokedOnResetAcrossFiftyRaces() {
         LocalProxy(h1Only = true).use { proxy ->
             repeat(50) { iteration ->

@@ -87,6 +87,21 @@ class FoxTunnelPoolTest {
     }
 
     @Test
+    fun successfulH2TransfersOutOfPendingAcrossFiftyTransitions() {
+        EchoProxy().use { proxy ->
+            repeat(50) { iteration ->
+                val tunnel = open(proxy)
+                try {
+                    assertEquals("H2 stayed pending at $iteration", 0, FoxTunnel.pendingRelayCount())
+                    assertEquals("H2 was not pooled at $iteration", 1, FoxTunnel.pooledSessionCount())
+                } finally {
+                    tunnel.close()
+                }
+            }
+        }
+    }
+
+    @Test
     fun transportResetRejectsPendingHandshakesAcrossFiftyRaces() {
         val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
         val connections = AtomicInteger()

@@ -109,13 +109,30 @@ These tests establish that cancellation is requested and late pipes are
 rejected; they cannot retract SYNs or other packets sent before a close, and
 they are not a physical-device kill-switch test.
 
+## Relay dial cleanup and cancellation (candidate change)
+
+A controlled local test found that the raw relay socket was not explicitly
+closed when initial setup or `connect()` failed; it failed at iteration zero on
+the previous code. The candidate closes it while retaining the original
+exception type and adaptive fallback behavior. A 50-transition stress passed
+with and without an HTTP proxy hop. This is a resource cleanup finding, not
+proof of traffic leakage.
+
+Additional loopback tests held a proxy CONNECT reply, a TLS handshake, and an
+H1 CONNECT response open. A reset did not close the pending connection before
+release on the earlier code (iteration zero). The candidate registers the raw
+relay socket before network setup, closes it on reset, and transfers ownership
+under the same lock to the established H1 registry or H2 pool. Three targeted
+50-race tests passed, as did 50-transition H1/H2 handoff checks and prior H1/H2
+reset stresses. These are JVM/loopback observations; GitHub Actions and Android
+physical-device behavior still need verification. Closing a socket cannot take
+back packets already sent and does not establish device-wide traffic safety.
+
 ## Remaining limitations
 
-- In-flight relay TCP/TLS and DNS operations are not all centrally
-  interruptible; a connection can finish after stop, although generation
-  checks reject or close a late result. A direct socket connect already in
-  progress can itself reach the network before it is closed. This is not a
-  kill switch.
+- OS DNS resolution and other network work may not be promptly interruptible;
+  cancellation races and socket-close behavior vary by platform. A direct or
+  relay socket can emit traffic before being closed. This is not a kill switch.
 - Real overlapping service teardown/restart, root-session overlap, flows admitted
   while the same TUN stack is being reconnected, DNS workers, and all error paths
   require additional deterministic integration and device tests. Lifecycle checks can prevent
