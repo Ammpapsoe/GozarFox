@@ -9,7 +9,7 @@ source_apk="${GOZAR_PREVIOUS_APK:?set GOZAR_PREVIOUS_APK}"
 source_version="${GOZAR_PREVIOUS_VERSION:?set GOZAR_PREVIOUS_VERSION}"
 label="${GOZAR_EVIDENCE_LABEL:?set GOZAR_EVIDENCE_LABEL}"
 case "$source_apk:$source_version:$label" in
-  official-stable:1.10.4:stable|official-previous:1.11.1:preview) ;;
+  official-stable:1.10.4:stable|official-previous:1.11.1:preview|official-corrected:1.11.2:corrected) ;;
   *) echo 'unexpected official upgrade fixture' >&2; exit 1 ;;
 esac
 prefix="$DEST/official-$label"

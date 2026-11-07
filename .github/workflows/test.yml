@@ -71,6 +71,7 @@ jobs:
           script: >-
             GOZAR_PREVIOUS_APK=official-stable GOZAR_PREVIOUS_VERSION=1.10.4 GOZAR_EVIDENCE_LABEL=stable bash scripts/test_official_upgrade_emulator.sh &&
             GOZAR_PREVIOUS_APK=official-previous GOZAR_PREVIOUS_VERSION=1.11.1 GOZAR_EVIDENCE_LABEL=preview bash scripts/test_official_upgrade_emulator.sh &&
+            GOZAR_PREVIOUS_APK=official-corrected GOZAR_PREVIOUS_VERSION=1.11.2 GOZAR_EVIDENCE_LABEL=corrected bash scripts/test_official_upgrade_emulator.sh &&
             bash scripts/test_recovery_emulator.sh
       - name: Upload emulator evidence
         if: always()
