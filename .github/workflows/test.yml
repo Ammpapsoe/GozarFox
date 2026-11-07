@@ -69,6 +69,7 @@ jobs:
             ${{ runner.temp }}/recovery-apks/*journal.json
             ${{ runner.temp }}/recovery-apks/downgrade.log
             ${{ runner.temp }}/recovery-apks/window.xml
+            ${{ runner.temp }}/recovery-apks/installer-window.xml
           if-no-files-found: ignore
 
   desktop-ui:

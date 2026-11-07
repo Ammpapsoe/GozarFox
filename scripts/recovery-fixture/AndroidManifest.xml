@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copied into the debug source set by the isolated emulator fixture build.
+     It is never included in a release build. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".RecoveryFixtureActivity"
+            android:exported="true" />
+    </application>
+</manifest>

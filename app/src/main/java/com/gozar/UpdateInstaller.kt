@@ -31,7 +31,11 @@ object UpdateInstaller {
         }
     }
 
-    private fun downloadAndInstall(context: Context): Boolean {
+    private fun downloadAndInstall(context: Context): Boolean =
+        downloadAndInstall(context) { url -> url.openConnection() as HttpURLConnection }
+
+    /** The injectable transport is used only by isolated debug-fixture tests. */
+    internal fun downloadAndInstall(context: Context, connect: (URL) -> HttpURLConnection): Boolean {
         val version = Store.updateVersion(context)
         val url = Store.updateUrl(context)
         val sha = Store.updateSha(context)
@@ -46,7 +50,7 @@ object UpdateInstaller {
         if (!directory.isDirectory && !directory.mkdirs()) return false
         val target = File(directory, "gozar-$version.apk")
         val temporary = File(directory, "gozar-$version.apk.part")
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = connect(URL(url))
         try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000

@@ -66,6 +66,11 @@ jobs:
               echo "::error::Android signing certificate does not match the official Gozar key"
               exit 1
             fi
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump xmltree "$apk" AndroidManifest.xml > "$RUNNER_TEMP/release-manifest.txt"
+            if grep -F 'RecoveryFixtureActivity' "$RUNNER_TEMP/release-manifest.txt" >/dev/null; then
+              echo "::error::CI-only recovery fixture activity must never appear in a release APK"
+              exit 1
+            fi
           done
       - name: Collect APKs
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}

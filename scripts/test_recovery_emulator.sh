@@ -108,10 +108,110 @@ if adb install -r "$DEST/old.apk" > "$DEST/downgrade.log" 2>&1; then
 fi
 grep -F 'INSTALL_FAILED_VERSION_DOWNGRADE' "$DEST/downgrade.log" >/dev/null
 
-# A higher-version, same-key debug build can be installed while keeping data.
-adb install -r "$DEST/forward.apk"
+# Exercise the actual verifier and installer using an ephemeral test key and a
+# local transport in an isolated debug-only activity. Production networking and
+# the production pinned key are deliberately NOT replaced or tested here.
+python3 scripts/create_recovery_fixture_specs.py "$DEST"
+for kind in old forward; do
+  adb push "$DEST/$kind.apk" "/data/local/tmp/gozar-fixture-$kind.apk" >/dev/null
+  adb shell run-as "$PKG" cp "/data/local/tmp/gozar-fixture-$kind.apk" "files/recovery-fixture-$kind.apk"
+done
+for kind in invalid-signature tampered valid; do
+  adb push "$DEST/fixture-$kind.json" "/data/local/tmp/fixture-$kind.json" >/dev/null
+  adb shell run-as "$PKG" cp "/data/local/tmp/fixture-$kind.json" "files/fixture-$kind.json"
+done
+
+wait_for_fixture() {
+  python3 - "$PKG" "$1" <<'PY'
+import subprocess, sys, time
+pkg, expected = sys.argv[1:]
+deadline = time.monotonic() + 30
+last = ""
+while time.monotonic() < deadline:
+    result = subprocess.run(["adb", "shell", "run-as", pkg, "cat", "files/recovery-fixture-result"],
+                            capture_output=True, text=True)
+    last = result.stdout.strip()
+    if last:
+        if last != expected:
+            raise SystemExit(f"fixture returned {last!r}, expected {expected!r}")
+        print("Fixture:", last)
+        break
+    time.sleep(0.3)
+else:
+    raise SystemExit(f"fixture timed out waiting for {expected!r}; last={last!r}")
+PY
+}
+
+run_fixture() {
+  local mode="$1" expected="$2"
+  adb shell run-as "$PKG" rm -f files/recovery-fixture-result
+  if [ "$mode" = probe ]; then
+    adb shell am start -W -n "$PKG/.RecoveryFixtureActivity" --es mode probe >/dev/null
+  else
+    adb shell am start -W -n "$PKG/.RecoveryFixtureActivity" --es mode update --es spec "fixture-$mode.json" >/dev/null
+  fi
+  wait_for_fixture "$expected"
+}
+
+# The middle APK deliberately changes only this synthetic behavior probe.
+run_fixture probe probe:broken
+run_fixture invalid-signature manifest-rejected
+run_fixture tampered download-rejected
+adb shell dumpsys package "$PKG" | grep -F 'versionName=1.11.1' >/dev/null
+
+# Grant the package's install-source app-op, but still require an actual click
+# on the system package installer's confirmation UI.
+adb shell appops set "$PKG" REQUEST_INSTALL_PACKAGES allow
+run_fixture valid installer-started
+python3 - "$PKG" "$DEST/installer-window.xml" <<'PY'
+import re, subprocess, sys, time, xml.etree.ElementTree as ET
+pkg, evidence = sys.argv[1:]
+
+def adb(*args):
+    return subprocess.run(["adb", *args], text=True, capture_output=True, check=True).stdout
+
+deadline = time.monotonic() + 45
+while time.monotonic() < deadline:
+    try:
+        adb("shell", "uiautomator", "dump", "/sdcard/gozar-installer.xml")
+        xml = adb("shell", "cat", "/sdcard/gozar-installer.xml")
+        open(evidence, "w", encoding="utf-8").write(xml)
+        root = ET.fromstring(xml)
+        for node in root.iter("node"):
+            text = node.attrib.get("text", "").strip().lower()
+            owner = node.attrib.get("package", "")
+            if text not in ("install", "update") or "packageinstaller" not in owner:
+                continue
+            bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds", ""))
+            if not bounds:
+                continue
+            x1, y1, x2, y2 = map(int, bounds.groups())
+            if x2 <= x1 or y2 <= y1:
+                continue
+            adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+            break
+        else:
+            time.sleep(0.5)
+            continue
+        break
+    except (subprocess.CalledProcessError, ET.ParseError):
+        time.sleep(0.5)
+else:
+    raise SystemExit("system installer confirmation was not shown")
+
+deadline = time.monotonic() + 45
+while time.monotonic() < deadline:
+    info = adb("shell", "dumpsys", "package", pkg)
+    if "versionName=1.11.2" in info:
+        print("System installer upgraded the app to 1.11.2")
+        break
+    time.sleep(0.5)
+else:
+    raise SystemExit("system installer did not complete the forward upgrade")
+PY
 sentinel=$(adb shell run-as "$PKG" cat files/recovery-ci-sentinel | tr -d '\r')
 test "$sentinel" = recovery-ci-sentinel
+run_fixture probe probe:healthy
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
 adb shell run-as "$PKG" cat files/journal/update.json | tr -d '\r' > "$DEST/forward-journal.json"
 python3 - "$DEST/forward-journal.json" <<'PY'
@@ -120,4 +220,4 @@ state = json.load(open(sys.argv[1], encoding="utf-8"))
 assert state["installed"] == "1.11.2", state
 assert state["previous"] == "1.11.1", state
 PY
-printf '%s\n' 'Android emulator: downgrade rejected; forward install kept data and recovery notice opened.'
+printf '%s\n' 'Android emulator: bad signature and tampered APK rejected; user-confirmed fixture update restored synthetic behavior and kept data.'

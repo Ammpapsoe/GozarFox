@@ -76,6 +76,16 @@ known-good behavior was restored, that data migrated safely, or that every
 published versionCode is below the recovery code.** Those require separate
 review and testing before the draft release can be approved.
 
+The optional Android emulator scenario builds three debug APKs with a deliberately
+broken **synthetic** behavior probe in the middle one. An ephemeral Ed25519 test
+key signs a fixture manifest; a debug-only activity uses the real verifier and
+installer with a local fake transport. The scenario is designed to reject an
+invalid signature and tampered APK, require the system installer's confirmation,
+and check that the forward APK restores the probe while preserving a sentinel
+file. It does not test the production key, live GitHub delivery, real faulty
+production behavior, or arbitrary data migrations. The exported fixture activity
+is injected only into the three test APKs, never a release APK.
+
 A full rollback feature, including data compatibility, delivery when the app
 cannot start, user consent and desktop support, remains a separate incomplete
 requirement. Do not claim completion from journal state or an installer intent.
