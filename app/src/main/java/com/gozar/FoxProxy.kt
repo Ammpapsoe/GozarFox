@@ -17,6 +17,8 @@ class FoxProxy(
     private val countTraffic: Boolean = true,
     private val directAllowed: () -> Boolean = { FoxVpnService.directRoutingAllowed() },
     private val directAddress: (String) -> String? = { FoxVpnService.directAddress(it) },
+    private val tunnelScope: (FoxProxy) -> FoxLink.TransportScope? = { FoxLink.transportScope(it) },
+    private val scopeCurrent: (Long) -> Boolean = { FoxLink.transportIsCurrent(it) },
     private val pass: () -> String?
 ) {
 
@@ -237,15 +239,25 @@ class FoxProxy(
     }
 
     private fun open(host: String, port: Int): FoxPipe? {
+        // Bind this request to the listener's active attempt before any slow
+        // DNS, connect, or credential renewal. An old listener must not borrow
+        // the transport created by a later reconnect.
+        val scope = tunnelScope(this) ?: return null
+        if (!scopeCurrent(scope.ticket)) return null
         val tunnel = if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
             val address = directAddress(host) ?: return null
-            if (!directAllowed()) return null
-            FoxSocketPipe.connect(address, port)?.let { DirectPipe(it, directAllowed) }
+            if (!directAllowed() || !scopeCurrent(scope.ticket)) return null
+            val pipe = FoxSocketPipe.connect(address, port) ?: return null
+            val guarded = DirectPipe(pipe) { directAllowed() && scopeCurrent(scope.ticket) }
+            if (!directAllowed() || !scopeCurrent(scope.ticket)) {
+                guarded.close()
+                return null
+            }
+            guarded
         } else {
             val access = pass() ?: return null
-            val location = FoxLink.location ?: return null
             try {
-                FoxTunnel.open(location, host, port, access)
+                FoxTunnel.open(scope.location, host, port, access, expectedTransport = scope.ticket)
             } catch (e: Exception) {
                 if (!forceTunnel) FoxLink.fault(e.message ?: "tunnel failed")
                 null

@@ -163,13 +163,17 @@ class DnsTunnelIntegrationTest {
             }
         }
         val proxyPort = ServerSocket(0).use { it.localPort }
-        val proxy = FoxProxy(proxyPort, forceTunnel = true, countTraffic = false) { "local-test-pass" }
+        val proxy = FoxProxy(proxyPort, forceTunnel = true, countTraffic = false, tunnelScope = {
+            val place = FoxLink.location
+            val ticket = FoxTunnel.currentTransport()
+            if (place == null || ticket == null) null else FoxLink.TransportScope(place, ticket)
+        }, scopeCurrent = { FoxTunnel.transportIsCurrent(it) }) { "local-test-pass" }
         try {
             SSLContext.setDefault(context)
             HttpsURLConnection.setDefaultSSLSocketFactory(context.socketFactory)
             FoxRoute.apply(true, "localhost")
             FoxUpstream.hops = emptyList()
-            FoxTunnel.resetTransport()
+            FoxTunnel.startTransport()
             FoxLink.location = FoxLocation("NL", "Test", "Local", "localhost", relay.localPort, false)
             assertTrue(FoxRoute.direct("localhost"))
             assertTrue(proxy.start())

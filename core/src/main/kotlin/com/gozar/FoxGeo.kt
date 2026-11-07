@@ -31,9 +31,9 @@ object FoxGeo {
         return true
     }
 
-    fun refresh(location: FoxLocation, pass: String): Boolean {
+    fun refresh(location: FoxLocation, pass: String, expectedTransport: Long? = null): Boolean {
         return try {
-            val pipe = FoxTunnel.open(location, "raw.githubusercontent.com", 443, pass, 15000)
+            val pipe = FoxTunnel.open(location, "raw.githubusercontent.com", 443, pass, 15000, expectedTransport)
             try {
                 val request = ("GET /bardia049b-stack/Gozar/main/packaging/ir-domains.txt HTTP/1.1\r\n" +
                     "Host: raw.githubusercontent.com\r\nConnection: close\r\n\r\n").toByteArray(Charsets.UTF_8)
@@ -52,6 +52,7 @@ object FoxGeo {
                 if (split < 0) return false
                 val head = text.substring(0, split)
                 if (!head.startsWith("HTTP/") || !head.contains(" 200 ")) return false
+                if (expectedTransport != null && !FoxTunnel.transportIsCurrent(expectedTransport)) return false
                 update(String(bytes, split + 4, bytes.size - split - 4, Charsets.UTF_8))
             } finally {
                 pipe.close()

@@ -41,7 +41,9 @@ class FoxStack(
     private val resolver: FoxResolver,
     private val dial: (String, String, Int) -> FoxPipe,
     private val meter: (Boolean, Long) -> Unit,
-    mtu: Int = MTU
+    mtu: Int = MTU,
+    // Capture a flow's lifecycle scope before it is submitted to a worker.
+    private val prepareDial: ((String, String, Int) -> (() -> FoxPipe))? = null
 ) {
 
     private val mtu = mtu.coerceIn(576, 65535)
@@ -615,11 +617,23 @@ class FoxStack(
         }
 
         fun begin() {
+            val destination = address(remote)
+            val host = names[remote] ?: destination
+            val open: () -> FoxPipe = if (remotePort == 53) {
+                { dnsPipe() }
+            } else {
+                try {
+                    prepareDial?.invoke(host, destination, remotePort) ?: { dial(host, destination, remotePort) }
+                } catch (e: Exception) {
+                    if (!closed) send(remote, remotePort, appPort, sent, expected, RST or ACK, 0, null, 0, 0)
+                    flows.remove(key, this)
+                    return
+                }
+            }
             workers.execute {
-                val destination = address(remote)
-                val host = names[remote] ?: destination
+                if (closed) return@execute
                 val link = try {
-                    if (remotePort == 53) dnsPipe() else dial(host, destination, remotePort)
+                    open()
                 } catch (e: Exception) {
                     if (!closed) send(remote, remotePort, appPort, sent, expected, RST or ACK, 0, null, 0, 0)
                     flows.remove(key, this)
