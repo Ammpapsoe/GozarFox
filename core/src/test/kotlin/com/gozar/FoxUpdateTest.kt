@@ -269,6 +269,20 @@ class FoxUpdateTest {
     }
 
     @Test
+    fun streamingDownloadsEnforceTheSignedSizeAndDigest() {
+        val bytes = ByteArray(100_000) { (it % 251).toByte() }
+        val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        val output = java.io.ByteArrayOutputStream()
+        assertTrue(FoxUpdate.copyVerified(bytes.inputStream(), output, bytes.size.toLong(), digest))
+        assertTrue(bytes.contentEquals(output.toByteArray()))
+        assertFalse(FoxUpdate.copyVerified(bytes.inputStream(), java.io.ByteArrayOutputStream(), bytes.size - 1L, digest))
+        assertFalse(FoxUpdate.copyVerified(bytes.inputStream(), java.io.ByteArrayOutputStream(), bytes.size + 1L, digest))
+        assertFalse(FoxUpdate.copyVerified(bytes.inputStream(), java.io.ByteArrayOutputStream(), bytes.size.toLong(), "0".repeat(64)))
+        assertFalse(FoxUpdate.copyVerified(bytes.inputStream(), java.io.ByteArrayOutputStream(), bytes.size.toLong(), "invalid"))
+    }
+
+    @Test
     fun onlyProjectReleaseDownloadUrlsAreTrusted() {
         assertTrue(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/a.apk"))
         assertTrue(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar1/releases/download/v1.12.0/a.apk"))
@@ -342,6 +356,39 @@ class FoxUpdateTest {
         assertEquals(3, journal.beginLaunch("1.12.0"))
         assertEquals("1.11.0", journal.rollbackTarget("1.12.0"))
         assertNull(journal.rollbackFile())
+    }
+
+    @Test
+    fun aCancelledInstallerDoesNotInventAPreviousVersion() {
+        val journal = journal()
+        journal.recordUpdate("1.12.0", "1.11.0", "/some/old.apk")
+        assertEquals(0, journal.beginLaunch("1.11.0"))
+        assertEquals("1.11.0", journal.state().installed)
+        assertEquals("", journal.state().previous)
+        assertNull(journal.rollbackFile())
+        assertNull(journal.rollbackTarget("1.11.0"))
+    }
+
+    @Test
+    fun anExternalUpdateNeverReusesACacheForADifferentVersion() {
+        val journal = journal()
+        val cached = File(folder.root, "older.apk").also { it.writeBytes(byteArrayOf(1)) }
+        journal.recordUpdate("1.11.0", "1.10.0", cached.absolutePath)
+        journal.markHealthy()
+        journal.beginLaunch("1.12.0")
+        repeat(3) { journal.beginLaunch("1.12.0") }
+        assertEquals("1.11.0", journal.rollbackTarget("1.12.0"))
+        assertNull(journal.rollbackFile())
+    }
+
+    @Test
+    fun launchFailureCancelsThePendingTrial() {
+        val journal = journal()
+        journal.recordUpdate("1.12.0", "1.11.0", "")
+        journal.cancelPending("1.12.0", "1.11.0")
+        assertEquals("1.11.0", journal.state().installed)
+        assertTrue(journal.state().healthy)
+        assertEquals("", journal.state().previous)
     }
 
     @Test

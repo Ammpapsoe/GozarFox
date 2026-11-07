@@ -163,6 +163,33 @@ object FoxUpdate {
         return difference == 0
     }
 
+    /** Stream into a caller-owned temporary file while enforcing signed size and digest. */
+    fun copyVerified(input: java.io.InputStream, output: java.io.OutputStream, size: Long, sha256: String): Boolean {
+        if (size <= 0 || size > 512L * 1024 * 1024 || !SHA256_HEX.matches(sha256)) return false
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(65_536)
+        var total = 0L
+        while (true) {
+            var count = input.read(buffer)
+            if (count < 0) break
+            if (count == 0) {
+                val one = input.read()
+                if (one < 0) break
+                buffer[0] = one.toByte()
+                count = 1
+            }
+            if (count.toLong() > size - total) return false
+            output.write(buffer, 0, count)
+            digest.update(buffer, 0, count)
+            total += count
+        }
+        if (total != size) return false
+        val expected = ByteArray(32) { index ->
+            ((Character.digit(sha256[index * 2], 16) shl 4) or Character.digit(sha256[index * 2 + 1], 16)).toByte()
+        }
+        return java.security.MessageDigest.isEqual(expected, digest.digest())
+    }
+
     fun versionParts(value: String): List<Int> =
         value.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }.take(4)
 

@@ -15,9 +15,11 @@ class UpdateActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_DOWNLOAD -> UpdateInstaller.start(context)
-            ACTION_ROLLBACK -> {
-                val ok = UpdateInstaller.rollback(context)
-                Notify.installResult(context.applicationContext, ok)
+            // PendingIntents from an older build open the honest recovery
+            // flow instead of asking Android to install an older APK.
+            ACTION_ROLLBACK -> try {
+                context.startActivity(Intent(context, UpdateRecoveryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
             }
         }
     }

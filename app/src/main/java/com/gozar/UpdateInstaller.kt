@@ -6,20 +6,18 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 /**
- * Downloads the update named by the signed manifest, proves the bytes match
- * the signed sha256 and size, caches the running APK so the update can be
- * reversed, records the trial in the journal, and hands the file to the
- * system installer. Nothing is installed silently — the user always confirms
- * the system prompt.
+ * Downloads the APK named by a previously verified manifest into a temporary
+ * file, checks its exact size and SHA-256, then hands it to Android's system
+ * installer. The user must confirm; starting the installer does not prove that
+ * Android actually installed the package.
  */
 object UpdateInstaller {
-
     private val main = Handler(Looper.getMainLooper())
     private val running = java.util.concurrent.atomic.AtomicBoolean()
 
@@ -27,20 +25,10 @@ object UpdateInstaller {
         if (!running.compareAndSet(false, true)) return
         val app = context.applicationContext
         thread(name = "gozar-update-download") {
-            val ok = try {
-                downloadAndInstall(app)
-            } catch (_: Exception) {
-                false
-            }
+            val handedOff = try { downloadAndInstall(app) } catch (_: Exception) { false }
             running.set(false)
-            main.post { Notify.installResult(app, ok) }
+            main.post { Notify.installResult(app, handedOff) }
         }
-    }
-
-    /** Reinstalls the cached previous build when the journal advises a rollback. */
-    fun rollback(context: Context): Boolean {
-        val file = App.journal(context).rollbackFile() ?: return false
-        return launch(context.applicationContext, file)
     }
 
     private fun downloadAndInstall(context: Context): Boolean {
@@ -48,57 +36,45 @@ object UpdateInstaller {
         val url = Store.updateUrl(context)
         val sha = Store.updateSha(context)
         val size = Store.updateSize(context)
-        if (version.isBlank() || url.isBlank() || sha.isBlank() || size <= 0) return false
-        if (!FoxUpdate.trusted(url)) return false
-        val target = File(context.filesDir, "updates/gozar-$version.apk")
-        target.parentFile?.mkdirs()
+        val installed = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
+        } catch (_: Exception) { "" }
+        if (!FoxUpdate.isNewer(version, installed) || !FoxUpdate.trusted(url)) return false
+        if (size <= 0 || size > 512L * 1024 * 1024 || !sha.matches(Regex("[0-9a-f]{64}"))) return false
+
+        val directory = File(context.filesDir, "updates")
+        if (!directory.isDirectory && !directory.mkdirs()) return false
+        val target = File(directory, "gozar-$version.apk")
+        val temporary = File(directory, "gozar-$version.apk.part")
         val connection = URL(url).openConnection() as HttpURLConnection
+        var complete = false
         try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
             connection.setRequestProperty("User-Agent", "Gozar updater")
             connection.setRequestProperty("Connection", "close")
             if (connection.responseCode !in 200..299) return false
-            val digest = MessageDigest.getInstance("SHA-256")
-            var total = 0L
             connection.inputStream.use { input ->
-                target.outputStream().use { output ->
-                    val buffer = ByteArray(65_536)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        total += read
-                        // The signed manifest bounds the download exactly.
-                        if (total > size) return false
-                        digest.update(buffer, 0, read)
-                        output.write(buffer, 0, read)
-                    }
+                FileOutputStream(temporary).use { output ->
+                    if (!FoxUpdate.copyVerified(input, output, size, sha)) return false
+                    output.fd.sync()
                 }
             }
-            if (total != size) return false
-            val actual = digest.digest().joinToString("") { "%02x".format(it) }
-            if (!actual.equals(sha, ignoreCase = true)) {
-                target.delete()
-                return false
-            }
+            // Both files are in app-private storage on the same filesystem.
+            if (!temporary.renameTo(target)) return false
+            complete = true
         } catch (_: Exception) {
-            target.delete()
             return false
         } finally {
             connection.disconnect()
+            if (!complete) temporary.delete()
         }
+
         val journal = App.journal(context)
-        try {
-            val installedVersion = context.packageManager
-                .getPackageInfo(context.packageName, 0).versionName.orEmpty()
-            val source = File(context.packageManager.getApplicationInfo(context.packageName, 0).sourceDir)
-            val cached = File(context.filesDir, "updates/rollback-$installedVersion.apk")
-            source.copyTo(cached, overwrite = true)
-            journal.recordUpdate(version, installedVersion, cached.absolutePath)
-        } catch (_: Exception) {
-            journal.recordUpdate(version, "", "")
-        }
-        return launch(context, target)
+        journal.recordUpdate(version, installed, "")
+        val handedOff = launch(context, target)
+        if (!handedOff) journal.cancelPending(version, installed)
+        return handedOff
     }
 
     private fun launch(context: Context, apk: File): Boolean = try {

@@ -59,6 +59,10 @@
             android:name=".LoginActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".UpdateRecoveryActivity"
+            android:exported="false" />
+
         <service
             android:name=".FoxVpnService"
             android:exported="false"

@@ -67,34 +67,30 @@ object Notify {
         }
     }
 
-    /**
-     * Offers the signed rollback when the running build failed its trial.
-     * With a cached APK the rollback is one tap; without it the previous
-     * release page is the fallback.
-     */
-    fun rollbackAvailable(c: Context, version: String, cachedFile: Boolean): Boolean {
+    /** The trial is unconfirmed, not necessarily broken. Offer a real check
+     * for a newer signed recovery update rather than an unsupported downgrade. */
+    fun recoveryRecommended(c: Context, version: String): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(c, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
         return try {
             updateChannel(c)
-            val action = PendingIntent.getBroadcast(
+            val action = PendingIntent.getActivity(
                 c,
                 6,
-                Intent(c, UpdateActionReceiver::class.java).setAction(UpdateActionReceiver.ACTION_ROLLBACK),
+                Intent(c, UpdateRecoveryActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 flags()
             )
             val note = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL_UPDATE) else Notification.Builder(c)
             note.setSmallIcon(R.drawable.ic_refresh)
                 .setContentTitle(c.getString(R.string.rollback_notification_title))
                 .setContentText(c.getString(R.string.rollback_notification_text, version))
+                .setContentIntent(action)
+                .addAction(0, c.getString(R.string.rollback_action), action)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .setCategory(Notification.CATEGORY_SERVICE)
-            if (cachedFile) {
-                note.addAction(0, c.getString(R.string.rollback_action), action)
-            }
             if (Build.VERSION.SDK_INT < 26) note.setPriority(Notification.PRIORITY_DEFAULT)
             mgr(c).notify(ID_ROLLBACK, note.build())
             true
