@@ -9,7 +9,10 @@ for apk in old affected forward; do test -s "$DEST/$apk.apk"; done
 
 adb install -r "$DEST/old.apk"
 adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
-adb shell run-as "$PKG" sh -c 'printf recovery-ci-sentinel > files/recovery-ci-sentinel'
+printf recovery-ci-sentinel > "$DEST/sentinel.txt"
+adb push "$DEST/sentinel.txt" /data/local/tmp/gozar-recovery-sentinel >/dev/null
+adb shell run-as "$PKG" mkdir -p files
+adb shell run-as "$PKG" cp /data/local/tmp/gozar-recovery-sentinel files/recovery-ci-sentinel
 
 adb install -r "$DEST/affected.apk"
 # The first launch detects the external upgrade; three more launches leave
