@@ -53,6 +53,8 @@ class ReleaseToolsTest(unittest.TestCase):
     def test_production_key_matches_the_client_and_wrong_key_is_rejected(self):
         source = (ROOT / "core/src/main/kotlin/com/gozar/FoxUpdate.kt").read_text(encoding="utf-8")
         self.assertIn(f'KEY_HEX = "{self.prod_hex}"', source)
+        desktop = (ROOT / "go-desktop/internal/update/manifest.go").read_text(encoding="utf-8")
+        self.assertIn(f'const KeyHex = "{self.prod_hex}"', desktop)
         result = self.sign(SCRIPT)
         self.assertNotEqual(0, result.returncode)
         self.assertFalse((self.apkdir / "update.json").exists())

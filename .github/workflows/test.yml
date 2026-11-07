@@ -10,6 +10,19 @@ permissions:
   contents: read
 
 jobs:
+  desktop-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.6'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test desktop update verification
+        working-directory: go-desktop
+        run: go test ./internal/update -count=1
+
   release-tools:
     runs-on: ubuntu-latest
     timeout-minutes: 10
