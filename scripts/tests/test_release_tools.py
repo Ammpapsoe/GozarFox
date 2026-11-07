@@ -135,6 +135,13 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse((self.apkdir / "desktop-update.json").exists())
 
+    def test_desktop_core_and_package_versions_match(self):
+        pubspec = (ROOT / "desktop_flutter/pubspec.yaml").read_text(encoding="utf-8")
+        core = (ROOT / "go-desktop/cmd/gozar/main.go").read_text(encoding="utf-8")
+        ui_version = re.search(r"(?m)^version:\s*([^+\s]+)", pubspec).group(1)
+        core_version = re.search(r'(?m)^const version = "([^"]+)"', core).group(1)
+        self.assertEqual(ui_version, core_version)
+
     def test_dry_run_does_not_silently_skip_packaging_or_validation(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
         packages = workflow.split("  packages:\n", 1)[1].split("\n  publish:\n", 1)[0]

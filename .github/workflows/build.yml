@@ -512,6 +512,11 @@ jobs:
         run: |
           set -e
           DESKTOP=$(grep -m1 '^version:' desktop_flutter/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          CORE=$(awk -F'"' '/^const version = / {print $2; exit}' go-desktop/cmd/gozar/main.go)
+          if [ -z "$DESKTOP" ] || [ "$DESKTOP" != "$CORE" ]; then
+            echo "::error::Desktop UI and core versions differ; signed update comparisons would be wrong"
+            exit 1
+          fi
           ANDROID=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
           TAG="$GITHUB_REF_NAME"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then TAG="v$ANDROID"; fi
