@@ -800,9 +800,13 @@ class FoxResolver(
 ) {
 
     private class Entry(val body: ByteArray, val storedAt: Long, val expires: Long)
+    private class LookupFlight {
+        val finished = CountDownLatch(1)
+        @Volatile var body: ByteArray? = null
+    }
 
     private val cache = ConcurrentHashMap<String, Entry>()
-    private val monitors = ConcurrentHashMap<String, Any>()
+    private val flights = ConcurrentHashMap<String, LookupFlight>()
     private val slots = Semaphore(8)
 
     fun answer(query: ByteArray): ByteArray? {
@@ -812,32 +816,49 @@ class FoxResolver(
         val type = questionType(query)
         if (type == 28 || type == 65) return empty(query)
         val key = String(query, 2, query.size - 2, Charsets.ISO_8859_1)
-        val time = now()
-        val hit = cache[key]
-        if (hit != null) {
-            if (time < hit.expires) return retag(query, hit.body, (time - hit.storedAt).coerceAtLeast(0) / 1000)
-            cache.remove(key, hit)
-        }
-        // Single flight: one lookup per name, everyone else waits for its result
-        // instead of repeating the same query in parallel.
-        val monitor = monitors.getOrPut(key) { Any() }
-        val body: ByteArray?
-        try {
-            synchronized(monitor) {
-                val waited = cache[key]
-                if (waited != null) {
-                    val at = now()
-                    if (at < waited.expires) return retag(query, waited.body, (at - waited.storedAt).coerceAtLeast(0) / 1000)
-                    cache.remove(key, waited)
-                }
-                body = exchange(query)
-                if (body != null && valid(query, body)) store(key, body, time)
+        cached(key, query)?.let { return it }
+
+        // Share even uncacheable responses and failures among callers already
+        // waiting for this lookup. A later request can still retry a failure;
+        // it is never installed as a DNS cache entry.
+        val mine = LookupFlight()
+        val existing = flights.putIfAbsent(key, mine)
+        if (existing != null) {
+            val complete = try {
+                existing.finished.await(35, TimeUnit.SECONDS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
             }
-        } finally {
-            monitors.remove(key, monitor)
+            return if (complete) existing.body?.let { retag(query, it) } ?: failure(query) else failure(query)
         }
-        if (body == null || !valid(query, body)) return failure(query)
-        return retag(query, body)
+        var result: ByteArray? = null
+        try {
+            // The previous flight may have filled the cache between our first
+            // cache check and becoming the next leader.
+            result = cached(key, query)
+            if (result == null) {
+                val started = now()
+                val body = exchange(query)
+                if (body != null && valid(query, body)) {
+                    store(key, body, started)
+                    result = body
+                }
+            }
+            return result?.let { retag(query, it) } ?: failure(query)
+        } finally {
+            mine.body = result
+            mine.finished.countDown()
+            flights.remove(key, mine)
+        }
+    }
+
+    private fun cached(key: String, query: ByteArray): ByteArray? {
+        val hit = cache[key] ?: return null
+        val time = now()
+        if (time < hit.expires) return retag(query, hit.body, (time - hit.storedAt).coerceAtLeast(0) / 1000)
+        cache.remove(key, hit)
+        return null
     }
 
     private fun store(key: String, body: ByteArray, time: Long) {
