@@ -331,9 +331,9 @@ object FoxTunnel {
     fun powerSaving(): Boolean = FoxDuplex.coalesceDelayed()
 
     fun resetTransport() {
-        adaptive.clear()
         synchronized(sessions) {
             sessionGeneration += 1
+            adaptive.clear()
             for (list in sessions.values) for (session in list) session.shutdown()
             sessions.clear()
         }
@@ -343,30 +343,55 @@ object FoxTunnel {
 
     fun open(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int = 15000): FoxDuplex {
         val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
+        val (generation, order) = synchronized(sessions) { sessionGeneration to adaptive.order(key) }
         var firstError: Exception? = null
-        for (h2 in adaptive.order(key)) {
+        for (h2 in order) {
+            synchronized(sessions) {
+                if (generation != sessionGeneration) throw TransportReset()
+            }
             val started = System.nanoTime()
-            try {
-                val result = if (h2) {
-                    acquireSession(location, key, timeout).openStream(host, port, pass, timeout)
+            val result = try {
+                if (h2) {
+                    acquireSession(location, key, timeout, generation).openStream(host, port, pass, timeout)
                 } else {
                     openH1(location, host, port, pass, timeout)
                 }
-                adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
-                return result
             } catch (e: Exception) {
-                if (e is TransportReset || isCertificateFailure(e) || e is FoxError ||
+                val fatal = e is TransportReset || isCertificateFailure(e) || e is FoxError ||
                     e is FoxProxyRefusal && e.status in setOf(401, 403, 407, 429, 451)
-                ) throw e
-                adaptive.failed(key, h2)
+                // A failed handshake or a closed H2 stream can race reset too:
+                // do not turn that obsolete attempt into an HTTP/1 fallback.
+                val current = synchronized(sessions) {
+                    if (generation != sessionGeneration) false else {
+                        if (!fatal) adaptive.failed(key, h2)
+                        true
+                    }
+                }
+                if (!current) throw TransportReset()
+                if (fatal) throw e
                 if (firstError == null) firstError = e
+                continue
             }
+            // A successful H1 or H2 open that completed after reset must not
+            // escape to its caller. Close outside the pool lock.
+            val accepted = synchronized(sessions) {
+                if (generation != sessionGeneration) false else {
+                    adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
+                    true
+                }
+            }
+            if (!accepted) {
+                try { result.close() } catch (_: Exception) { }
+                throw TransportReset()
+            }
+            return result
         }
         throw firstError ?: java.io.IOException("the proxy did not answer")
     }
 
-    private fun acquireSession(location: FoxLocation, key: String, timeout: Int): H2Session {
+    private fun acquireSession(location: FoxLocation, key: String, timeout: Int, expectedGeneration: Long? = null): H2Session {
         val generation = synchronized(sessions) {
+            if (expectedGeneration != null && expectedGeneration != sessionGeneration) throw TransportReset()
             val list = sessions.getOrPut(key) { mutableListOf() }
             val now = System.currentTimeMillis()
             list.removeAll { session ->

@@ -14,8 +14,10 @@ import java.security.SecureRandom
 import java.security.cert.CertificateFactory
 import java.util.Collections
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
@@ -130,6 +132,41 @@ class FoxTunnelTest {
             assertArrayEquals(proxy.reply, exchange(proxy))
             assertEquals(listOf("http/1.1"), proxy.protocols.toList())
             assertTrue(proxy.problems.isEmpty())
+        }
+    }
+
+    @Test
+    fun pendingH1OpenIsRejectedAfterResetAcrossFiftyRaces() {
+        val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
+        LocalProxy(h1Only = true, beforeH1Reply = {
+            val (entered, release) = gates.poll(10, TimeUnit.SECONDS) ?: error("missing H1 gate")
+            entered.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+        }).use { proxy ->
+            repeat(50) { iteration ->
+                resetH2()
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                val handedOff = AtomicBoolean(false)
+                gates.put(entered to release)
+                val worker = thread(isDaemon = true) {
+                    try {
+                        val tunnel = open(proxy)
+                        handedOff.set(true)
+                        tunnel.close()
+                    } catch (_: Exception) { }
+                }
+                try {
+                    assertTrue("H1 open did not enter at iteration $iteration", entered.await(8, TimeUnit.SECONDS))
+                    FoxTunnel.resetTransport()
+                } finally {
+                    release.countDown()
+                }
+                worker.join(10000)
+                assertFalse("H1 open did not finish at iteration $iteration", worker.isAlive)
+                assertFalse("obsolete H1 open escaped to the caller at iteration $iteration", handedOff.get())
+                assertEquals(0, FoxTunnel.pooledSessionCount())
+            }
         }
     }
 
@@ -281,7 +318,8 @@ class FoxTunnelTest {
         private val splitH2Headers: Boolean = false,
         private val refuseH2: Boolean = false,
         private val smallWindow: Boolean = false,
-        private val h1Only: Boolean = false
+        private val h1Only: Boolean = false,
+        private val beforeH1Reply: (() -> Unit)? = null
     ) : Closeable {
         val reply = ByteArray(8000) { (it % 251).toByte() }
         val upload = ByteArrayOutputStream()
@@ -381,6 +419,7 @@ class FoxTunnelTest {
             val input = BufferedInputStream(socket.inputStream)
             authHeads.add(readHead(input))
             val output = socket.outputStream
+            beforeH1Reply?.invoke()
             output.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.US_ASCII))
             output.flush()
             val data = ByteArray("upload-over-tunnel".length)

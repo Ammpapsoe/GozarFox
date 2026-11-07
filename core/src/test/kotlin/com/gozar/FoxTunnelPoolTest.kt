@@ -128,6 +128,45 @@ class FoxTunnelPoolTest {
     }
 
     @Test
+    fun failedHandshakeAfterResetDoesNotFallBackAcrossFiftyRaces() {
+        val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
+        val connections = AtomicInteger()
+        EchoProxy(beforeReply = { connections.incrementAndGet() }, afterReply = {
+            val gate = gates.poll()
+            if (gate != null) {
+                gate.first.countDown()
+                check(gate.second.await(10, TimeUnit.SECONDS))
+                // Fail the TLS handshake after the chain itself succeeded,
+                // rather than reaching the pool-generation check.
+                throw java.io.IOException("gated upstream failure")
+            }
+        }).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            repeat(50) { iteration ->
+                FoxTunnel.resetTransport()
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                gates.put(entered to release)
+                val worker = thread(isDaemon = true) {
+                    try { FoxTunnel.open(location, "target.example.invalid", 443, "local-test-only", 3000).close() }
+                    catch (_: Exception) { }
+                }
+                try {
+                    assertTrue("handshake did not enter at iteration $iteration", entered.await(8, TimeUnit.SECONDS))
+                    FoxTunnel.resetTransport()
+                } finally {
+                    release.countDown()
+                }
+                worker.join(10000)
+                assertFalse("open did not finish at iteration $iteration", worker.isAlive)
+                assertEquals("a failed handshake after reset must not start an HTTP/1 fallback", iteration + 1, connections.get())
+                assertEquals(0, FoxTunnel.pooledSessionCount())
+            }
+        }
+    }
+
+    @Test
     fun streamsBeyondTheSoftLimitOpenASecondSessionAndStillSucceed() {
         EchoProxy().use { proxy ->
             val tunnels = ArrayList<FoxDuplex>()
@@ -321,7 +360,8 @@ class FoxTunnelPoolTest {
         private val goawayAfterEcho: Boolean = false,
         private val refuseStatus: Int = 0,
         private val serverMaxStreams: Int = 0,
-        private val beforeReply: (() -> Unit)? = null
+        private val beforeReply: (() -> Unit)? = null,
+        private val afterReply: (() -> Unit)? = null
     ) : Closeable {
         val sessions = AtomicInteger()
         val streamIds = Collections.synchronizedList(mutableListOf<Int>())
@@ -357,6 +397,7 @@ class FoxTunnelPoolTest {
                 write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.US_ASCII))
                 flush()
             }
+            afterReply?.invoke()
             val socket = context.socketFactory.createSocket(raw, "127.0.0.1", raw.port, true) as SSLSocket
             socket.use {
                 socket.useClientMode = false
