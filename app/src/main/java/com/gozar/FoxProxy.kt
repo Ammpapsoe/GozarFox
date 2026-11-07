@@ -17,6 +17,10 @@ class FoxProxy(
     private val countTraffic: Boolean = true,
     private val directAllowed: () -> Boolean = { FoxVpnService.directRoutingAllowed() },
     private val directAddress: (String) -> String? = { FoxVpnService.directAddress(it) },
+    private val directConnect: (String, Int) -> FoxPipe? = { host, port -> FoxSocketPipe.connect(host, port) },
+    private val tunnelConnect: (FoxLocation, String, Int, String, Long) -> FoxPipe? = { place, host, port, pass, ticket ->
+        FoxTunnel.open(place, host, port, pass, expectedTransport = ticket)
+    },
     private val tunnelScope: (FoxProxy) -> FoxLink.TransportScope? = { FoxLink.transportScope(it) },
     private val scopeCurrent: (Long) -> Boolean = { FoxLink.transportIsCurrent(it) },
     private val pass: () -> String?
@@ -36,14 +40,24 @@ class FoxProxy(
     private val connections = Any()
     private val clients = mutableSetOf<Socket>()
     private val pipes = mutableSetOf<FoxPipe>()
+    private var paused = false
+    private var epoch = 0L
 
     fun start(): Boolean {
         if (running) return true
         return try {
             val socket = ServerSocket(port, 16, InetAddress.getByName("127.0.0.1"))
-            server = socket
-            active = socket.localPort
-            running = true
+            synchronized(connections) {
+                if (running) {
+                    socket.close()
+                    return true
+                }
+                server = socket
+                active = socket.localPort
+                running = true
+                paused = false
+                epoch += 1
+            }
             thread(isDaemon = true, name = "fox-proxy") { acceptLoop(socket) }
             true
         } catch (e: Exception) {
@@ -52,11 +66,36 @@ class FoxProxy(
         }
     }
 
+    /**
+     * Keep the loopback port reserved for a live VPN interface, but reject new
+     * work and revoke all old clients/pipes while a connection is restarting.
+     */
+    internal fun pause() {
+        val openClients: List<Socket>
+        val openPipes: List<FoxPipe>
+        synchronized(connections) {
+            paused = true
+            epoch += 1
+            openClients = clients.toList()
+            openPipes = pipes.toList()
+            clients.clear()
+            pipes.clear()
+        }
+        for (client in openClients) try { client.close() } catch (_: Exception) { }
+        for (pipe in openPipes) try { pipe.close() } catch (_: Exception) { }
+    }
+
+    internal fun resume() {
+        synchronized(connections) { if (running) paused = false }
+    }
+
     fun stop() {
         val openClients: List<Socket>
         val openPipes: List<FoxPipe>
         synchronized(connections) {
             running = false
+            paused = true
+            epoch += 1
             try {
                 server?.close()
             } catch (_: Exception) {
@@ -71,6 +110,10 @@ class FoxProxy(
         for (pipe in openPipes) try { pipe.close() } catch (_: Exception) { }
     }
 
+    private fun activeEpoch(expected: Long): Boolean = synchronized(connections) {
+        running && !paused && epoch == expected
+    }
+
     private fun acceptLoop(socket: ServerSocket) {
         while (running) {
             val client = try {
@@ -82,19 +125,22 @@ class FoxProxy(
                 try { client.close() } catch (_: Exception) { }
                 continue
             }
-            val accepted = synchronized(connections) {
-                if (!running) false else clients.add(client)
+            val acceptedEpoch = synchronized(connections) {
+                if (!running || paused) null else {
+                    clients.add(client)
+                    epoch
+                }
             }
-            if (!accepted) {
+            if (acceptedEpoch == null) {
                 slots.release()
                 try { client.close() } catch (_: Exception) { }
                 continue
             }
-            thread(isDaemon = true) { handle(client) }
+            thread(isDaemon = true) { handle(client, acceptedEpoch) }
         }
     }
 
-    private fun handle(client: Socket) {
+    private fun handle(client: Socket, acceptedEpoch: Long) {
         try {
             client.tcpNoDelay = true
             val input = BufferedInputStream(client.getInputStream())
@@ -102,7 +148,7 @@ class FoxProxy(
             input.mark(1)
             val first = input.read()
             input.reset()
-            if (first == 0x05) socks(input, output) else web(input, output)
+            if (first == 0x05) socks(input, output, acceptedEpoch) else web(input, output, acceptedEpoch)
         } catch (_: Exception) {
         } finally {
             slots.release()
@@ -114,7 +160,7 @@ class FoxProxy(
         }
     }
 
-    private fun socks(input: InputStream, output: BufferedOutputStream) {
+    private fun socks(input: InputStream, output: BufferedOutputStream, acceptedEpoch: Long) {
         if (input.read() != 0x05) return
         val count = input.read()
         if (count <= 0) return
@@ -158,7 +204,7 @@ class FoxProxy(
         val portBytes = ByteArray(2)
         if (readFull(input, portBytes) < 0) return
         val target = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
-        val tunnel = open(host, target)
+        val tunnel = open(host, target, acceptedEpoch)
         if (tunnel == null) {
             output.write(byteArrayOf(0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
@@ -182,7 +228,7 @@ class FoxProxy(
         return ok
     }
 
-    private fun web(input: InputStream, output: BufferedOutputStream) {
+    private fun web(input: InputStream, output: BufferedOutputStream, acceptedEpoch: Long) {
         val head = readHead(input) ?: return
         val lines = head.split("\r\n")
         val first = lines.firstOrNull()?.split(" ") ?: return
@@ -195,7 +241,7 @@ class FoxProxy(
             if (colon <= 0) return
             val host = target.substring(0, colon).trim('[', ']')
             val port = target.substring(colon + 1).toIntOrNull() ?: 443
-            val tunnel = open(host, port)
+            val tunnel = open(host, port, acceptedEpoch)
             if (tunnel == null) {
                 output.write("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray())
                 output.flush()
@@ -221,7 +267,7 @@ class FoxProxy(
             output.flush()
             return
         }
-        val tunnel = open(host, port) ?: return
+        val tunnel = open(host, port, acceptedEpoch) ?: return
         val path = (url.path.ifEmpty { "/" }) + (url.query?.let { "?$it" } ?: "")
         val rebuilt = StringBuilder("$method $path $version\r\n")
         for (line in lines.drop(1)) {
@@ -238,33 +284,35 @@ class FoxProxy(
         pump(input, output, tunnel)
     }
 
-    private fun open(host: String, port: Int): FoxPipe? {
+    private fun open(host: String, port: Int, acceptedEpoch: Long): FoxPipe? {
         // Bind this request to the listener's active attempt before any slow
         // DNS, connect, or credential renewal. An old listener must not borrow
         // the transport created by a later reconnect.
+        if (!activeEpoch(acceptedEpoch)) return null
         val scope = tunnelScope(this) ?: return null
-        if (!scopeCurrent(scope.ticket)) return null
+        if (!activeEpoch(acceptedEpoch) || !scopeCurrent(scope.ticket)) return null
         val tunnel = if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
             val address = directAddress(host) ?: return null
-            if (!directAllowed() || !scopeCurrent(scope.ticket)) return null
-            val pipe = FoxSocketPipe.connect(address, port) ?: return null
-            val guarded = DirectPipe(pipe) { directAllowed() && scopeCurrent(scope.ticket) }
-            if (!directAllowed() || !scopeCurrent(scope.ticket)) {
+            if (!activeEpoch(acceptedEpoch) || !directAllowed() || !scopeCurrent(scope.ticket)) return null
+            val pipe = directConnect(address, port) ?: return null
+            val guarded = DirectPipe(pipe) { activeEpoch(acceptedEpoch) && directAllowed() && scopeCurrent(scope.ticket) }
+            if (!activeEpoch(acceptedEpoch) || !directAllowed() || !scopeCurrent(scope.ticket)) {
                 guarded.close()
                 return null
             }
             guarded
         } else {
             val access = pass() ?: return null
+            if (!activeEpoch(acceptedEpoch)) return null
             try {
-                FoxTunnel.open(scope.location, host, port, access, expectedTransport = scope.ticket)
+                tunnelConnect(scope.location, host, port, access, scope.ticket)
             } catch (e: Exception) {
-                if (!forceTunnel) FoxLink.fault(e.message ?: "tunnel failed")
+                if (!forceTunnel && activeEpoch(acceptedEpoch)) FoxLink.fault(e.message ?: "tunnel failed")
                 null
             }
         } ?: return null
         val accepted = synchronized(connections) {
-            if (!running) false else pipes.add(tunnel)
+            if (!running || paused || epoch != acceptedEpoch) false else pipes.add(tunnel)
         }
         if (!accepted) {
             try { tunnel.close() } catch (_: Exception) { }

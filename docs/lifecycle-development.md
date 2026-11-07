@@ -33,6 +33,26 @@ an app-level 50-race direct-lookup test, and 50 sequential stop transitions in
 CI. Results must be checked on that later commit before describing the
 integration as verified.
 
+## Same-interface retry (candidate change)
+
+The in-place always-on retry retains the `VpnService` descriptor, its
+`FoxResolver`, and, on Android 10+, the HTTP proxy address. Previously,
+`FoxLink.stop()` closed its ephemeral-port listeners and the next start could
+create listeners on different ports while that same interface still held the
+old ports. This is a code-path finding; it has not been reproduced on a real
+Android device.
+
+The candidate keeps all three original loopback listeners reserved while that
+interface exists. During a stop or failed attempt they are paused, reject new
+clients, and close tracked clients and pipes; after successful verification the
+same ports are resumed. Once the interface is released, the listeners are
+closed. A listener-local epoch prevents work accepted before pause from being
+resumed under the new attempt, including a delayed direct lookup or credential
+renewal. Tests cover two sets of 50 pause/resume races, paused-listener
+rejection, and 50 stop/prepare transitions with a simulated interface. The results of GitHub Actions on the
+commit containing these changes must be checked before reporting them as
+passing, and they do not establish a successful real always-on reconnect.
+
 ## Remaining limitations
 
 - In-flight raw TCP/TLS connect calls are not centrally interruptible; a

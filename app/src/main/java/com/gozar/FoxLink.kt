@@ -92,6 +92,7 @@ object FoxLink {
             webPort = web?.boundPort() ?: 0
             dnsPort = dns?.boundPort() ?: 0
             prepared = socksPort > 0 && webPort > 0 && dnsPort > 0
+            if (prepared && !connected) pauseServers()
             prepared
         }
     }
@@ -172,6 +173,7 @@ object FoxLink {
                     exitIp = ""
                     connected = true
                     connecting = false
+                    resumeServers()
                     since = System.currentTimeMillis()
                     downBytes.set(0L)
                     upBytes.set(0L)
@@ -206,7 +208,7 @@ object FoxLink {
                     } else {
                         e.message ?: "Could not connect"
                     }
-                    stopServers()
+                    retireServers()
                 }
                 tick()
                 if (FoxVpnService.alwaysOn()) {
@@ -302,7 +304,7 @@ object FoxLink {
             transportTicket = null
             FoxTunnel.stopTransport()
             FoxLeakGuard.clearReport()
-            stopServers()
+            retireServers()
             if (connected && FoxVpnService.lockdownState() == 3) {
                 // This is an observed disconnection while lockdown is enabled,
                 // not a claim that an individual packet was blocked.
@@ -319,6 +321,25 @@ object FoxLink {
             stopRenewal()
         }
         tick()
+    }
+
+    // Android's VPN interface and resolver hold the originally advertised
+    // loopback ports. Keep them reserved but paused across an in-place retry;
+    // once the interface is gone, close the listeners completely.
+    private fun retireServers() {
+        if (FoxVpnService.hasInterface()) pauseServers() else stopServers()
+    }
+
+    private fun pauseServers() {
+        socks?.pause()
+        web?.pause()
+        dns?.pause()
+    }
+
+    private fun resumeServers() {
+        socks?.resume()
+        web?.resume()
+        dns?.resume()
     }
 
     private fun stopServers() {

@@ -5,6 +5,7 @@ import android.app.Notification
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.content.Context
+import android.os.ParcelFileDescriptor
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CountDownLatch
@@ -12,6 +13,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -182,6 +184,125 @@ class ProtectionTest {
             target.close()
             server.join(5000)
         }
+    }
+
+    @Test
+    fun pausedProxyKeepsItsPortAndRejectsStaleHandlersAcrossFiftyRaces() {
+        data class Gate(val entered: CountDownLatch, val release: CountDownLatch, val worker: AtomicReference<Thread?>)
+        val gates = LinkedBlockingQueue<Gate>()
+        val connectCalls = AtomicInteger()
+        FoxRoute.apply(false, "direct.example")
+        val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
+        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = {
+            val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing gate")
+            gate.worker.set(Thread.currentThread())
+            gate.entered.countDown()
+            if (!gate.release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
+            "127.0.0.1"
+        }, directConnect = { _, _ -> connectCalls.incrementAndGet(); null },
+            tunnelScope = { FoxLink.TransportScope(place, 1L) }, scopeCurrent = { true }) { null }
+        assertTrue(proxy.start())
+        val port = proxy.boundPort()
+        try {
+            repeat(50) { iteration ->
+                val gate = Gate(CountDownLatch(1), CountDownLatch(1), AtomicReference(null))
+                gates.put(gate)
+                Socket("127.0.0.1", port).use { client ->
+                    client.soTimeout = 5000
+                    client.getOutputStream().write("CONNECT direct.example:443 HTTP/1.1\r\nHost: direct.example\r\n\r\n".toByteArray())
+                    assertTrue("lookup did not enter at iteration $iteration", gate.entered.await(5, TimeUnit.SECONDS))
+                    proxy.pause()
+                    assertEquals(port, proxy.boundPort())
+                    val denied = try {
+                        Socket("127.0.0.1", port).use { pausedClient ->
+                            pausedClient.soTimeout = 3000
+                            pausedClient.getOutputStream().write("CONNECT direct.example:443 HTTP/1.1\r\n\r\n".toByteArray())
+                            pausedClient.getInputStream().read() < 0
+                        }
+                    } catch (_: java.net.SocketTimeoutException) {
+                        false
+                    } catch (_: java.net.SocketException) {
+                        true
+                    }
+                    assertTrue("paused listener accepted work at iteration $iteration", denied)
+                    proxy.resume()
+                    gate.release.countDown()
+                    val worker = gate.worker.get() ?: error("missing worker")
+                    worker.join(5000)
+                    assertFalse("old handler did not exit at iteration $iteration", worker.isAlive)
+                    assertEquals("old handler attempted a direct connection", 0, connectCalls.get())
+                }
+            }
+        } finally {
+            proxy.stop()
+        }
+    }
+
+    @Test
+    fun pausedProxyRejectsDelayedCredentialsAcrossFiftyRaces() {
+        data class Gate(val entered: CountDownLatch, val release: CountDownLatch, val worker: AtomicReference<Thread?>)
+        val gates = LinkedBlockingQueue<Gate>()
+        val connectCalls = AtomicInteger()
+        val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
+        val proxy = FoxProxy(0, forceTunnel = true,
+            tunnelConnect = { _, _, _, _, _ -> connectCalls.incrementAndGet(); null },
+            tunnelScope = { FoxLink.TransportScope(place, 1L) }, scopeCurrent = { true }) {
+            val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing gate")
+            gate.worker.set(Thread.currentThread())
+            gate.entered.countDown()
+            if (!gate.release.await(5, TimeUnit.SECONDS)) error("credential lookup timed out")
+            "synthetic-token"
+        }
+        assertTrue(proxy.start())
+        try {
+            repeat(50) { iteration ->
+                val gate = Gate(CountDownLatch(1), CountDownLatch(1), AtomicReference(null))
+                gates.put(gate)
+                Socket("127.0.0.1", proxy.boundPort()).use { client ->
+                    client.soTimeout = 5000
+                    client.getOutputStream().write("CONNECT example.invalid:443 HTTP/1.1\r\nHost: example.invalid\r\n\r\n".toByteArray())
+                    assertTrue("credentials did not enter at $iteration", gate.entered.await(5, TimeUnit.SECONDS))
+                    proxy.pause()
+                    proxy.resume()
+                    gate.release.countDown()
+                    val worker = gate.worker.get() ?: error("missing worker")
+                    worker.join(5000)
+                    assertFalse("old handler did not exit at $iteration", worker.isAlive)
+                    assertEquals("old handler attempted a tunnel connection", 0, connectCalls.get())
+                }
+            }
+        } finally {
+            proxy.stop()
+        }
+    }
+
+    @Test
+    fun inPlaceStopPreservesAdvertisedPortsWhileInterfaceExists() {
+        FoxLink.stop()
+        val controller = Robolectric.buildService(FoxVpnService::class.java).create()
+        val service = controller.get()
+        val descriptors = ParcelFileDescriptor.createPipe()
+        val field = FoxVpnService::class.java.getDeclaredField("descriptor").apply { isAccessible = true }
+        field.set(service, descriptors[0])
+        try {
+            assertTrue(FoxVpnService.hasInterface())
+            assertTrue(FoxLink.prepare(RuntimeEnvironment.getApplication()))
+            val expected = listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort)
+            assertTrue(expected.all { it > 0 })
+            repeat(50) { iteration ->
+                FoxLink.stop()
+                assertEquals("proxy ports changed at transition $iteration", expected,
+                    listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort))
+                assertTrue(FoxLink.prepare(RuntimeEnvironment.getApplication()))
+                assertEquals(expected, listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort))
+            }
+        } finally {
+            controller.destroy()
+            descriptors[1].close()
+            FoxLink.stop()
+            FoxTunnel.startTransport()
+        }
+        assertEquals(0, FoxLink.dnsPort)
     }
 
     @Test

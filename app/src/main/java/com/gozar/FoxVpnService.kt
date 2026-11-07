@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class FoxVpnService : VpnService() {
 
-    private var descriptor: ParcelFileDescriptor? = null
+    @Volatile private var descriptor: ParcelFileDescriptor? = null
 
     private var stack: FoxStack? = null
     @Volatile private var stackLifetime: AtomicBoolean? = null
@@ -363,6 +363,9 @@ class FoxVpnService : VpnService() {
         }
 
         fun isAlive(): Boolean = alive
+
+        /** A reserved proxy port remains useful only while this interface exists. */
+        internal fun hasInterface(): Boolean = instance?.descriptor != null
 
         fun lockdownState(): Int {
             val service = instance ?: return 0
