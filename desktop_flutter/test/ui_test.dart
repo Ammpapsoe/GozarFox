@@ -204,8 +204,9 @@ class UpdateFakeCore extends FakeCore {
     }
     if (method == 'cancel_update') {
       requests.add(method);
-      if (!pendingCheck.isCompleted)
+      if (!pendingCheck.isCompleted) {
         pendingCheck.complete(const CoreReply(error: 'cancelled'));
+      }
       return const CoreReply();
     }
     return super.call(method, params);

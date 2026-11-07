@@ -32,7 +32,9 @@ func TestLatencyMeasuresLocalListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if average <= 0 || jitter < 0 {
+	// A successful loopback dial can take less than the monotonic clock's
+	// resolution (notably on Windows), in which case zero is valid.
+	if average < 0 || jitter < 0 {
 		t.Fatalf("average=%s jitter=%s", average, jitter)
 	}
 }

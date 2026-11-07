@@ -167,8 +167,9 @@ class DesktopUpdate {
   final List<UpdatePackage> packages;
 
   static DesktopUpdate? fromReply(Object? raw) {
-    if (raw is! Map || raw['version'] is! String || raw['newer'] is! bool)
+    if (raw is! Map || raw['version'] is! String || raw['newer'] is! bool) {
       return null;
+    }
     final items = raw['artifacts'];
     if (items != null && items is! List) return null;
     final packages = <UpdatePackage>[];

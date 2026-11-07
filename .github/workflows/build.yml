@@ -147,6 +147,11 @@ jobs:
         working-directory: go-desktop
         shell: bash
         run: go test ./...
+      - name: Stress loopback latency on the Windows clock
+        if: matrix.platform == 'windows'
+        working-directory: go-desktop
+        shell: bash
+        run: go test ./internal/tunnel -run '^TestLatencyMeasuresLocalListener$' -count=50
       - name: Compile live tunnel test
         working-directory: go-desktop
         shell: bash
