@@ -1,50 +1,96 @@
-# Signed updates and rollback
+# Android signed updates and recovery
 
-## Threat model
+## Scope and threat model
 
-An attacker who can MITM or block `api.github.com` (routine on filtered
-networks) must not be able to offer a device a modified build. The GitHub
-release alone is therefore not trusted: every update is described by an
-`update.json` manifest with a detached Ed25519 signature
-(`update.json.sig`), checked against a public key pinned in
-`FoxUpdate.KEY_HEX` (core). No signature, no verification, no install
-offer — fail-closed.
+An attacker who can alter or block GitHub responses must not be able to offer
+modified APK bytes. Android verifies the exact `update.json` bytes against the
+Ed25519 key pinned in `FoxUpdate.KEY_HEX` before treating an update as current
+or available. A missing, malformed or invalid signature fails closed. The
+platform package installer independently checks the APK signing certificate.
+An attacker can still block updates and can replay an older, correctly signed
+manifest; the format currently has no expiry or revocation mechanism.
 
-## Rules enforced by `FoxUpdate.verify` (core)
+This describes the **Android** updater. The desktop app currently opens a
+GitHub release page; it does not implement signed in-app download, install or
+rollback. GPG signatures for release files can be verified separately, but
+that is not an automatic desktop updater.
 
-1. Manifest ≤ 64 KiB, strict base64 signature, RFC 8032 Ed25519 check
-   against the pinned key, done **before** anything else is trusted.
-2. Schema: `version`, `channel_min`, `rollback`, `issued_at`, `notes`,
-   `artifacts[]` with `name`, `sha256` (64 hex), `size`, `url`.
-3. Artifact URLs must be https release-download URLs of the project's own
-   GitHub repositories.
-4. `issued_at` may not be more than a day in the future.
-5. Normal updates must be strictly newer than the installed version
-   (no downgrades). Rollback manifests must target a strictly older
-   version that is still at or above `channel_min`.
+## What the Android client verifies
 
-Downloaded bytes are re-checked against the signed `sha256` and exact
-`size` before the installer is invoked (`UpdateInstaller`).
+* At most 64 KiB of manifest, strict base64, Ed25519 signature, field types,
+  sensible timestamp, and safe version and artifact names.
+* The signed artifact URL must be an exact HTTPS GitHub release-download URL
+  in a project repository and must match the manifest version/tag and filename.
+* The Android update must be newer than the running version. A signed manifest
+  marked as an old-version rollback is not offered by the Android updater.
+* APK bytes are streamed to a private temporary file with an exact signed
+  size and SHA-256 limit. Only a verified file replaces the target. Failed or
+  interrupted downloads are removed. The system installer is then opened;
+  this handoff is **not** proof that the user accepted or that installation
+  succeeded.
 
-## Rollback
+The core verifier retains its signed `rollback` schema for other potential
+consumers, but that must not be confused with a working Android downgrade.
+`channel_min` is a floor for such a core rollback verdict; it is not a data
+migration guarantee or an enforcement of APK `versionCode` compatibility.
 
-`FoxUpdateJournal` makes every update a trial: `recordUpdate` on install,
-`beginLaunch` on each start, `markHealthy` when the tunnel is proven up
-(`FoxLink`). Three consecutive launches without a healthy tunnel mark the
-build failed; on the next start the app offers the previous version — as a
-one-tap reinstall when the previous APK was cached, otherwise via the
-release page. A corrupt journal resets; it never throws.
+## Recovery on Android
 
-## Release procedure (Android)
+Android's ordinary package installer does not normally allow an APK with a
+lower `versionCode` to replace an installed one. The app therefore no longer
+promises a one-tap reinstall of an older cached APK. Three launches without a
+confirmed healthy tunnel generate a recommendation to check for a **newer
+signed update**. An unconfirmed launch is not proof of a crash: the user may
+not have connected or the network may be unavailable. The notification opens
+a real signed-update check; if no newer update exists, it says so.
 
-1. Bump `versionName`/`versionCode`, merge to `main`, tag `vX.Y.Z`.
-   CI (`build.yml`) builds, signature-verifies, and uploads the APKs.
-2. Download the `android` artifact, then:
-   `GOZAR_RELEASE_KEY=/secure/path/release-private.pem tools/sign-update-manifest.sh X.Y.Z <channel_min> <apk-dir> "changelog"`
-3. Publish a GitHub release with the APKs, `update.json`, and
-   `update.json.sig` as assets.
+To recover a faulty published build without an uninstall, an operator can
+prepare a *forward recovery* release:
 
-The release private key is kept outside the repository; the signing tool
-refuses to run when the key does not match the pinned public key.
-Key rotation = ship a client release that pins the new key, then start
-signing with it (old clients verify old-key manifests until they update).
+1. Restore the known-good behavior in a new commit, while retaining necessary
+   security fixes and migration code. Do not blindly revert persistent-data
+   schemas or security fixes.
+2. Give the recovery app a `versionName` newer than the affected version and
+   a `versionCode` higher than **every** published affected APK. Sign the APK
+   with the same official Android signing certificate. Version names alone do
+   not prove that Android will accept a package.
+3. Build and test all supported APK variants, upgrade and data migration from
+   the affected versions, and a real installation on representative devices.
+   Publish a normal (`rollback: false`) manifest signed with the pinned
+   update key, and explain the recovery and any limitations in release notes.
+4. The user must have network access and approve the platform installer; an OS
+   policy, disabled install permission, incompatible data, or refusal can
+   prevent recovery. This is not an automatic or fully proven rollback.
+
+A full rollback feature, including data compatibility, delivery when the app
+cannot start, user consent and desktop support, remains a separate incomplete
+requirement. Do not claim completion from journal state or an installer intent.
+
+## Release procedure and safe validation
+
+`build.yml` verifies the official APK certificate and GPG-signs the artifacts.
+The publication job uses `GOZAR_UPDATE_KEY` to generate `update.json` and
+`update.json.sig`, verifies the Ed25519 signing key and signature, includes the
+manifest with the release assets, and compares every published asset with the
+built file. The private key stays outside the repository. The tag must match
+the Android version (`vX.Y.Z` or `vX.Y.Z-desktop`); desktop and Android package
+versions can differ and the notes use both actual versions.
+
+For a no-publication validation on a mission branch:
+
+```sh
+gh workflow run build.yml --ref <mission-branch> -f validate_release=true
+```
+
+This builds and signs the complete artifact set, checks the signatures and
+uploads `release-validation-evidence`; it does **not** create a GitHub release
+or a tag. Release notes live in `docs/release-notes/X.Y.Z.md`. Notes beginning
+with `<!-- DRAFT -->` are accepted only by the dry run and block publication.
+After a phase is actually complete and approved: remove the draft marker,
+merge the mission branch, tag the reviewed commit, and verify the published
+release and assets. The dry run and unit tests do not substitute for real
+installation, migration or recovery tests.
+
+Key rotation requires a client that already trusts the replacement key (or a
+separate trusted update channel); simply switching the server key strands old
+clients. A compromised signing key cannot currently be revoked remotely.

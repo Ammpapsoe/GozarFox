@@ -23,10 +23,7 @@ object UpdateChecker {
     private const val FoxUpdateManifestLimit = 65_536
     private const val RELEASE_JSON_LIMIT = 1_048_576
     private val main = Handler(Looper.getMainLooper())
-    private val lock = Any()
-    private val callbacks = mutableListOf<(Result) -> Unit>()
-    private var checking = false
-    private var notifyWhenDone = false
+    private val flight = FoxUpdateFlight<Result>()
 
     sealed class Result {
         data class Available(val version: String, val url: String, val sha256: String = "", val size: Long = 0L) : Result()
@@ -94,37 +91,31 @@ object UpdateChecker {
     /** A concurrent caller shares the same network request and receives its result on the main thread. */
     fun check(context: Context, notify: Boolean = true, callback: ((Result) -> Unit)? = null) {
         val appContext = context.applicationContext
-        synchronized(lock) {
-            callback?.let { callbacks += it }
-            notifyWhenDone = notifyWhenDone || notify
-            if (checking) return
-            checking = true
-        }
+        if (!flight.join(notify, callback)) return
         thread(name = "gozar-update-check") {
             val result = latest(appContext)
-            val shouldNotify: Boolean
-            val pending: List<(Result) -> Unit>
-            synchronized(lock) {
-                checking = false
-                shouldNotify = notifyWhenDone
-                notifyWhenDone = false
-                pending = callbacks.toList()
-                callbacks.clear()
+            val completion = flight.complete(result, Result.Failed) { published, shouldNotify ->
+                when (published) {
+                    is Result.Available -> {
+                        Store.setUpdate(appContext, published.version, published.url, published.sha256, published.size)
+                        if (shouldNotify && Store.notifiedUpdate(appContext) != published.version &&
+                            Notify.updateAvailable(appContext, published.version, published.url)
+                        ) {
+                            Store.setNotifiedUpdate(appContext, published.version)
+                        }
+                    }
+                    Result.Current -> Store.clearUpdate(appContext)
+                    Result.Failed -> Unit
+                }
+                Store.setUpdateCheckedAt(appContext, System.currentTimeMillis())
             }
-            when (result) {
-                is Result.Available -> {
-                    Store.setUpdate(appContext, result.version, result.url, result.sha256, result.size)
-                    if (shouldNotify && Store.notifiedUpdate(appContext) != result.version &&
-                        Notify.updateAvailable(appContext, result.version, result.url)
-                    ) {
-                        Store.setNotifiedUpdate(appContext, result.version)
+            main.post {
+                completion.callbacks.forEach { subscriber ->
+                    try { subscriber(completion.result) } catch (error: Exception) {
+                        android.util.Log.w("UpdateChecker", "update callback failed", error)
                     }
                 }
-                Result.Current -> Store.clearUpdate(appContext)
-                Result.Failed -> Unit
             }
-            Store.setUpdateCheckedAt(appContext, System.currentTimeMillis())
-            main.post { pending.forEach { it.invoke(result) } }
         }
     }
 
