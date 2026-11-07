@@ -32,7 +32,10 @@ class FoxVerifiedLoginTest {
         val tokenRequests = AtomicInteger()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
+        val tokenEntered = CountDownLatch(1)
+        val tokenRelease = CountDownLatch(1)
         @Volatile var blockVerification = false
+        @Volatile var blockTokens = false
         @Volatile var failFirstVerification = false
         @Volatile var failFirstToken = true
         @Volatile var needsCode = true
@@ -46,6 +49,8 @@ class FoxVerifiedLoginTest {
             if (!verified.compareAndSet(false, true)) throw FoxError("Synthetic code already used")
         }
         override fun tokens(sessionToken: String): FoxTokens {
+            tokenEntered.countDown()
+            if (blockTokens) check(tokenRelease.await(10, TimeUnit.SECONDS))
             if (tokenRequests.incrementAndGet() == 1 && failFirstToken) {
                 throw FoxError("Synthetic OAuth failure", status = 406)
             }
@@ -67,6 +72,7 @@ class FoxVerifiedLoginTest {
     @After
     fun tearDown() {
         provider.release.countDown()
+        provider.tokenRelease.countDown()
         await { !Fox.busy }
         Fox.cancelLogin()
         Fox.loginProvider = MozillaLoginProvider
@@ -99,6 +105,21 @@ class FoxVerifiedLoginTest {
         assertEquals("a verified session must not consume the same code again", 1, provider.verifies.get())
         assertEquals(2, provider.tokenRequests.get())
         assertTrue(Fox.signedIn(context))
+    }
+
+    @Test
+    fun signOutWhileOAuthIsPendingCannotRestoreTheSignedOutAccount() {
+        provider.needsCode = false
+        provider.failFirstToken = false
+        provider.blockTokens = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        assertTrue("token request did not start", provider.tokenEntered.await(5, TimeUnit.SECONDS))
+        Fox.signOut(context)
+        assertFalse(Fox.signedIn(context))
+        provider.tokenRelease.countDown()
+        await { !Fox.busy }
+        assertFalse("late login must not recreate a signed-out account", Fox.signedIn(context))
+        assertFalse("late login must not expose a pending retry", Fox.needsStep())
     }
 
     @Test
