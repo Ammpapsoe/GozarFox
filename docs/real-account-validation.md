@@ -19,13 +19,30 @@ Python's unauthenticated HTTP/1.1 request, but HTTP 406 for Go over HTTP/2 both
 without authorization and with a made-up Hawk session. `curl` over HTTP/1.1
 also returned 406, while forced HTTP/1.1 through Go ended in EOF. Changing
 compression, JSON formatting, or the Go user-agent did not remove those 406s.
-These differing observations do not identify the cause of the real account's
+Python with a fabricated, properly shaped Hawk header also returned 401/110
+(run 42404644659). A JVM `HttpURLConnection` comparison on a runner returned
+406 with no authorization and 401 with a malformed, fabricated Hawk header
+(run 42405253153); this is not an Android-device test. These differing
+observations do not identify the cause of the real account's
 406, and the fake-session result must not be presented as account validation.
 They do not establish a general Mozilla outage or failure on all devices.
 Public OAuth client metadata lists the
 current Firefox client redirect as `urn:ietf:wg:oauth:2.0:oob:oauth-redirect-webchannel`;
 that does not establish an app- or loopback-compatible redirect. A browser
 flow needs an appropriately registered client and redirect.
+
+## Verified-session retry (synthetic Android app tests)
+
+Run 42404592144 reproduced a separate app-state defect with an injected fake
+provider: after an email code was successfully verified and OAuth failed, a
+retry submitted that consumed code again. Two overlapping calls could also
+verify the same session concurrently. The candidate serializes login-operation
+bodies, keeps an already verified login session for retry, and offers a
+retry action without asking for the code again. Run 42405147616 passed seven
+fake-provider tests, including 50 overlapping submissions and a Robolectric UI
+check. This does not establish that OAuth succeeds, that retry resolves HTTP
+406, or that Android devices were tested with the real account. The separate
+signup/link and account logout lifecycles require additional review.
 
 The probe encrypted input to the ephemeral CI job, did not upload passwords,
 verification codes, account identifiers or tokens as artifacts, and removed its
