@@ -15,19 +15,49 @@ adb shell run-as "$PKG" mkdir -p files
 adb shell run-as "$PKG" cp /data/local/tmp/gozar-recovery-sentinel files/recovery-ci-sentinel
 
 adb install -r "$DEST/affected.apk"
-# The first launch detects the external upgrade; three more launches leave
-# the trial unconfirmed and should create the actionable recovery notice.
-for _ in 1 2 3 4; do
-  adb shell am force-stop "$PKG"
-  adb shell am start -W -n "$PKG/.MainActivity" >/dev/null
-done
-adb shell run-as "$PKG" cat files/journal/update.json | tr -d '\r' > "$DEST/affected-journal.json"
-python3 - "$DEST/affected-journal.json" <<'PY'
-import json, sys
-state = json.load(open(sys.argv[1], encoding="utf-8"))
-assert state["installed"] == "1.11.1", state
-assert state["previous"] == "1.11.0", state
-assert state["attempts"] == 3 and not state["healthy"], state
+# A force-stop can race the process's durable journal write on an emulator.
+# Wait for each real launch to appear in the journal before stopping again;
+# never manufacture trial state or infer a crash from an unconfirmed launch.
+python3 - "$PKG" "$DEST/affected-journal.json" <<'PY'
+import json, subprocess, sys, time
+pkg, evidence = sys.argv[1:]
+
+def adb(*args):
+    return subprocess.run(["adb", *args], text=True, capture_output=True, check=True).stdout
+
+def state():
+    try:
+        return json.loads(adb("shell", "run-as", pkg, "cat", "files/journal/update.json"))
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return {}
+
+for launch in range(1, 9):
+    adb("shell", "am", "force-stop", pkg)
+    before = state()
+    output = adb("shell", "am", "start", "-W", "-n", pkg + "/.MainActivity")
+    if "Status: ok" not in output:
+        raise SystemExit("app did not start: " + output)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        current = state()
+        if current.get("installed") == "1.11.1" and (
+            before.get("installed") != "1.11.1" or current.get("attempts", 0) > before.get("attempts", 0)
+        ):
+            break
+        time.sleep(0.25)
+    else:
+        raise SystemExit(f"launch {launch} did not update journal; before={before}, after={current}")
+    print(f"Observed affected launch {launch}: attempts={current.get('attempts')}")
+    if current.get("attempts", 0) >= 3:
+        break
+else:
+    raise SystemExit("unconfirmed-launch threshold was not reached")
+
+with open(evidence, "w", encoding="utf-8") as handle:
+    json.dump(current, handle)
+assert current["installed"] == "1.11.1", current
+assert current["previous"] == "1.11.0", current
+assert current["attempts"] >= 3 and not current["healthy"], current
 PY
 adb shell dumpsys notification --noredact | tr -d '\r' > "$DEST/notifications.txt"
 if ! grep -E '(pkg=com\.gozar.*id=4098|id=4098.*pkg=com\.gozar)' "$DEST/notifications.txt" >/dev/null; then
