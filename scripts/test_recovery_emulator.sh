@@ -99,6 +99,9 @@ while time.monotonic() < end:
 else:
     raise SystemExit("recovery notification did not open the recovery activity")
 PY
+# On some emulator launches the shade stays expanded even though the recovery
+# activity resumed underneath it; close it before later installer UI checks.
+adb shell cmd statusbar collapse
 
 # A normal replace-install must not silently downgrade an installed version.
 adb shell am force-stop "$PKG"
