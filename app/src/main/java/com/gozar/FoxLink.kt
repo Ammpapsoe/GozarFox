@@ -250,13 +250,14 @@ object FoxLink {
         val ticket = synchronized(stateLock) {
             if (!connected || !FoxVpnService.isAlive() ||
                 (expectedAttempt != null && expectedAttempt != generation)) return false
-            generation to FoxLeakGuard.beginReport()
+            val transport = transportTicket ?: return false
+            Triple(generation, FoxLeakGuard.beginReport(), transport)
         }
         thread(isDaemon = true, name = "fox-leak-diagnostic") {
             try {
                 val result = FoxLeakGuard.diagnose(
                     positiveHost = "api.accounts.firefox.com",
-                    resolve = { host -> FoxVpnService.diagnosticDns(host) },
+                    resolve = { host -> FoxVpnService.diagnosticDns(host, ticket.third) },
                     exitIp = exitIp
                 )
                 val published = synchronized(stateLock) {

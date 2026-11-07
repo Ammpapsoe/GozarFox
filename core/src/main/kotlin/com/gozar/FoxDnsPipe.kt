@@ -5,6 +5,7 @@ import java.util.ArrayDeque
 
 class FoxDnsPipe(
     private val resolver: FoxResolver,
+    private val scope: FoxDnsScope? = null,
     private val onAnswer: (ByteArray, ByteArray) -> Unit = { _, _ -> }
 ) : FoxPipe {
     private val lock = Object()
@@ -18,7 +19,7 @@ class FoxDnsPipe(
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
         val messages = ArrayList<ByteArray>()
         synchronized(lock) {
-            if (closed || finished) throw IOException("DNS connection is closed")
+            if (closed || finished || scope?.isCurrent() == false) throw IOException("DNS connection is closed")
             incoming += buffer.copyOfRange(offset, offset + length)
             while (incoming.size >= 2) {
                 val size = ((incoming[0].toInt() and 255) shl 8) or (incoming[1].toInt() and 255)
@@ -30,19 +31,19 @@ class FoxDnsPipe(
             if (incoming.size > 65537) throw IOException("DNS message is too large")
         }
         for (query in messages) {
-            val answer = resolver.answer(query) ?: throw IOException("invalid DNS query")
+            val answer = resolver.answer(query, scope) ?: throw IOException("DNS query is unavailable")
             if (answer.size > 65535) throw IOException("DNS reply is too large")
             val framed = ByteArray(answer.size + 2)
             framed[0] = (answer.size ushr 8).toByte()
             framed[1] = answer.size.toByte()
             answer.copyInto(framed, 2)
             synchronized(lock) {
-                if (closed) throw IOException("DNS connection is closed")
+                if (closed || scope?.isCurrent() == false) throw IOException("DNS connection is closed")
                 // Publishing the learned name and checking closure must be
                 // atomic: a slow lookup cannot teach a flow after it closes.
                 onAnswer(query, answer)
-                while (queued + framed.size > 512 * 1024 && !closed) lock.wait()
-                if (closed) throw IOException("DNS connection is closed")
+                while (queued + framed.size > 512 * 1024 && !closed && scope?.isCurrent() != false) lock.wait(1000)
+                if (closed || scope?.isCurrent() == false) throw IOException("DNS connection is closed")
                 outgoing.addLast(framed)
                 queued += framed.size
                 lock.notifyAll()
@@ -53,8 +54,8 @@ class FoxDnsPipe(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         synchronized(lock) {
-            while (outgoing.isEmpty() && !closed && !finished) lock.wait()
-            if (outgoing.isEmpty()) return -1
+            while (outgoing.isEmpty() && !closed && !finished && scope?.isCurrent() != false) lock.wait(1000)
+            if (scope?.isCurrent() == false || outgoing.isEmpty()) return -1
             val first = outgoing.first()
             val count = minOf(length, first.size - headOffset)
             System.arraycopy(first, headOffset, buffer, offset, count)

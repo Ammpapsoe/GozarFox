@@ -16,7 +16,7 @@ class FoxProxy(
     private val forceTunnel: Boolean = false,
     private val countTraffic: Boolean = true,
     private val directAllowed: () -> Boolean = { FoxVpnService.directRoutingAllowed() },
-    private val directAddress: (String) -> String? = { FoxVpnService.directAddress(it) },
+    private val directAddress: (String, Long) -> String? = { host, ticket -> FoxVpnService.directAddress(host, ticket) },
     private val directConnect: (String, Int) -> FoxPipe? = { host, port -> FoxSocketPipe.connect(host, port) },
     private val tunnelConnect: (FoxLocation, String, Int, String, Long) -> FoxPipe? = { place, host, port, pass, ticket ->
         FoxTunnel.open(place, host, port, pass, expectedTransport = ticket)
@@ -292,7 +292,7 @@ class FoxProxy(
         val scope = tunnelScope(this) ?: return null
         if (!activeEpoch(acceptedEpoch) || !scopeCurrent(scope.ticket)) return null
         val tunnel = if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
-            val address = directAddress(host) ?: return null
+            val address = directAddress(host, scope.ticket) ?: return null
             if (!activeEpoch(acceptedEpoch) || !directAllowed() || !scopeCurrent(scope.ticket)) return null
             val pipe = directConnect(address, port) ?: return null
             val guarded = DirectPipe(pipe) { activeEpoch(acceptedEpoch) && directAllowed() && scopeCurrent(scope.ticket) }

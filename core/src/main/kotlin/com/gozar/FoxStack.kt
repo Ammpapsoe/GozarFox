@@ -29,6 +29,11 @@ interface FoxPipe {
     fun close()
 }
 
+/** Identifies a DNS owner's attempt and fails closed when it is no longer current. */
+class FoxDnsScope(val key: Any, private val valid: () -> Boolean) {
+    fun isCurrent(): Boolean = try { valid() } catch (_: Exception) { false }
+}
+
 private const val MIN_TTL_SECONDS = 60L
 private const val MAX_TTL_SECONDS = 300L
 private const val NEGATIVE_TTL_MS = 30_000L
@@ -43,7 +48,9 @@ class FoxStack(
     private val meter: (Boolean, Long) -> Unit,
     mtu: Int = MTU,
     // Capture a flow's lifecycle scope before it is submitted to a worker.
-    private val prepareDial: ((String, String, Int) -> (() -> FoxPipe))? = null
+    private val prepareDial: ((String, String, Int) -> (() -> FoxPipe))? = null,
+    // Capture DNS ownership at packet/flow admission, before worker dispatch.
+    private val prepareDns: (() -> FoxDnsScope?)? = null
 ) {
 
     private val mtu = mtu.coerceIn(576, 65535)
@@ -128,7 +135,7 @@ class FoxStack(
 
     fun nameOf(address: Int): String? = names[address]
 
-    internal fun dnsPipe(): FoxPipe = FoxDnsPipe(resolver, ::learn)
+    internal fun dnsPipe(scope: FoxDnsScope? = null): FoxPipe = FoxDnsPipe(resolver, scope, ::learn)
 
     private fun pump() {
         val buffer = ByteArray(65535)
@@ -266,22 +273,27 @@ class FoxStack(
             unreachable(target, packet, total)
             return
         }
+        val scope = try { prepareDns?.invoke() } catch (_: Exception) { null }
+        if (prepareDns != null && scope == null) return
+        if (scope?.isCurrent() == false) return
         meter(false, length.toLong())
         val query = packet.copyOfRange(start, start + length - 8)
         try {
             dnsWorkers.execute {
+                if (!running || scope?.isCurrent() == false) return@execute
                 val answer = try {
-                    resolver.answer(query)
+                    resolver.answer(query, scope)
                 } catch (_: Exception) {
                     null
                 } ?: return@execute
+                if (!running || scope?.isCurrent() == false) return@execute
                 learn(query, answer)
                 val limited = resolver.truncate(query, answer, mtu - 28)
-                if (limited.isNotEmpty()) replyUdp(target, appPort, serverPort, limited)
+                if (running && scope?.isCurrent() != false && limited.isNotEmpty()) replyUdp(target, appPort, serverPort, limited)
             }
         } catch (_: RejectedExecutionException) {
             val failure = resolver.unavailable(query)
-            if (failure != null) replyUdp(target, appPort, serverPort, failure)
+            if (running && scope?.isCurrent() != false && failure != null) replyUdp(target, appPort, serverPort, failure)
         }
     }
 
@@ -620,7 +632,12 @@ class FoxStack(
             val destination = address(remote)
             val host = names[remote] ?: destination
             val open: () -> FoxPipe = if (remotePort == 53) {
-                { dnsPipe() }
+                val scope = try { prepareDns?.invoke() } catch (_: Exception) { null }
+                if (prepareDns != null && (scope == null || !scope.isCurrent())) {
+                    terminate()
+                    return
+                }
+                { dnsPipe(scope) }
             } else {
                 try {
                     prepareDial?.invoke(host, destination, remotePort) ?: { dial(host, destination, remotePort) }
@@ -813,24 +830,28 @@ class FoxResolver(
     private val raceHeadStartMs: Long = RACE_HEAD_START_MS
 ) {
 
+    private data class LookupKey(val question: String, val scope: Any?)
     private class Entry(val body: ByteArray, val storedAt: Long, val expires: Long)
     private class LookupFlight {
         val finished = CountDownLatch(1)
         @Volatile var body: ByteArray? = null
     }
 
-    private val cache = ConcurrentHashMap<String, Entry>()
-    private val flights = ConcurrentHashMap<String, LookupFlight>()
+    private val cache = ConcurrentHashMap<LookupKey, Entry>()
+    private val flights = ConcurrentHashMap<LookupKey, LookupFlight>()
     private val slots = Semaphore(8)
 
-    fun answer(query: ByteArray): ByteArray? {
+    fun answer(query: ByteArray, scope: FoxDnsScope? = null): ByteArray? {
+        if (!scopeCurrent(scope)) return null
         if (query.size < 17 || query[2].toInt() and 0x80 != 0 || short(query, 4) != 1 || question(query) == null) return null
         val questionEnd = questionEnd(query, 12)
         if (questionEnd < 0 || questionEnd + 4 > query.size) return null
         val type = questionType(query)
-        if (type == 28 || type == 65) return empty(query)
-        val key = String(query, 2, query.size - 2, Charsets.ISO_8859_1)
-        cached(key, query)?.let { return it }
+        if (type == 28 || type == 65) return if (scopeCurrent(scope)) empty(query) else null
+        // Different attempts never join an older in-flight request or consume
+        // an answer cached by that request after the owner changed.
+        val key = LookupKey(String(query, 2, query.size - 2, Charsets.ISO_8859_1), scope?.key)
+        cached(key, query)?.let { return if (scopeCurrent(scope)) it else null }
 
         // Share even uncacheable responses and failures among callers already
         // waiting for this lookup. A later request can still retry a failure;
@@ -844,21 +865,24 @@ class FoxResolver(
                 Thread.currentThread().interrupt()
                 false
             }
+            if (!scopeCurrent(scope)) return null
             return if (complete) existing.body?.let { retag(query, it) } ?: failure(query) else failure(query)
         }
         var result: ByteArray? = null
         try {
             // The previous flight may have filled the cache between our first
             // cache check and becoming the next leader.
+            if (!scopeCurrent(scope)) return null
             result = cached(key, query)
             if (result == null) {
                 val started = now()
-                val body = exchange(query)
-                if (body != null && valid(query, body)) {
+                val body = exchange(query, scope)
+                if (body != null && scopeCurrent(scope) && valid(query, body)) {
                     store(key, body, started)
                     result = body
                 }
             }
+            if (!scopeCurrent(scope)) return null
             return result?.let { retag(query, it) } ?: failure(query)
         } finally {
             mine.body = result
@@ -867,7 +891,9 @@ class FoxResolver(
         }
     }
 
-    private fun cached(key: String, query: ByteArray): ByteArray? {
+    private fun scopeCurrent(scope: FoxDnsScope?): Boolean = scope?.isCurrent() ?: true
+
+    private fun cached(key: LookupKey, query: ByteArray): ByteArray? {
         val hit = cache[key] ?: return null
         val time = now()
         if (time < hit.expires) return retag(query, hit.body, (time - hit.storedAt).coerceAtLeast(0) / 1000)
@@ -875,7 +901,7 @@ class FoxResolver(
         return null
     }
 
-    private fun store(key: String, body: ByteArray, time: Long) {
+    private fun store(key: LookupKey, body: ByteArray, time: Long) {
         val lifetime = when (body[3].toInt() and 0x0F) {
             0 -> ttl(body)
             3 -> NEGATIVE_TTL_MS
@@ -916,7 +942,8 @@ class FoxResolver(
         return copy
     }
 
-    fun directAddress(host: String): String? {
+    fun directAddress(host: String, scope: FoxDnsScope? = null): String? {
+        if (!scopeCurrent(scope)) return null
         val raw = host.trim().removeSurrounding("[", "]").trimEnd('.')
         if (raw.isEmpty()) return null
         if (raw.equals("localhost", true) || raw.endsWith(".localhost", true)) return "127.0.0.1"
@@ -944,8 +971,8 @@ class FoxResolver(
             }
             write(byteArrayOf(0, 0, 1, 0, 1))
         }.toByteArray()
-        val body = answer(query) ?: return null
-        if (body.size < 12 || body[3].toInt() and 15 != 0) return null
+        val body = answer(query, scope) ?: return null
+        if (!scopeCurrent(scope) || body.size < 12 || body[3].toInt() and 15 != 0) return null
         var at = questionEnd(body, 12)
         if (at < 0 || at + 4 > body.size) return null
         at += 4
@@ -1038,10 +1065,11 @@ class FoxResolver(
      * rest race in parallel and the first valid reply wins. A slow or blocked
      * endpoint therefore costs milliseconds, not its whole timeout.
      */
-    private fun exchange(query: ByteArray): ByteArray? {
-        if (endpoints.isEmpty()) return null
+    private fun exchange(query: ByteArray, scope: FoxDnsScope?): ByteArray? {
+        if (endpoints.isEmpty() || !scopeCurrent(scope)) return null
         if (!slots.tryAcquire(2, TimeUnit.SECONDS)) return null
         try {
+            if (!scopeCurrent(scope)) return null
             val winner = AtomicReference<ByteArray?>(null)
             val settled = CountDownLatch(1)
             val remaining = AtomicInteger(endpoints.size)
@@ -1054,14 +1082,14 @@ class FoxResolver(
             val stagger = thread(isDaemon = true, name = "fox-dns-race") {
                 try {
                     gate.await(raceHeadStartMs, TimeUnit.MILLISECONDS)
-                    if (winner.get() != null) {
+                    if (winner.get() != null || !scopeCurrent(scope)) {
                         repeat(rest.size) { if (remaining.decrementAndGet() == 0) settled.countDown() }
                         return@thread
                     }
                     val others = ArrayList<Thread>(rest.size)
                     for (url in rest) {
-                        if (winner.get() != null) break
-                        others.add(thread(isDaemon = true) { settle(attempt(url, query)) })
+                        if (winner.get() != null || !scopeCurrent(scope)) break
+                        others.add(thread(isDaemon = true) { settle(attempt(url, query, scope)) })
                     }
                     repeat(rest.size - others.size) { if (remaining.decrementAndGet() == 0) settled.countDown() }
                     for (worker in others) worker.join(30000)
@@ -1069,20 +1097,21 @@ class FoxResolver(
                 }
             }
             thread(isDaemon = true, name = "fox-dns-first") {
-                val body = attempt(endpoints[0], query)
+                val body = attempt(endpoints[0], query, scope)
                 settle(body)
                 if (body == null) gate.countDown()
             }
             settled.await(30, TimeUnit.SECONDS)
-            return winner.get()
+            return if (scopeCurrent(scope)) winner.get() else null
         } finally {
             slots.release()
         }
     }
 
-    private fun attempt(url: String, query: ByteArray): ByteArray? {
+    private fun attempt(url: String, query: ByteArray, scope: FoxDnsScope?): ByteArray? {
+        if (!scopeCurrent(scope)) return null
         val body = try { over(url, query) } catch (_: Exception) { null }
-        return if (body != null && valid(query, body) && body[3].toInt() and 0x0F != 2) body else null
+        return if (scopeCurrent(scope) && body != null && valid(query, body) && body[3].toInt() and 0x0F != 2) body else null
     }
 
     private fun over(url: String, query: ByteArray): ByteArray? {

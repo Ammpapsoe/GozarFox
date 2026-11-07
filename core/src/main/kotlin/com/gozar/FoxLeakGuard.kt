@@ -86,7 +86,7 @@ object FoxLeakGuard {
     }
 
     /** Query A records via the supplied VPN resolver; never use system DNS. */
-    fun lookupA(resolver: FoxResolver, host: String): Lookup {
+    fun lookupA(resolver: FoxResolver, host: String, scope: FoxDnsScope? = null): Lookup {
         val labels = host.trimEnd('.').split('.')
         if (host.length > 253 || labels.isEmpty() || labels.any { label ->
                 label.isEmpty() || label.length > 63 || label.startsWith('-') || label.endsWith('-') ||
@@ -102,7 +102,7 @@ object FoxLeakGuard {
             }
             write(byteArrayOf(0, 0, 1, 0, 1))
         }.toByteArray()
-        val body = try { resolver.answer(query) } catch (_: Exception) { null }
+        val body = try { resolver.answer(query, scope) } catch (_: Exception) { null }
             ?: return Lookup(LookupCode.UNAVAILABLE)
         return parseAnswer(body)
     }

@@ -113,7 +113,7 @@ class ProtectionTest {
             val port = availablePort()
             FoxRoute.apply(false, "direct.example")
             val resolved = LinkedBlockingQueue<String>()
-            val proxy = FoxProxy(port, directAllowed = { true }, directAddress = { host ->
+            val proxy = FoxProxy(port, directAllowed = { true }, directAddress = { host, _ ->
                 resolved.offer(host)
                 "127.0.0.1"
             }, tunnelScope = { FoxLink.TransportScope(FoxLocation("", "", "", "local-test.invalid", 443, false), 1L) },
@@ -159,7 +159,7 @@ class ProtectionTest {
         }
         FoxRoute.apply(false, "direct.example")
         val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
-        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = {
+        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = { _, _ ->
             val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing gate")
             gate.entered.countDown()
             if (!gate.release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
@@ -194,7 +194,7 @@ class ProtectionTest {
         val connectCalls = AtomicInteger()
         FoxRoute.apply(false, "direct.example")
         val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
-        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = {
+        val proxy = FoxProxy(0, directAllowed = { true }, directAddress = { _, _ ->
             val gate = gates.poll(5, TimeUnit.SECONDS) ?: error("missing gate")
             gate.worker.set(Thread.currentThread())
             gate.entered.countDown()

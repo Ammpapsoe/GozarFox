@@ -49,9 +49,9 @@ same ports are resumed. Once the interface is released, the listeners are
 closed. A listener-local epoch prevents work accepted before pause from being
 resumed under the new attempt, including a delayed direct lookup or credential
 renewal. Tests cover two sets of 50 pause/resume races, paused-listener
-rejection, and 50 stop/prepare transitions with a simulated interface. The results of GitHub Actions on the
-commit containing these changes must be checked before reporting them as
-passing, and they do not establish a successful real always-on reconnect.
+rejection, and 50 stop/prepare transitions with a simulated interface. GitHub
+Actions Test 42392158846 and the installer-emulator workflow 42392164985 passed
+on commit 38cc5f6. These do not establish a successful real always-on reconnect.
 
 ## Overlapping service instances (candidate change)
 
@@ -68,8 +68,8 @@ instance releases its own stack, root session and descriptor without stopping
 the replacement's transport or closing its direct pipes; current-instance
 teardown still stops global resources. A 50-transition Robolectric regression
 checks liveness, the current transport, ports, direct-pipe ownership, and stale
-error reporting. Check the corresponding GitHub Actions run before treating
-this candidate as verified.
+error reporting. GitHub Actions Test 42393238388 and installer-emulator Test
+42393245449 passed on commit b418668; neither is a real service-overlap test.
 
 ## Closed TCP DNS flow (candidate change)
 
@@ -77,7 +77,23 @@ A gated local regression found that `FoxDnsPipe` could publish a learned DNS
 answer after its pipe had been closed; the test failed at iteration zero on
 the earlier code. This is a stale name-to-address update, not evidence of a
 packet leak. The candidate checks closure and publishes the answer under the
-same lock. Its targeted 50-iteration local stress passed. GitHub Actions and
+same lock. Its targeted 50-iteration local stress passed.
+
+## DNS attempt scoping (candidate change)
+
+The same VPN interface retains its resolver across an in-place retry. DNS
+packets and TCP DNS flows now capture a service-lifetime/transport scope at
+admission; the resolver separates single-flight and cache entries by that
+scope. A stale scope is checked before a fallback starts and before a finished
+answer is used; the next attempt does not wait on the old attempt's DNS
+flight. Proxy direct lookups and diagnostic DNS queries carry their expected
+transport ticket too. Local 50-iteration stresses cover a blocked primary and
+fallback, independent old/new flights, a stale TCP DNS pipe, and a synthetic
+TUN UDP query followed by a successful replacement-attempt query.
+
+These are best-effort validity checks, not an atomic network kill switch: a
+raw lookup or TCP/TLS operation already past a check can still race a stop,
+and a blocking request may continue until its timeout. GitHub Actions and
 real reconnect scenarios must still be checked.
 
 ## Remaining limitations

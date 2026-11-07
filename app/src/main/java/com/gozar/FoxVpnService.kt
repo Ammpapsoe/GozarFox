@@ -151,11 +151,21 @@ class FoxVpnService : VpnService() {
                     }
                 }
                 open
-            }
+            },
+            prepareDns = { dnsScope() }
         )
         engine.start()
         stack = engine
         FoxLink.start(this)
+    }
+
+    private fun dnsScope(expectedTicket: Long? = null): FoxDnsScope? {
+        val lifetime = stackLifetime ?: return null
+        val transport = FoxLink.transportScope() ?: return null
+        if (!lifetime.get() || (expectedTicket != null && transport.ticket != expectedTicket)) return null
+        return FoxDnsScope(lifetime to transport.ticket) {
+            lifetime.get() && instance === this && FoxLink.transportIsCurrent(transport.ticket)
+        }
     }
 
     override fun onRevoke() {
@@ -409,13 +419,20 @@ class FoxVpnService : VpnService() {
             return state >= 2 || (state == 0 && service.systemStarted)
         }
 
-        fun directAddress(host: String): String? = instance?.resolver?.directAddress(host)
+        fun directAddress(host: String, expectedTicket: Long): String? {
+            val service = instance ?: return null
+            val scope = service.dnsScope(expectedTicket) ?: return null
+            return service.resolver?.directAddress(host, scope)
+        }
 
         /** Diagnostic DNS uses the service resolver and its force-tunnel proxy,
          * not system DNS from this VPN-excluded process. */
-        fun diagnosticDns(host: String): FoxLeakGuard.Lookup {
-            val resolver = instance?.resolver ?: return FoxLeakGuard.Lookup(FoxLeakGuard.LookupCode.UNAVAILABLE)
-            return FoxLeakGuard.lookupA(resolver, host)
+        fun diagnosticDns(host: String, expectedTicket: Long): FoxLeakGuard.Lookup {
+            val unavailable = FoxLeakGuard.Lookup(FoxLeakGuard.LookupCode.UNAVAILABLE)
+            val service = instance ?: return unavailable
+            val scope = service.dnsScope(expectedTicket) ?: return unavailable
+            val resolver = service.resolver ?: return unavailable
+            return FoxLeakGuard.lookupA(resolver, host, scope)
         }
 
         fun directRoutingAllowed(): Boolean {
