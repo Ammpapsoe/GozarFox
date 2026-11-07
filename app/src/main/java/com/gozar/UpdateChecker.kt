@@ -17,11 +17,11 @@ object UpdateChecker {
     private const val CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
     private const val OWNER = "bardia049b-stack"
     private val REPOSITORIES = listOf("Gozar", "Gozar1")
-    private const val LATEST_RELEASE = "https://api.github.com/repos/bardia049b-stack/Gozar1/releases/latest"
+    private const val LATEST_RELEASE = "https://api.github.com/repos/bardia049b-stack/Gozar/releases/latest"
     private const val MANIFEST_ASSET = "update.json"
     private const val SIGNATURE_ASSET = "update.json.sig"
     private const val FoxUpdateManifestLimit = 65_536
-    private val VERSION = Regex("^\\d{1,4}(\\.\\d{1,4}){1,3}(-[0-9A-Za-z.]{1,16})?$")
+    private const val RELEASE_JSON_LIMIT = 1_048_576
     private val main = Handler(Looper.getMainLooper())
     private val lock = Any()
     private val callbacks = mutableListOf<(Result) -> Unit>()
@@ -59,31 +59,23 @@ object UpdateChecker {
         if (!hasManifest || !hasSignature) return Result.Failed
         val manifestJson = fetchAsset(MANIFEST_ASSET) ?: return Result.Failed
         val signature = fetchAsset(SIGNATURE_ASSET) ?: return Result.Failed
-        val verdict = FoxUpdate.verify(manifestJson.trim(), signature.trim(), installed, keyHex = keyHex)
-        val accepted = verdict as? FoxUpdate.Verdict.Accept
-        if (accepted == null) {
-            // "Up to date" is only reported when the manifest plainly declares a
-            // version that is not newer; everything else stays a hard failure.
-            // The declared version is untrusted input — it can at worst hide an
-            // update, never install one.
-            val declared = try {
-                JSONObject(manifestJson).optString("version")
-            } catch (_: Exception) {
-                ""
-            }
-            return if (declared.isNotEmpty() && VERSION.matches(declared) && !isNewer(declared, installed)) {
-                Result.Current
-            } else {
-                Result.Failed
-            }
+        // Verify the exact downloaded bytes. Whitespace is significant in a
+        // detached signature; do not trim the signed JSON before verification.
+        val verdict = FoxUpdate.verify(manifestJson, signature.trim(), installed, keyHex = keyHex)
+        val accepted = when (verdict) {
+            is FoxUpdate.Verdict.Current -> return Result.Current
+            is FoxUpdate.Verdict.Reject -> return Result.Failed
+            is FoxUpdate.Verdict.Accept -> verdict.manifest
         }
-        // Prefer this device's ABI, then any ABI the device supports, then universal.
+        // A normal Android installer will reject a lower versionCode even if
+        // an old manifest is signed. Recovery must be a newer, signed build.
+        if (accepted.rollback || !FoxUpdate.isNewer(accepted.version, installed)) return Result.Failed
+        // An APK for an unknown ABI is not a safe fallback.
         val apk = abis.firstNotNullOfOrNull { abi ->
-                accepted.manifest.artifacts.firstOrNull { it.name.contains(abi) && it.name.endsWith(".apk") }
-            } ?: accepted.manifest.artifactFor("universal.apk")
-            ?: accepted.manifest.artifactFor(".apk")
+                accepted.artifacts.firstOrNull { it.name.endsWith("_$abi.apk") }
+            } ?: accepted.artifactFor("_universal.apk")
             ?: return Result.Failed
-        return Result.Available(accepted.manifest.version, apk.url, apk.sha256, apk.size)
+        return Result.Available(accepted.version, apk.url, apk.sha256, apk.size)
     }
 
     /** Runs at app startup and then at most once per day while Android permits background work. */
@@ -147,7 +139,8 @@ object UpdateChecker {
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             connection.setRequestProperty("Connection", "close")
             if (connection.responseCode !in 200..299) return Result.Failed
-            val json = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+            val jsonText = connection.inputStream.use { readLimited(it, RELEASE_JSON_LIMIT) } ?: return Result.Failed
+            val json = JSONObject(jsonText)
             val installed = try {
                 context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
             } catch (_: Exception) {
@@ -169,7 +162,7 @@ object UpdateChecker {
             val asset = assets.optJSONObject(index) ?: continue
             if (asset.optString("name") != name) continue
             val url = asset.optString("browser_download_url")
-            if (!url.startsWith("https://")) return null
+            if (!FoxUpdate.trusted(url)) return null
             var connection: HttpURLConnection? = null
             return try {
                 connection = URL(url).openConnection() as HttpURLConnection
@@ -178,16 +171,7 @@ object UpdateChecker {
                 connection.setRequestProperty("User-Agent", "Gozar update checker")
                 connection.setRequestProperty("Connection", "close")
                 if (connection.responseCode !in 200..299) return null
-                val reader = connection.inputStream.bufferedReader(Charsets.UTF_8)
-                val buffer = CharArray(FoxUpdateManifestLimit)
-                var total = 0
-                while (total < buffer.size) {
-                    val read = reader.read(buffer, total, buffer.size - total)
-                    if (read < 0) break
-                    total += read
-                }
-                if (reader.read() >= 0) return null // larger than any legitimate manifest
-                String(buffer, 0, total)
+                connection.inputStream.use { readLimited(it, FoxUpdateManifestLimit) }
             } catch (_: Exception) {
                 null
             } finally {
@@ -195,6 +179,20 @@ object UpdateChecker {
             }
         }
         return null
+    }
+
+    internal fun readLimited(input: java.io.InputStream, limit: Int): String? {
+        if (limit < 0) return null
+        val output = java.io.ByteArrayOutputStream(minOf(limit, 8192))
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            if (output.size() + count > limit) return null
+            output.write(buffer, 0, count)
+        }
+        return output.toString("UTF-8")
     }
 
     internal fun trusted(url: String): Boolean {
@@ -209,18 +207,4 @@ object UpdateChecker {
         return REPOSITORIES.any { path.startsWith("/$OWNER/$it/releases/") }
     }
 
-    private fun isNewer(remote: String, local: String): Boolean {
-        val remoteParts = versionParts(remote)
-        val localParts = versionParts(local)
-        val count = maxOf(remoteParts.size, localParts.size, 3)
-        for (index in 0 until count) {
-            val r = remoteParts.getOrElse(index) { 0 }
-            val l = localParts.getOrElse(index) { 0 }
-            if (r != l) return r > l
-        }
-        return false
-    }
-
-    private fun versionParts(value: String): List<Int> =
-        Regex("\\d+").findAll(value).map { it.value.toIntOrNull() ?: 0 }.take(4).toList()
 }

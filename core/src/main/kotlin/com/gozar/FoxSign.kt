@@ -60,7 +60,10 @@ object FoxSign {
     private fun multiply(scalar: BigInteger, point: Point): Point {
         var result = Point(BigInteger.ZERO, BigInteger.ONE)
         var current = point
-        var rest = scalar.mod(L)
+        require(scalar.signum() >= 0)
+        // Do not reduce by L here: subgroup validation must really compute
+        // [L]P, including when P has a non-prime-order component.
+        var rest = scalar
         while (rest.signum() > 0) {
             if (rest.testBit(0)) result = add(result, current)
             current = add(current, current)
@@ -135,14 +138,23 @@ object FoxSign {
 
     fun verify(public: ByteArray, message: ByteArray, signature: ByteArray): Boolean {
         if (public.size != 32 || signature.size != 64) return false
-        val pointA = decode(public) ?: return false
-        val pointR = decode(signature.copyOfRange(0, 32)) ?: return false
-        val s = littleEndianOfBytes(signature.copyOfRange(32, 64))
-        if (s >= L) return false
-        val encodedR = signature.copyOfRange(0, 32)
-        val k = littleEndianOfBytes(sha512(encodedR, public, message)).mod(L)
-        val left = multiply(s, BASE)
-        val right = add(pointR, multiply(k, pointA))
-        return left.x == right.x && left.y == right.y
+        return try {
+            val pointA = decode(public) ?: return false
+            val encodedR = signature.copyOfRange(0, 32)
+            val pointR = decode(encodedR) ?: return false
+            val s = littleEndianOfBytes(signature.copyOfRange(32, 64))
+            if (s >= L) return false
+            fun identity(point: Point) = point.x == BigInteger.ZERO && point.y == BigInteger.ONE
+            // Identity, low-order and mixed-order points are never acceptable
+            // release keys or nonce points. Check the actual prime subgroup.
+            if (identity(pointA) || identity(pointR) ||
+                !identity(multiply(L, pointA)) || !identity(multiply(L, pointR))) return false
+            val k = littleEndianOfBytes(sha512(encodedR, public, message)).mod(L)
+            val left = multiply(s, BASE)
+            val right = add(pointR, multiply(k, pointA))
+            left.x == right.x && left.y == right.y
+        } catch (_: ArithmeticException) {
+            false
+        }
     }
 }

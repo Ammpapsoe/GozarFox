@@ -97,6 +97,17 @@ class FoxUpdateTest {
     }
 
     @Test
+    fun verifierRejectsIdentityAndSmallOrderForgeries() {
+        val identity = ByteArray(32).also { it[0] = 1 }
+        val zero = ByteArray(32)
+        val forged = identity + ByteArray(32)
+        assertFalse(FoxSign.verify(identity, "anything".toByteArray(), forged))
+        assertFalse(FoxSign.verify(zero, "anything".toByteArray(), forged))
+        assertFalse(FoxSign.verify(public1, "anything".toByteArray(), forged))
+        assertFalse(FoxSign.verify(ByteArray(32) { 0xff.toByte() }, ByteArray(0), forged))
+    }
+
+    @Test
     fun signingIsDeterministicAndSurvivesLargeMessages() {
         val message = ByteArray(5000) { (it % 251).toByte() }
         val first = FoxSign.sign(seed2, message)
@@ -116,7 +127,7 @@ class FoxUpdateTest {
         channelMin: String = "1.8.0",
         rollback: Boolean = false,
         issuedAt: Long = 1_793_000_000,
-        artifacts: String = """[{"name":"gozar-1.12.0.apk","sha256":"${"a".repeat(64)}","size":1048576,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/gozar-1.12.0.apk"}]"""
+        artifacts: String = """[{"name":"gozar-$version.apk","sha256":"${"a".repeat(64)}","size":1048576,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v$version/gozar-$version.apk"}]"""
     ): String = """{"version":"$version","channel_min":"$channelMin","rollback":$rollback,"issued_at":$issuedAt,"notes":"n","artifacts":$artifacts}"""
 
     private fun sign(body: String): String = base64(FoxSign.sign(seed1, body.toByteArray(Charsets.UTF_8)))
@@ -187,11 +198,49 @@ class FoxUpdateTest {
     }
 
     @Test
+    fun signedButIllTypedFieldsAreRejectedWithoutThrowing() {
+        val original = manifest()
+        for (bad in listOf(
+            original.replace("\"rollback\":false", "\"rollback\":\"false\""),
+            original.replace("\"issued_at\":1793000000", "\"issued_at\":\"1793000000\""),
+            original.replace("\"issued_at\":1793000000", "\"issued_at\":1.5"),
+            original.replace("\"size\":1048576", "\"size\":\"1048576\""),
+            original.replace("\"version\":\"1.12.0\"", "\"version\":\"1.12.0-beta..1\"")
+        )) {
+            assertTrue(expect(bad, sign(bad)) is FoxUpdate.Verdict.Reject)
+        }
+    }
+
+    @Test
+    fun signedArtifactMustMatchItsReleaseNameAndTag() {
+        val wrongTag = manifest().replace("/download/v1.12.0/", "/download/v1.10.0/")
+        val wrongName = manifest().replace("/gozar-1.12.0.apk\"", "/other.apk\"")
+        val original = manifest()
+        val item = original.substringAfter("[{").substringBefore("}]")
+        val duplicate = original.replace("[{$item}]", "[{$item},{$item}]")
+        for (bad in listOf(wrongTag, wrongName, duplicate)) {
+            assertTrue(expect(bad, sign(bad)) is FoxUpdate.Verdict.Reject)
+        }
+    }
+
+    @Test
+    fun versionsTreatFinalReleasesAndPrereleasesCorrectly() {
+        assertTrue(FoxUpdate.isNewer("1.12.0", "1.12.0-rc.1"))
+        assertFalse(FoxUpdate.isNewer("1.12.0-rc.1", "1.12.0"))
+        assertTrue(FoxUpdate.isNewer("1.12.0-rc.2", "1.12.0-rc.1"))
+        assertTrue(FoxUpdate.isNewer("1.12.0-beta", "1.12.0-alpha"))
+        assertFalse(FoxUpdate.isNewer("1.12.0-alpha.1", "1.12.0-alpha.2"))
+        assertFalse(FoxUpdate.isNewer("1.12.0-beta..1", "1.11.0"))
+    }
+
+    @Test
     fun downgradesAndBadRollbacksAreRejected() {
         val downgrade = manifest(version = "1.10.0")
         assertTrue(expect(downgrade, sign(downgrade)) is FoxUpdate.Verdict.Reject)
         val same = manifest(version = "1.11.0")
-        assertTrue(expect(same, sign(same)) is FoxUpdate.Verdict.Reject)
+        assertTrue(expect(same, sign(same)) is FoxUpdate.Verdict.Current)
+        // An unauthenticated body can never be reported as current.
+        assertTrue(expect(same, sign(manifest())) is FoxUpdate.Verdict.Reject)
         // A rollback that is actually newer is rejected.
         val fakeRollback = manifest(version = "1.12.0", rollback = true)
         assertTrue(expect(fakeRollback, sign(fakeRollback)) is FoxUpdate.Verdict.Reject)
@@ -227,6 +276,10 @@ class FoxUpdateTest {
         assertFalse(FoxUpdate.trusted("https://raw.githubusercontent.com/bardia049b-stack/Gozar/main/a.apk"))
         assertFalse(FoxUpdate.trusted("http://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk"))
         assertFalse(FoxUpdate.trusted("https://github.com@evil.example/bardia049b-stack/Gozar/releases/download/v/a.apk"))
+        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/../a.apk"))
+        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/%2e%2e"))
+        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk?target=other"))
+        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk#other"))
         assertFalse(FoxUpdate.trusted("not a url"))
     }
 

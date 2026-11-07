@@ -12,7 +12,7 @@ import org.robolectric.RuntimeEnvironment
  * The release-decision pipeline: a release only becomes an offered update
  * when GitHub serves both signed-manifest assets and the Ed25519 signature
  * plus every FoxUpdate rule accepts them. Everything else is a hard failure
- * (or "up to date" when the manifest plainly declares nothing newer).
+ * (or "up to date" only when a valid signed manifest names the installed version).
  */
 @RunWith(RobolectricTestRunner::class)
 class UpdateManifestFlowTest {
@@ -23,8 +23,8 @@ class UpdateManifestFlowTest {
 
     private val manifestBody = """
         {"version":"1.12.0","channel_min":"1.8.0","rollback":false,"issued_at":1793000000,
-         "notes":"n","artifacts":[{"name":"gozar-1.12.0.apk","sha256":"${"a".repeat(64)}",
-         "size":2048,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/gozar-1.12.0.apk"}]}
+         "notes":"n","artifacts":[{"name":"Gozar_1.12.0_universal.apk","sha256":"${"a".repeat(64)}",
+         "size":2048,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/Gozar_1.12.0_universal.apk"}]}
     """.trimIndent().replace("\n", "").replace(" ", "")
 
     private fun signed(body: String) = base64(FoxSign.sign(seed, body.toByteArray(Charsets.UTF_8)))
@@ -48,7 +48,7 @@ class UpdateManifestFlowTest {
 
     @Test
     fun releasesWithoutBothSignedManifestAssetsAreFailed() {
-        assertTrue(verdict(release("gozar-1.12.0.apk"), null, null) is UpdateChecker.Result.Failed)
+        assertTrue(verdict(release("Gozar_1.12.0_universal.apk"), null, null) is UpdateChecker.Result.Failed)
         assertTrue(verdict(release("update.json", "gozar.apk"), manifestBody, null) is UpdateChecker.Result.Failed)
         assertTrue(verdict(release("update.json.sig", "gozar.apk"), null, signed(manifestBody)) is UpdateChecker.Result.Failed)
     }
@@ -61,7 +61,7 @@ class UpdateManifestFlowTest {
         assertEquals("1.12.0", available.version)
         assertEquals("a".repeat(64), available.sha256)
         assertEquals(2048L, available.size)
-        assertTrue(available.url.endsWith("gozar-1.12.0.apk"))
+        assertTrue(available.url.endsWith("Gozar_1.12.0_universal.apk"))
     }
 
     @Test
@@ -81,8 +81,39 @@ class UpdateManifestFlowTest {
     }
 
     @Test
+    fun anUnsignedOrReplayedManifestNeverReportsUpToDate() {
+        val same = manifestBody.replace("1.12.0", "1.11.0")
+        val older = manifestBody.replace("1.12.0", "1.10.0")
+        val release = release("update.json", "update.json.sig")
+        assertTrue(verdict(release, same, signed(manifestBody)) is UpdateChecker.Result.Failed)
+        assertTrue(verdict(release, same, "invalid") is UpdateChecker.Result.Failed)
+        assertTrue(verdict(release, older, signed(older)) is UpdateChecker.Result.Failed)
+    }
+
+    @Test
+    fun signatureCoversTheExactManifestBytes() {
+        val spaced = "  $manifestBody\n"
+        val release = release("update.json", "update.json.sig")
+        assertTrue(verdict(release, spaced, signed(spaced)) is UpdateChecker.Result.Available)
+        assertTrue(verdict(release, spaced, signed(manifestBody)) is UpdateChecker.Result.Failed)
+    }
+
+    @Test
+    fun androidDoesNotOfferAnOldSignedRollbackApk() {
+        val rollback = manifestBody.replace("1.12.0", "1.10.0").replace("\"rollback\":false", "\"rollback\":true")
+        assertTrue(verdict(release("update.json", "update.json.sig"), rollback, signed(rollback)) is UpdateChecker.Result.Failed)
+    }
+
+    @Test
+    fun boundedTextReadingCountsBytesRatherThanCharacters() {
+        val bytes = "سلام".toByteArray(Charsets.UTF_8)
+        assertEquals("سلام", UpdateChecker.readLimited(bytes.inputStream(), bytes.size))
+        assertEquals(null, UpdateChecker.readLimited(bytes.inputStream(), bytes.size - 1))
+    }
+
+    @Test
     fun aSignedManifestWithoutAnApkArtifactIsFailed() {
-        val noApk = manifestBody.replace("gozar-1.12.0.apk", "gozar-1.12.0-desktop.tar.zst")
+        val noApk = manifestBody.replace("Gozar_1.12.0_universal.apk", "gozar-1.12.0-desktop.tar.zst")
         val result = verdict(release("update.json", "update.json.sig"), noApk, signed(noApk))
         assertTrue(result is UpdateChecker.Result.Failed)
     }
@@ -103,6 +134,15 @@ class UpdateManifestFlowTest {
         } as UpdateChecker.Result.Available
         assertEquals(2000L, other.size)
         assertTrue(other.url.endsWith("universal.apk"))
+    }
+
+    @Test
+    fun anIncompatibleApkIsNotSelectedAsFallback() {
+        val armOnly = manifestBody.replace("_universal.apk", "_arm64-v8a.apk")
+        val result = UpdateChecker.verdictFrom(
+            release("update.json", "update.json.sig"), "1.11.0", keyHex, listOf("x86_64")
+        ) { name -> if (name == "update.json") armOnly else signed(armOnly) }
+        assertTrue(result is UpdateChecker.Result.Failed)
     }
 
     @Test

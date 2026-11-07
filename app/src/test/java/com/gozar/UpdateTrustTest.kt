@@ -32,11 +32,9 @@ class UpdateTrustTest {
 
     @Test
     fun versionComparisonStaysNumericAndBounded() {
-        val compare = UpdateChecker::class.java.getDeclaredMethod("isNewer", String::class.java, String::class.java)
-        compare.isAccessible = true
-        assertTrue(compare.invoke(UpdateChecker, "1.10.2", "1.10.1") as Boolean)
-        assertTrue(compare.invoke(UpdateChecker, "2.0", "1.99.99") as Boolean)
-        assertFalse(compare.invoke(UpdateChecker, "1.10.1", "1.10.1") as Boolean)
-        assertFalse(compare.invoke(UpdateChecker, "1.9.9", "1.10.1") as Boolean)
+        assertTrue(FoxUpdate.isNewer("1.10.2", "1.10.1"))
+        assertTrue(FoxUpdate.isNewer("2.0", "1.99.99"))
+        assertFalse(FoxUpdate.isNewer("1.10.1", "1.10.1"))
+        assertFalse(FoxUpdate.isNewer("1.9.9", "1.10.1"))
     }
 }

@@ -46,6 +46,8 @@ object FoxUpdate {
 
     sealed class Verdict {
         class Accept(val manifest: Manifest) : Verdict()
+        // A current result is only possible after signature and schema checks.
+        class Current(val manifest: Manifest) : Verdict()
         class Reject(val reason: String) : Verdict()
     }
 
@@ -75,64 +77,78 @@ object FoxUpdate {
         } catch (_: Exception) {
             return Verdict.Reject("manifest is not valid JSON")
         }
-        val version = json.optString("version")
-        val channelMin = json.optString("channel_min")
-        if (!VERSION.matches(version)) return Verdict.Reject("version is malformed")
-        if (!VERSION.matches(channelMin)) return Verdict.Reject("channel_min is malformed")
-        if (!json.has("rollback") || !json.has("issued_at") || !json.has("artifacts")) {
-            return Verdict.Reject("manifest is missing required fields")
+        val version = json.opt("version") as? String ?: return Verdict.Reject("version is malformed")
+        val channelMin = json.opt("channel_min") as? String ?: return Verdict.Reject("channel_min is malformed")
+        if (!validVersion(version)) return Verdict.Reject("version is malformed")
+        if (!validVersion(channelMin)) return Verdict.Reject("channel_min is malformed")
+        val rollback = json.opt("rollback") as? Boolean ?: return Verdict.Reject("rollback is malformed")
+        val issuedAt = when (val value = json.opt("issued_at")) {
+            is Int -> value.toLong()
+            is Long -> value
+            else -> return Verdict.Reject("issued_at is malformed")
         }
-        val rollback = json.getBoolean("rollback")
-        val issuedAt = json.getLong("issued_at")
         if (issuedAt <= 0) return Verdict.Reject("issued_at is malformed")
         if (issuedAt > nowSeconds + MAX_CLOCK_SKEW_SECONDS) return Verdict.Reject("manifest is dated in the future")
-        if (installed.isNotEmpty() && !VERSION.matches(installed)) return Verdict.Reject("installed version is malformed")
+        if (installed.isNotEmpty() && !validVersion(installed)) return Verdict.Reject("installed version is malformed")
 
         val artifacts = try {
-            parseArtifacts(json.getJSONArray("artifacts"))
+            parseArtifacts(json.getJSONArray("artifacts"), version)
         } catch (error: Exception) {
             return Verdict.Reject(error.message ?: "artifacts are malformed")
         }
         if (artifacts.isEmpty()) return Verdict.Reject("manifest lists no artifacts")
+        val manifest = Manifest(version, channelMin, rollback, issuedAt, json.optString("notes"), artifacts)
 
         if (rollback) {
             if (installed.isEmpty()) return Verdict.Reject("a rollback needs a known installed version")
             if (!isNewer(installed, version)) return Verdict.Reject("a rollback must target an older version")
             if (isNewer(channelMin, version)) return Verdict.Reject("the rollback target is below the channel floor")
-        } else if (installed.isNotEmpty() && !isNewer(version, installed)) {
-            return Verdict.Reject("the manifest is not newer than the installed build")
+        } else if (installed.isNotEmpty()) {
+            if (version == installed) return Verdict.Current(manifest)
+            if (!isNewer(version, installed)) return Verdict.Reject("the manifest is older than the installed build")
         }
-        return Verdict.Accept(Manifest(version, channelMin, rollback, issuedAt, json.optString("notes"), artifacts))
+        return Verdict.Accept(manifest)
     }
 
-    private fun parseArtifacts(array: JSONArray): List<Artifact> {
+    private fun parseArtifacts(array: JSONArray, version: String): List<Artifact> {
+        if (array.length() > 64) throw IllegalArgumentException("too many artifacts")
         val out = ArrayList<Artifact>()
+        val names = HashSet<String>()
         for (index in 0 until array.length()) {
             val item = array.getJSONObject(index)
-            val name = item.getString("name")
-            val sha256 = item.getString("sha256")
-            val size = item.getLong("size")
-            val url = item.getString("url")
-            if (name.isBlank() || name.length > 200) throw IllegalArgumentException("artifact name is malformed")
+            val name = item.opt("name") as? String ?: throw IllegalArgumentException("artifact name is malformed")
+            val sha256 = item.opt("sha256") as? String ?: throw IllegalArgumentException("artifact sha256 is malformed")
+            val size = when (val value = item.opt("size")) {
+                is Int -> value.toLong()
+                is Long -> value
+                else -> throw IllegalArgumentException("artifact size is malformed")
+            }
+            val url = item.opt("url") as? String ?: throw IllegalArgumentException("artifact url is malformed")
+            if (!Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,199}").matches(name) || !names.add(name)) {
+                throw IllegalArgumentException("artifact name is malformed or duplicated")
+            }
             if (!SHA256_HEX.matches(sha256)) throw IllegalArgumentException("artifact sha256 is malformed")
             if (size <= 0 || size > 512L * 1024 * 1024) throw IllegalArgumentException("artifact size is malformed")
             if (!trusted(url)) throw IllegalArgumentException("artifact url is not a trusted release asset")
+            val path = java.net.URI(url).rawPath
+            if (!path.endsWith("/v$version/$name")) throw IllegalArgumentException("artifact does not match its release")
             out.add(Artifact(name, sha256, size, url))
         }
         return out
     }
 
-    /** Only https release-download URLs of the project's own GitHub repositories. */
+    /** Only exact, unescaped https release-download paths in our repositories. */
     fun trusted(url: String): Boolean {
-        val parsed = try {
-            java.net.URI(url)
-        } catch (_: Exception) {
-            return false
-        }
+        val parsed = try { java.net.URI(url) } catch (_: Exception) { return false }
         if (!parsed.scheme.equals("https", true) || parsed.userInfo != null || parsed.port != -1) return false
-        if (!parsed.host.equals("github.com", true)) return false
-        val path = parsed.path ?: return false
-        return REPOSITORIES.any { path.startsWith("/$OWNER/$it/releases/download/") }
+        if (!parsed.host.equals("github.com", true) || parsed.rawQuery != null || parsed.rawFragment != null) return false
+        val path = parsed.rawPath ?: return false
+        if (path.contains('%') || parsed.normalize().rawPath != path) return false
+        val parts = path.split('/')
+        return parts.size == 7 && parts[0].isEmpty() && parts[1] == OWNER && parts[2] in REPOSITORIES &&
+            parts[3] == "releases" && parts[4] == "download" &&
+            Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,199}").matches(parts[5]) &&
+            Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,199}").matches(parts[6])
     }
 
     /** Constant-shape check of downloaded bytes against the signed manifest entry. */
@@ -148,9 +164,11 @@ object FoxUpdate {
     }
 
     fun versionParts(value: String): List<Int> =
-        Regex("\\d+").findAll(value).map { it.value.toIntOrNull() ?: 0 }.take(4).toList()
+        value.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }.take(4)
 
+    /** Numeric core first, then SemVer-style prerelease precedence. */
     fun isNewer(candidate: String, baseline: String): Boolean {
+        if (!validVersion(candidate) || !validVersion(baseline)) return false
         val left = versionParts(candidate)
         val right = versionParts(baseline)
         val count = maxOf(left.size, right.size, 3)
@@ -159,11 +177,33 @@ object FoxUpdate {
             val b = right.getOrElse(index) { 0 }
             if (a != b) return a > b
         }
-        return false
+        val aPre = candidate.substringAfter('-', "")
+        val bPre = baseline.substringAfter('-', "")
+        if (aPre.isEmpty() || bPre.isEmpty()) return aPre.isEmpty() && bPre.isNotEmpty()
+        val aParts = aPre.split('.')
+        val bParts = bPre.split('.')
+        for (index in 0 until minOf(aParts.size, bParts.size)) {
+            val a = aParts[index]
+            val b = bParts[index]
+            if (a == b) continue
+            val aNumber = a.toLongOrNull()
+            val bNumber = b.toLongOrNull()
+            if (aNumber != null && bNumber != null) {
+                if (aNumber != bNumber) return aNumber > bNumber
+            } else if (aNumber != null || bNumber != null) {
+                return aNumber == null
+            } else {
+                return a > b
+            }
+        }
+        return aParts.size > bParts.size
     }
 
+    private fun validVersion(value: String): Boolean = VERSION.matches(value) &&
+        (!value.contains('-') || value.substringAfter('-').split('.').all { it.isNotEmpty() })
+
     private fun hex(value: String): ByteArray {
-        require(value.length % 2 == 0)
+        require(value.matches(Regex("[0-9a-fA-F]{64}")))
         return ByteArray(value.length / 2) {
             ((Character.digit(value[it * 2], 16) shl 4) or Character.digit(value[it * 2 + 1], 16)).toByte()
         }
@@ -194,7 +234,9 @@ object FoxUpdate {
                 out[at++] = ((buffer shr bits) and 0xFF).toByte()
             }
         }
-        if (at != out.size) throw IllegalArgumentException("bad base64 body")
+        if (at != out.size || (bits > 0 && (buffer and ((1 shl bits) - 1)) != 0)) {
+            throw IllegalArgumentException("bad base64 body")
+        }
         return out
     }
 }
