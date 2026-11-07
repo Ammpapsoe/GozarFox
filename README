@@ -73,9 +73,10 @@ The desktop tunnel is experimental. Real Linux, Windows and macOS tunnel interfa
 with local simulated upstreams; the new Linux code has also been retested with a local TLS-verified
 HTTP/2 CONNECT relay. These tests do not verify a connection to a real Firefox proxy. The new
 Windows window frame and macOS interface have not been tested on native devices. Firefox account
-sign-in and registration were checked with mock responses, not a real account. The non-interactive
-security check was also probed without account credentials. Mozilla
-may present an unsupported security challenge or refuse a request. IPv6 is not routed through
+sign-in and registration have mock coverage. A real-account CI attempt reached email-code
+verification but the subsequent OAuth request received HTTP 406; it did not reach a real relay.
+See docs/real-account-validation.md. The non-interactive security check was also probed
+without account credentials. Mozilla may present an unsupported security challenge or refuse a request. IPv6 is not routed through
 the tunnel and may bypass it. UDP other than DNS is not supported. Mozilla's proxy supports only
 certain destination ports, including 80, 443, 8080, and 8443. Do not rely on this build for privacy
 or as a complete device-wide VPN. The desktop interface provides language, appearance, account
