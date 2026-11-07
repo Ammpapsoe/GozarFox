@@ -291,16 +291,24 @@ object FoxTunnel {
     private const val SESSION_IDLE_MS = 60_000L
     private const val UPLOAD_STALL_MS = 25_000L
 
+    private class TransportReset : java.io.IOException("transport reset during session creation")
+
     private val adaptive = FoxAdaptive()
     private val sessions = HashMap<String, MutableList<H2Session>>()
+    // Handshakes run outside the pool lock. A transport reset invalidates
+    // in-flight handshakes so they cannot reinsert an obsolete session.
+    private var sessionGeneration = 0L
 
     fun resetTransport() {
         adaptive.clear()
         synchronized(sessions) {
+            sessionGeneration += 1
             for (list in sessions.values) for (session in list) session.shutdown()
             sessions.clear()
         }
     }
+
+    internal fun pooledSessionCount(): Int = synchronized(sessions) { sessions.values.sumOf { it.size } }
 
     fun open(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int = 15000): FoxDuplex {
         val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
@@ -316,7 +324,7 @@ object FoxTunnel {
                 adaptive.success(key, h2, (System.nanoTime() - started) / 1_000_000L)
                 return result
             } catch (e: Exception) {
-                if (isCertificateFailure(e) || e is FoxError ||
+                if (e is TransportReset || isCertificateFailure(e) || e is FoxError ||
                     e is FoxProxyRefusal && e.status in setOf(401, 403, 407, 429, 451)
                 ) throw e
                 adaptive.failed(key, h2)
@@ -327,7 +335,7 @@ object FoxTunnel {
     }
 
     private fun acquireSession(location: FoxLocation, key: String, timeout: Int): H2Session {
-        synchronized(sessions) {
+        val generation = synchronized(sessions) {
             val list = sessions.getOrPut(key) { mutableListOf() }
             val now = System.currentTimeMillis()
             list.removeAll { session ->
@@ -353,9 +361,14 @@ object FoxTunnel {
                 fallback.touch()
                 return fallback
             }
+            sessionGeneration
         }
         val fresh = H2Session(location, timeout)
         synchronized(sessions) {
+            if (generation != sessionGeneration) {
+                fresh.shutdown()
+                throw TransportReset()
+            }
             val list = sessions.getOrPut(key) { mutableListOf() }
             list.removeAll { session ->
                 val gone = !session.alive()

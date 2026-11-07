@@ -68,7 +68,10 @@ jobs:
           disable-animations: true
           disable-linux-hw-accel: ${{ env.GOZAR_DISABLE_KVM }}
           emulator-boot-timeout: 1800
-          script: bash scripts/test_official_upgrade_emulator.sh && bash scripts/test_recovery_emulator.sh
+          script: >-
+            GOZAR_PREVIOUS_APK=official-stable GOZAR_PREVIOUS_VERSION=1.10.4 GOZAR_EVIDENCE_LABEL=stable bash scripts/test_official_upgrade_emulator.sh &&
+            GOZAR_PREVIOUS_APK=official-previous GOZAR_PREVIOUS_VERSION=1.11.1 GOZAR_EVIDENCE_LABEL=preview bash scripts/test_official_upgrade_emulator.sh &&
+            bash scripts/test_recovery_emulator.sh
       - name: Upload emulator evidence
         if: always()
         uses: actions/upload-artifact@v4

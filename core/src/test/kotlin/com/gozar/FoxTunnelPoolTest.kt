@@ -15,6 +15,9 @@ import java.security.cert.CertificateFactory
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
@@ -24,6 +27,7 @@ import javax.net.ssl.TrustManagerFactory
 import kotlin.concurrent.thread
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -78,6 +82,47 @@ class FoxTunnelPoolTest {
                 assertTrue(proxy.problems.isEmpty())
             } finally {
                 first.close()
+            }
+        }
+    }
+
+    @Test
+    fun transportResetRejectsPendingHandshakesAcrossFiftyRaces() {
+        val gates = LinkedBlockingQueue<Pair<CountDownLatch, CountDownLatch>>()
+        val connections = AtomicInteger()
+        EchoProxy(beforeReply = {
+            connections.incrementAndGet()
+            val gate = gates.poll()
+            if (gate != null) {
+                gate.first.countDown()
+                check(gate.second.await(10, TimeUnit.SECONDS))
+            }
+        }).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            repeat(50) { iteration ->
+                // Reset adaptive preferences so every gated first attempt is H2.
+                FoxTunnel.resetTransport()
+                val entered = CountDownLatch(1)
+                val release = CountDownLatch(1)
+                gates.put(entered to release)
+                val worker = thread(isDaemon = true) {
+                    try {
+                        FoxTunnel.open(location, "target.example.invalid", 443, "local-test-only", 3000).close()
+                    } catch (_: Exception) {
+                        // Reset may cancel this request; it must not restore a stale pooled session.
+                    }
+                }
+                try {
+                    assertTrue("handshake did not enter at iteration $iteration", entered.await(8, TimeUnit.SECONDS))
+                    FoxTunnel.resetTransport()
+                } finally {
+                    release.countDown()
+                }
+                worker.join(10000)
+                assertFalse("open did not finish at iteration $iteration", worker.isAlive)
+                assertEquals("obsolete session was reinserted at iteration $iteration", 0, FoxTunnel.pooledSessionCount())
+                assertEquals("reset must not start an HTTP/1 fallback", iteration + 1, connections.get())
             }
         }
     }
@@ -202,7 +247,8 @@ class FoxTunnelPoolTest {
     private class EchoProxy(
         private val goawayAfterEcho: Boolean = false,
         private val refuseStatus: Int = 0,
-        private val serverMaxStreams: Int = 0
+        private val serverMaxStreams: Int = 0,
+        private val beforeReply: (() -> Unit)? = null
     ) : Closeable {
         val sessions = AtomicInteger()
         val streamIds = Collections.synchronizedList(mutableListOf<Int>())
@@ -233,6 +279,7 @@ class FoxTunnelPoolTest {
         private fun handle(raw: Socket) {
             raw.soTimeout = 20000
             readHead(BufferedInputStream(raw.getInputStream()))
+            beforeReply?.invoke()
             raw.getOutputStream().apply {
                 write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.US_ASCII))
                 flush()

@@ -178,6 +178,8 @@ class ReleaseToolsTest(unittest.TestCase):
         publish = workflow.split("  publish:\n", 1)[1].split("\n  release-validation-complete:\n", 1)[0]
         self.assertIn("scripts/release_channel.py", publish)
         self.assertIn("draft: true", publish)
+        self.assertIn("Require same-commit Android install evidence", publish)
+        self.assertIn("android-recovery-emulator", publish)
         self.assertIn("prerelease: ${{ steps.version.outputs.prerelease }}", publish)
         self.assertIn("--draft=false --prerelease --latest=false", publish)
         self.assertLess(publish.index("Verify draft release files"), publish.index("Publish verified release"))

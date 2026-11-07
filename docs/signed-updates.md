@@ -87,9 +87,10 @@ production behavior, or arbitrary data migrations. The exported fixture activity
 is injected only into the three test APKs, never a release APK.
 
 The same optional workflow separately builds an officially signed release APK,
-checks both certificates, and attempts an emulator replace-install over the
-published 1.10.4 APK. It checks the app launch and package identity; an app-private
-sentinel is also checked when the emulator exposes root ADB. This uses `adb`
+checks the certificates, and attempts emulator replace-installs over both the
+published 1.10.4 stable APK and 1.11.1 preview APK. It checks the app launch and
+package identity; an app-private sentinel is also checked when the emulator
+exposes root ADB. This uses `adb`
 rather than the interactive installer, covers one emulator/API level only, and
 does not prove data migration or recovery from a faulty production build.
 
@@ -122,10 +123,11 @@ with exactly one channel marker: `<!-- DRAFT -->`, `<!-- PRERELEASE -->` or
 incomplete requirements and is not promoted to GitHub's latest stable release;
 using its versionCode means a later Android release needs a higher one.
 
-A tag build creates a draft first, uploads and byte-compares the complete
-asset set, and only then publishes it using the explicit channel. Stable
-publication is appropriate only after the phase's acceptance is complete and
-the reviewed branch is merged. The dry run and unit tests do not substitute
+A tag build requires a successful Android install/recovery emulator workflow
+for the **same commit**, creates a draft first, uploads and byte-compares the
+complete asset set, and only then publishes it using the explicit channel.
+Stable publication is appropriate only after the phase's acceptance is complete
+and the reviewed branch is merged. The dry run and unit tests do not substitute
 for real installation, migration or recovery tests.
 
 Key rotation requires a client that already trusts the replacement key (or a

@@ -5,14 +5,22 @@
 set -euo pipefail
 DEST="${GOZAR_APK_DIR:?set GOZAR_APK_DIR}"
 PKG=com.gozar
+source_apk="${GOZAR_PREVIOUS_APK:?set GOZAR_PREVIOUS_APK}"
+source_version="${GOZAR_PREVIOUS_VERSION:?set GOZAR_PREVIOUS_VERSION}"
+label="${GOZAR_EVIDENCE_LABEL:?set GOZAR_EVIDENCE_LABEL}"
+case "$source_apk:$source_version:$label" in
+  official-stable:1.10.4:stable|official-previous:1.11.1:preview) ;;
+  *) echo 'unexpected official upgrade fixture' >&2; exit 1 ;;
+esac
+prefix="$DEST/official-$label"
 trap 'adb logcat -d -s AndroidRuntime:E | tail -100 || true' ERR
-for apk in official-previous official-candidate; do test -s "$DEST/$apk.apk"; done
+for apk in "$source_apk" official-candidate; do test -s "$DEST/$apk.apk"; done
 adb uninstall "$PKG" >/dev/null 2>&1 || true
-adb install "$DEST/official-previous.apk"
-adb shell dumpsys package "$PKG" | tr -d '\r' > "$DEST/official-previous-package.txt"
-grep -F 'versionName=1.10.4' "$DEST/official-previous-package.txt" >/dev/null
-adb shell am start -W -n "$PKG/.MainActivity" | tee "$DEST/official-previous-launch.txt"
-grep -F 'Status: ok' "$DEST/official-previous-launch.txt" >/dev/null
+adb install "$DEST/$source_apk.apk"
+adb shell dumpsys package "$PKG" | tr -d '\r' > "$prefix-previous-package.txt"
+grep -F "versionName=$source_version" "$prefix-previous-package.txt" >/dev/null
+adb shell am start -W -n "$PKG/.MainActivity" | tee "$prefix-previous-launch.txt"
+grep -F 'Status: ok' "$prefix-previous-launch.txt" >/dev/null
 
 # Google APIs emulator images may expose a root ADB daemon. If available,
 # plant a sentinel as root without changing the release APK's debug flag.
@@ -34,10 +42,10 @@ else
 fi
 
 adb install -r "$DEST/official-candidate.apk"
-adb shell dumpsys package "$PKG" | tr -d '\r' > "$DEST/official-candidate-package.txt"
+adb shell dumpsys package "$PKG" | tr -d '\r' > "$prefix-candidate-package.txt"
 candidate_version=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/")
-grep -F "versionName=$candidate_version" "$DEST/official-candidate-package.txt" >/dev/null
-python3 - "$DEST/official-previous-package.txt" "$DEST/official-candidate-package.txt" <<'PY'
+grep -F "versionName=$candidate_version" "$prefix-candidate-package.txt" >/dev/null
+python3 - "$prefix-previous-package.txt" "$prefix-candidate-package.txt" <<'PY'
 import re, sys
 
 def identity(path):
@@ -58,9 +66,9 @@ if [ "$rooted" = 0 ]; then
   test "$value" = official-ci-persistence
   echo 'Official APK upgrade preserved the app-private sentinel.'
 fi
-adb shell am start -W -n "$PKG/.MainActivity" | tee "$DEST/official-candidate-launch.txt"
-grep -F 'Status: ok' "$DEST/official-candidate-launch.txt" >/dev/null
+adb shell am start -W -n "$PKG/.MainActivity" | tee "$prefix-candidate-launch.txt"
+grep -F 'Status: ok' "$prefix-candidate-launch.txt" >/dev/null
 adb shell pidof "$PKG" >/dev/null
-echo 'Officially signed release candidate installed over the published APK and launched on the emulator.'
+echo "Officially signed candidate installed over $source_version and launched on the emulator."
 # The following fixture scenario uses the same application ID but a debug key.
 adb uninstall "$PKG" >/dev/null
