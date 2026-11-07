@@ -131,9 +131,9 @@ jobs:
         with:
           go-version: '1.24.6'
           cache-dependency-path: go-desktop/go.sum
-      - name: Test bounded UDP capsule framing
+      - name: Test capsule framing and synthetic HTTP/2 UDP streams
         working-directory: go-desktop
-        run: go test ./internal/masque -count=1
+        run: go test -race ./internal/masque ./internal/tunnel -count=1
 
   release-tools:
     runs-on: ubuntu-latest
