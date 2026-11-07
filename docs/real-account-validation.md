@@ -4,8 +4,9 @@ On 2026-11-07, an explicitly authorized Mozilla test account was used from a
 GitHub-hosted Linux runner against the Gozar desktop authentication code. The
 account password and a new emailed verification code were accepted by the
 sign-in and session-verification calls. The subsequent OAuth token request did
-not complete: Mozilla's security edge returned HTTP 406. In a diagnostic build,
-a retry with `Accept-Encoding: identity` also encountered HTTP 406. CI run
+not complete: the Mozilla OAuth endpoint returned HTTP 406, and the client did
+not complete its security-check handling. In a diagnostic build, a retry with
+`Accept-Encoding: identity` also encountered HTTP 406. CI run
 42402949693 records the sanitized outcome. This is not a successful end-to-end
 sign-in or a test of a production relay.
 
@@ -15,14 +16,17 @@ An unauthenticated comparison on another runner returned HTTP 401 for both gzip
 and identity variants (run 42401992344). That comparison cannot establish the
 cause of the authenticated 406. The observed error may depend on the runner,
 network, headers, or Mozilla's security checks; it is not evidence of a general
-Mozilla outage or of all devices failing.
+Mozilla outage or of all devices failing. Public OAuth client metadata lists the
+current Firefox client redirect as `urn:ietf:wg:oauth:2.0:oob:oauth-redirect-webchannel`;
+that does not establish an app- or loopback-compatible redirect. A browser
+flow needs an appropriately registered client and redirect.
 
 The probe encrypted input to the ephemeral CI job, did not upload passwords,
 verification codes, account identifiers or tokens as artifacts, and removed its
-temporary repository secret. The completed job's logs were checked for the
-account identifier, password and first code without printing their values. The
-user should review active Mozilla sessions and rotate the test password after
-finishing because it was shared in chat.
+temporary repository secret. The completed jobs' logs were checked in memory
+for the account identifier, password and their respective codes without printing
+those values. The user should review active Mozilla sessions and rotate the test
+password after finishing because it was shared in chat.
 
 Remaining work:
 
