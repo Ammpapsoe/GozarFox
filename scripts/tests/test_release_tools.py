@@ -135,6 +135,15 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertFalse((self.apkdir / "desktop-update.json").exists())
 
+    def test_dry_run_does_not_silently_skip_packaging_or_validation(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        packages = workflow.split("  packages:\n", 1)[1].split("\n  publish:\n", 1)[0]
+        self.assertIn("inputs.validate_release", packages)
+        sentinel = workflow.split("  release-validation-complete:\n", 1)[1]
+        self.assertIn("needs: [publish]", sentinel)
+        self.assertIn("VALIDATION_RESULT", sentinel)
+        self.assertIn('!= success', sentinel)
+
     def test_release_notes_fail_closed_for_drafts_and_missing_versions(self):
         notes = ROOT / "scripts/notes.py"
         env = self.env.copy()
