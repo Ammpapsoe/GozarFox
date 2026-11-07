@@ -122,11 +122,18 @@ class FoxStackQueueTest {
         val input = PacketInput()
         val output = PacketOutput()
         val tunnel = MemoryTunnel()
-        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ -> tunnel }, { _, _ -> })
+        val dialEntered = CountDownLatch(1)
+        val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ ->
+            dialEntered.countDown()
+            tunnel
+        }, { _, _ -> })
         stack.start()
         try {
             input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
             val peer = u32(output.next(), 24) + 1
+            // The stack is allowed to cancel a pending dial without ever
+            // acquiring this pipe. Test closure only after dial has begun.
+            assertTrue("dial should start", dialEntered.await(3, TimeUnit.SECONDS))
             input.offer(tcp(1001, peer, 0x04, byteArrayOf()))
             assertTrue("the tunnel pipe should be closed", tunnel.awaitClose(3000))
             val deadline = System.currentTimeMillis() + 3000
@@ -135,6 +142,38 @@ class FoxStackQueueTest {
         } finally {
             stack.stop()
             input.close()
+        }
+    }
+
+    @Test
+    fun rstClosesLateDialAcrossFiftyRaces() {
+        repeat(50) { iteration ->
+            val input = PacketInput()
+            val output = PacketOutput()
+            val tunnel = MemoryTunnel()
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { _, _, _ ->
+                entered.countDown()
+                if (!release.await(5, TimeUnit.SECONDS)) error("dial timed out")
+                tunnel
+            }, { _, _ -> })
+            stack.start()
+            try {
+                input.offer(tcp(1000, 0, 0x02, byteArrayOf()))
+                val peer = u32(output.next(), 24) + 1
+                assertTrue("dial did not begin at $iteration", entered.await(3, TimeUnit.SECONDS))
+                input.offer(tcp(1001, peer, 0x04, byteArrayOf()))
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+                while (stack.active() > 0 && System.nanoTime() < deadline) Thread.sleep(1)
+                assertEquals("reset did not remove flow at $iteration", 0, stack.active())
+                release.countDown()
+                assertTrue("late pipe leaked at $iteration", tunnel.awaitClose(3000))
+            } finally {
+                release.countDown()
+                stack.stop()
+                input.close()
+            }
         }
     }
 

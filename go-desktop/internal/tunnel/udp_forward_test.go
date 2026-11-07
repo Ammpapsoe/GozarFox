@@ -49,12 +49,13 @@ func TestUDPHTTP2SyntheticProxyForwardsLoopbackPackets(t *testing.T) {
 		}
 		// The destination is fixed by the test, not obtained from an
 		// untrusted URL; this server is intentionally loopback-only.
-		udp, err := net.Dial("udp4", packet.LocalAddr().String())
+		udp, err := net.ListenPacket("udp4", "127.0.0.1:0")
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
 		defer udp.Close()
+		target := packet.LocalAddr()
 		w.Header().Set("Capsule-Protocol", "?1")
 		w.WriteHeader(http.StatusOK)
 		w.(http.Flusher).Flush()
@@ -67,11 +68,14 @@ func TestUDPHTTP2SyntheticProxyForwardsLoopbackPackets(t *testing.T) {
 			if err := udp.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 				return
 			}
-			if _, err := udp.Write(payload); err != nil {
+			// Connected UDPConn.Write of an empty slice is a no-op on
+			// Windows. WriteTo sends an actual zero-length datagram, so
+			// this still exercises the wire for that case on every platform.
+			if _, err := udp.WriteTo(payload, target); err != nil {
 				return
 			}
-			n, err := udp.Read(buf)
-			if err != nil {
+			n, source, err := udp.ReadFrom(buf)
+			if err != nil || source.String() != target.String() {
 				return
 			}
 			wire, err := masque.EncodeDatagram(buf[:n])
