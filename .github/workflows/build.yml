@@ -525,6 +525,10 @@ jobs:
             exit 1
           fi
           ANDROID=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
+          if [ -z "$ANDROID" ] || [ "$DESKTOP" != "$ANDROID" ]; then
+            echo "::error::Android, desktop UI and desktop core must use the same release version"
+            exit 1
+          fi
           TAG="$GITHUB_REF_NAME"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then TAG="v$ANDROID"; fi
           if [ "$TAG" != "v$ANDROID" ] && [ "$TAG" != "v$ANDROID-desktop" ]; then

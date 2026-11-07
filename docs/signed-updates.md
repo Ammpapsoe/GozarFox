@@ -97,8 +97,9 @@ The publication job uses `GOZAR_UPDATE_KEY` to generate the Android `update.json
 and desktop `desktop-update.json` with their detached `.sig` files, verifies
 the Ed25519 signing key and signatures, includes them with the release assets,
 and compares every published asset with the built file. The private key stays outside the repository. The tag must match
-the Android version (`vX.Y.Z` or `vX.Y.Z-desktop`); desktop and Android package
-versions can differ and the notes use both actual versions.
+the Android version (`vX.Y.Z` or `vX.Y.Z-desktop`). The publication workflow
+requires the Android, desktop UI and desktop core versions to match, so a new
+desktop build is not mistakenly treated as an already-installed older version.
 
 For a no-publication validation on a mission branch:
 
