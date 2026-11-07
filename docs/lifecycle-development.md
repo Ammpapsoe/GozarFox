@@ -53,15 +53,33 @@ rejection, and 50 stop/prepare transitions with a simulated interface. The resul
 commit containing these changes must be checked before reporting them as
 passing, and they do not establish a successful real always-on reconnect.
 
+## Overlapping service instances (candidate change)
+
+A Robolectric regression created a replacement service before destroying the
+old instance. On the previous code, the old `onDestroy()` marked the process
+service as not alive; GitHub Actions run 42392530748 failed that assertion on
+the test-only commit. The same unconditional teardown also called the global
+transport stop and closed the global direct-pipe registry. The test models
+service objects and descriptors; it does not establish that Android creates
+this interleaving on a particular device.
+
+The candidate serializes global ownership changes and teardown. A stale
+instance releases its own stack, root session and descriptor without stopping
+the replacement's transport or closing its direct pipes; current-instance
+teardown still stops global resources. A 50-transition Robolectric regression
+checks liveness, the current transport, ports, direct-pipe ownership, and stale
+error reporting. Check the corresponding GitHub Actions run before treating
+this candidate as verified.
+
 ## Remaining limitations
 
 - In-flight raw TCP/TLS connect calls are not centrally interruptible; a
   connection can finish after stop, although generation checks reject or close
   a late result. A direct socket connect already in progress can itself reach
   the network before the post-connect validity check. This is not a kill switch.
-- Overlapping service-instance teardown and restart, flows admitted while the
-  same TUN stack is being reconnected, DNS workers, and all error paths require
-  additional deterministic integration tests. Lifecycle checks can prevent
+- Real overlapping service teardown/restart, root-session overlap, flows admitted
+  while the same TUN stack is being reconnected, DNS workers, and all error paths
+  require additional deterministic integration and device tests. Lifecycle checks can prevent
   stale use without proving that no network packet was emitted.
 - Emulated and synthetic tests do not replace Android physical-interface
   captures, real-device always-on/lockdown tests, or authorized relay testing.

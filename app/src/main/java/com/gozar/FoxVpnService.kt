@@ -38,8 +38,11 @@ class FoxVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        alive = true
-        instance = this
+        synchronized(ownerLock) {
+            alive = true
+            instance = this
+            rootActive = false
+        }
         thread(isDaemon = true, name = "focus-capability") {
             val protocol = FocusIsland.permittedProtocol(applicationContext)
             Handler(Looper.getMainLooper()).post {
@@ -161,17 +164,16 @@ class FoxVpnService : VpnService() {
     }
 
     override fun onDestroy() {
-        alive = false
-        if (instance === this) instance = null
-        release()
-        if (startFailure.isNotEmpty()) FoxLink.fault(startFailure)
+        release(destroyed = true)
         super.onDestroy()
     }
 
     private fun abortStart(message: String) {
         startFailure = message
         close()
-        FoxLink.fault(message)
+        synchronized(ownerLock) {
+            if (instance === this) FoxLink.fault(message)
+        }
     }
 
     private fun close() {
@@ -183,17 +185,17 @@ class FoxVpnService : VpnService() {
         stopSelf()
     }
 
-    private fun release() {
+    private fun release(destroyed: Boolean = false) {
+        // Per-instance resources always belong to this service, even if a
+        // replacement has already become the process-wide owner.
         stackLifetime?.set(false)
         stackLifetime = null
         val root = synchronized(this) {
             val current = rootSession
             rootSession = null
-            rootActive = false
             current
         }
         root?.stop()
-        DirectPipe.closeAll()
         try {
             stack?.stop()
         } catch (e: Exception) {
@@ -205,7 +207,19 @@ class FoxVpnService : VpnService() {
         } catch (e: Exception) {
         }
         descriptor = null
-        FoxLink.stop()
+        synchronized(ownerLock) {
+            // Claim/check and global teardown are atomic relative to a new
+            // onCreate; an old service must not revoke the replacement.
+            if (instance !== this) return
+            if (destroyed) {
+                instance = null
+                alive = false
+            }
+            rootActive = false
+            DirectPipe.closeAll()
+            FoxLink.stop()
+            if (destroyed && startFailure.isNotEmpty()) FoxLink.fault(startFailure)
+        }
     }
 
     private fun activateRoot() {
@@ -217,7 +231,13 @@ class FoxVpnService : VpnService() {
             val session = RootSession.create(this, fd) { active ->
                 synchronized(this) {
                     if (rootSession !== made) return@create
-                    rootActive = active
+                    val ownsGlobals = synchronized(ownerLock) {
+                        if (instance !== this) false else {
+                            rootActive = active
+                            true
+                        }
+                    }
+                    if (!ownsGlobals) return@create
                     if (!active && FoxLink.connected && Store.rootRouting(this)) {
                         FoxLink.fault(getString(R.string.root_unavailable))
                     }
@@ -323,6 +343,7 @@ class FoxVpnService : VpnService() {
         private const val NOTIFY = 7412
         private const val STOP = "com.gozar.FOX_STOP"
 
+        private val ownerLock = Any()
         @Volatile private var alive = false
         @Volatile var rootActive = false
             private set

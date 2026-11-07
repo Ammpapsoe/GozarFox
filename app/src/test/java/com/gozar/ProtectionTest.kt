@@ -310,18 +310,21 @@ class ProtectionTest {
     fun oldServiceDestroyCannotResetReplacementAcrossFiftyTransitions() {
         val context = RuntimeEnvironment.getApplication()
         val descriptorField = FoxVpnService::class.java.getDeclaredField("descriptor").apply { isAccessible = true }
+        val failureField = FoxVpnService::class.java.getDeclaredField("startFailure").apply { isAccessible = true }
         try {
             repeat(50) { iteration ->
                 FoxLink.stop()
                 val oldController = Robolectric.buildService(FoxVpnService::class.java).create()
                 val oldDescriptors = ParcelFileDescriptor.createPipe()
                 descriptorField.set(oldController.get(), oldDescriptors[0])
+                failureField.set(oldController.get(), "stale service failure")
                 assertTrue(FoxLink.prepare(context))
                 val ports = listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort)
                 val newController = Robolectric.buildService(FoxVpnService::class.java).create()
                 val newDescriptors = ParcelFileDescriptor.createPipe()
                 descriptorField.set(newController.get(), newDescriptors[0])
                 val ticket = FoxTunnel.startTransport()
+                FoxLink.error = "replacement state"
                 val closed = AtomicBoolean(false)
                 val direct = DirectPipe(object : FoxPipe {
                     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = -1
@@ -329,24 +332,29 @@ class ProtectionTest {
                     override fun close() { closed.set(true) }
                 }) { true }
                 var oldDestroyed = false
+                var newDestroyed = false
                 try {
                     oldController.destroy()
                     oldDestroyed = true
                     assertTrue("replacement lost liveness at iteration $iteration", FoxVpnService.isAlive())
                     assertTrue("replacement lost interface at iteration $iteration", FoxVpnService.hasInterface())
                     assertTrue("replacement transport reset at iteration $iteration", FoxTunnel.transportIsCurrent(ticket))
+                    assertEquals("stale failure replaced current state", "replacement state", FoxLink.error)
                     assertEquals("replacement ports changed at iteration $iteration", ports,
                         listOf(FoxLink.socksPort, FoxLink.webPort, FoxLink.dnsPort))
                     assertFalse("replacement direct pipe closed at iteration $iteration", closed.get())
+                    newController.destroy()
+                    newDestroyed = true
+                    assertTrue("current service did not close direct pipe", closed.get())
+                    assertNull("current service teardown did not stop transport", FoxTunnel.currentTransport())
+                    assertEquals(0, FoxLink.dnsPort)
                 } finally {
                     if (!oldDestroyed) oldController.destroy()
-                    newController.destroy()
+                    if (!newDestroyed) newController.destroy()
                     direct.close()
                     oldDescriptors[1].close()
                     newDescriptors[1].close()
                 }
-                assertNull("current service teardown did not stop transport", FoxTunnel.currentTransport())
-                assertEquals(0, FoxLink.dnsPort)
             }
         } finally {
             FoxLink.stop()
