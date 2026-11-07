@@ -102,11 +102,19 @@
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="?attr/colorOnSurfaceVariant" />
             </LinearLayout>
-            <LinearLayout android:id="@+id/rowNotifications" style="@style/Gozar.Row" android:layout_marginTop="@dimen/stack_gap" android:background="@drawable/settings_group_bottom">
+            <LinearLayout android:id="@+id/rowNotifications" style="@style/Gozar.Row" android:layout_marginTop="@dimen/stack_gap" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/frame_clover" android:backgroundTint="@color/settings_amber_container" android:contentDescription="@string/notification_title" android:src="@drawable/ic_bell" app:tint="@color/settings_amber_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">
                     <TextView style="@style/Gozar.Row.Title" android:text="@string/notification_title" />
                     <TextView style="@style/Gozar.Row.Subtitle" android:text="@string/notification_desc" />
+                </LinearLayout>
+                <ImageView style="@style/Gozar.Row.Chevron" android:tint="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/rowLeak" style="@style/Gozar.Row" android:layout_marginTop="@dimen/stack_gap" android:background="@drawable/settings_group_bottom">
+                <ImageView style="@style/Gozar.Tile" android:background="@drawable/settings_frame_shield" android:backgroundTint="@color/settings_blue_container" android:contentDescription="@string/leak_title" android:src="@drawable/ic_shield" app:tint="@color/settings_blue_on_container" />
+                <LinearLayout style="@style/Gozar.Row.Text">
+                    <TextView style="@style/Gozar.Row.Title" android:text="@string/leak_title" />
+                    <TextView style="@style/Gozar.Row.Subtitle" android:text="@string/leak_idle" android:id="@+id/tvLeak" />
                 </LinearLayout>
                 <ImageView style="@style/Gozar.Row.Chevron" android:tint="?attr/colorOnSurfaceVariant" />
             </LinearLayout>

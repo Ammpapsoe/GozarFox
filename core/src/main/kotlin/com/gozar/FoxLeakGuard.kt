@@ -50,23 +50,38 @@ object FoxLeakGuard {
     fun lastReport(): Report? = report
 
     /**
-     * Runs the leak self-test. [resolve] must answer a canary query through
-     * the tunnel resolver; [exitIp] must report the source IP the far side
-     * sees, fetched through the tunnel. [baselineIp] is the address observed
-     * before connecting — when known, the exit must differ from it.
+     * Runs the leak self-test through the tunnel.
+     *
+     * DNS is checked twice: [positiveHost] (a real hostname) must resolve to
+     * non-local addresses, and [CANARY] — a name under .invalid that can
+     * never exist — must NOT resolve. An answer for the canary means the
+     * resolver is being hijacked or spoofed, the classic filtered-network
+     * poison.
+     *
+     * [exitIp] must report the source address the far side sees, fetched
+     * through the tunnel; it must be non-local and, when [baselineIp] is
+     * known, different from it.
      */
     fun selfTest(
         now: Long = System.currentTimeMillis(),
         baselineIp: String,
+        positiveHost: String,
         resolve: (String) -> List<String>,
         exitIp: () -> String
     ): Report {
         val resolved = try {
+            resolve(positiveHost)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val positiveOk = resolved.isNotEmpty() && resolved.none { isLocalAddress(it) }
+        val canary = try {
             resolve(CANARY)
         } catch (_: Exception) {
             emptyList()
         }
-        val dnsLeakFree = resolved.isNotEmpty() && resolved.none { isLocalAddress(it) }
+        val hijackFree = canary.isEmpty()
+        val dnsLeakFree = positiveOk && hijackFree
         val exit = try {
             exitIp()
         } catch (_: Exception) {
@@ -75,7 +90,8 @@ object FoxLeakGuard {
         val exitVerified = exit.isNotBlank() && !isLocalAddress(exit) &&
             (baselineIp.isBlank() || exit != baselineIp)
         val detail = buildString {
-            if (!dnsLeakFree) append("dns answers missing or local; ")
+            if (!positiveOk) append("dns answers missing or local; ")
+            if (!hijackFree) append("the canary resolved — dns is being hijacked; ")
             if (exit.isBlank()) append("no exit ip through the tunnel; ")
             else if (isLocalAddress(exit)) append("exit ip is local; ")
             else if (baselineIp.isNotBlank() && exit == baselineIp) append("exit ip unchanged from baseline; ")
@@ -85,7 +101,7 @@ object FoxLeakGuard {
         return result
     }
 
-    /** A hostname that only exists to be resolved; nothing serves on it. */
+    /** A name under .invalid: it can never resolve except through a hijack. */
     const val CANARY = "leak-canary.gozar.invalid"
 
     /** True for loopback, private, link-local, and unspecified literals. */

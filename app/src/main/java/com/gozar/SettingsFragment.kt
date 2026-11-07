@@ -24,6 +24,7 @@ class SettingsFragment : Fragment() {
 
     private val tonAddress = "UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3"
     private var updateChecking = false
+    private var leakRunning = false
     private var rootChecking = false
     private var appPicker: AppPicker? = null
     private var section = ""
@@ -66,6 +67,7 @@ class SettingsFragment : Fragment() {
         find<View>(R.id.rowKillSwitch).setOnClickListener { explainLockdown() }
         find<View>(R.id.rowDns).setOnClickListener { pickDns() }
         find<View>(R.id.rowNotifications).setOnClickListener { openNotificationSettings() }
+        find<View>(R.id.rowLeak).setOnClickListener { runLeakTest() }
         find<View>(R.id.rowAds).setOnClickListener { requestAdBlocking(!Store.blockAds(requireContext())) }
         find<MaterialSwitch>(R.id.swAds).setOnCheckedChangeListener { _, checked ->
             if (!changingSwitch) requestAdBlocking(checked)
@@ -194,6 +196,20 @@ class SettingsFragment : Fragment() {
                 find<View>(R.id.btnAccountRefresh).isEnabled = signed
             }
             "security" -> {
+                find<TextView>(R.id.tvLeak).text = when {
+                    leakRunning -> getString(R.string.leak_running)
+                    else -> {
+                        val report = FoxLeakGuard.lastReport()
+                        val blocked = FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED) +
+                            FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED)
+                        val base = when {
+                            report == null -> getString(R.string.leak_idle)
+                            report.passed -> getString(R.string.leak_passed)
+                            else -> getString(R.string.leak_failed, report.detail)
+                        }
+                        if (blocked > 0) base + " · " + getString(R.string.leak_blocked, ltr(plain(blocked))) else base
+                    }
+                }
                 linkState = connectionState()
                 find<TextView>(R.id.tvKillSwitch).setText(when (FoxVpnService.lockdownState()) {
                     3 -> R.string.kill_active
@@ -363,6 +379,42 @@ class SettingsFragment : Fragment() {
             }
         }
         dialog.show()
+    }
+
+    /** Runs the leak self-test on demand; results land in the row subtitle. */
+    private fun runLeakTest() {
+        if (leakRunning) return
+        if (!FoxLink.connected || FoxLink.exitIp.isBlank()) {
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.leak_title)
+                .setMessage(R.string.leak_idle)
+                .setPositiveButton(R.string.ok, null)
+                .show()
+            return
+        }
+        leakRunning = true
+        paint()
+        kotlin.concurrent.thread(name = "gozar-leak-test") {
+            try {
+                FoxLeakGuard.selfTest(
+                    baselineIp = "",
+                    positiveHost = "api.accounts.firefox.com",
+                    resolve = { host ->
+                        try {
+                            java.net.InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    },
+                    exitIp = { FoxLink.exitIp }
+                )
+            } catch (_: Exception) {
+            }
+            activity?.runOnUiThread {
+                leakRunning = false
+                if (isAdded && view != null) paint()
+            }
+        }
     }
 
     private fun openNotificationSettings() {

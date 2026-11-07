@@ -106,6 +106,8 @@ object FoxLink {
         tick()
         thread {
             try {
+                // A repackaged build gets no tunnel.
+                if (!TamperCheck.verify(app)) throw FoxError(app.getString(R.string.tamper_detected))
                 FoxRoute.apply(Store.bypassLan(app), Store.bypassList(app))
                 FoxRoute.applyChain(Store.chain(app))
                 FoxTunnel.resetTransport()
@@ -215,7 +217,44 @@ object FoxLink {
                     true
                 }
             }
-            if (changed) tick()
+            if (changed) {
+                tick()
+                postConnectWork(location, attempt)
+            }
+        }
+    }
+
+    /**
+     * Once the exit is confirmed: warm the session pool and the DNS cache for
+     * the API surface (prefetch), then run the leak self-test through the
+     * proven tunnel.
+     */
+    private fun postConnectWork(location: FoxLocation, attempt: Long) {
+        thread(isDaemon = true, name = "fox-post-connect") {
+            try {
+                FoxTunnel.prewarm(location)
+                for (host in listOf("api.accounts.firefox.com", "vpn.mozilla.org", "firefox.settings.services.mozilla.com")) {
+                    if (!current(attempt)) return@thread
+                    try {
+                        java.net.InetAddress.getAllByName(host)
+                    } catch (_: Exception) {
+                    }
+                }
+                if (!current(attempt)) return@thread
+                FoxLeakGuard.selfTest(
+                    baselineIp = "",
+                    positiveHost = "api.accounts.firefox.com",
+                    resolve = { host ->
+                        try {
+                            java.net.InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    },
+                    exitIp = { exitIp }
+                )
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -234,6 +273,11 @@ object FoxLink {
             if (attempt != null && attempt != generation) return
             generation += 1
             stopServers()
+            if (connected && FoxVpnService.alwaysOn()) {
+                // The tunnel is down while lockdown keeps blocking traffic:
+                // count the moment the kill switch took over.
+                FoxLeakGuard.note(FoxLeakGuard.KILL_SWITCH_BLOCKED)
+            }
             connected = false
             connecting = false
             exitIp = ""

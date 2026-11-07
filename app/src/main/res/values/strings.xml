@@ -219,6 +219,13 @@
     <string name="update_notification_title">Gozar update available</string>
     <string name="update_notification_text">Version %s is ready to download</string>
     <string name="update_action_download">Download and install</string>
+    <string name="leak_title">Leak Guard</string>
+    <string name="leak_idle">Runs automatically after connecting; tap to test now</string>
+    <string name="leak_running">Testing the tunnel…</string>
+    <string name="leak_passed">No leaks: DNS and the exit IP both go through the tunnel</string>
+    <string name="leak_failed">Leak detected: %s</string>
+    <string name="leak_blocked">%s packets blocked by the guard</string>
+    <string name="tamper_detected">This copy of Gozar is not signed with the official key and cannot connect</string>
     <string name="update_download_failed">The update could not be downloaded</string>
     <string name="rollback_notification_title">This update did not prove stable</string>
     <string name="rollback_notification_text">Version %s is available to restore</string>

@@ -66,13 +66,18 @@ class FoxLeakGuardTest {
         }
     }
 
+    private val positive = "api.example.test"
+
+    private fun honest(host: String) = if (host == FoxLeakGuard.CANARY) emptyList() else listOf("93.184.216.34")
+
     @Test
     fun selfTestPassesWhenDnsAndExitBothComeFromTheTunnel() {
         FoxLeakGuard.reset()
         val report = FoxLeakGuard.selfTest(
             now = 1000L,
             baselineIp = "2.176.10.5",
-            resolve = { listOf("93.184.216.34") },
+            positiveHost = positive,
+            resolve = { honest(it) },
             exitIp = { "45.131.7.9" }
         )
         assertTrue(report.passed)
@@ -84,26 +89,35 @@ class FoxLeakGuardTest {
     @Test
     fun selfTestFailsEveryLeakShape() {
         // No DNS answer at all.
-        var report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { emptyList() }, exitIp = { "45.1.1.1" })
+        var report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { emptyList() }, exitIp = { "45.1.1.1" })
         assertTrue(!report.dnsLeakFree && report.exitVerified)
         // DNS answered with a private address (the classic ISP-hijack leak).
-        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("10.10.10.10") }, exitIp = { "45.1.1.1" })
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { listOf("10.10.10.10") }, exitIp = { "45.1.1.1" })
         assertTrue(!report.dnsLeakFree)
+        // The canary resolved: the resolver is being spoofed.
+        report = FoxLeakGuard.selfTest(
+            baselineIp = "2.2.2.2",
+            positiveHost = positive,
+            resolve = { host -> if (host == FoxLeakGuard.CANARY) listOf("5.61.103.1") else listOf("93.184.216.34") },
+            exitIp = { "45.1.1.1" }
+        )
+        assertTrue(!report.dnsLeakFree)
+        assertTrue(report.detail.contains("hijack"))
         // Exit still on the baseline IP: traffic is not going through the tunnel.
-        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "2.2.2.2" })
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { honest(it) }, exitIp = { "2.2.2.2" })
         assertTrue(report.dnsLeakFree && !report.exitVerified)
         assertTrue(report.detail.contains("unchanged"))
         // Exit unavailable.
-        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "" })
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { honest(it) }, exitIp = { "" })
         assertTrue(!report.exitVerified)
         // Exit on a local address.
-        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { listOf("93.184.216.34") }, exitIp = { "192.168.1.1" })
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { honest(it) }, exitIp = { "192.168.1.1" })
         assertTrue(!report.exitVerified)
         // A throwing probe is a failure, not a crash.
-        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", resolve = { throw RuntimeException() }, exitIp = { throw RuntimeException() })
+        report = FoxLeakGuard.selfTest(baselineIp = "2.2.2.2", positiveHost = positive, resolve = { throw RuntimeException() }, exitIp = { throw RuntimeException() })
         assertTrue(!report.passed)
         // Without a baseline, any non-local exit passes.
-        report = FoxLeakGuard.selfTest(baselineIp = "", resolve = { listOf("93.184.216.34") }, exitIp = { "45.1.1.1" })
+        report = FoxLeakGuard.selfTest(baselineIp = "", positiveHost = positive, resolve = { honest(it) }, exitIp = { "45.1.1.1" })
         assertTrue(report.passed)
     }
 
