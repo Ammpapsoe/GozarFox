@@ -23,6 +23,8 @@ object Fox {
     private val refreshLock = Any()
     private val operations = AtomicInteger()
 
+    @Volatile internal var loginProvider: FoxLoginProvider = MozillaLoginProvider
+
     @Volatile var email: String = ""
     @Volatile var limit: Long = 0L
     @Volatile var remaining: Long = 0L
@@ -133,7 +135,7 @@ object Fox {
 
     private fun signInNow(c: Context, mail: String, password: String, created: Boolean) {
         if (created) message = ""
-        val session = FoxApi.signIn(mail, password)
+        val session = loginProvider.signIn(mail, password)
         pendingEmail = mail
         pendingPassword = password
         pendingUid = session.uid
@@ -155,7 +157,7 @@ object Fox {
             say(c, R.string.fox_stage_link)
             try {
                 if (FoxApi.emailVerified(pendingToken)) {
-                    val again = FoxApi.signIn(pendingEmail, pendingPassword)
+                    val again = loginProvider.signIn(pendingEmail, pendingPassword)
                     pendingToken = again.token
                     pendingUid = again.uid
                     if (!again.needsCode) {
@@ -168,7 +170,7 @@ object Fox {
                 }
                 finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
             } catch (e: FoxError) {
-                val again = FoxApi.signIn(pendingEmail, pendingPassword)
+                val again = loginProvider.signIn(pendingEmail, pendingPassword)
                 pendingToken = again.token
                 if (again.needsCode) {
                     byLink = again.byLink
@@ -198,7 +200,7 @@ object Fox {
                 try {
                     finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
                 } catch (e: FoxError) {
-                    val again = FoxApi.signIn(pendingEmail, pendingPassword)
+                    val again = loginProvider.signIn(pendingEmail, pendingPassword)
                     pendingToken = again.token
                     if (again.needsCode) {
                         step = STEP_LOGIN
@@ -208,7 +210,7 @@ object Fox {
                     }
                 }
             } else {
-                FoxApi.verifySession(pendingToken, clean)
+                loginProvider.verifySession(pendingToken, clean)
                 finish(c.applicationContext, pendingToken, pendingUid, pendingEmail, pendingPassword)
             }
         }
@@ -239,8 +241,8 @@ object Fox {
 
     private fun finish(c: Context, sessionToken: String, uid: String, mail: String, password: String) {
         say(c, R.string.fox_stage_pass)
-        val tokens = FoxApi.tokens(sessionToken)
-        val pass = FoxApi.pass(tokens.access)
+        val tokens = loginProvider.tokens(sessionToken)
+        val pass = loginProvider.pass(tokens.access)
         FoxStore.saveAccount(c, mail, uid, tokens, pass)
         step = STEP_NONE
         byLink = false
