@@ -145,6 +145,54 @@ class CoreState {
   }
 }
 
+class UpdatePackage {
+  const UpdatePackage(
+      {required this.id,
+      required this.name,
+      required this.kind,
+      required this.size});
+
+  final String id;
+  final String name;
+  final String kind;
+  final int size;
+}
+
+class DesktopUpdate {
+  const DesktopUpdate(
+      {required this.version, required this.newer, required this.packages});
+
+  final String version;
+  final bool newer;
+  final List<UpdatePackage> packages;
+
+  static DesktopUpdate? fromReply(Object? raw) {
+    if (raw is! Map || raw['version'] is! String || raw['newer'] is! bool)
+      return null;
+    final items = raw['artifacts'];
+    if (items != null && items is! List) return null;
+    final packages = <UpdatePackage>[];
+    for (final item in (items as List? ?? const [])) {
+      if (item is! Map ||
+          item['id'] is! String ||
+          item['name'] is! String ||
+          item['kind'] is! String ||
+          item['size'] is! int ||
+          (item['size'] as int) <= 0) return null;
+      packages.add(UpdatePackage(
+        id: item['id'] as String,
+        name: item['name'] as String,
+        kind: item['kind'] as String,
+        size: item['size'] as int,
+      ));
+    }
+    return DesktopUpdate(
+        version: raw['version'] as String,
+        newer: raw['newer'] as bool,
+        packages: packages);
+  }
+}
+
 class CoreReply {
   const CoreReply({
     this.state,
@@ -152,6 +200,8 @@ class CoreReply {
     this.needsCode = false,
     this.captchaImage,
     this.systemEmails = const [],
+    this.update,
+    this.downloadedPath,
   });
 
   final CoreState? state;
@@ -159,6 +209,8 @@ class CoreReply {
   final bool needsCode;
   final String? captchaImage;
   final List<String> systemEmails;
+  final DesktopUpdate? update;
+  final String? downloadedPath;
 
   factory CoreReply.fromJson(Map<String, dynamic> json) {
     final state = json['state'];
@@ -175,6 +227,10 @@ class CoreReply {
           : const [],
       captchaImage: result is Map && result['captcha_image'] is String
           ? result['captcha_image'] as String
+          : null,
+      update: DesktopUpdate.fromReply(result),
+      downloadedPath: result is Map && result['downloaded_path'] is String
+          ? result['downloaded_path'] as String
           : null,
     );
   }
@@ -253,7 +309,10 @@ class Core {
     try {
       process.stdin.writeln(jsonEncode(message));
       await process.stdin.flush();
-      return await waiter.future.timeout(const Duration(seconds: 180));
+      final timeout = method == 'download_update'
+          ? const Duration(minutes: 16)
+          : const Duration(seconds: 180);
+      return await waiter.future.timeout(timeout);
     } finally {
       _pending.remove(id);
     }

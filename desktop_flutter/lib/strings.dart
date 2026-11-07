@@ -179,8 +179,24 @@ class Words {
       pick('نسخهٔ تازه در دسترس است:', 'A new release is available:');
   String get updateCurrent =>
       pick('نسخهٔ شما به‌روز است.', 'You are up to date.');
-  String get updateFailed =>
-      pick('بررسی به‌روزرسانی انجام نشد.', 'Could not check for updates.');
+  String get updateFailed => pick('بررسی یا تأیید به‌روزرسانی انجام نشد.',
+      'Could not check or verify the update.');
+  String get updateChecking =>
+      pick('در حال بررسی امضای نسخه…', 'Checking the signed release…');
+  String get updateDownloading => pick(
+      'در حال دریافت و بررسی فایل…', 'Downloading and verifying the package…');
+  String get updateChoosePackage => pick('بستهٔ مناسب نصب خود را انتخاب کنید:',
+      'Choose the package for your installation:');
+  String get updateNoPackage => pick(
+      'بستهٔ امضاشده‌ای برای این دستگاه موجود نیست.',
+      'No signed package is available for this device.');
+  String get updateDownloaded => pick(
+      'فایل با امضای نسخه بررسی شد، اما نصب نشده است. برای نصب، پوشه را باز کنید و مراحل سیستم‌عامل را انجام دهید. بازیابی خودکار هنوز پشتیبانی نمی‌شود.',
+      'The file was verified against the signed release, but is not installed. Open the folder and follow your system’s installation steps. Automatic rollback is not yet supported.');
+  String get updateOpenFolder => pick('باز کردن پوشه', 'Open folder');
+  String get updateCopyPath => pick('کپی مسیر', 'Copy path');
+  String get updateDownloadFailed => pick('دریافت یا بررسی فایل ناموفق بود.',
+      'The package could not be downloaded or verified.');
   String get openRelease => pick('دیدن نسخه', 'View release');
   String get donate => pick('حمایت از گذر', 'Support Gozar');
   String get donateMessage => pick(

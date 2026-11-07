@@ -10,6 +10,27 @@ permissions:
   contents: read
 
 jobs:
+  desktop-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+      - name: Install Linux UI dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - name: Analyze and test desktop UI
+        working-directory: desktop_flutter
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
   desktop-update:
     runs-on: ubuntu-latest
     timeout-minutes: 15

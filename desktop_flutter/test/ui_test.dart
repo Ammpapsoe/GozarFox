@@ -170,6 +170,48 @@ class SlowStartCore extends FakeCore {
   }
 }
 
+class UpdateFakeCore extends FakeCore {
+  UpdateFakeCore({this.delayCheck = false})
+      : super(signedIn: true, language: 'en');
+
+  final bool delayCheck;
+  final pendingCheck = Completer<CoreReply>();
+  Map<String, dynamic>? downloadParams;
+
+  @override
+  Future<CoreReply> call(String method, [Map<String, dynamic>? params]) async {
+    if (method == 'check_update') {
+      requests.add(method);
+      if (delayCheck) return pendingCheck.future;
+      return const CoreReply(
+          update: DesktopUpdate(
+        version: '1.10.5',
+        newer: true,
+        packages: [
+          UpdatePackage(
+              id: 'linux-amd64-deb',
+              name: 'Gozar-Linux-amd64.deb',
+              kind: 'deb',
+              size: 2048)
+        ],
+      ));
+    }
+    if (method == 'download_update') {
+      requests.add(method);
+      downloadParams = params;
+      return const CoreReply(
+          downloadedPath: '/home/user/.cache/Gozar/updates/verified.deb');
+    }
+    if (method == 'cancel_update') {
+      requests.add(method);
+      if (!pendingCheck.isCompleted)
+        pendingCheck.complete(const CoreReply(error: 'cancelled'));
+      return const CoreReply();
+    }
+    return super.call(method, params);
+  }
+}
+
 void main() {
   testWidgets('language can be changed from the native login screen',
       (tester) async {
@@ -522,6 +564,87 @@ void main() {
     expect(copied, 'UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3');
     expect(core.requests, isNot(contains('connect')));
   });
+  testWidgets(
+      'signed desktop update downloads a selected package without claiming installation',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = UpdateFakeCore();
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('General'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Check for updates'));
+    await tester.pumpAndSettle();
+    expect(find.text('Gozar-Linux-amd64.deb'), findsOneWidget);
+    await tester.tap(find.text('Gozar-Linux-amd64.deb'));
+    await tester.pumpAndSettle();
+    expect(core.downloadParams?['id'], 'linux-amd64-deb');
+    expect(find.textContaining('not installed'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate((widget) =>
+            widget is SelectableText &&
+            widget.data == '/home/user/.cache/Gozar/updates/verified.deb'),
+        findsOneWidget);
+    expect(find.text('Open folder'), findsOneWidget);
+    await tester.tap(find.text('Close').last);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('update check can be cancelled through the core', (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = UpdateFakeCore(delayCheck: true);
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('General'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Check for updates'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('Checking the signed release…'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(core.requests, contains('cancel_update'));
+    expect(find.text('You are up to date.'), findsNothing);
+  });
+
+  test('desktop update RPC rejects malformed summaries', () {
+    final reply = CoreReply.fromJson({
+      'reply': {
+        'version': '1.10.5',
+        'newer': true,
+        'artifacts': [
+          {'id': 'a', 'name': 'package.deb', 'kind': 'deb', 'size': 42}
+        ],
+      }
+    });
+    expect(reply.update?.version, '1.10.5');
+    expect(reply.update?.packages.single.id, 'a');
+    final bad = CoreReply.fromJson({
+      'reply': {
+        'version': '1.10.5',
+        'newer': true,
+        'artifacts': [
+          {'id': 'a', 'name': 7, 'kind': 'deb', 'size': 42}
+        ],
+      }
+    });
+    expect(bad.update, isNull);
+  });
+
   test('core maps only reported connection data', () {
     final state = CoreState.fromJson({
       'live': true,

@@ -141,6 +141,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   bool _starting = true;
   bool _busy = false;
   bool _connectionBusy = false;
+  bool _updateBusy = false;
   bool _refreshing = false;
   bool _loadingServers = false;
   bool _needsCode = false;
@@ -870,62 +871,177 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     }
   }
 
-  Future<void> _checkUpdates() async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10);
+  Future<void> _cancelUpdateOperation() async {
     try {
-      final request = await client.getUrl(Uri.parse(
-          'https://api.github.com/repos/bardia049b-stack/Gozar1/releases/latest'));
-      request.headers.set(HttpHeaders.userAgentHeader, 'Gozar desktop');
-      final response =
-          await request.close().timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) throw const FormatException();
-      final data = jsonDecode(await utf8.decoder.bind(response).join())
-          as Map<String, dynamic>;
-      final tag = data['tag_name'] as String? ?? '';
-      final url = data['html_url'] as String? ?? '';
-      const current = '1.10.4';
-      List<int> version(String value) => RegExp(r'\d+')
-          .allMatches(value)
-          .take(3)
-          .map((match) => int.parse(match.group(0)!))
-          .toList();
-      final available = version(tag);
-      final installed = version(current);
-      bool newer = false;
-      if (available.length == 3 && installed.length == 3) {
-        for (var i = 0; i < 3; i++) {
-          if (available[i] != installed[i]) {
-            newer = available[i] > installed[i];
-            break;
-          }
-        }
+      await _core.call('cancel_update');
+    } on Object {
+      // The core may already have disconnected; never claim cancellation succeeded.
+    }
+  }
+
+  Future<CoreReply?> _updateOperation(String method, String message,
+      [Map<String, dynamic>? params]) async {
+    if (!mounted) return null;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var cancelled = false;
+    late final DialogRoute<void> route;
+    route = DialogRoute<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(words.updates),
+        content: Row(children: [
+          const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 16),
+          Expanded(child: Text(message)),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () {
+              cancelled = true;
+              unawaited(_cancelUpdateOperation());
+              if (route.isActive) navigator.removeRoute(route);
+            },
+            child: Text(words.cancel),
+          ),
+        ],
+      ),
+    );
+    unawaited(navigator.push(route));
+    late final CoreReply reply;
+    try {
+      reply = await _core.call(method, params);
+    } on Object {
+      reply = const CoreReply(error: 'update operation failed');
+    } finally {
+      if (navigator.mounted && route.isActive) navigator.removeRoute(route);
+    }
+    if (cancelled || !mounted) return null;
+    if (reply.error != null) {
+      await _info(
+          words.updates,
+          method == 'download_update'
+              ? words.updateDownloadFailed
+              : words.updateFailed);
+      return null;
+    }
+    return reply;
+  }
+
+  Future<void> _openUpdateFolder(String path) async {
+    try {
+      final directory = File(path).parent.path;
+      if (Platform.isWindows) {
+        await Process.start('explorer.exe', [directory]);
+      } else if (Platform.isMacOS) {
+        await Process.start('open', [directory]);
+      } else {
+        await Process.start('xdg-open', [directory]);
       }
-      if (!mounted) return;
-      final open = await showDialog<bool>(
+    } on Object {
+      if (mounted) setState(() => _error = '@browser');
+    }
+  }
+
+  Future<void> _checkUpdates() async {
+    if (_updateBusy) return;
+    _updateBusy = true;
+    try {
+      final reply =
+          await _updateOperation('check_update', words.updateChecking);
+      if (reply == null || !mounted) return;
+      final update = reply.update;
+      if (update == null) {
+        await _info(words.updates, words.updateFailed);
+        return;
+      }
+      if (!update.newer) {
+        await _info(words.updates, words.updateCurrent);
+        return;
+      }
+      if (update.packages.isEmpty) {
+        await _info(words.updates, words.updateNoPackage);
+        return;
+      }
+      final selected = await showDialog<UpdatePackage>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${words.updateAvailable} ${update.version}'),
+          content: SizedBox(
+            width: 380,
+            height: math.min(260.0, 55.0 + update.packages.length * 68.0),
+            child: Column(children: [
+              Text(words.updateChoosePackage),
+              Expanded(
+                  child: ListView(
+                children: [
+                  for (final package in update.packages)
+                    ListTile(
+                      title: Text(package.name,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle:
+                          Text('${package.kind} · ${_size(package.size)}'),
+                      onTap: () => Navigator.pop(dialogContext, package),
+                    ),
+                ],
+              )),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: Text(words.close))
+          ],
+        ),
+      );
+      if (selected == null || !mounted) return;
+      final downloaded = await _updateOperation(
+          'download_update', words.updateDownloading, {'id': selected.id});
+      if (downloaded == null || !mounted) return;
+      final path = downloaded.downloadedPath;
+      if (path == null || path.isEmpty) {
+        await _info(words.updates, words.updateDownloadFailed);
+        return;
+      }
+      final openFolder = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text(words.updates),
-          content: Text(
-              newer ? '${words.updateAvailable} $tag' : words.updateCurrent),
+          content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(words.updateDownloaded),
+                  const SizedBox(height: 12),
+                  SelectableText(path, textDirection: TextDirection.ltr),
+                ],
+              )),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
                 child: Text(words.close)),
-            if (newer &&
-                url.startsWith(
-                    'https://github.com/bardia049b-stack/Gozar1/releases/'))
-              TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: Text(words.openRelease)),
+            TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: path));
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext, false);
+                  }
+                },
+                child: Text(words.updateCopyPath)),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: Text(words.updateOpenFolder)),
           ],
         ),
       );
-      if (open == true) await _openPage(url);
-    } on Object {
-      if (mounted) await _info(words.updates, words.updateFailed);
+      if (openFolder == true) await _openUpdateFolder(path);
     } finally {
-      client.close(force: true);
+      _updateBusy = false;
     }
   }
 
@@ -1306,7 +1422,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(GzRadius.card + GzSpace.xs),
+                    borderRadius:
+                        BorderRadius.circular(GzRadius.card + GzSpace.xs),
                     border: Border.all(
                         color: Theme.of(context).colorScheme.outlineVariant),
                   ),
@@ -1636,8 +1753,10 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                     child: Text(location,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: foreground)),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(color: foreground)),
                   ),
                   if (canSelect)
                     Icon(
