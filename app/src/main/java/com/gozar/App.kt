@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.appcompat.app.AppCompatDelegate
 import java.io.File
@@ -37,10 +36,8 @@ class App : Application() {
         UpdateChecker.check(this)
     }
 
-    /**
-     * Battery-aware transport: on battery or in system power-save, uploads
-     * coalesce over a longer window so the radio wakes less often.
-     */
+    /** Respect the user's system battery-saver setting. Normal unplugged use
+     * retains the original low-latency coalescing window. */
     private fun watchPower() {
         applyPowerProfile()
         try {
@@ -48,10 +45,7 @@ class App : Application() {
                 object : BroadcastReceiver() {
                     override fun onReceive(context: Context, intent: Intent) = applyPowerProfile()
                 },
-                IntentFilter().apply {
-                    addAction(Intent.ACTION_BATTERY_CHANGED)
-                    addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
-                }
+                IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
             )
         } catch (_: Exception) {
         }
@@ -60,9 +54,7 @@ class App : Application() {
     private fun applyPowerProfile() {
         try {
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
-            val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            val plugged = battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-            FoxTunnel.setPowerSaving(power.isPowerSaveMode || plugged == 0)
+            FoxTunnel.setPowerSaving(power.isPowerSaveMode)
         } catch (_: Exception) {
         }
     }

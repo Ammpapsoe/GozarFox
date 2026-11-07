@@ -30,6 +30,7 @@ class SettingsFragment : Fragment() {
     private var section = ""
     private var changingSwitch = false
     private var linkState: List<Boolean>? = null
+    private var shownLeakReport: FoxLeakGuard.Report? = null
     private var usageState: Pair<Long, Long>? = null
     private var versionName: String? = null
     private val accountListener: () -> Unit = { if (isAdded && view != null && !isHidden) paint() }
@@ -37,7 +38,8 @@ class SettingsFragment : Fragment() {
         if (isAdded && view != null && !isHidden) {
             if (section == "security" || section == "connection") {
                 val current = connectionState()
-                if (current != linkState) {
+                if (current != linkState ||
+                    (section == "security" && FoxLeakGuard.lastReport() !== shownLeakReport)) {
                     linkState = current
                     paint()
                 }
@@ -200,12 +202,15 @@ class SettingsFragment : Fragment() {
                     leakRunning -> getString(R.string.leak_running)
                     else -> {
                         val report = FoxLeakGuard.lastReport()
+                        shownLeakReport = report
                         val blocked = FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED) +
                             FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED)
                         val base = when {
                             report == null -> getString(R.string.leak_idle)
-                            report.passed -> getString(R.string.leak_passed)
-                            else -> getString(R.string.leak_failed, report.detail)
+                            report.dnsCheck == FoxLeakGuard.Check.ISSUE -> getString(R.string.leak_issue)
+                            report.dnsCheck == FoxLeakGuard.Check.OK && report.exitCheck == FoxLeakGuard.Check.OK ->
+                                getString(R.string.leak_tunnel_ok)
+                            else -> getString(R.string.leak_inconclusive)
                         }
                         if (blocked > 0) base + " · " + getString(R.string.leak_blocked, ltr(plain(blocked))) else base
                     }
@@ -381,39 +386,23 @@ class SettingsFragment : Fragment() {
         dialog.show()
     }
 
-    /** Runs the leak self-test on demand; results land in the row subtitle. */
+    /** Runs the tunnel diagnostic on demand; it cannot certify all device traffic. */
     private fun runLeakTest() {
         if (leakRunning) return
-        if (!FoxLink.connected || FoxLink.exitIp.isBlank()) {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.leak_title)
-                .setMessage(R.string.leak_idle)
-                .setPositiveButton(R.string.ok, null)
-                .show()
-            return
-        }
         leakRunning = true
         paint()
-        kotlin.concurrent.thread(name = "gozar-leak-test") {
-            try {
-                FoxLeakGuard.selfTest(
-                    baselineIp = "",
-                    positiveHost = "api.accounts.firefox.com",
-                    resolve = { host ->
-                        try {
-                            java.net.InetAddress.getAllByName(host).mapNotNull { it.hostAddress }
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
-                    },
-                    exitIp = { FoxLink.exitIp }
-                )
-            } catch (_: Exception) {
-            }
-            activity?.runOnUiThread {
-                leakRunning = false
-                if (isAdded && view != null) paint()
-            }
+        val started = FoxLink.runLeakDiagnostic {
+            leakRunning = false
+            if (isAdded && view != null) paint()
+        }
+        if (!started) {
+            leakRunning = false
+            paint()
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.leak_title)
+                .setMessage(R.string.leak_connect_first)
+                .setPositiveButton(R.string.ok, null)
+                .show()
         }
     }
 

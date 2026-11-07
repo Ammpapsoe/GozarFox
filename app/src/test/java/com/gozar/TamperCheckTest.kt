@@ -19,6 +19,9 @@ class TamperCheckTest {
         assertTrue(TamperCheck.trusted(listOf("deadbeef", official)))
         assertFalse(TamperCheck.trusted(listOf("deadbeef")))
         assertFalse(TamperCheck.trusted(emptyList()))
+        assertTrue(TamperCheck.trustedCurrentSigners(listOf(official)))
+        assertFalse(TamperCheck.trustedCurrentSigners(listOf(official, "deadbeef")))
+        assertFalse(TamperCheck.trustedCurrentSigners(emptyList()))
     }
 
     @Test
@@ -26,6 +29,16 @@ class TamperCheckTest {
         // Unit tests run the debug variant, whose debug key is not the pinned
         // release key; verify() must still pass so the app is testable.
         val context = RuntimeEnvironment.getApplication()
+        assertTrue(BuildConfig.DEBUG)
         assertTrue(TamperCheck.verify(context))
+        // This debug-build exemption does not depend on the mutable manifest
+        // debuggable flag, which must not exempt a release build.
+        val flags = context.applicationInfo.flags
+        try {
+            context.applicationInfo.flags = flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE.inv()
+            assertTrue(TamperCheck.verify(context))
+        } finally {
+            context.applicationInfo.flags = flags
+        }
     }
 }

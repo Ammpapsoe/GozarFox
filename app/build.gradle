@@ -10,6 +10,10 @@ android {
     namespace 'com.gozar'
     compileSdk 36
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId 'com.gozar'
         minSdk 24

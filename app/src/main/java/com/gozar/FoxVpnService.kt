@@ -366,6 +366,13 @@ class FoxVpnService : VpnService() {
 
         fun directAddress(host: String): String? = instance?.resolver?.directAddress(host)
 
+        /** Diagnostic DNS uses the service resolver and its force-tunnel proxy,
+         * not system DNS from this VPN-excluded process. */
+        fun diagnosticDns(host: String): FoxLeakGuard.Lookup {
+            val resolver = instance?.resolver ?: return FoxLeakGuard.Lookup(FoxLeakGuard.LookupCode.UNAVAILABLE)
+            return FoxLeakGuard.lookupA(resolver, host)
+        }
+
         fun directRoutingAllowed(): Boolean {
             val service = instance ?: return false
             if (service.descriptor == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
