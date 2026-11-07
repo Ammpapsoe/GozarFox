@@ -135,7 +135,7 @@ class FoxVpnService : VpnService() {
                     val expected = scope ?: throw IOException("not connected yet")
                     if (!lifetime.get() || !FoxLink.transportIsCurrent(expected.ticket)) throw IOException("tunnel stopped")
                     if (directRoutingAllowed() && FoxRoute.direct(host)) {
-                        val pipe = FoxSocketPipe.connect(address, port) ?: throw IOException("direct connection failed")
+                        val pipe = FoxLink.connectDirect(address, port, expected.ticket) ?: throw IOException("direct connection failed")
                         val guarded = DirectPipe(pipe) {
                             lifetime.get() && directRoutingAllowed() && FoxLink.transportIsCurrent(expected.ticket)
                         }

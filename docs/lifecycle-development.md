@@ -96,12 +96,26 @@ raw lookup or TCP/TLS operation already past a check can still race a stop,
 and a blocking request may continue until its timeout. GitHub Actions and
 real reconnect scenarios must still be checked.
 
+## Direct socket cancellation (candidate change)
+
+Android's proxy and TUN direct-dial paths now register each direct TCP socket
+before connecting. Starting a new transport attempt or stopping the current
+one closes the registered pending and established sockets; a late dial cannot
+be handed off under a new ticket. Two targeted 50-iteration local stresses use
+controlled sockets to cover cancellation during connect, a late return after a
+new attempt starts, and writes to a revoked established pipe. An app-level
+50-transition loopback test checks the `FoxLink.stop()` integration in CI.
+These tests establish that cancellation is requested and late pipes are
+rejected; they cannot retract SYNs or other packets sent before a close, and
+they are not a physical-device kill-switch test.
+
 ## Remaining limitations
 
-- In-flight raw TCP/TLS connect calls are not centrally interruptible; a
-  connection can finish after stop, although generation checks reject or close
-  a late result. A direct socket connect already in progress can itself reach
-  the network before the post-connect validity check. This is not a kill switch.
+- In-flight relay TCP/TLS and DNS operations are not all centrally
+  interruptible; a connection can finish after stop, although generation
+  checks reject or close a late result. A direct socket connect already in
+  progress can itself reach the network before it is closed. This is not a
+  kill switch.
 - Real overlapping service teardown/restart, root-session overlap, flows admitted
   while the same TUN stack is being reconnected, DNS workers, and all error paths
   require additional deterministic integration and device tests. Lifecycle checks can prevent

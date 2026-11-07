@@ -63,6 +63,32 @@ class ProtectionTest {
     }
 
     @Test
+    fun linkStopClosesTrackedDirectSocketsAcrossFiftyTransitions() {
+        val field = FoxLink::class.java.getDeclaredField("directSockets").apply { isAccessible = true }
+        val registry = field.get(FoxLink) as FoxDirectRegistry
+        ServerSocket(0).use { target ->
+            target.soTimeout = 5000
+            try {
+                repeat(50) { iteration ->
+                    val ticket = FoxTunnel.startTransport()
+                    registry.start(ticket)
+                    val pipe = FoxLink.connectDirect("127.0.0.1", target.localPort, ticket)
+                    assertNotNull("direct socket did not connect at $iteration", pipe)
+                    target.accept().use {
+                        FoxLink.stop()
+                        val rejected = runCatching { pipe!!.write(byteArrayOf(7), 0, 1) }.isFailure
+                        assertTrue("direct socket survived stop at $iteration", rejected)
+                        pipe!!.close()
+                    }
+                }
+            } finally {
+                FoxLink.stop()
+                FoxTunnel.startTransport()
+            }
+        }
+    }
+
+    @Test
     fun securityPreferencesPersistWithoutChangingTheChosenResolver() {
         val context = RuntimeEnvironment.getApplication()
         Store.setCustomDns(context, "https://dns.example.test/dns-query")
@@ -116,7 +142,8 @@ class ProtectionTest {
             val proxy = FoxProxy(port, directAllowed = { true }, directAddress = { host, _ ->
                 resolved.offer(host)
                 "127.0.0.1"
-            }, tunnelScope = { FoxLink.TransportScope(FoxLocation("", "", "", "local-test.invalid", 443, false), 1L) },
+            }, directConnect = { host, port, _ -> FoxSocketPipe.connect(host, port) },
+                tunnelScope = { FoxLink.TransportScope(FoxLocation("", "", "", "local-test.invalid", 443, false), 1L) },
                 scopeCurrent = { true }) { null }
             assertTrue(proxy.start())
             try {
@@ -164,7 +191,8 @@ class ProtectionTest {
             gate.entered.countDown()
             if (!gate.release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
             "127.0.0.1"
-        }, tunnelScope = { FoxLink.TransportScope(place, epoch.get()) }, scopeCurrent = { it == epoch.get() }) { null }
+        }, directConnect = { host, port, _ -> FoxSocketPipe.connect(host, port) },
+            tunnelScope = { FoxLink.TransportScope(place, epoch.get()) }, scopeCurrent = { it == epoch.get() }) { null }
         assertTrue(proxy.start())
         try {
             repeat(50) { iteration ->
@@ -200,7 +228,7 @@ class ProtectionTest {
             gate.entered.countDown()
             if (!gate.release.await(5, TimeUnit.SECONDS)) error("lookup timed out")
             "127.0.0.1"
-        }, directConnect = { _, _ -> connectCalls.incrementAndGet(); null },
+        }, directConnect = { _, _, _ -> connectCalls.incrementAndGet(); null },
             tunnelScope = { FoxLink.TransportScope(place, 1L) }, scopeCurrent = { true }) { null }
         assertTrue(proxy.start())
         val port = proxy.boundPort()

@@ -43,6 +43,7 @@ object FoxLink {
     private val historyLock = Any()
     private val history = ArrayDeque<Pair<Float, Float>>()
     private val attempts = FoxAttemptFence()
+    private val directSockets = FoxDirectRegistry()
     private val stateLock = attempts.monitor
     private val generation: Long get() = attempts.generation
     private var transportTicket: Long? = null
@@ -120,7 +121,10 @@ object FoxLink {
                 val ticket = attempts.ifCurrent(attempt) {
                     FoxRoute.apply(bypassLan, bypassList)
                     FoxRoute.applyChain(chain)
-                    FoxTunnel.startTransport().also { transportTicket = it }
+                    FoxTunnel.startTransport().also {
+                        directSockets.start(it)
+                        transportTicket = it
+                    }
                 } ?: return@thread
                 val access = Fox.validAccess(app)
                 if (!current(attempt)) return@thread
@@ -202,6 +206,7 @@ object FoxLink {
                     connected = false
                     connecting = false
                     transportTicket = null
+                    directSockets.stop()
                     FoxTunnel.stopTransport()
                     error = if (FoxTunnel.isTlsFailure(e)) {
                         app.getString(R.string.fox_secure_connection_error)
@@ -290,6 +295,10 @@ object FoxLink {
         connected && transportTicket == ticket && FoxTunnel.transportIsCurrent(ticket)
     }
 
+    /** Registers the socket before connect so a stop can interrupt a pending dial. */
+    internal fun connectDirect(host: String, port: Int, ticket: Long): FoxPipe? =
+        directSockets.connect(host, port, ticket)
+
     private fun storePass(app: Context, pass: FoxPass, access: FoxAccess, attempt: Long, live: Boolean = false): Boolean =
         synchronized(stateLock) {
             if (attempt != generation || (live && !connected)) false
@@ -303,6 +312,7 @@ object FoxLink {
             if (attempt != null && attempt != generation) return
             attempts.advance()
             transportTicket = null
+            directSockets.stop()
             FoxTunnel.stopTransport()
             FoxLeakGuard.clearReport()
             retireServers()

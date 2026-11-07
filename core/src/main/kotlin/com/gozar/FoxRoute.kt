@@ -75,8 +75,10 @@ class FoxSocketPipe private constructor(private val socket: Socket) : FoxPipe {
     }
 
     companion object {
-        fun connect(host: String, port: Int, timeout: Int = 8000): FoxPipe? {
-            val socket = Socket()
+        fun connect(host: String, port: Int, timeout: Int = 8000): FoxPipe? =
+            connect(Socket(), host, port, timeout)
+
+        internal fun connect(socket: Socket, host: String, port: Int, timeout: Int): FoxPipe? {
             return try {
                 socket.tcpNoDelay = true
                 socket.connect(InetSocketAddress(host, port), timeout)
