@@ -1,4 +1,6 @@
 import base64
+import os
+from pathlib import Path
 import sys
 from urllib.parse import urlencode
 
@@ -102,7 +104,17 @@ rows = [
         badge('Core', 'macOS__ARM64', '4b4b4b', 'apple', 'Gozar-Core-macOS-ARM.tar.xz'))),
 ]
 
-print(SECURITY)
+release_version = tag.removeprefix('v').removesuffix('-desktop')
+notes_file = Path(__file__).resolve().parent.parent / 'docs' / 'release-notes' / f'{release_version}.md'
+if notes_file.is_file():
+    notes = notes_file.read_text(encoding='utf-8')
+    if notes.startswith('<!-- DRAFT -->') and os.environ.get('GOZAR_ALLOW_DRAFT_NOTES') != '1':
+        raise SystemExit(f'refusing to publish draft release notes: {notes_file.name}')
+elif release_version == '1.10.4':
+    notes = SECURITY
+else:
+    raise SystemExit(f'missing release notes for {release_version}')
+print(notes)
 print('| System | Download |')
 print('|:--:|:--|')
 for name, downloads in rows:

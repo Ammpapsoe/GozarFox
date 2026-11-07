@@ -5,6 +5,12 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      validate_release:
+        description: Build and verify release artifacts without publishing
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,7 +35,7 @@ jobs:
       - name: Test Android security, tunnel and interface
         run: bash ./gradlew :core:test :app:testDebugUnitTest --no-daemon
       - name: Signing key
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
@@ -39,7 +45,7 @@ jobs:
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
       - name: Build release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -47,7 +53,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: bash ./gradlew assembleRelease --no-daemon --stacktrace
       - name: Verify Android signing identity
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         run: |
           set -e
           expected=bc9d3368f2671175f81be047a1ff72bca0cfc58e8b1b8f9f87e24694ba45f5b1
@@ -62,7 +68,7 @@ jobs:
             fi
           done
       - name: Collect APKs
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         run: |
           set -e
           VERSION=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
@@ -79,16 +85,16 @@ jobs:
             cp "$f" "out/Gozar_${VERSION}_${abi}.apk"
           done
       - name: Assemble debug build
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !(startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release)) }}
         run: bash ./gradlew :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !(startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release)) }}
         with:
           name: android-debug-not-release
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         with:
           name: android
           path: out/*
@@ -487,7 +493,7 @@ jobs:
 
   publish:
     needs: [android, desktop, cores, packages, proof]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -502,12 +508,15 @@ jobs:
           set -e
           DESKTOP=$(grep -m1 '^version:' desktop_flutter/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
           ANDROID=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
-          if [ "$GITHUB_REF_NAME" != "v$DESKTOP" ] && [ "$GITHUB_REF_NAME" != "v$ANDROID-desktop" ]; then
-            echo "::error::Release tag does not match a desktop or Android-compatible version"
+          TAG="$GITHUB_REF_NAME"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then TAG="v$ANDROID"; fi
+          if [ "$TAG" != "v$ANDROID" ] && [ "$TAG" != "v$ANDROID-desktop" ]; then
+            echo "::error::Release tag must match the Android version for signed updates"
             exit 1
           fi
           echo "desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
           echo "android=$ANDROID" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: Check release files
         env:
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
@@ -553,9 +562,37 @@ jobs:
             test -s "$f.sig"
             gpg --homedir "$RUNNER_TEMP/verify-keyring" --batch --verify "$f.sig" "$f"
           done
+      - name: Sign Android update manifest
+        env:
+          GOZAR_UPDATE_KEY: ${{ secrets.GOZAR_UPDATE_KEY }}
+          ANDROID_VERSION: ${{ steps.version.outputs.android }}
+          GOZAR_RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -e
+          test -n "$GOZAR_UPDATE_KEY" || { echo '::error::GOZAR_UPDATE_KEY is missing'; exit 1; }
+          umask 077
+          key="$RUNNER_TEMP/gozar-update-key.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$GOZAR_UPDATE_KEY" > "$key"
+          GOZAR_RELEASE_KEY="$key" bash tools/sign-update-manifest.sh "$ANDROID_VERSION" "1.8.0" collected "Gozar Android $ANDROID_VERSION"
+          test -s collected/update.json
+          test -s collected/update.json.sig
       - name: Notes
-        run: python3 scripts/notes.py "${{ steps.version.outputs.desktop }}" "${{ github.repository }}" "${{ steps.version.outputs.android }}" "${{ github.ref_name }}" > "$RUNNER_TEMP/notes.md"
+        env:
+          GOZAR_ALLOW_DRAFT_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release && '1' || '0' }}
+        run: python3 scripts/notes.py "${{ steps.version.outputs.desktop }}" "${{ github.repository }}" "${{ steps.version.outputs.android }}" "${{ steps.version.outputs.tag }}" > "$RUNNER_TEMP/notes.md"
+      - name: Upload release-validation evidence
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-evidence
+          path: |
+            collected/update.json
+            collected/update.json.sig
+            collected/gozar-public-key.asc
+          if-no-files-found: error
       - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -565,6 +602,7 @@ jobs:
           files: collected/*
           fail_on_unmatched_files: true
       - name: Verify published files
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
@@ -576,7 +614,7 @@ jobs:
             printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done
-          printf '%s\n' "$assets" | grep -Fx gozar-public-key.asc >/dev/null
+          for f in gozar-public-key.asc update.json update.json.sig; do printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null; done
           mkdir -p "$RUNNER_TEMP/published"
           gh release download "$GITHUB_REF_NAME" --dir "$RUNNER_TEMP/published"
           for f in collected/*; do

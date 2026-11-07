@@ -212,6 +212,12 @@ class FoxUpdateTest {
     }
 
     @Test
+    fun signedDesktopTaggedReleaseCanCarryTheSameAndroidVersion() {
+        val body = manifest().replace("/download/v1.12.0/", "/download/v1.12.0-desktop/")
+        assertTrue(expect(body, sign(body)) is FoxUpdate.Verdict.Accept)
+    }
+
+    @Test
     fun signedArtifactMustMatchItsReleaseNameAndTag() {
         val wrongTag = manifest().replace("/download/v1.12.0/", "/download/v1.10.0/")
         val wrongName = manifest().replace("/gozar-1.12.0.apk\"", "/other.apk\"")

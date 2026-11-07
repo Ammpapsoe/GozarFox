@@ -47,7 +47,6 @@ object UpdateInstaller {
         val target = File(directory, "gozar-$version.apk")
         val temporary = File(directory, "gozar-$version.apk.part")
         val connection = URL(url).openConnection() as HttpURLConnection
-        var complete = false
         try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
@@ -55,19 +54,12 @@ object UpdateInstaller {
             connection.setRequestProperty("Connection", "close")
             if (connection.responseCode !in 200..299) return false
             connection.inputStream.use { input ->
-                FileOutputStream(temporary).use { output ->
-                    if (!FoxUpdate.copyVerified(input, output, size, sha)) return false
-                    output.fd.sync()
-                }
+                if (!saveVerified(input, temporary, target, size, sha)) return false
             }
-            // Both files are in app-private storage on the same filesystem.
-            if (!temporary.renameTo(target)) return false
-            complete = true
         } catch (_: Exception) {
             return false
         } finally {
             connection.disconnect()
-            if (!complete) temporary.delete()
         }
 
         val journal = App.journal(context)
@@ -75,6 +67,25 @@ object UpdateInstaller {
         val handedOff = launch(context, target)
         if (!handedOff) journal.cancelPending(version, installed)
         return handedOff
+    }
+
+    /** A failed/short/tampered download must never replace the last good file. */
+    internal fun saveVerified(input: java.io.InputStream, temporary: File, target: File, size: Long, sha: String): Boolean {
+        var complete = false
+        try {
+            FileOutputStream(temporary).use { output ->
+                if (!FoxUpdate.copyVerified(input, output, size, sha)) return false
+                output.fd.sync()
+            }
+            // Both files are in app-private storage on the same filesystem.
+            if (!temporary.renameTo(target)) return false
+            complete = true
+            return true
+        } catch (_: Exception) {
+            return false
+        } finally {
+            if (!complete) temporary.delete()
+        }
     }
 
     private fun launch(context: Context, apk: File): Boolean = try {

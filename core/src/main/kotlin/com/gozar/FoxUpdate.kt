@@ -131,7 +131,9 @@ object FoxUpdate {
             if (size <= 0 || size > 512L * 1024 * 1024) throw IllegalArgumentException("artifact size is malformed")
             if (!trusted(url)) throw IllegalArgumentException("artifact url is not a trusted release asset")
             val path = java.net.URI(url).rawPath
-            if (!path.endsWith("/v$version/$name")) throw IllegalArgumentException("artifact does not match its release")
+            if (!path.endsWith("/v$version/$name") && !path.endsWith("/v$version-desktop/$name")) {
+                throw IllegalArgumentException("artifact does not match its release")
+            }
             out.add(Artifact(name, sha256, size, url))
         }
         return out
