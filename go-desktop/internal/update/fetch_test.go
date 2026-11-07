@@ -22,7 +22,7 @@ func testClient(responses map[string][]byte) *http.Client {
 		if !ok {
 			status = http.StatusNotFound
 		}
-		return &http.Response{StatusCode: status, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header), Request: req}, nil
+		return &http.Response{StatusCode: status, Body: io.NopCloser(bytes.NewReader(body)), Header: make(http.Header), Request: req, ContentLength: int64(len(body))}, nil
 	})}
 }
 
