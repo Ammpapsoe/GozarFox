@@ -109,49 +109,110 @@ object FoxLeakGuard {
 
     private fun parseAnswer(body: ByteArray): Lookup {
         val unavailable = Lookup(LookupCode.UNAVAILABLE)
-        if (body.size < 12 || body[2].toInt() and 0x80 == 0 || u16(body, 4) != 1) return unavailable
-        when (body[3].toInt() and 15) {
-            3 -> return Lookup(LookupCode.NXDOMAIN)
-            0 -> Unit
-            else -> return unavailable
-        }
-        val count = u16(body, 6)
-        if (count > 256) return unavailable
-        var at = nameEnd(body, 12)
-        if (at < 0 || at + 4 > body.size) return unavailable
+        if (body.size !in 12..65535 || u16(body, 4) != 1) return unavailable
+        val flags = body[2].toInt() and 255
+        // A truncated reply, a non-query opcode, or a malformed reserved bit
+        // is not positive evidence. FoxResolver already matches the question
+        // and transaction ID before this diagnostic parser sees the answer.
+        if (flags and 0x80 == 0 || flags and 0x78 != 0 || flags and 0x02 != 0 || body[3].toInt() and 0x40 != 0) return unavailable
+        val code = body[3].toInt() and 15
+        if (code != 0 && code != 3) return unavailable
+        val answers = u16(body, 6)
+        val records = answers + u16(body, 8) + u16(body, 10)
+        if (answers > 256 || records > 512) return unavailable
+        val question = readName(body, 12) ?: return unavailable
+        var at = question.next
+        if (at + 4 > body.size || u16(body, at) != 1 || u16(body, at + 2) != 1) return unavailable
         at += 4
-        val addresses = ArrayList<String>()
-        repeat(count) {
-            at = nameEnd(body, at)
-            if (at < 0 || at + 10 > body.size) return unavailable
+        val addresses = HashMap<String, MutableList<String>>()
+        val aliases = HashMap<String, String>()
+        repeat(records) { index ->
+            val owner = readName(body, at) ?: return unavailable
+            at = owner.next
+            if (at + 10 > body.size) return unavailable
             val type = u16(body, at)
             val recordClass = u16(body, at + 2)
             val length = u16(body, at + 8)
+            // The high byte of an OPT record's TTL carries the extended RCODE.
+            // Do not interpret an EDNS error with a low four-bit RCODE of zero
+            // as a successful positive lookup.
+            if (type == 41 && body[at + 4].toInt() and 255 != 0) return unavailable
             at += 10
-            if (at + length > body.size) return unavailable
-            if (type == 1 && recordClass == 1 && length == 4) {
-                addresses.add((0..3).joinToString(".") { index -> (body[at + index].toInt() and 255).toString() })
+            if (length > body.size - at) return unavailable
+            val end = at + length
+            if (index < answers && recordClass == 1) {
+                when (type) {
+                    1 -> {
+                        if (length != 4) return unavailable
+                        val value = (0..3).joinToString(".") { part -> (body[at + part].toInt() and 255).toString() }
+                        addresses.getOrPut(owner.text) { ArrayList() }.add(value)
+                    }
+                    5 -> {
+                        val alias = readName(body, at) ?: return unavailable
+                        if (alias.next != end) return unavailable
+                        val previous = aliases.put(owner.text, alias.text)
+                        if (previous != null && previous != alias.text) return unavailable
+                    }
+                }
             }
-            at += length
+            at = end
         }
-        return Lookup(LookupCode.ANSWER, addresses)
+        if (at != body.size) return unavailable
+        // NXDOMAIN with an A answer is contradictory, not evidence that the
+        // randomized canary was absent. Check the alias chain even for an
+        // NXDOMAIN so a cycle cannot masquerade as a valid negative result.
+        if (code == 3 && addresses.isNotEmpty()) return unavailable
+        var name = question.text
+        val visited = HashSet<String>()
+        repeat(32) {
+            if (!visited.add(name)) return unavailable
+            val found = addresses[name].orEmpty()
+            val alias = aliases[name]
+            if (found.isNotEmpty()) return if (alias == null) Lookup(LookupCode.ANSWER, found) else unavailable
+            if (alias == null) return Lookup(if (code == 3) LookupCode.NXDOMAIN else LookupCode.ANSWER)
+            name = alias
+        }
+        return unavailable
     }
 
-    private fun nameEnd(data: ByteArray, start: Int): Int {
+    private data class WireName(val text: String, val next: Int)
+
+    /** Decode a bounded DNS name, including backwards compression pointers. */
+    private fun readName(data: ByteArray, start: Int): WireName? {
         var at = start
+        var next = -1
+        var wireLength = 1 // terminating root label
+        val labels = ArrayList<String>()
         var steps = 0
-        while (at < data.size && steps++ < 128) {
+        while (at in data.indices && steps++ < 128) {
             val size = data[at].toInt() and 255
-            if (size == 0) return at + 1
+            if (size == 0) return WireName(labels.joinToString("."), if (next < 0) at + 1 else next)
             if (size and 0xc0 == 0xc0) {
-                if (at + 1 >= data.size) return -1
+                if (at + 1 >= data.size) return null
                 val pointer = ((size and 0x3f) shl 8) or (data[at + 1].toInt() and 255)
-                return if (pointer < data.size) at + 2 else -1
+                // RFC 1035 compression points to a prior occurrence. Requiring
+                // a backwards target also prevents pointer cycles.
+                if (pointer >= at) return null
+                if (next < 0) next = at + 2
+                at = pointer
+                continue
             }
-            if (size > 63 || at + 1 + size > data.size) return -1
+            if (size and 0xc0 != 0 || size > 63 || at + 1 + size > data.size) return null
+            wireLength += size + 1
+            if (wireLength > 255) return null
+            val label = StringBuilder(size * 2)
+            for (index in at + 1 until at + 1 + size) {
+                var value = data[index].toInt() and 255
+                if (value in 65..90) value += 32 // DNS names are ASCII case-insensitive.
+                label.append("0123456789abcdef"[value ushr 4])
+                label.append("0123456789abcdef"[value and 15])
+            }
+            // Hex labels avoid treating a literal dot inside a wire label as
+            // a separator while comparing answer owners and CNAME targets.
+            labels.add(label.toString())
             at += size + 1
         }
-        return -1
+        return null
     }
 
     private fun u16(data: ByteArray, at: Int): Int =

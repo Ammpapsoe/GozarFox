@@ -141,6 +141,80 @@ class FoxLeakGuardTest {
         return head + byteArrayOf(0xc0.toByte(), 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4) + ip
     }
 
+    private fun wireName(text: String): ByteArray = ByteArrayOutputStream().apply {
+        for (label in text.split('.')) {
+            val bytes = label.toByteArray(Charsets.US_ASCII)
+            write(bytes.size)
+            write(bytes)
+        }
+        write(0)
+    }.toByteArray()
+
+    private fun wireRecord(owner: ByteArray, type: Int, data: ByteArray): ByteArray = owner + byteArrayOf(
+        (type ushr 8).toByte(), type.toByte(), 0, 1, 0, 0, 0, 60,
+        (data.size ushr 8).toByte(), data.size.toByte()
+    ) + data
+
+    private fun diagnosticResolver(reply: (ByteArray) -> ByteArray): FoxResolver = FoxResolver(
+        0, request = { _, query -> reply(query) }, endpoints = listOf("https://resolver.example/dns-query")
+    )
+
+    @Test
+    fun truncatedMalformedAndContradictoryDnsRepliesAreUnknown() {
+        val truncated = diagnosticResolver { query -> wireAnswer(query, 3).apply { this[2] = (this[2].toInt() or 2).toByte() } }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(truncated, canary).code)
+
+        val malformedAuthority = diagnosticResolver { query -> wireAnswer(query, 3).apply { this[9] = 1 } }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(malformedAuthority, canary).code)
+
+        val contradiction = diagnosticResolver { query -> wireAnswer(query, 3, byteArrayOf(8, 8, 8, 8)) }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(contradiction, canary).code)
+
+        val aliasLoop = diagnosticResolver { query ->
+            val head = wireAnswer(query, 3).apply { this[7] = 1 }
+            head + wireRecord(byteArrayOf(0xc0.toByte(), 12), 5, byteArrayOf(0xc0.toByte(), 12))
+        }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(aliasLoop, canary).code)
+
+        val selfPointer = diagnosticResolver { query ->
+            val head = wireAnswer(query, 0).apply { this[7] = 1 }
+            head + wireRecord(byteArrayOf(0xc0.toByte(), head.size.toByte()), 1, byteArrayOf(8, 8, 8, 8))
+        }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(selfPointer, positive).code)
+
+        val extendedError = diagnosticResolver { query ->
+            val head = wireAnswer(query, 0, byteArrayOf(8, 8, 8, 8)).apply { this[11] = 1 }
+            // OPT, UDP size 4096, extended RCODE 1, no options.
+            head + byteArrayOf(0, 0, 41, 0x10, 0, 1, 0, 0, 0, 0, 0)
+        }
+        assertEquals(FoxLeakGuard.LookupCode.UNAVAILABLE, FoxLeakGuard.lookupA(extendedError, positive).code)
+    }
+
+    @Test
+    fun unrelatedAddressCannotMakeTheDnsProbePassButCnameChainCan() {
+        val unrelated = diagnosticResolver { query ->
+            val head = wireAnswer(query, 0).apply { this[7] = 1 }
+            head + wireRecord(wireName("other.example.test"), 1, byteArrayOf(8, 8, 8, 8))
+        }
+        val result = FoxLeakGuard.lookupA(unrelated, positive)
+        assertEquals(FoxLeakGuard.LookupCode.ANSWER, result.code)
+        assertTrue(result.addresses.isEmpty())
+        val report = FoxLeakGuard.diagnose(positiveHost = positive, canaryHost = canary,
+            resolve = { host -> if (host == positive) result else answer(host) }, exitIp = "8.8.8.8")
+        assertEquals(FoxLeakGuard.Check.UNKNOWN, report.dnsCheck)
+
+        val cname = diagnosticResolver { query ->
+            val head = wireAnswer(query, 0).apply { this[7] = 2 }
+            val cnameStart = head.size + 12 // compressed owner plus the fixed ten-byte RR header
+            val alias = wireRecord(byteArrayOf(0xc0.toByte(), 12), 5, wireName("edge.example.test"))
+            val ip = wireRecord(byteArrayOf(0xc0.toByte(), cnameStart.toByte()), 1, byteArrayOf(8, 8, 8, 8))
+            head + alias + ip
+        }
+        val viaAlias = FoxLeakGuard.lookupA(cname, positive)
+        assertEquals(FoxLeakGuard.LookupCode.ANSWER, viaAlias.code)
+        assertEquals(listOf("8.8.8.8"), viaAlias.addresses)
+    }
+
     @Test
     fun vpnResolverDnsProbeDistinguishesNxdomainFromServfailAndMalformedResponses() {
         fun resolver(code: Int, ip: ByteArray? = null): FoxResolver = FoxResolver(

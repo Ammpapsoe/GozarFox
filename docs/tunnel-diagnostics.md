@@ -5,8 +5,12 @@ canary through Gozar's **forced-tunnel DoH resolver**, and observes the IP
 returned by a tunnel-only exit probe. The result can be `OK`, `ISSUE` or
 `UNKNOWN`. An unexpected answer to the canary or a non-public positive answer
 is an issue; an unavailable resolver, timeout or unverified exit is unknown.
-NXDOMAIN and a lookup failure are not equivalent. Counters record IPv6 or
-malformed packets dropped by this VPN stack, but are not a device-wide audit.
+NXDOMAIN and a lookup failure are not equivalent. A truncated, malformed or
+contradictory DNS reply is unknown; a positive A answer must belong to the
+queried name or its bounded CNAME chain. DNS message names are decoded with
+bounded, backwards-only compression as described by RFC 1035. Counters record
+IPv6 or malformed packets dropped by this VPN stack, but are not a device-wide
+audit.
 
 These observations **do not certify leak freedom**: they do not monitor the
 physical interface, all other UIDs, OS DNS, browser/WebRTC behavior, bypassed
