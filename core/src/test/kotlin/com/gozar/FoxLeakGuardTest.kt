@@ -5,8 +5,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.util.Collections
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class FoxLeakGuardTest {
@@ -112,13 +114,13 @@ class FoxLeakGuardTest {
 
     @Test
     fun automaticResolverSurvivesOneDeadEndpoint() {
-        val seen = mutableListOf<String>()
-        var dead = true
+        val seen = Collections.synchronizedList(mutableListOf<String>())
+        val firstFailed = AtomicBoolean(false)
         val query = probeQuery()
         val reply = probeAnswer(query)
         val resolver = FoxResolver(0, request = { url, _ ->
-            seen += url
-            if (dead) { dead = false; null } else reply
+            seen.add(url)
+            if (firstFailed.compareAndSet(false, true)) null else reply
         }, endpoints = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false))
         assertEquals(reply.toList(), resolver.answer(query)?.toList())
         assertTrue(seen.size >= 2)
@@ -126,11 +128,11 @@ class FoxLeakGuardTest {
 
     @Test
     fun automaticResolverReportsFailureWhenEveryEndpointDies() {
-        var calls = 0
-        val resolver = FoxResolver(0, request = { _, _ -> calls++; null },
+        val calls = AtomicInteger()
+        val resolver = FoxResolver(0, request = { _, _ -> calls.incrementAndGet(); null },
             endpoints = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false))
         val answer = resolver.answer(probeQuery())!!
         assertEquals(2, answer[3].toInt() and 15)
-        assertEquals(DnsPolicy.endpoints(DnsPolicy.AUTO, "", false).size, calls)
+        assertEquals(DnsPolicy.endpoints(DnsPolicy.AUTO, "", false).size, calls.get())
     }
 }

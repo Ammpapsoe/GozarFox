@@ -173,8 +173,24 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertIn("VALIDATION_RESULT", sentinel)
         self.assertIn('!= success', sentinel)
 
+    def test_publication_is_draft_first_and_respects_release_channel(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        publish = workflow.split("  publish:\n", 1)[1].split("\n  release-validation-complete:\n", 1)[0]
+        self.assertIn("scripts/release_channel.py", publish)
+        self.assertIn("draft: true", publish)
+        self.assertIn("prerelease: ${{ steps.version.outputs.prerelease }}", publish)
+        self.assertIn("--draft=false --prerelease --latest=false", publish)
+        self.assertLess(publish.index("Verify draft release files"), publish.index("Publish verified release"))
+
     def test_release_notes_fail_closed_for_drafts_and_missing_versions(self):
-        notes = ROOT / "scripts/notes.py"
+        # Keep this test independent of whether the real release notes later
+        # move from draft to an explicitly labeled prerelease or stable state.
+        scratch = self.root / "notes-fixture"
+        (scratch / "scripts").mkdir(parents=True, exist_ok=True)
+        (scratch / "docs/release-notes").mkdir(parents=True, exist_ok=True)
+        notes = scratch / "scripts/notes.py"
+        notes.write_text((ROOT / "scripts/notes.py").read_text(encoding="utf-8"), encoding="utf-8")
+        (scratch / "docs/release-notes/1.11.1.md").write_text("<!-- DRAFT -->\nDraft fixture\n", encoding="utf-8")
         env = self.env.copy()
         env.pop("GOZAR_ALLOW_DRAFT_NOTES", None)
         self.assertNotEqual(0, command("python3", str(notes), "1.10.4", "bardia049b-stack/Gozar", "1.11.1", "v1.11.1", env=env).returncode)

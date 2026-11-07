@@ -116,12 +116,17 @@ gh workflow run build.yml --ref <mission-branch> -f validate_release=true
 
 This builds and signs the complete artifact set, checks the signatures and
 uploads `release-validation-evidence`; it does **not** create a GitHub release
-or a tag. Release notes live in `docs/release-notes/X.Y.Z.md`. Notes beginning
-with `<!-- DRAFT -->` are accepted only by the dry run and block publication.
-After a phase is actually complete and approved: remove the draft marker,
-merge the mission branch, tag the reviewed commit, and verify the published
-release and assets. The dry run and unit tests do not substitute for real
-installation, migration or recovery tests.
+or a tag. Release notes live in `docs/release-notes/X.Y.Z.md` and must start
+with exactly one channel marker: `<!-- DRAFT -->`, `<!-- PRERELEASE -->` or
+`<!-- STABLE -->`. Draft notes block publication. A prerelease must describe
+incomplete requirements and is not promoted to GitHub's latest stable release;
+using its versionCode means a later Android release needs a higher one.
+
+A tag build creates a draft first, uploads and byte-compares the complete
+asset set, and only then publishes it using the explicit channel. Stable
+publication is appropriate only after the phase's acceptance is complete and
+the reviewed branch is merged. The dry run and unit tests do not substitute
+for real installation, migration or recovery tests.
 
 Key rotation requires a client that already trusts the replacement key (or a
 separate trusted update channel); simply switching the server key strands old

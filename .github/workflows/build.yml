@@ -535,9 +535,21 @@ jobs:
             echo "::error::Release tag must match the Android version for signed updates"
             exit 1
           fi
+          notes="docs/release-notes/$ANDROID.md"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            channel=$(python3 scripts/release_channel.py "$notes" --allow-draft)
+          else
+            channel=$(python3 scripts/release_channel.py "$notes")
+          fi
+          case "$channel" in
+            prerelease|draft) prerelease=true ;;
+            stable) prerelease=false ;;
+            *) echo '::error::Unrecognized release channel'; exit 1 ;;
+          esac
           echo "desktop=$DESKTOP" >> "$GITHUB_OUTPUT"
           echo "android=$ANDROID" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
       - name: Check release files
         env:
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
@@ -622,17 +634,19 @@ jobs:
             collected/desktop-update.json.sig
             collected/gozar-public-key.asc
           if-no-files-found: error
-      - name: Publish
+      - name: Create release draft
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ format('Gozar Android {0} / Desktop {1}', steps.version.outputs.android, steps.version.outputs.desktop) }}
           body_path: ${{ runner.temp }}/notes.md
-          make_latest: true
+          draft: true
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          make_latest: false
           files: collected/*
           fail_on_unmatched_files: true
-      - name: Verify published files
+      - name: Verify draft release files
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -653,6 +667,28 @@ jobs:
             test -s "$RUNNER_TEMP/published/$name"
             cmp "$f" "$RUNNER_TEMP/published/$name"
           done
+      - name: Publish verified release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -e
+          draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft')
+          test "$draft" = true || { echo '::error::Release was visible before asset verification'; exit 1; }
+          if [ "$PRERELEASE" = true ]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease --latest=false
+          elif [ "$PRERELEASE" = false ]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease=false --latest
+          else
+            echo '::error::Invalid release channel'; exit 1
+          fi
+          state=$(gh release view "$GITHUB_REF_NAME" --json isDraft,isPrerelease --jq '[.isDraft,.isPrerelease] | @csv')
+          test "$state" = "false,$PRERELEASE" || { echo "::error::Unexpected public release state: $state"; exit 1; }
+          if [ "$PRERELEASE" = true ]; then
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')
+            test "$latest" != "$GITHUB_REF_NAME" || { echo '::error::Prerelease was incorrectly marked latest'; exit 1; }
+          fi
 
   release-validation-complete:
     needs: [publish]
