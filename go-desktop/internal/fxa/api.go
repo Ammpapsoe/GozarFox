@@ -2,6 +2,7 @@ package fxa
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,7 +41,7 @@ func (e *Error) Error() string { return e.Message }
 
 func call(method, url, body string, headers map[string]string) (*Reply, error) {
 	for attempt := 0; attempt < 3; attempt++ {
-		reply, err := callOnce(method, url, body, headers)
+		reply, err := callWithTLSRetry(client, method, url, body, headers)
 		if err != nil || reply.Code != http.StatusNotAcceptable ||
 			(!strings.HasPrefix(url, authBase+"/") && !strings.HasPrefix(url, accountBase+"/")) {
 			return reply, err
@@ -52,7 +53,56 @@ func call(method, url, body string, headers map[string]string) (*Reply, error) {
 	return nil, errors.New("Mozilla security check was not accepted; try again")
 }
 
-func callOnce(method, url, body string, headers map[string]string) (*Reply, error) {
+// Retry only the exact Mozilla token endpoints after a 406. The regular
+// platform trust roots and hostname verification are retained. OAuth issues
+// a token as requested by the user; the proxy-pass endpoint is read-only.
+func mayRetryMozillaTLS12(method, address string, status int) bool {
+	if status != http.StatusNotAcceptable {
+		return false
+	}
+	return (method == http.MethodPost && address == authBase+"/oauth/token") ||
+		((method == http.MethodGet || method == http.MethodHead) && address == guardianURL+"/api/v1/fpn/token")
+}
+
+func tls12Client(base *http.Client) (*http.Client, func()) {
+	underlying := base.Transport
+	if underlying == nil {
+		underlying = http.DefaultTransport
+	}
+	original, ok := underlying.(*http.Transport)
+	if !ok {
+		return nil, func() {}
+	}
+	transport := original.Clone()
+	config := &tls.Config{}
+	if transport.TLSClientConfig != nil {
+		config = transport.TLSClientConfig.Clone()
+	}
+	if config.MinVersion > tls.VersionTLS12 || (config.MaxVersion != 0 && config.MaxVersion < tls.VersionTLS12) {
+		return nil, func() {}
+	}
+	config.MinVersion, config.MaxVersion = tls.VersionTLS12, tls.VersionTLS12
+	transport.TLSClientConfig = config
+	copy := *base
+	copy.Transport = transport
+	copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &copy, transport.CloseIdleConnections
+}
+
+func callWithTLSRetry(primary *http.Client, method, address, body string, headers map[string]string) (*Reply, error) {
+	reply, err := callOnce(primary, method, address, body, headers)
+	if err != nil || !mayRetryMozillaTLS12(method, address, reply.Code) {
+		return reply, err
+	}
+	compatible, closeIdle := tls12Client(primary)
+	defer closeIdle()
+	if compatible == nil {
+		return reply, nil
+	}
+	return callOnce(compatible, method, address, body, headers)
+}
+
+func callOnce(using *http.Client, method, url, body string, headers map[string]string) (*Reply, error) {
 	var reader io.Reader
 	if body != "" {
 		reader = strings.NewReader(body)
@@ -72,7 +122,7 @@ func callOnce(method, url, body string, headers map[string]string) (*Reply, erro
 	for name, value := range headers {
 		request.Header.Set(name, value)
 	}
-	response, err := client.Do(request)
+	response, err := using.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -367,14 +417,20 @@ func parseInt(text string) (int64, error) {
 	return value, err
 }
 
-func PassToken(access string) (*Pass, error) {
+func PassToken(access string) (*Pass, error) { return passToken(access, true) }
+
+// ExistingPassToken is read-only and never activates an entitlement. This is
+// useful for explicitly authorized diagnostics against an existing account.
+func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false) }
+
+func passToken(access string, allowActivate bool) (*Pass, error) {
 	reply, err := call("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
 		"Authorization": "Bearer " + access,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if reply.Code == 403 {
+	if reply.Code == 403 && allowActivate {
 		call("POST", guardianURL+"/api/v1/fpn/activate", "{}", map[string]string{
 			"Authorization": "Bearer " + access,
 		})

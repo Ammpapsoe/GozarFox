@@ -19,8 +19,10 @@ obtained HTTP 200. A Java HTTPS retry restricted to TLS 1.2 also received HTTP
 candidate now retries only a 406 on Mozilla's exact read-only proxy-pass
 endpoint with TLS 1.2, retaining ordinary certificate and hostname checks.
 This desktop JVM is not Android; the retry and full app still require Android
-device validation. Passwords,
-codes, tokens and device keys were not placed in CI artifacts. These results do
+device validation. A separate real-account desktop Go diagnostic signed in but
+the OAuth exchange encountered a Mozilla security-check failure; a narrowly
+scoped TLS 1.2 retry is being evaluated for that endpoint and the read-only pass
+request. Passwords, codes, tokens and device keys were not placed in CI artifacts. These results do
 not test the full Android VPN service, a physical phone or the desktop app end to end.
 
 An earlier test device's temporary credentials were lost during an environment

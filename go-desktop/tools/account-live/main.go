@@ -6,12 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
 )
@@ -97,24 +94,16 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("STATE=GO_ACCOUNT_SERVER_LIST_OK")
-	// This is a read-only version of the production pass request: deliberately
-	// do not call PassToken, whose 403 path can activate an entitlement.
-	client := &http.Client{Timeout: 25 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
-	}}
-	request, _ := http.NewRequest(http.MethodGet, "https://vpn.mozilla.org/api/v1/fpn/token", nil)
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0")
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", "Bearer "+refreshed.Access)
-	response, err := client.Do(request)
+	// This uses the production transport and parsing but cannot activate an
+	// entitlement if the user's existing account is not already eligible.
+	pass, err := fxa.ExistingPassToken(refreshed.Access)
 	if err != nil {
-		fmt.Println("STATE=GO_ACCOUNT_PASS_REQUEST_FAILED")
+		failure("PASS", err)
 		os.Exit(1)
 	}
-	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
-	fmt.Printf("STATE=GO_ACCOUNT_PASS_HTTP_%d\n", response.StatusCode)
-	if response.StatusCode != http.StatusOK {
+	if pass.Token == "" {
+		fmt.Println("STATE=GO_ACCOUNT_PASS_EMPTY")
 		os.Exit(1)
 	}
+	fmt.Println("STATE=GO_ACCOUNT_PASS_HTTP_200")
 }
