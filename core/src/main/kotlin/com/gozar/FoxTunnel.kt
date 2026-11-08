@@ -59,11 +59,12 @@ class FoxDuplex private constructor(
         }
     }
 
-    internal class H2(private val session: FoxTunnel.H2Session, val id: Int) : Link {
+    internal class H2(private val session: FoxTunnel.H2Session, val id: Int, private val bounded: Boolean = false) : Link {
         private val lock = Object()
         private val inbox = ArrayDeque<ByteArray>()
         private var head = ByteArray(0)
         private var headOffset = 0
+        private var buffered = 0
         private var ended = false
         private var failure: Exception? = null
         private var open = false
@@ -73,9 +74,17 @@ class FoxDuplex private constructor(
 
         fun timeout(): Int = readTimeoutMs
 
-        fun deliver(payload: ByteArray) = synchronized(lock) {
+        fun deliver(payload: ByteArray): Boolean = synchronized(lock) {
+            if (bounded && (ended || payload.size > 131_072 - buffered)) {
+                if (failure == null) failure = java.io.IOException("UDP stream receive buffer is full")
+                ended = true
+                lock.notifyAll()
+                return@synchronized false
+            }
             inbox.addLast(payload)
+            if (bounded) buffered += payload.size
             lock.notifyAll()
+            true
         }
 
         fun end() = synchronized(lock) {
@@ -97,6 +106,8 @@ class FoxDuplex private constructor(
             lock.notifyAll()
         }
 
+        fun isOpen(): Boolean = synchronized(lock) { open }
+
         fun awaitOpen(timeoutMs: Int): Boolean = synchronized(lock) {
             val deadline = System.currentTimeMillis() + timeoutMs
             while (!open && failure == null) {
@@ -117,6 +128,7 @@ class FoxDuplex private constructor(
                         val take = minOf(head.size - headOffset, length)
                         System.arraycopy(head, headOffset, buffer, offset, take)
                         headOffset += take
+                        if (bounded) buffered -= take
                         if (headOffset == head.size) {
                             head = ByteArray(0)
                             headOffset = 0
@@ -363,6 +375,9 @@ object FoxTunnel {
 
     private val adaptive = FoxAdaptive()
     private val sessions = HashMap<String, MutableList<H2Session>>()
+    // UDP has a separate pool because it must decode every response header
+    // block and enforce extended-CONNECT and capsule semantics.
+    private val udpSessions = HashMap<String, MutableList<H2Session>>()
     private val h1Streams = HashSet<FoxDuplex>()
     private val h2Streams = HashSet<FoxDuplex>()
     private val pendingRelays = HashSet<Socket>()
@@ -433,11 +448,12 @@ object FoxTunnel {
             if (enabled != null) transportEnabled = enabled
             ticket = sessionGeneration
             adaptive.clear()
-            oldSessions = sessions.values.flatMap { it.toList() }
+            oldSessions = sessions.values.flatMap { it.toList() } + udpSessions.values.flatMap { it.toList() }
             oldH1 = h1Streams.toList()
             oldH2 = h2Streams.toList()
             oldPending = pendingRelays.toList()
             sessions.clear()
+            udpSessions.clear()
             h1Streams.clear()
             h2Streams.clear()
             pendingRelays.clear()
@@ -524,10 +540,51 @@ object FoxTunnel {
         throw firstError ?: java.io.IOException("the proxy did not answer")
     }
 
-    private fun acquireSession(location: FoxLocation, key: String, timeout: Int, expectedGeneration: Long? = null): H2Session {
+    /** Open one UDP target through a validated authenticated CONNECT-UDP stream. */
+    fun openUDP(
+        location: FoxLocation, host: String, port: Int, pass: String,
+        timeout: Int = 15000, expectedTransport: Long? = null
+    ): FoxDatagramPipe {
+        val path = udpPath(host, port)
+        if (pass.isEmpty() || pass.any { it == '\r' || it == '\n' || it == '\u0000' }) {
+            throw java.io.IOException("invalid proxy credential")
+        }
+        val key = location.host + ":" + location.port + "|" + FoxUpstream.text()
+        val generation = synchronized(sessions) {
+            if (!transportEnabled || (expectedTransport != null && expectedTransport != sessionGeneration)) throw TransportReset()
+            sessionGeneration
+        }
+        val duplex = acquireSession(location, key, timeout, generation, udp = true).openDatagram(path, pass, timeout)
+        val accepted = synchronized(sessions) {
+            if (!transportEnabled || generation != sessionGeneration) false else {
+                h2Streams.add(duplex)
+                duplex.onClosed { synchronized(sessions) { h2Streams.remove(duplex) } }
+                true
+            }
+        }
+        if (!accepted) {
+            duplex.abort()
+            throw TransportReset()
+        }
+        return FoxDatagram(duplex)
+    }
+
+    // Packet-engine destinations are IPv4 addresses. Never resolve a hostname
+    // locally while choosing the authenticated UDP relay target.
+    internal fun udpPath(host: String, port: Int): String {
+        val parts = host.split('.')
+        if (port !in 1..65535 || parts.size != 4 || parts.any {
+            it.isEmpty() || it.length > 3 || it.any { digit -> digit !in '0'..'9' } ||
+                (it.length > 1 && it[0] == '0') || (it.toIntOrNull() ?: 256) > 255
+        }) throw java.io.IOException("invalid UDP destination")
+        return "/.well-known/masque/udp/$host/$port/"
+    }
+
+    private fun acquireSession(location: FoxLocation, key: String, timeout: Int, expectedGeneration: Long? = null, udp: Boolean = false): H2Session {
+        val pool = if (udp) udpSessions else sessions
         val generation = synchronized(sessions) {
             if (!transportEnabled || (expectedGeneration != null && expectedGeneration != sessionGeneration)) throw TransportReset()
-            val list = sessions.getOrPut(key) { mutableListOf() }
+            val list = pool.getOrPut(key) { mutableListOf() }
             val now = System.currentTimeMillis()
             list.removeAll { session ->
                 val gone = !session.alive() || (session.activeCount() == 0 && now - session.lastUse() > SESSION_IDLE_MS)
@@ -554,7 +611,7 @@ object FoxTunnel {
             }
             sessionGeneration
         }
-        val fresh = H2Session(location, timeout, generation)
+        val fresh = H2Session(location, timeout, generation, udp)
         synchronized(sessions) {
             if (generation != sessionGeneration) {
                 fresh.shutdown()
@@ -563,7 +620,7 @@ object FoxTunnel {
             // Move the raw socket from pending ownership to the H2 pool while
             // holding the same lock as reset, leaving no untracked interval.
             releasePendingLocked(fresh.socket)
-            val list = sessions.getOrPut(key) { mutableListOf() }
+            val list = pool.getOrPut(key) { mutableListOf() }
             list.removeAll { session ->
                 val gone = !session.alive()
                 if (gone) session.shutdown()
@@ -635,15 +692,21 @@ object FoxTunnel {
      * A reader thread demultiplexes the frames; each stream keeps its own inbox
      * and half of the flow-control state lives here, under [stateLock].
      */
-    internal class H2Session(location: FoxLocation, timeout: Int, generation: Long) {
+    internal class H2Session(location: FoxLocation, timeout: Int, generation: Long, private val udp: Boolean = false) {
 
         internal val socket: SSLSocket = connect(location, arrayOf("h2"), timeout, generation)
+        private val proxyAuthority = authority(location.host, location.port)
         private val input: BufferedInputStream
         private val output: BufferedOutputStream
         private val outputLock = Any()
         private val streams = ConcurrentHashMap<Int, FoxDuplex.H2>()
         private val stateLock = Object()
         private val headerBlocks = HashMap<Int, ByteArrayOutputStream>()
+        private val headerEndsStream = HashSet<Int>()
+        private val udpHeaders = if (udp) FoxUdpHeaders() else null
+        private var continuationStream: Int? = null
+        private var peerSettingsSeen = false
+        private var peerExtendedConnect = false
         private val pendingWindows = HashMap<Int, Long>()
         private val sendWindows = HashMap<Int, Long>()
         private var connectionWindow = 65535L
@@ -727,6 +790,49 @@ object FoxTunnel {
             }
         }
 
+        fun openDatagram(path: String, pass: String, timeout: Int): FoxDuplex {
+            if (!udp) throw java.io.IOException("UDP requires a dedicated HTTP/2 session")
+            val deadline = System.currentTimeMillis() + timeout.coerceAtLeast(1)
+            val (id, stream) = synchronized(stateLock) {
+                while (!peerSettingsSeen && !dead) {
+                    val left = deadline - System.currentTimeMillis()
+                    if (left <= 0) throw java.io.IOException("the proxy did not advertise HTTP/2 settings")
+                    stateLock.wait(left)
+                }
+                if (dead || !peerExtendedConnect) throw java.io.IOException("the proxy did not enable extended CONNECT")
+                if (streams.size >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
+                val next = nextId
+                if (next <= 0 || next > Int.MAX_VALUE - 2) throw java.io.IOException("HTTP/2 stream IDs exhausted")
+                nextId += 2
+                val pending = pendingWindows.remove(next) ?: 0L
+                if (pending != 0L) sendWindows[next] = initialWindow + pending
+                val created = FoxDuplex.H2(this, next, bounded = true)
+                streams[next] = created
+                next to created
+            }
+            touch()
+            try {
+                val block = ByteArrayOutputStream()
+                block.write(pair(":method", "CONNECT"))
+                block.write(pair(":protocol", "connect-udp"))
+                block.write(pair(":scheme", "https"))
+                block.write(pair(":authority", proxyAuthority))
+                block.write(pair(":path", path))
+                block.write(pair("capsule-protocol", "?1"))
+                block.write(pair("proxy-authorization", "Bearer $pass"))
+                block.write(pair("user-agent", AGENT))
+                sendFrame(frame(0x01, 0x04, id, block.toByteArray()))
+                if (!stream.awaitOpen((deadline - System.currentTimeMillis()).coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())) {
+                    throw stream.refusal() ?: java.io.IOException("the UDP proxy did not answer in time")
+                }
+                return FoxDuplex(stream)
+            } catch (error: Exception) {
+                removeStream(id)
+                cancel(id)
+                throw error
+            }
+        }
+
         fun removeStream(id: Int) {
             streams.remove(id)
             synchronized(stateLock) {
@@ -796,6 +902,9 @@ object FoxTunnel {
                     val id = ((header[5].toInt() and 0x7F) shl 24) or ((header[6].toInt() and 0xFF) shl 16) or
                         ((header[7].toInt() and 0xFF) shl 8) or (header[8].toInt() and 0xFF)
                     if (size > 16384) throw java.io.IOException("the proxy sent an oversized HTTP/2 frame")
+                    if (udp && continuationStream != null && (type != 0x09 || id != continuationStream)) {
+                        throw java.io.IOException("interleaved HTTP/2 header block")
+                    }
                     val payload = ByteArray(size)
                     if (size > 0 && !fill(input, payload)) break
                     when (type) {
@@ -803,6 +912,7 @@ object FoxTunnel {
                         0x01 -> headers(id, flags, payload)
                         0x03 -> {
                             headerBlocks.remove(id)
+                            headerEndsStream.remove(id)
                             val stream = streams[id]
                             removeStream(id)
                             stream?.fail(java.io.IOException("the proxy reset the tunnel (${code(payload)})"))
@@ -825,6 +935,7 @@ object FoxTunnel {
             } finally {
                 dead = true
                 headerBlocks.clear()
+                headerEndsStream.clear()
                 synchronized(stateLock) { stateLock.notifyAll() }
                 failAll(java.io.IOException("the tunnel session ended"))
                 try {
@@ -849,7 +960,11 @@ object FoxTunnel {
             // end() with an empty inbox would return EOF and truncate the
             // final frame's data. read() drains the inbox before honoring
             // ended, so this order is race-free.
-            if (end > start) stream.deliver(payload.copyOfRange(start, end))
+            if (end > start && !stream.deliver(payload.copyOfRange(start, end))) {
+                removeStream(id)
+                cancel(id)
+                return
+            }
             if (flags and 0x01 != 0) stream.end()
         }
 
@@ -868,6 +983,8 @@ object FoxTunnel {
         }
 
         private fun headers(id: Int, flags: Int, payload: ByteArray) {
+            if (udp && (id == 0 || headerBlocks.containsKey(id))) throw java.io.IOException("invalid HTTP/2 headers")
+            if (udp && flags and 0x01 != 0) headerEndsStream.add(id)
             var from = 0
             var to = payload.size
             if (flags and 0x08 != 0) {
@@ -880,21 +997,55 @@ object FoxTunnel {
             val block = headerBlocks.getOrPut(id) { ByteArrayOutputStream() }
             block.write(payload, from, to - from)
             if (flags and 0x04 != 0) completeHeaders(id)
+            else if (udp) continuationStream = id
         }
 
         private fun continuation(id: Int, flags: Int, payload: ByteArray) {
+            if (udp && (continuationStream != id || id == 0)) throw java.io.IOException("unexpected HTTP/2 continuation")
             val block = headerBlocks[id] ?: return
             if (block.size() + payload.size > 65536) {
+                if (udp) throw java.io.IOException("UDP HTTP/2 headers too large")
                 headerBlocks.remove(id)
                 streams.remove(id)?.fail(java.io.IOException("HTTP/2 headers too large"))
                 return
             }
             block.write(payload)
-            if (flags and 0x04 != 0) completeHeaders(id)
+            if (flags and 0x04 != 0) {
+                if (udp) continuationStream = null
+                completeHeaders(id)
+            }
         }
 
         private fun completeHeaders(id: Int) {
             val block = headerBlocks.remove(id) ?: return
+            if (udp) {
+                val stream = streams[id]
+                val trailers = stream?.isOpen() == true
+                // Decode even for a cancelled stream to keep HPACK's dynamic
+                // table synchronized for every remaining stream.
+                val headers = udpHeaders!!.decode(block.toByteArray(), requireStatus = stream != null && !trailers)
+                val ended = headerEndsStream.remove(id)
+                if (stream == null) return
+                if (trailers) {
+                    if (headers.status != null || !ended) throw java.io.IOException("invalid UDP stream trailers")
+                    stream.end()
+                    return
+                }
+                val reply = headers.status ?: throw java.io.IOException("missing UDP proxy status")
+                if (reply in 100..199) {
+                    if (ended) throw java.io.IOException("informational response ended UDP stream")
+                    return
+                }
+                if (reply !in 200..299) {
+                    stream.fail(FoxProxyRefusal(reply, reason(reply, mapOf())))
+                } else if (reply in setOf(204, 205, 206) || ended || headers.invalidBodyHeaders ||
+                    headers.capsuleCount != 1 || headers.capsule != "?1") {
+                    stream.fail(java.io.IOException("the proxy did not establish a valid UDP capsule stream"))
+                } else {
+                    stream.markOpen()
+                }
+                return
+            }
             val stream = streams[id] ?: return
             val reply = status(block.toByteArray())
             if (reply == null) {
@@ -911,6 +1062,7 @@ object FoxTunnel {
         private fun settingsIn(flags: Int, payload: ByteArray) {
             if (flags and 0x01 != 0) return
             val changed = h2InitialWindow(payload, synchronized(stateLock) { initialWindow })
+            var extended: Boolean? = null
             // Honor the server's own concurrency cap (SETTINGS_MAX_CONCURRENT_STREAMS).
             // h2InitialWindow has already validated that payload.size % 6 == 0.
             for (index in payload.indices step 6) {
@@ -919,10 +1071,23 @@ object FoxTunnel {
                     val value = ((payload[index + 2].toLong() and 255) shl 24) or
                         ((payload[index + 3].toLong() and 255) shl 16) or
                         ((payload[index + 4].toLong() and 255) shl 8) or (payload[index + 5].toLong() and 255)
-                    serverMaxStreams = if (value == 0L) 0 else value.toInt().coerceAtLeast(0)
+                    serverMaxStreams = if (value == 0L) 0 else value.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                } else if (udp && id == 8) {
+                    val value = ((payload[index + 2].toLong() and 255) shl 24) or
+                        ((payload[index + 3].toLong() and 255) shl 16) or
+                        ((payload[index + 4].toLong() and 255) shl 8) or (payload[index + 5].toLong() and 255)
+                    if (value !in 0L..1L || (extended == true && value == 0L)) {
+                        throw java.io.IOException("invalid extended CONNECT setting")
+                    }
+                    extended = value == 1L
                 }
             }
             synchronized(stateLock) {
+                if (udp) {
+                    if (peerExtendedConnect && extended == false) throw java.io.IOException("extended CONNECT was disabled")
+                    if (extended != null) peerExtendedConnect = extended == true
+                    peerSettingsSeen = true
+                }
                 val delta = changed - initialWindow
                 initialWindow = changed
                 if (delta != 0L) {

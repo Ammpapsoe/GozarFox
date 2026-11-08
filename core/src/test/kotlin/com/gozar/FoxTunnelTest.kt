@@ -67,6 +67,49 @@ class FoxTunnelTest {
     }
 
     @Test
+    fun udpExtendedConnectPreservesDatagramBoundaries() {
+        LocalProxy(udpMode = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            val stream = FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+            try {
+                for (payload in listOf("one".toByteArray(), byteArrayOf(), "another".toByteArray())) {
+                    stream.send(payload)
+                    assertArrayEquals(payload, stream.receive())
+                }
+                val request = proxy.authHeads.single()
+                assertTrue(request.contains("connect-udp"))
+                assertTrue(request.contains("/.well-known/masque/udp/203.0.113.7/443/"))
+                assertTrue(request.contains("Bearer local-test-only"))
+                assertTrue(proxy.problems.isEmpty())
+            } finally {
+                stream.close()
+            }
+        }
+    }
+
+    @Test
+    fun udpRequiresExtendedConnectAndCapsuleConfirmation() {
+        for ((settings, capsule) in listOf(false to true, true to false)) {
+            LocalProxy(udpMode = true, udpSettings = settings, udpCapsule = capsule).use { proxy ->
+                FoxTunnel.resetTransport()
+                FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+                val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+                assertTrue(runCatching { FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000) }.isFailure)
+                assertEquals(listOf("h2"), proxy.protocols.toList())
+            }
+        }
+    }
+
+    @Test
+    fun udpDestinationMustBeANumericIpv4Address() {
+        assertEquals("/.well-known/masque/udp/203.0.113.7/443/", FoxTunnel.udpPath("203.0.113.7", 443))
+        for (value in listOf("example.com", "1.2.3.256", "1.2.03.4", "1.2.3", "1.2.3.4/evil")) {
+            assertTrue("accepted $value", runCatching { FoxTunnel.udpPath(value, 443) }.isFailure)
+        }
+    }
+
+    @Test
     fun paddedAndContinuedHeadersWithTableUpdateAreAccepted() {
         LocalProxy(splitH2Headers = true).use { proxy ->
             assertArrayEquals(proxy.reply, exchange(proxy))
@@ -461,7 +504,10 @@ class FoxTunnelTest {
         private val refuseH2: Boolean = false,
         private val smallWindow: Boolean = false,
         private val h1Only: Boolean = false,
-        private val beforeH1Reply: (() -> Unit)? = null
+        private val beforeH1Reply: (() -> Unit)? = null,
+        private val udpMode: Boolean = false,
+        private val udpSettings: Boolean = true,
+        private val udpCapsule: Boolean = true
     ) : Closeable {
         val reply = ByteArray(8000) { (it % 251).toByte() }
         val upload = ByteArrayOutputStream()
@@ -519,10 +565,14 @@ class FoxTunnelTest {
             readFully(input, preface)
             check(String(preface, Charsets.US_ASCII) == "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
             check(readFrame(input).first == 4)
+            val output = socket.outputStream
+            if (udpMode) {
+                udpH2(input, output)
+                return
+            }
             val headers = readFrame(input)
             check(headers.first == 1)
             authHeads.add(String(headers.second, Charsets.UTF_8))
-            val output = socket.outputStream
             if (rejectH2) {
                 output.write(frame(7, 0, 0, ByteArray(8)))
                 output.flush()
@@ -555,6 +605,34 @@ class FoxTunnelTest {
             }
             output.write(frame(0, 1, 1, reply))
             output.flush()
+        }
+
+        private fun udpH2(input: BufferedInputStream, output: java.io.OutputStream) {
+            val settings = if (udpSettings) byteArrayOf(0, 8, 0, 0, 0, 1) else ByteArray(0)
+            output.write(frame(4, 0, 0, settings))
+            output.flush()
+            if (!udpSettings) return
+            while (true) {
+                val request = readFrame(input)
+                if (request.first != 1) continue
+                authHeads.add(String(request.second, Charsets.UTF_8))
+                break
+            }
+            val response = ByteArrayOutputStream().apply {
+                write(0x88) // indexed :status 200
+                if (udpCapsule) write(FoxTunnel.pair("capsule-protocol", "?1"))
+            }.toByteArray()
+            output.write(frame(1, 4, 1, response))
+            output.flush()
+            if (!udpCapsule) return
+            while (true) {
+                val data = readFrame(input)
+                if (data.first == 3) return
+                if (data.first == 0) {
+                    output.write(frame(0, 0, 1, data.second))
+                    output.flush()
+                }
+            }
         }
 
         private fun h1(socket: SSLSocket) {

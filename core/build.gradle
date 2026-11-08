@@ -14,6 +14,9 @@ kotlin {
 }
 
 dependencies {
+    // Stateful RFC 7541 response decoding for the dedicated UDP HTTP/2 pool.
+    // Its published POM lists test libraries as runtime dependencies; none are needed.
+    implementation('com.twitter:hpack:1.0.2') { transitive = false }
     compileOnly 'org.json:json:20240303'
     testImplementation 'org.json:json:20240303'
     testImplementation 'junit:junit:4.13.2'

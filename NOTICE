@@ -39,6 +39,13 @@ ZXing
 Source: https://github.com/zxing/zxing
 License: Apache License 2.0
 
+HPACK
+-----
+The Android core uses the HPACK decoder from Twitter's hpack library.
+Copyright 2014 Twitter, Inc.
+Source: https://github.com/twitter/hpack
+License: Apache License 2.0; see HPACK-LICENSE.txt.
+
 Desktop protocol reference
 --------------------------
 The account, Fastly challenge and tunnel protocols were checked against armanlife/firefox-vpn-client.
