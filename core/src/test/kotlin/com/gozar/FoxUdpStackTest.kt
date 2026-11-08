@@ -53,6 +53,76 @@ class FoxUdpStackTest {
     }
 
     @Test
+    fun oversizedPacketIsRejectedBeforeOpeningARelay() {
+        val input = PacketInput()
+        val output = PacketOutput()
+        val opened = AtomicInteger()
+        val stack = FoxStack(
+            input, output, 0x0a6f0002, FoxResolver(0),
+            { _, _, _ -> error("unexpected direct") }, { _, _ -> }, 576,
+            prepareUdp = { _, _ ->
+                opened.incrementAndGet()
+                val open: () -> FoxDatagramPipe = { EchoDatagram() }
+                open
+            }
+        )
+        stack.start()
+        try {
+            input.offer(udp(40000, 443, ByteArray(549))) // 577 bytes including IP and UDP headers
+            val response = output.next()
+            assertEquals(1, response[9].toInt() and 255) // ICMP unreachable
+            assertEquals(0, opened.get())
+            assertEquals(0L, stack.queuedDatagramBytes())
+        } finally {
+            stack.stop()
+            input.close()
+        }
+    }
+
+    @Test
+    fun pendingUdpPayloadsAreGloballyBoundedAndReleasedOnStop() {
+        val input = PacketInput()
+        val output = PacketOutput()
+        val entered = CountDownLatch(5)
+        val release = CountDownLatch(1)
+        val stack = FoxStack(
+            input, output, 0x0a6f0002, FoxResolver(0),
+            { _, _, _ -> error("unexpected direct") }, { _, _ -> }, 65535,
+            prepareUdp = { _, _ ->
+                val open: () -> FoxDatagramPipe = {
+                    entered.countDown()
+                    while (true) {
+                        try { release.await(); break } catch (_: InterruptedException) { }
+                    }
+                    EchoDatagram()
+                }
+                open
+            }
+        )
+        stack.start()
+        try {
+            val body = ByteArray(60_000)
+            repeat(5) { flow ->
+                repeat(32) { input.offer(udp(40000 + flow, 443, body)) }
+            }
+            // Processing this invalid DNS sentinel means the preceding packets
+            // have all passed the stack's single packet-reader thread.
+            input.offer(udp(49000, 53, byteArrayOf()))
+            assertTrue("relay workers did not start", entered.await(5, TimeUnit.SECONDS))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            while (input.reads.get() < 161 && System.nanoTime() < deadline) Thread.sleep(5)
+            assertEquals("input did not drain", 161, input.reads.get())
+            assertEquals(139L * 60_000L, stack.queuedDatagramBytes())
+            stack.stop()
+            assertEquals(0L, stack.queuedDatagramBytes())
+        } finally {
+            release.countDown()
+            stack.stop()
+            input.close()
+        }
+    }
+
+    @Test
     fun refusingUdpRelayNeverUsesDirectOrTcpDial() {
         val input = PacketInput()
         val output = PacketOutput()
@@ -147,12 +217,14 @@ class FoxUdpStackTest {
 
     private class PacketInput : InputStream() {
         private val packets = LinkedBlockingQueue<ByteArray>()
+        val reads = AtomicInteger()
         fun offer(packet: ByteArray) = packets.put(packet)
         override fun read(): Int = throw UnsupportedOperationException()
         override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
             val packet = packets.poll(5, TimeUnit.SECONDS) ?: return -1
             if (packet.isEmpty()) return -1
             System.arraycopy(packet, 0, buffer, offset, packet.size)
+            reads.incrementAndGet()
             return packet.size
         }
         override fun close() { packets.offer(byteArrayOf()) }

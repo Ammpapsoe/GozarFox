@@ -164,11 +164,14 @@ class FoxDuplex private constructor(
         }
 
         override fun teardown() {
+            // Remove a UDP stream before sending RST so a concurrent stalled
+            // capsule writer cannot resume after cancellation.
+            if (bounded) session.removeStream(id)
             try {
                 session.sendFrame(FoxTunnel.frame(0x03, 0, id, byteArrayOf(0, 0, 0, 8)))
             } catch (_: Exception) {
             }
-            session.removeStream(id)
+            if (!bounded) session.removeStream(id)
         }
 
         override fun setTimeout(timeout: Int) {
@@ -191,6 +194,18 @@ class FoxDuplex private constructor(
     internal constructor(stream: H2) : this(stream as Link)
 
     internal fun setReadTimeout(timeout: Int) = link.setTimeout(timeout)
+
+    /**
+     * UDP capsules have a single serialized writer and must not share the
+     * asynchronous TCP coalescer: a stalled partial capsule could otherwise
+     * be interleaved with another flush on the same H2 byte stream.
+     */
+    internal fun writeCapsule(bytes: ByteArray) {
+        synchronized(outputLock) {
+            if (closed || aborted) throw java.io.IOException("the tunnel is closed")
+        }
+        link.sendBlocking(bytes)
+    }
 
     /** Used only while transferring an H1 socket into the active registry. */
     internal fun pendingSocket(): SSLSocket? = (link as? H1)?.socket
@@ -699,6 +714,8 @@ object FoxTunnel {
         private val input: BufferedInputStream
         private val output: BufferedOutputStream
         private val outputLock = Any()
+        // New HTTP/2 stream IDs must appear on the wire in increasing order.
+        private val udpOpenLock = Any()
         private val streams = ConcurrentHashMap<Int, FoxDuplex.H2>()
         private val stateLock = Object()
         private val headerBlocks = HashMap<Int, ByteArrayOutputStream>()
@@ -793,35 +810,46 @@ object FoxTunnel {
         fun openDatagram(path: String, pass: String, timeout: Int): FoxDuplex {
             if (!udp) throw java.io.IOException("UDP requires a dedicated HTTP/2 session")
             val deadline = System.currentTimeMillis() + timeout.coerceAtLeast(1)
-            val (id, stream) = synchronized(stateLock) {
-                while (!peerSettingsSeen && !dead) {
-                    val left = deadline - System.currentTimeMillis()
-                    if (left <= 0) throw java.io.IOException("the proxy did not advertise HTTP/2 settings")
-                    stateLock.wait(left)
+            val block = ByteArrayOutputStream().apply {
+                write(pair(":method", "CONNECT"))
+                write(pair(":protocol", "connect-udp"))
+                write(pair(":scheme", "https"))
+                write(pair(":authority", proxyAuthority))
+                write(pair(":path", path))
+                write(pair("capsule-protocol", "?1"))
+                write(pair("proxy-authorization", "Bearer $pass"))
+                write(pair("user-agent", AGENT))
+            }.toByteArray()
+            // Allocation and the first HEADERS write are serialized together:
+            // a later stream must never reach the peer before an earlier ID.
+            val (id, stream) = synchronized(udpOpenLock) {
+                val allocated = synchronized(stateLock) {
+                    while (!peerSettingsSeen && !dead) {
+                        val left = deadline - System.currentTimeMillis()
+                        if (left <= 0) throw java.io.IOException("the proxy did not advertise HTTP/2 settings")
+                        stateLock.wait(left)
+                    }
+                    if (dead || !peerExtendedConnect) throw java.io.IOException("the proxy did not enable extended CONNECT")
+                    if (System.currentTimeMillis() >= deadline) throw java.io.IOException("the UDP open timed out")
+                    if (streams.size >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
+                    val next = nextId
+                    if (next <= 0 || next > Int.MAX_VALUE - 2) throw java.io.IOException("HTTP/2 stream IDs exhausted")
+                    nextId += 2
+                    val created = FoxDuplex.H2(this, next, bounded = true)
+                    streams[next] = created
+                    next to created
                 }
-                if (dead || !peerExtendedConnect) throw java.io.IOException("the proxy did not enable extended CONNECT")
-                if (streams.size >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
-                val next = nextId
-                if (next <= 0 || next > Int.MAX_VALUE - 2) throw java.io.IOException("HTTP/2 stream IDs exhausted")
-                nextId += 2
-                val pending = pendingWindows.remove(next) ?: 0L
-                if (pending != 0L) sendWindows[next] = initialWindow + pending
-                val created = FoxDuplex.H2(this, next, bounded = true)
-                streams[next] = created
-                next to created
+                try {
+                    sendFrame(frame(0x01, 0x04, allocated.first, block))
+                } catch (error: Exception) {
+                    removeStream(allocated.first)
+                    cancel(allocated.first)
+                    throw error
+                }
+                allocated
             }
             touch()
             try {
-                val block = ByteArrayOutputStream()
-                block.write(pair(":method", "CONNECT"))
-                block.write(pair(":protocol", "connect-udp"))
-                block.write(pair(":scheme", "https"))
-                block.write(pair(":authority", proxyAuthority))
-                block.write(pair(":path", path))
-                block.write(pair("capsule-protocol", "?1"))
-                block.write(pair("proxy-authorization", "Bearer $pass"))
-                block.write(pair("user-agent", AGENT))
-                sendFrame(frame(0x01, 0x04, id, block.toByteArray()))
                 if (!stream.awaitOpen((deadline - System.currentTimeMillis()).coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())) {
                     throw stream.refusal() ?: java.io.IOException("the UDP proxy did not answer in time")
                 }
@@ -834,10 +862,16 @@ object FoxTunnel {
         }
 
         fun removeStream(id: Int) {
+            if (udp) synchronized(outputLock) { removeStreamState(id) }
+            else removeStreamState(id)
+        }
+
+        private fun removeStreamState(id: Int) {
             streams.remove(id)
             synchronized(stateLock) {
                 sendWindows.remove(id)
                 pendingWindows.remove(id)
+                stateLock.notifyAll()
             }
         }
 
@@ -856,7 +890,7 @@ object FoxTunnel {
                 val chunk = synchronized(stateLock) {
                     var granted = 0
                     while (granted == 0) {
-                        if (dead) throw java.io.IOException("the tunnel is closed")
+                        if (dead || (udp && !streams.containsKey(id))) throw java.io.IOException("the tunnel is closed")
                         val streamWindow = sendWindows[id] ?: initialWindow
                         val available = minOf(streamWindow, connectionWindow)
                         if (available > 0) {
@@ -873,7 +907,25 @@ object FoxTunnel {
                     granted
                 }
                 if (chunk == 0) return bytes.copyOfRange(sent, bytes.size)
-                sendFrame(frame(0x00, 0, id, bytes, sent, chunk))
+                val dataFrame = frame(0x00, 0, id, bytes, sent, chunk)
+                if (udp) {
+                    // Serialize cancellation and the final liveness check with
+                    // the write; already-written bytes cannot be retracted.
+                    synchronized(outputLock) {
+                        if (dead || !streams.containsKey(id)) {
+                            // The reservation was never sent. Return connection
+                            // credit so repeated cancelled flows cannot starve
+                            // unrelated active streams.
+                            synchronized(stateLock) {
+                                connectionWindow += chunk
+                                stateLock.notifyAll()
+                            }
+                            throw java.io.IOException("the tunnel is closed")
+                        }
+                        output.write(dataFrame)
+                        output.flush()
+                    }
+                } else sendFrame(dataFrame)
                 sent += chunk
             }
             return ByteArray(0)
@@ -1115,6 +1167,12 @@ object FoxTunnel {
                     val updated = (sendWindows[id] ?: initialWindow) + increase
                     if (updated > 0x7fffffffL) throw java.io.IOException("HTTP/2 window overflow")
                     sendWindows[id] = updated
+                } else if (udp) {
+                    // UDP streams are registered before their HEADERS are sent.
+                    // An update for an idle stream is a connection error; an
+                    // update for a previously closed stream can be ignored.
+                    // Never grow an unbounded map of peer-chosen stream IDs.
+                    if (id >= nextId || id and 1 == 0) throw java.io.IOException("window update for idle UDP stream")
                 } else {
                     // A window update may arrive before the stream is registered; keep it.
                     pendingWindows[id] = (pendingWindows[id] ?: 0L) + increase

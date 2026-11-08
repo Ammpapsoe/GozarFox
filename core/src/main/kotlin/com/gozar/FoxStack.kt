@@ -76,6 +76,7 @@ class FoxStack(
         private const val MAX_FLOWS = 256
         private const val MAX_UDP_FLOWS = 64
         private const val MAX_UDP_QUEUED = 32
+        private const val MAX_UDP_QUEUED_BYTES = 8L * 1024 * 1024
         private const val UDP_IDLE_MS = 90_000L
         private const val MAX_NAMES = 4096
         private const val SYN_BURST = 256
@@ -87,6 +88,7 @@ class FoxStack(
     private val flows = ConcurrentHashMap<Long, Flow>()
     private val udpLock = Any()
     private val udpFlows = HashMap<Long, UdpFlow>()
+    private val udpQueuedBytes = AtomicLong(0)
 
     /** Bounded LRU: the resolver learns a name per address and forgets the oldest instead of all. */
     private val names: MutableMap<Int, String> =
@@ -313,6 +315,10 @@ class FoxStack(
 
     private fun routeDatagram(packet: ByteArray, total: Int, target: Int, appPort: Int, remotePort: Int, start: Int, length: Int) {
         if (!running) return
+        if (total > mtu || length - 8 > mtu - 28) {
+            unreachable(target, packet, total)
+            return
+        }
         val key = key(appPort, target, remotePort)
         var selected = synchronized(udpLock) { udpFlows[key] }
         var created = false
@@ -361,9 +367,17 @@ class FoxStack(
         private var relay: FoxDatagramPipe? = null
 
         fun enqueue(payload: ByteArray): Boolean = synchronized(lock) {
-            if (closed || !running) false else pending.offer(payload).also {
-                if (it) idleAt = System.currentTimeMillis()
+            if (closed || !running) return@synchronized false
+            val size = payload.size.toLong()
+            while (true) {
+                val queued = udpQueuedBytes.get()
+                if (size > MAX_UDP_QUEUED_BYTES - queued) return@synchronized false
+                if (udpQueuedBytes.compareAndSet(queued, queued + size)) break
             }
+            val accepted = pending.offer(payload)
+            if (accepted) idleAt = System.currentTimeMillis()
+            else udpQueuedBytes.addAndGet(-size)
+            accepted
         }
 
         fun begin() {
@@ -389,6 +403,7 @@ class FoxStack(
                         }
                         while (running && !closed) {
                             val payload = pending.poll(1, TimeUnit.SECONDS) ?: continue
+                            udpQueuedBytes.addAndGet(-payload.size.toLong())
                             if (!running || closed) break
                             opened.send(payload)
                         }
@@ -434,12 +449,15 @@ class FoxStack(
             synchronized(udpLock) {
                 if (udpFlows[key] === this) udpFlows.remove(key)
             }
-            pending.clear()
+            val discarded = ArrayList<ByteArray>()
+            pending.drainTo(discarded)
+            udpQueuedBytes.addAndGet(-discarded.sumOf { it.size.toLong() })
             try { old?.close() } catch (_: Exception) { }
         }
     }
 
     internal fun activeDatagrams(): Int = synchronized(udpLock) { udpFlows.size }
+    internal fun queuedDatagramBytes(): Long = udpQueuedBytes.get()
 
     private fun learn(query: ByteArray, answer: ByteArray) {
         val name = questionName(query) ?: return

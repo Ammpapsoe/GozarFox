@@ -18,6 +18,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
@@ -149,6 +150,125 @@ class FoxTunnelTest {
                     stream.close()
                 }
             }
+        }
+    }
+
+    @Test
+    fun concurrentCapsulesRemainWholeWhenFlowControlSplitsThem() {
+        LocalProxy(udpMode = true, udpSmallWindow = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            val stream = FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+            val error = AtomicReference<Throwable?>()
+            val secondStarted = CountDownLatch(1)
+            val first = thread(isDaemon = true) {
+                try { stream.send("first".toByteArray()) } catch (problem: Throwable) { error.compareAndSet(null, problem) }
+            }
+            var second: Thread? = null
+            try {
+                assertTrue("first capsule never reached the proxy", proxy.firstUdpData.await(5, TimeUnit.SECONDS))
+                val secondWorker = thread(isDaemon = true) {
+                    secondStarted.countDown()
+                    try { stream.send("second".toByteArray()) } catch (problem: Throwable) { error.compareAndSet(null, problem) }
+                }
+                second = secondWorker
+                assertTrue(secondStarted.await(5, TimeUnit.SECONDS))
+                proxy.resumeUdpWindow.countDown()
+                first.join(5000)
+                secondWorker.join(5000)
+                assertFalse("first send blocked", first.isAlive)
+                assertFalse("second send blocked", secondWorker.isAlive)
+                if (error.get() != null) throw AssertionError("capsule send failed", error.get())
+                assertArrayEquals("first".toByteArray(), stream.receive())
+                assertArrayEquals("second".toByteArray(), stream.receive())
+            } finally {
+                proxy.resumeUdpWindow.countDown()
+                stream.close()
+                first.join(5000)
+                second?.join(5000)
+            }
+        }
+    }
+
+    @Test
+    fun udpCancellationUnblocksPartialCapsulesAcrossFiftyRaces() {
+        repeat(50) { iteration ->
+            LocalProxy(udpMode = true, udpSmallWindow = true).use { proxy ->
+                FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+                val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+                val stream = FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+                val result = AtomicReference<Throwable?>()
+                val worker = thread(isDaemon = true) {
+                    try { stream.send("partially-sent".toByteArray()) }
+                    catch (problem: Throwable) { result.set(problem) }
+                }
+                try {
+                    assertTrue("no partial data at $iteration", proxy.firstUdpData.await(5, TimeUnit.SECONDS))
+                    stream.close()
+                    worker.join(5000)
+                    assertFalse("writer remained blocked at $iteration", worker.isAlive)
+                    assertTrue("writer was not cancelled at $iteration", result.get() != null)
+                    proxy.resumeUdpWindow.countDown()
+                    assertTrue("proxy did not observe reset at $iteration", proxy.udpReset.await(5, TimeUnit.SECONDS))
+                    assertEquals("bytes sent after cancellation at $iteration", 1, proxy.udpDataBytes.get())
+                } finally {
+                    proxy.resumeUdpWindow.countDown()
+                    stream.close()
+                    worker.join(5000)
+                    FoxTunnel.resetTransport()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun concurrentUdpStreamsOpenInWireOrderAcrossFiftyRaces() {
+        LocalProxy(udpMode = true, udpMultiplex = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            // Warm a session so both racing requests share one HTTP/2 connection.
+            val seed = FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+            try {
+                repeat(50) { iteration ->
+                    val ready = CountDownLatch(2)
+                    val start = CountDownLatch(1)
+                    val done = CountDownLatch(2)
+                    val error = AtomicReference<Throwable?>()
+                    repeat(2) {
+                        thread(isDaemon = true) {
+                            ready.countDown()
+                            try {
+                                check(start.await(5, TimeUnit.SECONDS))
+                                FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000).close()
+                            } catch (problem: Throwable) {
+                                error.compareAndSet(null, problem)
+                            } finally {
+                                done.countDown()
+                            }
+                        }
+                    }
+                    assertTrue("workers did not start at $iteration", ready.await(5, TimeUnit.SECONDS))
+                    start.countDown()
+                    assertTrue("opens blocked at $iteration", done.await(10, TimeUnit.SECONDS))
+                    if (error.get() != null) throw AssertionError("UDP open failed at $iteration", error.get())
+                    assertTrue("proxy rejected stream ordering at $iteration: ${proxy.problems}", proxy.problems.isEmpty())
+                }
+                assertEquals(101, proxy.authHeads.size)
+                assertEquals(1, proxy.protocols.size)
+            } finally {
+                seed.close()
+            }
+        }
+    }
+
+    @Test
+    fun udpRejectsPeerWindowUpdatesForIdleStreams() {
+        LocalProxy(udpMode = true, udpIdleWindow = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            assertTrue(runCatching {
+                FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+            }.isFailure)
         }
     }
 
@@ -558,7 +678,10 @@ class FoxTunnelTest {
         private val beforeH1Reply: (() -> Unit)? = null,
         private val udpMode: Boolean = false,
         private val udpSettings: Boolean = true,
-        private val udpCapsule: Boolean = true
+        private val udpCapsule: Boolean = true,
+        private val udpMultiplex: Boolean = false,
+        private val udpIdleWindow: Boolean = false,
+        private val udpSmallWindow: Boolean = false
     ) : Closeable {
         val reply = ByteArray(8000) { (it % 251).toByte() }
         val upload = ByteArrayOutputStream()
@@ -566,6 +689,10 @@ class FoxTunnelTest {
         val connectHeads = Collections.synchronizedList(mutableListOf<String>())
         val authHeads = Collections.synchronizedList(mutableListOf<String>())
         val problems = ConcurrentLinkedQueue<Throwable>()
+        val firstUdpData = CountDownLatch(1)
+        val resumeUdpWindow = CountDownLatch(1)
+        val udpReset = CountDownLatch(1)
+        val udpDataBytes = AtomicInteger()
         private val server = ServerSocket(0, 16, InetAddress.getByName("127.0.0.1"))
         private val valid = serverContext("server.p12")
         private val expired = serverContext("expired-server.p12")
@@ -659,15 +786,47 @@ class FoxTunnelTest {
         }
 
         private fun udpH2(input: BufferedInputStream, output: java.io.OutputStream) {
-            val settings = if (udpSettings) byteArrayOf(0, 8, 0, 0, 0, 1) else ByteArray(0)
+            val settings = if (!udpSettings) ByteArray(0) else if (udpSmallWindow) {
+                byteArrayOf(0, 8, 0, 0, 0, 1, 0, 4, 0, 0, 0, 1)
+            } else byteArrayOf(0, 8, 0, 0, 0, 1)
             output.write(frame(4, 0, 0, settings))
             output.flush()
             if (!udpSettings) return
+            if (udpMultiplex) {
+                var lastStream = 0
+                while (true) {
+                    val (type, id, payload) = readFrameWithId(input)
+                    when (type) {
+                        1 -> {
+                            check(id > lastStream && id and 1 == 1) { "UDP stream IDs out of order: $lastStream then $id" }
+                            lastStream = id
+                            authHeads.add(String(payload, Charsets.UTF_8))
+                            val response = ByteArrayOutputStream().apply {
+                                write(0x88)
+                                write(FoxTunnel.pair("capsule-protocol", "?1"))
+                            }.toByteArray()
+                            output.write(frame(1, 4, id, response))
+                            output.flush()
+                        }
+                        0 -> {
+                            output.write(frame(0, 0, id, payload))
+                            output.flush()
+                        }
+                        // A cancelled flow does not terminate the H2 session.
+                        3 -> Unit
+                    }
+                }
+            }
             while (true) {
                 val request = readFrame(input)
                 if (request.first != 1) continue
                 authHeads.add(String(request.second, Charsets.UTF_8))
                 break
+            }
+            if (udpIdleWindow) {
+                output.write(frame(8, 0, Int.MAX_VALUE, byteArrayOf(0, 0, 0, 1)))
+                output.flush()
+                return
             }
             val response = ByteArrayOutputStream().apply {
                 write(0x88) // indexed :status 200
@@ -678,10 +837,24 @@ class FoxTunnelTest {
             if (!udpCapsule) return
             while (true) {
                 val data = readFrame(input)
-                if (data.first == 3) return
+                if (data.first == 3) {
+                    udpReset.countDown()
+                    return
+                }
                 if (data.first == 0) {
+                    udpDataBytes.addAndGet(data.second.size)
                     output.write(frame(0, 0, 1, data.second))
                     output.flush()
+                    if (udpSmallWindow && data.second.isNotEmpty()) {
+                        firstUdpData.countDown()
+                        check(resumeUdpWindow.await(5, TimeUnit.SECONDS))
+                        val amount = data.second.size
+                        output.write(frame(8, 0, 1, byteArrayOf(
+                            (amount ushr 24).toByte(), (amount ushr 16).toByte(),
+                            (amount ushr 8).toByte(), amount.toByte()
+                        )))
+                        output.flush()
+                    }
                 }
             }
         }
@@ -816,12 +989,19 @@ class FoxTunnelTest {
         }
 
         private fun readFrame(input: InputStream): Pair<Int, ByteArray> {
+            val (type, _, payload) = readFrameWithId(input)
+            return type to payload
+        }
+
+        private fun readFrameWithId(input: InputStream): Triple<Int, Int, ByteArray> {
             val head = ByteArray(9)
             readFully(input, head)
             val size = ((head[0].toInt() and 255) shl 16) or ((head[1].toInt() and 255) shl 8) or (head[2].toInt() and 255)
+            val id = ((head[5].toInt() and 0x7f) shl 24) or ((head[6].toInt() and 255) shl 16) or
+                ((head[7].toInt() and 255) shl 8) or (head[8].toInt() and 255)
             val payload = ByteArray(size)
             readFully(input, payload)
-            return (head[3].toInt() and 255) to payload
+            return Triple(head[3].toInt() and 255, id, payload)
         }
 
         private fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {

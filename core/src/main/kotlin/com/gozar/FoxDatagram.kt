@@ -45,7 +45,7 @@ internal class FoxDatagram(private val pipe: FoxDuplex) : FoxDatagramPipe {
     override fun send(payload: ByteArray) = synchronized(sendLock) {
         try {
             val encoded = FoxCapsule.encodeDatagram(payload)
-            pipe.write(encoded, 0, encoded.size)
+            pipe.writeCapsule(encoded)
         } catch (error: Exception) {
             close()
             throw IOException("unable to write UDP capsule", error)

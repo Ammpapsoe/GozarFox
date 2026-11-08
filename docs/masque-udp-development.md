@@ -36,8 +36,10 @@ head-of-line delay. A per-flow idle timeout and concurrency limits bound
 resources. Neither implementation uses a direct UDP fallback on relay failure.
 
 On Android, non-DNS IPv4 UDP is demultiplexed in `FoxStack` and uses a
-service-lifetime/transport-generation-scoped `FoxTunnel.openUDP` stream. Its
-H2 pool checks the peer setting, decodes complete HPACK response blocks in
+service-lifetime/transport-generation-scoped `FoxTunnel.openUDP` stream. Up to
+64 flows share an 8 MiB aggregate queued-payload budget; packets exceeding the
+configured TUN MTU are rejected. Its H2 pool checks the peer setting, decodes
+complete HPACK response blocks in
 wire order and validates the capsule response. IPv6 and fragmented IP packets
 remain fail-closed; oversized return datagrams are dropped because the stack
 does not fragment them. Split-routing UDP is also sent to the relay; it is not

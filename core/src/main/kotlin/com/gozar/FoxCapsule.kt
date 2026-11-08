@@ -6,9 +6,9 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * Bounded RFC 9297 DATAGRAM-capsule framing for a future RFC 9298 UDP tunnel.
- * This codec alone does not enable UDP routing or imply proxy support. A
- * caller must first establish a validated CONNECT-UDP stream and negotiate
+ * Bounded RFC 9297 DATAGRAM-capsule framing for an RFC 9298 UDP tunnel.
+ * This codec alone does not imply production proxy support. A caller must
+ * first establish a validated CONNECT-UDP stream and negotiate
  * the Capsule Protocol; ordinary TCP CONNECT streams must not use it.
  *
  * Reads are streaming, so a capsule may cross any number of HTTP/2 DATA
