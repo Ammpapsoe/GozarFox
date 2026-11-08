@@ -4,7 +4,10 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-class FoxReply(val code: Int, val body: String, val headers: Map<String, String>) {
+class FoxReply(
+    val code: Int, val body: String, val headers: Map<String, String>,
+    val setCookies: List<String> = emptyList()
+) {
     fun header(name: String): String? {
         for ((k, v) in headers) if (k.equals(name, true)) return v
         return null
@@ -66,14 +69,17 @@ object FoxNet {
         connection.requestMethod = method
         connection.connectTimeout = timeout
         connection.readTimeout = timeout
-        connection.instanceFollowRedirects = true
+        // Never forward manually supplied Authorization or cookies to a
+        // redirect target; API callers handle non-2xx responses explicitly.
+        connection.instanceFollowRedirects = false
         connection.setRequestProperty("User-Agent", UA)
         connection.setRequestProperty("Accept", "*/*")
         if (url.startsWith(AUTH + "/") || url.startsWith(ACCOUNT_AUTH + "/")) {
             connection.setRequestProperty("Accept-Encoding", "identity")
         }
         connection.setRequestProperty("Cache-Control", "max-age=0")
-        if (jar.header().isNotEmpty()) connection.setRequestProperty("Cookie", jar.header())
+        val cookie = jar.header(url)
+        if (cookie.isNotEmpty()) connection.setRequestProperty("Cookie", cookie)
         if (body != null) connection.setRequestProperty("Content-Type", "application/json")
         for ((k, v) in headers) connection.setRequestProperty(k, v)
         try {
@@ -85,12 +91,14 @@ object FoxNet {
             val stream: InputStream? = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             val found = HashMap<String, String>()
+            val cookies = ArrayList<String>()
             for ((k, values) in connection.headerFields) {
                 if (k == null || values.isEmpty()) continue
                 found[k] = values.joinToString(",")
+                if (k.equals("Set-Cookie", true)) cookies.addAll(values)
             }
-            val reply = FoxReply(code, text, found)
-            jar.absorb(reply)
+            val reply = FoxReply(code, text, found, cookies)
+            jar.absorb(url, reply)
             return reply
         } finally {
             connection.disconnect()

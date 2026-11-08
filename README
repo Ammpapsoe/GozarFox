@@ -84,8 +84,10 @@ The desktop tunnel is experimental. Real Linux, Windows and macOS tunnel interfa
 with local simulated upstreams; the Linux code has also been tested with a local TLS-verified
 HTTP/2 CONNECT relay. A separate authorized live script authenticated a real Firefox account,
 refreshed its token and reached a Mozilla relay. CI-built Kotlin and Go WARP cores also passed UDP
-round trips through a restricted bridge into that relay. Those isolated results do not prove the
-complete Android or desktop app on a physical device. See docs/real-account-validation.md.
+round trips through a restricted bridge into that relay. In a separate desktop-JVM diagnostic, the
+Android shared account core signed in and refreshed its token, but the proxy-pass request returned
+HTTP 406. These isolated results do not prove the complete Android or desktop app on a physical
+device. See docs/real-account-validation.md.
 Mozilla may present an unsupported security challenge or refuse a request. Desktop IPv6 and some
 existing LAN or relay routes may bypass the tunnel, including UDP. With WARP enabled, selective
 direct desktop split routes are paused, but this is not device-wide leak protection. WARP uses

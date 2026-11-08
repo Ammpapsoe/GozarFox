@@ -7,24 +7,25 @@ import java.net.URL
 import java.util.regex.Pattern
 
 class FoxJar {
+    // CookieManager enforces host/domain, path, expiry and Secure attributes.
+    // A single flat map would send account cookies to unrelated Mozilla hosts.
+    private val cookies = java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ORIGINAL_SERVER)
 
-    private val store = HashMap<String, String>()
+    @Synchronized fun header(url: String): String = try {
+        val fields = cookies.get(java.net.URI(url), emptyMap())
+        fields.entries.filter { it.key.equals("Cookie", true) }
+            .flatMap { it.value }.joinToString("; ")
+    } catch (_: Exception) { "" }
 
-    fun header(): String = store.entries.joinToString("; ") { "${it.key}=${it.value}" }
-
-    fun absorb(reply: FoxReply) {
-        for ((name, value) in reply.headers) {
-            if (!name.equals("Set-Cookie", true)) continue
-            for (piece in value.split(",\\s*(?=[A-Za-z0-9_\\-]+=)".toRegex())) {
-                val pair = piece.split(";").firstOrNull()?.trim() ?: continue
-                val eq = pair.indexOf('=')
-                if (eq <= 0) continue
-                store[pair.substring(0, eq).trim()] = pair.substring(eq + 1).trim()
-            }
-        }
+    @Synchronized fun absorb(url: String, reply: FoxReply) {
+        val values = if (reply.setCookies.isNotEmpty()) reply.setCookies else
+            reply.headers.entries.filter { it.key.equals("Set-Cookie", true) }
+                .flatMap { it.value.split(",\\s*(?=[A-Za-z0-9_\\-]+=)".toRegex()) }
+        if (values.isEmpty()) return
+        try { cookies.put(java.net.URI(url), mapOf("Set-Cookie" to values)) } catch (_: Exception) { }
     }
 
-    fun clear() = store.clear()
+    @Synchronized fun clear() { cookies.cookieStore.removeAll() }
 }
 
 object FoxShield {
@@ -80,7 +81,7 @@ object FoxShield {
             }
             if (back.optString("status") == "success") {
                 val probe = fetch(jar, host + "/", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                val ok = probe != null && !probe.contains("Client Challenge") && jar.header().isNotEmpty()
+                val ok = probe != null && !probe.contains("Client Challenge") && jar.header(host + "/").isNotEmpty()
                 return ok
             }
             val next = back.optJSONArray("ch") ?: return false
@@ -163,9 +164,10 @@ object FoxShield {
         connection.requestMethod = method
         connection.connectTimeout = 20000
         connection.readTimeout = 20000
-        connection.instanceFollowRedirects = true
+        connection.instanceFollowRedirects = false
         connection.setRequestProperty("User-Agent", AGENT)
-        if (jar.header().isNotEmpty()) connection.setRequestProperty("Cookie", jar.header())
+        val cookie = jar.header(url)
+        if (cookie.isNotEmpty()) connection.setRequestProperty("Cookie", cookie)
         for ((k, v) in extra) connection.setRequestProperty(k, v)
         if (body != null && body.isNotEmpty()) connection.setRequestProperty("Content-Type", "application/json")
         return try {
@@ -177,12 +179,14 @@ object FoxShield {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             val found = HashMap<String, String>()
+            val cookies = ArrayList<String>()
             for ((k, values) in connection.headerFields) {
                 if (k == null || values.isEmpty()) continue
                 found[k] = values.joinToString(",")
+                if (k.equals("Set-Cookie", true)) cookies.addAll(values)
             }
-            val reply = FoxReply(code, text, found)
-            jar.absorb(reply)
+            val reply = FoxReply(code, text, found, cookies)
+            jar.absorb(url, reply)
             reply
         } catch (_: Exception) {
             null

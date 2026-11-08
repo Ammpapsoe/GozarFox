@@ -54,13 +54,17 @@ jobs:
         with:
           go-version: '1.24.6'
           cache-dependency-path: go-desktop/go.sum
-      - name: Build isolated diagnostic
+      - name: Build isolated diagnostics (no credentials)
         working-directory: go-desktop
-        run: go build -trimpath -o "$RUNNER_TEMP/gozar-warp-live" ./tools/warp-live
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/gozar-warp-live" ./tools/warp-live
+          go build -trimpath -o "$RUNNER_TEMP/gozar-account-live" ./tools/account-live
       - uses: actions/upload-artifact@v4
         with:
           name: gozar-warp-live-linux
-          path: ${{ runner.temp }}/gozar-warp-live
+          path: |
+            ${{ runner.temp }}/gozar-warp-live
+            ${{ runner.temp }}/gozar-account-live
           retention-days: 1
 
   android-recovery-emulator:

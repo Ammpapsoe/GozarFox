@@ -10,9 +10,15 @@ with the user's explicit consent. The Python script completed UDP through the
 Mozilla → WARP chain. CI-built Kotlin and Go diagnostics from commit
 `aa81e51` used the actual WARP cores through a restricted loopback-to-Mozilla
 bridge and each obtained a real UDP response. Kotlin also re-enrolled the same
-test device through the relay. Passwords, codes, tokens and device keys
-were not placed in CI artifacts. These results do not test the full Android VPN
-service, a physical phone or the desktop app end to end.
+test device through the relay. A separate diagnostic using the actual shared
+Android account core on a desktop JVM successfully signed in, exchanged and
+refreshed OAuth tokens, and read the server list. Its direct proxy-pass request
+received HTTP 406; an isolated Python client using the very same access token
+obtained HTTP 200. The cause is not established: a desktop JVM is not Android,
+and this result is a release blocker pending investigation and an actual
+Android app test. Passwords,
+codes, tokens and device keys were not placed in CI artifacts. These results do
+not test the full Android VPN service, a physical phone or the desktop app end to end.
 
 An earlier test device's temporary credentials were lost during an environment
 reset; its remote deletion could not be confirmed. A replacement test identity
