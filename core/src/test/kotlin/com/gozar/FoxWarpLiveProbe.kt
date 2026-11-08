@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object FoxWarpLiveProbe {
     @JvmStatic fun main(args: Array<String>) {
-        if (args.size != 3 || args[0] != "--allow-test-proxy") {
+        if (args.size !in 3..4 || args[0] != "--allow-test-proxy" || (args.size == 4 && args[3] != "--reenroll-same-device")) {
             System.err.println("STATE=KOTLIN_PROBE_REQUIRES_AUTHORIZATION")
             return
         }
@@ -25,10 +25,15 @@ object FoxWarpLiveProbe {
             throw IllegalArgumentException("identity must be private")
         }
         val valid = AtomicBoolean(true)
-        val warp = FoxWarp(port, { file.readText() }, { false }, { valid.get() })
+        val reenroll = args.size == 4
+        var saved = if (reenroll) org.json.JSONObject(file.readText()).put("server_key", "").put("ipv4", "").toString() else file.readText()
+        var enrolled = false
+        val warp = FoxWarp(port, { saved }, { updated -> saved = updated; enrolled = true; true }, { valid.get() })
         var failed = false
         try {
             warp.start()
+            if (reenroll && !enrolled) throw IllegalStateException("WARP reenrollment was not persisted")
+            if (reenroll) println("STATE=KOTLIN_WARP_SAME_DEVICE_REENROLLED")
             println("STATE=KOTLIN_WARP_AUTHENTICATED_UDP_SCAN_OK")
             val flow = warp.openUDP("1.1.1.1", 53)
             try {

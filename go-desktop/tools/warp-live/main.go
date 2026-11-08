@@ -1,6 +1,6 @@
 // warp-live is an explicitly opted-in diagnostic, not part of the app. It
-// reuses a pre-authorized WARP test device and makes DIRECT network connections;
-// it neither registers a device nor prints identity or packet contents.
+// reuses a pre-authorized WARP test device, either directly or through an
+// explicitly provided loopback proxy. It never registers or prints credentials.
 package main
 
 import (
@@ -20,9 +20,17 @@ import (
 func run() error {
 	path := flag.String("identity", "", "protected pre-existing WARP identity JSON")
 	direct := flag.Bool("allow-direct-test", false, "explicitly authorize direct network probing")
+	proxy := flag.String("loopback-proxy", "", "explicitly use a local HTTP CONNECT bridge")
 	flag.Parse()
-	if !*direct || *path == "" {
-		return fmt.Errorf("identity and direct-test authorization are required")
+	if *path == "" || (*direct == (*proxy != "")) {
+		return fmt.Errorf("identity and exactly one authorized test route are required")
+	}
+	if *proxy != "" {
+		host, port, err := net.SplitHostPort(*proxy)
+		ip := net.ParseIP(host)
+		if err != nil || ip == nil || !ip.IsLoopback() || port == "" {
+			return fmt.Errorf("test proxy must be a loopback address")
+		}
 	}
 	info, err := os.Stat(*path)
 	if err != nil || info.Mode().Perm()&0o077 != 0 {
@@ -43,7 +51,40 @@ func run() error {
 	}
 	dial := func(ctx context.Context, host string, port int) (io.ReadWriteCloser, error) {
 		d := net.Dialer{Timeout: 8 * time.Second}
-		return d.DialContext(ctx, "tcp", net.JoinHostPort(host, fmt.Sprint(port)))
+		if *proxy == "" {
+			return d.DialContext(ctx, "tcp", net.JoinHostPort(host, fmt.Sprint(port)))
+		}
+		conn, err := d.DialContext(ctx, "tcp", *proxy)
+		if err != nil {
+			return nil, err
+		}
+		stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+		defer stop()
+		_ = conn.SetDeadline(time.Now().Add(12 * time.Second))
+		target := net.JoinHostPort(host, fmt.Sprint(port))
+		_, err = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target)
+		if err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		var header []byte
+		var one [1]byte
+		for len(header) < 8192 {
+			if _, err = io.ReadFull(conn, one[:]); err != nil {
+				_ = conn.Close()
+				return nil, err
+			}
+			header = append(header, one[0])
+			if len(header) >= 4 && string(header[len(header)-4:]) == "\r\n\r\n" {
+				break
+			}
+		}
+		if len(header) < 13 || string(header[:13]) != "HTTP/1.1 200 " {
+			_ = conn.Close()
+			return nil, fmt.Errorf("test proxy refused CONNECT")
+		}
+		_ = conn.SetDeadline(time.Time{})
+		return conn, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
