@@ -36,5 +36,10 @@ export APPIMAGE_EXTRACT_AND_RUN=1
 export ARCH="$arch"
 export VERSION="$version"
 mkdir -p "$(dirname "$output")"
-"$tool" --no-appstream --comp zstd "$appdir" "$output"
+if [ -n "${APPIMAGE_RUNTIME_FILE:-}" ]; then
+	test -f "$APPIMAGE_RUNTIME_FILE"
+	"$tool" --no-appstream --comp zstd --runtime-file "$APPIMAGE_RUNTIME_FILE" "$appdir" "$output"
+else
+	"$tool" --no-appstream --comp zstd "$appdir" "$output"
+fi
 ls -l "$output"

@@ -477,9 +477,15 @@ jobs:
       - name: Version
         id: version
         run: echo "version=$(grep -m1 '^version:' desktop_flutter/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)" >> "$GITHUB_OUTPUT"
+      - name: Fetch and authenticate pinned AppImage tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch_appimage_tools.sh "$RUNNER_TEMP/appimage-tools"
       - name: Build desktop packages
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          APPIMAGETOOL: ${{ runner.temp }}/appimage-tools/appimagetool-x86_64.AppImage
+          APPIMAGE_RUNTIME_FILE: ${{ runner.temp }}/appimage-tools/runtime-x86_64
         run: |
           set -e
           mkdir -p out
