@@ -60,7 +60,7 @@ func mayRetryMozillaTLS12(method, address string, status int) bool {
 	if status != http.StatusNotAcceptable {
 		return false
 	}
-	return (method == http.MethodPost && address == authBase+"/oauth/token") ||
+	return (method == http.MethodPost && (address == authBase+"/oauth/token" || address == refreshURL)) ||
 		((method == http.MethodGet || method == http.MethodHead) && address == guardianURL+"/api/v1/fpn/token")
 }
 

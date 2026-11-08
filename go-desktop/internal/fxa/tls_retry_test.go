@@ -15,6 +15,7 @@ import (
 func TestTLSRetryIsLimitedToMozillaTokenEndpoints(t *testing.T) {
 	valid := []struct{ method, address string }{
 		{http.MethodPost, authBase + "/oauth/token"},
+		{http.MethodPost, refreshURL},
 		{http.MethodGet, guardianURL + "/api/v1/fpn/token"},
 		{http.MethodHead, guardianURL + "/api/v1/fpn/token"},
 	}
@@ -25,6 +26,8 @@ func TestTLSRetryIsLimitedToMozillaTokenEndpoints(t *testing.T) {
 	}
 	invalid := []struct{ method, address string }{
 		{http.MethodGet, authBase + "/oauth/token"},
+		{http.MethodGet, refreshURL},
+		{http.MethodPost, refreshURL + "?next=evil"},
 		{http.MethodPost, guardianURL + "/api/v1/fpn/token"},
 		{http.MethodPost, authBase + "/account/login"},
 		{http.MethodPost, guardianURL + "/api/v1/fpn/activate"},
