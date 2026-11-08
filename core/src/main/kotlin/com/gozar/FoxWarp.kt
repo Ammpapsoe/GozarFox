@@ -167,10 +167,12 @@ private class WarpSession private constructor(
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         val all = synchronized(flowLock) { flows.values.toList().also { flows.clear() } }
+        // Close the raw socket first: a blocked DATA write must not prevent
+        // shutdown or flush a late capsule while a flow is being revoked.
+        sockets.release(raw)
+        try { h2.shutdown() } catch (_: Exception) { }
         all.forEach { it.close() }
         try { stream.abort() } catch (_: Exception) { }
-        try { h2.shutdown() } catch (_: Exception) { }
-        sockets.release(raw)
     }
     fun verify(): Boolean {
         val flow = open("1.1.1.1", 53)

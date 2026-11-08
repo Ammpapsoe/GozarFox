@@ -30,43 +30,6 @@ import javax.net.ssl.SSLSocket
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
 
-/** API-24-safe base64 for the encrypted device identity. */
-internal object WarpBase64 {
-    private const val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    fun encode(bytes: ByteArray): String {
-        val out = StringBuilder((bytes.size + 2) / 3 * 4)
-        var i = 0
-        while (i < bytes.size) {
-            val n = minOf(3, bytes.size - i)
-            val value = ((bytes[i].toInt() and 255) shl 16) or
-                (if (n > 1) (bytes[i + 1].toInt() and 255) shl 8 else 0) or
-                (if (n > 2) bytes[i + 2].toInt() and 255 else 0)
-            out.append(alphabet[(value ushr 18) and 63]); out.append(alphabet[(value ushr 12) and 63])
-            out.append(if (n > 1) alphabet[(value ushr 6) and 63] else '=')
-            out.append(if (n > 2) alphabet[value and 63] else '=')
-            i += n
-        }
-        return out.toString()
-    }
-    fun decode(text: String): ByteArray {
-        val input = text.replace("-----BEGIN PUBLIC KEY-----", "").replace("-----END PUBLIC KEY-----", "")
-            .filterNot { it.isWhitespace() }
-        require(input.isNotEmpty() && input.length % 4 == 0)
-        val padding = input.count { it == '=' }
-        require(padding <= 2 && (padding == 0 || input.endsWith("=".repeat(padding))))
-        val out = ByteArray(input.length / 4 * 3 - padding)
-        var bits = 0; var buffer = 0; var index = 0
-        for (ch in input) {
-            if (ch == '=') continue
-            val value = alphabet.indexOf(ch); require(value >= 0)
-            buffer = (buffer shl 6) or value; bits += 6
-            if (bits >= 8) { bits -= 8; out[index++] = ((buffer ushr bits) and 255).toByte() }
-        }
-        require(index == out.size && (bits == 0 || buffer and ((1 shl bits) - 1) == 0))
-        return out
-    }
-}
-
 internal data class WarpIdentity(
     val id: String, val token: String, val privateKey: String, val publicKey: String,
     val serverKey: String = "", val ipv4: String = ""
@@ -76,8 +39,8 @@ internal data class WarpIdentity(
     fun baseValid(): Boolean = try {
         require(id.matches(Regex("[A-Za-z0-9._-]{1,128}")) && token.isNotEmpty() && !token.contains('\r') && !token.contains('\n'))
         val factory = KeyFactory.getInstance("EC")
-        factory.generatePrivate(PKCS8EncodedKeySpec(WarpBase64.decode(privateKey)))
-        val public = factory.generatePublic(X509EncodedKeySpec(WarpBase64.decode(publicKey))) as ECPublicKey
+        factory.generatePrivate(PKCS8EncodedKeySpec(FoxBase64.decode(privateKey)))
+        val public = factory.generatePublic(X509EncodedKeySpec(FoxBase64.decode(publicKey))) as ECPublicKey
         require(public.params.curve.field.fieldSize == 256)
         true
     } catch (_: Exception) { false }
@@ -85,7 +48,7 @@ internal data class WarpIdentity(
         require(baseValid())
         val address = FoxWarpPackets.ipv4(ipv4) ?: throw IllegalArgumentException("invalid address")
         require(FoxWarpPackets.privateIPv4(address))
-        val pin = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(WarpBase64.decode(serverKey))) as ECPublicKey
+        val pin = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(FoxBase64.decode(serverKey))) as ECPublicKey
         require(pin.params.curve.field.fieldSize == 256)
         true
     } catch (_: Exception) { false }
@@ -222,11 +185,11 @@ internal class WarpEnrollment(private val sockets: WarpSockets, private val save
             val nonce = ByteArray(32).also { random.nextBytes(it) }
             val serial = ByteArray(8).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 255) }
             val date = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
-            val body = JSONObject().put("key", WarpBase64.encode(nonce)).put("install_id", "").put("fcm_token", "")
+            val body = JSONObject().put("key", FoxBase64.encode(nonce)).put("install_id", "").put("fcm_token", "")
                 .put("tos", date).put("model", "Android").put("serial_number", serial).put("os_version", "")
                 .put("key_type", "curve25519").put("tunnel_type", "wireguard").put("locale", "en_US")
             val reply = request("POST", "/reg", "", body)
-            identity = WarpIdentity(reply.optString("id"), reply.optString("token"), WarpBase64.encode(pair.private.encoded), WarpBase64.encode(pair.public.encoded))
+            identity = WarpIdentity(reply.optString("id"), reply.optString("token"), FoxBase64.encode(pair.private.encoded), FoxBase64.encode(pair.public.encoded))
             if (!identity.baseValid() || !save(identity.json())) throw IOException("could not securely save WARP identity")
         } else {
             identity = try { WarpIdentity.parse(saved) } catch (_: Exception) { throw IOException("invalid WARP identity") }
@@ -256,8 +219,8 @@ internal object WarpTLS {
     fun context(identity: WarpIdentity): SSLContext {
         if (!identity.ready()) throw IOException("incomplete WARP identity")
         val factory = KeyFactory.getInstance("EC")
-        val private = factory.generatePrivate(PKCS8EncodedKeySpec(WarpBase64.decode(identity.privateKey)))
-        val pub = factory.generatePublic(X509EncodedKeySpec(WarpBase64.decode(identity.publicKey)))
+        val private = factory.generatePrivate(PKCS8EncodedKeySpec(FoxBase64.decode(identity.privateKey)))
+        val pub = factory.generatePublic(X509EncodedKeySpec(FoxBase64.decode(identity.publicKey)))
         val algorithm = seq(byteArrayOf(0x06, 0x08, 0x2a, 0x86.toByte(), 0x48, 0xce.toByte(), 0x3d, 0x04, 0x03, 0x02))
         val time = SimpleDateFormat("yyMMddHHmmss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val now = System.currentTimeMillis()
@@ -275,7 +238,7 @@ internal object WarpTLS {
         val password = charArrayOf('w', 'a', 'r', 'p')
         val keys = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null); setKeyEntry("warp", private, password, arrayOf(cert)) }
         val km = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(keys, password) }
-        val expected = WarpBase64.decode(identity.serverKey)
+        val expected = FoxBase64.decode(identity.serverKey)
         val trust = object : X509TrustManager {
             override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
             override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) { throw java.security.cert.CertificateException("unexpected client verification") }
@@ -293,11 +256,26 @@ internal object WarpTLS {
             val secured = ssl.socketFactory.createSocket(raw, "consumer-masque.cloudflareclient.com", port, true) as SSLSocket
             val parameters = secured.sslParameters
             parameters.serverNames = listOf(SNIHostName("consumer-masque.cloudflareclient.com"))
+            var legacyAlpn = false
             try { parameters.applicationProtocols = arrayOf("h2") }
-            catch (_: NoSuchMethodError) { throw IOException("WARP requires HTTP/2 ALPN") }
+            catch (_: NoSuchMethodError) { legacyAlpn = true }
             secured.sslParameters = parameters
+            if (legacyAlpn) {
+                // Android 7–9's platform Conscrypt exposes ALPN before the
+                // public API. If unavailable or blocked, fail closed.
+                try {
+                    secured.javaClass.getMethod("setAlpnProtocols", ByteArray::class.java)
+                        .invoke(secured, byteArrayOf(2, 'h'.code.toByte(), '2'.code.toByte()))
+                } catch (_: Exception) { throw IOException("WARP requires HTTP/2 ALPN") }
+            }
             secured.startHandshake()
-            if (try { secured.applicationProtocol != "h2" } catch (_: NoSuchMethodError) { true }) throw IOException("WARP did not negotiate HTTP/2")
+            val selected = if (legacyAlpn) {
+                try {
+                    val bytes = secured.javaClass.getMethod("getAlpnSelectedProtocol").invoke(secured) as? ByteArray
+                    bytes?.toString(Charsets.US_ASCII) ?: ""
+                } catch (_: Exception) { "" }
+            } else try { secured.applicationProtocol } catch (_: NoSuchMethodError) { "" }
+            if (selected != "h2") throw IOException("WARP did not negotiate HTTP/2")
             secured.soTimeout = 0
             if (!sockets.valid()) throw IOException("WARP stopped")
             return raw to secured

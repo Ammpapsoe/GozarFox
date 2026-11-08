@@ -563,6 +563,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       final accepted = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          scrollable: true,
           title: Text(words.warpUdp),
           content: Text(words.warpConsent),
           actions: [

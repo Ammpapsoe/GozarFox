@@ -13,6 +13,10 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
 )
 
+// Direct host routes apply to every IP protocol, not only to the TCP flow
+// that installed them. WARP must not coexist with those routes.
+func allowSplitWithWarp(split, warpEnabled bool) bool { return split && !warpEnabled }
+
 // SetWarpUDP persists opt-in only after an explicit Cloudflare terms consent.
 // A live connection is restarted so its TUN MTU and UDP backend change together.
 func (a *App) SetWarpUDP(enabled, consent bool) error {

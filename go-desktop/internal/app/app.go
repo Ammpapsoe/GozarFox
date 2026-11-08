@@ -718,6 +718,8 @@ func (a *App) connect(ctx context.Context) error {
 	servers := append([]fxa.Location(nil), a.servers...)
 	chain := append([]string(nil), a.cfg.Chain...)
 	warpEnabled := a.cfg.WarpUDP
+	splitConfigured := a.cfg.SplitTunnel
+	killSwitch := a.cfg.KillSwitch
 	a.mu.Unlock()
 	hops, err := tunnel.ParseChain(chain)
 	if err != nil {
@@ -757,7 +759,11 @@ func (a *App) connect(ctx context.Context) error {
 	}
 	var direct engine.Dialer
 	var split *geo.Rules
-	if a.cfg.SplitTunnel {
+	// A direct TCP bypass installs a host-wide route that could also carry
+	// UDP around the TUN. Pause split routing while WARP is enabled rather
+	// than silently sending a later UDP flow directly to that host.
+	splitEnabled := allowSplitWithWarp(splitConfigured, warpEnabled)
+	if splitEnabled {
 		split = a.geo
 		direct = func(host string, remotePort int) (io.ReadWriteCloser, error) {
 			a.mu.Lock()
@@ -820,8 +826,8 @@ func (a *App) connect(ctx context.Context) error {
 		transport.Close()
 		return err
 	}
-	if a.cfg.KillSwitch {
-		if err := killswitch.Enable(killswitch.Config{Interface: created.Device(), Proxy: chosen.keep, AllowDirect: a.cfg.SplitTunnel}); err != nil {
+	if killSwitch {
+		if err := killswitch.Enable(killswitch.Config{Interface: created.Device(), Proxy: chosen.keep, AllowDirect: splitEnabled}); err != nil {
 			created.Stop()
 			if warpNow != nil {
 				_ = warpNow.Close()
@@ -832,7 +838,7 @@ func (a *App) connect(ctx context.Context) error {
 	}
 	a.mu.Lock()
 	a.engine = created
-	a.killActive = a.cfg.KillSwitch
+	a.killActive = killSwitch
 	a.transport = transport
 	a.warp = warpNow
 	a.activeServer = chosen.place

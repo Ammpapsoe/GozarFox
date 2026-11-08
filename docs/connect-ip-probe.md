@@ -30,14 +30,13 @@ this client, account, endpoint, or fallback behavior.
 
 ## Decision
 
-This probe alone is not a basis for claiming production support for CONNECT-IP
-(RFC 9484) or CONNECT-UDP (RFC 9298). The later development branch connects an
-HTTP/2 CONNECT-UDP client to the application packet paths for automated
-loopback testing, but production acceptance has not been established. Each
-protocol needs an authenticated in-app test of its actual request, response and
-datagram formats. CONNECT-IP and CONNECT-UDP have different semantics and
-requirements; they are not interchangeable simply by changing the `:protocol`
-header.
+This probe alone is not a basis for claiming Mozilla relay support for
+CONNECT-IP (RFC 9484) or CONNECT-UDP (RFC 9298). The newer candidate instead
+runs Cloudflare WARP CONNECT-IP through Mozilla's ordinary authenticated TCP
+CONNECT. Python and CI-built Kotlin and Go transport diagnostics have completed
+real UDP round trips through that chain; this is not yet end-to-end Android app
+validation. CONNECT-IP and CONNECT-UDP have different semantics and formats;
+they are not interchangeable simply by changing a header.
 
 A failed request, timeout, connection reset or 4xx/5xx does not necessarily
 mean permanent lack of protocol support: authentication, rate limits, server

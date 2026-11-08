@@ -1,7 +1,6 @@
 package com.gozar
 
 import java.security.SecureRandom
-import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -105,7 +104,7 @@ object FoxCrypto {
         val path = if (url.query.isNullOrEmpty()) url.path else url.path + "?" + url.query
         var payloadHash = ""
         if (payload.isNotEmpty()) {
-            payloadHash = Base64.getEncoder().encodeToString(sha256("hawk.1.payload\napplication/json\n$payload\n".toByteArray(Charsets.UTF_8)))
+            payloadHash = FoxBase64.encode(sha256("hawk.1.payload\napplication/json\n$payload\n".toByteArray(Charsets.UTF_8)))
         }
         val normalized = listOf(
             "hawk.1.header",
@@ -119,7 +118,7 @@ object FoxCrypto {
             "",
             ""
         ).joinToString("\n")
-        val mac = Base64.getEncoder().encodeToString(hmac(key, normalized.toByteArray(Charsets.UTF_8)))
+        val mac = FoxBase64.encode(hmac(key, normalized.toByteArray(Charsets.UTF_8)))
         val header = "Hawk id=\"$id\", ts=\"$ts\", nonce=\"$nonce\", mac=\"$mac\""
         return if (payloadHash.isNotEmpty()) "$header, hash=\"$payloadHash\"" else header
     }

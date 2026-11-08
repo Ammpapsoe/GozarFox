@@ -459,7 +459,7 @@ AGPL-3.0-or-later</string>
     <string name="settings_group_protection">امنیت و اتصال</string>
     <string name="settings_group_app">ظاهر و برنامه</string>
     <string name="warp_udp_title">UDP با Cloudflare WARP</string>
-    <string name="warp_udp_consent">با پذیرش شرایط برنامهٔ Cloudflare یک دستگاه رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP در داخل تونل موزیلا عبور می‌کند و Cloudflare آن را پردازش می‌کند. پس از اتصال VPN، نقاط اتصال به‌صورت خودکار بررسی می‌شوند. ترافیک IPv6 همچنان توسط تونل مسدود می‌شود. تغییر این گزینه ممکن است اتصال‌های UDP فعلی را قطع کند.</string>
+    <string name="warp_udp_consent">با پذیرش شرایط برنامهٔ Cloudflare یک دستگاه رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP در داخل تونل موزیلا عبور می‌کند و Cloudflare آن را پردازش می‌کند. پس از اتصال VPN، نقاط اتصال خودکار بررسی می‌شوند و IPv6 گرفته‌شده مسدود می‌شود. شناسهٔ رمزگذاری‌شده برای استفادهٔ بعدی نگه داشته می‌شود؛ خاموش‌کردن این گزینه ثبت دستگاه را در Cloudflare حذف نمی‌کند. تغییر این گزینه ممکن است اتصال‌های UDP فعلی را قطع کند.</string>
     <string name="warp_terms">شرایط Cloudflare</string>
     <string name="warp_accept">پذیرش و فعال‌سازی</string>
     <string name="warp_off">غیرفعال؛ UDP به‌جز DNS مسدود است</string>

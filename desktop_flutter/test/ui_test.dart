@@ -25,6 +25,8 @@ class FakeCore extends Core {
   String activeEmail = 'example@example.com';
   String theme = 'system';
   bool recents = false;
+  bool warpUdp = false;
+  Map<String, dynamic>? lastWarp;
   List<String> chain = [];
   bool live = false;
   int rateDown = 0;
@@ -67,6 +69,7 @@ class FakeCore extends Core {
         language: language,
         theme: theme,
         recents: recents,
+        warpUdp: warpUdp,
         chain: chain,
         live: live,
         rateDown: rateDown,
@@ -108,6 +111,10 @@ class FakeCore extends Core {
     if (method == 'server') selectedHost = params!['host'] as String;
     if (method == 'theme') theme = params!['theme'] as String;
     if (method == 'recents') recents = params!['enabled'] as bool;
+    if (method == 'warp_udp') {
+      lastWarp = Map<String, dynamic>.from(params!);
+      warpUdp = params['enabled'] as bool;
+    }
     if (method == 'chain') chain = (params!['hops'] as List).cast<String>();
     if (method == 'connect') live = true;
     if (method == 'disconnect') {
@@ -279,6 +286,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sign in'), findsWidgets);
     expect(core.requests, isNot(contains('connect')));
+  });
+
+  testWidgets('WARP requires consent and warns before a live reconnect',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = FakeCore(signedIn: true, language: 'en')..live = true;
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connection'));
+    await tester.pumpAndSettle();
+    final option = find.text('UDP via Cloudflare WARP');
+    await tester.ensureVisible(option);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('turning this off does not unregister'), findsOneWidget);
+    expect(find.textContaining('LAN, relay routes and IPv6'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(core.requests, isNot(contains('warp_udp')));
+    expect(core.warpUdp, isFalse);
+
+    // The full disclosure remains scrollable in the compact minimum window.
+    tester.view.physicalSize = const Size(360, 360);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(option);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Accept'));
+    await tester.pumpAndSettle();
+    expect(core.lastWarp, {'enabled': true, 'consent': true});
+    expect(core.warpUdp, isTrue);
+
+    await tester.ensureVisible(option);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disconnect and reconnect'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(core.warpUdp, isTrue);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Accept'));
+    await tester.pumpAndSettle();
+    expect(core.lastWarp, {'enabled': false, 'consent': false});
+    expect(core.warpUdp, isFalse);
   });
 
   testWidgets('server selection uses the chosen host', (tester) async {

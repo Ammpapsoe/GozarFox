@@ -110,8 +110,8 @@ class Words {
       );
   String get warpUdp => pick('UDP با Cloudflare WARP', 'UDP via Cloudflare WARP');
   String get warpConsent => pick(
-        'با پذیرش شرایط Cloudflare یک هویت رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP و از داخل تونل موزیلا عبور می‌کند؛ Cloudflare این ترافیک را پردازش می‌کند. ترافیک IPv6، از جمله UDP، خارج از تونل است. اگر VPN متصل باشد، اتصال مجدداً برقرار می‌شود و ممکن است محافظت موقتاً قطع شود.',
-        'Accepting Cloudflare’s terms registers a free WARP identity. IPv4 UDP travels through WARP inside the Mozilla tunnel; Cloudflare processes this traffic. IPv6 traffic, including UDP, is outside the tunnel. An active VPN will reconnect, and protection may briefly be interrupted.',
+        'با پذیرش شرایط Cloudflare یک هویت رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP در تونل موزیلا عبور می‌کند و Cloudflare آن را پردازش می‌کند. هویت رمزگذاری‌شده برای استفادهٔ بعدی نگه داشته می‌شود؛ خاموش‌کردن گزینه ثبت آن را حذف نمی‌کند. مسیریابی مستقیم انتخابی تا زمان فعال‌بودن WARP متوقف می‌شود. مسیرهای محلی، مسیر رله و ترافیک IPv6، از جمله UDP، ممکن است خارج از تونل باشند. VPN فعال دوباره متصل می‌شود و محافظت ممکن است موقتاً قطع شود.',
+        'Accepting Cloudflare’s terms registers a free WARP identity. IPv4 UDP uses WARP inside the Mozilla tunnel; Cloudflare processes it. The encrypted identity is kept for reuse; turning this off does not unregister it. Selective direct routing is paused while WARP is enabled. LAN, relay routes and IPv6 traffic, including UDP, can be outside the tunnel. An active VPN reconnects and protection may briefly be interrupted.',
       );
   String get cloudflareTerms => pick('شرایط Cloudflare', 'Cloudflare terms');
   String get warpReconnect => pick('اتصال VPN برای اعمال این تغییر قطع و دوباره برقرار می‌شود.', 'The VPN will disconnect and reconnect to apply this change.');

@@ -1,66 +1,66 @@
-# UDP over HTTP/2: connected implementation, production validation pending
+# WARP CONNECT-IP UDP: development candidate
 
-The development branch routes non-DNS IPv4 UDP through the application's VPN
-packet paths on Android and desktop. Each target flow uses an authenticated,
-certificate-verified HTTP/2 extended CONNECT stream with DATAGRAM capsules.
-Existing DNS handling remains separate. Refusal or an unsupported peer does
-**not** fall back to an unprotected UDP socket.
+The Android and desktop candidates carry non-DNS IPv4 UDP using Cloudflare
+WARP's HTTP/2 CONNECT-IP transport **inside an authenticated Mozilla TCP
+CONNECT tunnel**. There is no direct WARP fallback, and the former experimental
+Mozilla CONNECT-UDP implementation is not selected by either app. DNS retains
+its separate, tunnelled resolver path. WARP is off by default.
 
-This describes the branch, not an already-published release. Real relay
-acceptance, authenticated account access, end-to-end UDP delivery and destination
-port policy remain unverified. In particular, an earlier unauthenticated probe
-saw `SETTINGS_ENABLE_CONNECT_PROTOCOL=1`, but the relay reset all tested streams;
-that does not prove UDP is supported or unsupported. Fastly's June 2026
-[architecture article](https://www.fastly.com/blog/we-built-proxy-behind-firefoxs-new-built-in-vpn-heres-how-it-works)
-describes the initial Firefox deployment as HTTP/2 TCP CONNECT and discusses
-full MASQUE over HTTP/3 as a future direction. It does not establish whether
-this account's current relay supports HTTP/2 CONNECT-UDP. A user-reported
-successful installation of the older 1.11.2 release is not a UDP test.
+## User consent and routing
 
-## Protocol and routing
+Enabling the setting requires explicit acceptance of Cloudflare's application
+terms. The client registers a free WARP device, stores its identity encrypted,
+and discloses that Cloudflare processes its UDP. While the VPN is connected,
+the client scans known Cloudflare endpoints and selects one only after a pinned
+TLS handshake, CONNECT-IP acceptance **and an actual DNS-over-UDP round trip**.
+Endpoint TCP reachability alone is not reported as success. An unavailable
+transport causes UDP to fail closed; Android retries scanning after a failure,
+and both cores can re-scan after the selected session is lost.
 
-The codec implements a bounded subset of the DATAGRAM Capsule Protocol from
-[RFC 9297](https://www.rfc-editor.org/rfc/rfc9297.html) and context-zero UDP
-payload encoding from [RFC 9298](https://www.rfc-editor.org/rfc/rfc9298.html).
-An empty datagram remains distinct from end of stream. Unknown capsule types
-and context IDs are skipped, malformed/truncated values fail, and memory is
-bounded. The target uses the default well-known UDP URI template; its use by a
-specific production service is an assumption, not a discovery result.
+Android forwards non-DNS IPv4 UDP through WARP regardless of configured TCP
+split rules, routes IPv6 into the VPN for dropping, and bounds flow counts and
+packet queues. Per-app exclusions and the separate experimental root-routing
+feature have their own disclosed bypass limitations. Android uses the normal
+force-tunnel loopback proxy for both Cloudflare enrollment and the WARP endpoint;
+the proxy itself opens an authenticated Mozilla CONNECT.
 
-The client currently requires an explicit, unparameterized
-`Capsule-Protocol: ?1`, a 200 response without HTTP representation/body framing
-headers, and a live streaming body. This is stricter than the RFC and may reject
-otherwise-conforming proxies. HTTP/2 carries datagrams over an ordered, reliable
-TCP stream; it does not provide native QUIC datagrams and can suffer
-head-of-line delay. A per-flow idle timeout and concurrency limits bound
-resources. Neither implementation uses a direct UDP fallback on relay failure.
+Desktop temporarily pauses selective direct split routing while WARP is enabled:
+otherwise a host-wide route installed for a direct TCP flow could also send UDP
+outside the TUN. It may reconnect when changing the setting. Existing operating
+system LAN routes, relay-host exceptions and IPv6 can still be outside the
+IPv4-only desktop tunnel, including UDP. They are disclosed in the consent
+prompt; do not interpret the setting as device-wide leak protection. A firewall
+or kill-switch failure, a forced exit, or a reconnect may also interrupt
+protection. Desktop WARP identity storage fails closed if encryption is not
+available; Unix stores a private local key alongside its encrypted data, while
+Windows uses the user-bound OS protection API.
 
-On Android, non-DNS IPv4 UDP is demultiplexed in `FoxStack` and uses a
-service-lifetime/transport-generation-scoped `FoxTunnel.openUDP` stream. Up to
-64 flows share an 8 MiB aggregate queued-payload budget; packets exceeding the
-configured TUN MTU are rejected. Its H2 pool checks the peer setting, decodes
-complete HPACK response blocks in
-wire order and validates the capsule response. IPv6 and fragmented IP packets
-remain fail-closed; oversized return datagrams are dropped because the stack
-does not fragment them. Split-routing UDP is also sent to the relay; it is not
-sent through the direct TCP bypass. On desktop, the gVisor packet engine uses
-`Manager.OpenUDP` with bounded tracked flows, while DNS keeps its existing
-resolver path. The current desktop engine is IPv4-only.
+Both implementations use a 1280-byte inner MTU and do not reassemble fragmented
+IPv4 datagrams. Oversized payloads, IPv6 inside WARP, and unsupported
+destinations are dropped. HTTP/2 over TCP has head-of-line blocking; latency,
+throughput, arbitrary game ports and quality on other networks are not promised.
+Cloudflare's bare-IP type-zero capsule format is distinct from RFC 9298's
+context-prefixed CONNECT-UDP format. Android 7–9 lack the public ALPN API and
+try platform Conscrypt's non-public ALPN methods; if unavailable or blocked,
+WARP fails closed. This compatibility path has not been verified on a physical
+device.
 
-## Automated evidence and remaining work
+## Evidence and limits
 
-Unit tests use local fake TLS/H2 proxies and virtual packet interfaces. They
-cover datagram boundaries, empty packets, headers/authentication, peer settings,
-rejection without direct fallback and reset/stop races. Android tests also send
-packets through the stack and H2 capsule client in one synthetic path. Desktop
-builds include native TUN-to-local-proxy integration tests on Linux, Windows and
-macOS; results must be checked for the actual commit. Simulated and native-TUN
-local-proxy tests do not prove support by a real upstream relay.
+With explicit authorization, an isolated Python probe authenticated a real
+Firefox account, refreshed its token, obtained a Mozilla pass, and completed a
+real UDP DNS response through Mozilla → WARP. At commit `aa81e51`, CI-built
+Kotlin and Go diagnostics using the apps' WARP cores each passed authenticated
+endpoint scanning and a second UDP round trip through a restricted local bridge
+into that real Mozilla relay. The Kotlin core also re-enrolled the same test
+device through Mozilla. These tests are useful transport evidence, but the
+bridge is not the Android VPN interface or the desktop app's production tunnel
+manager.
 
-Before representing the feature as verified for users, run an authorized
-end-to-end account/relay test against an actual UDP echo destination and
-relevant port policy. Login previously reached HTTP 406 after email verification
-without reaching a relay; see `real-account-validation.md`. Establish actual
-Android-device and desktop-network behavior separately where required. No
-synthetic test proves device-wide leak freedom or the behavior of every network.
-CONNECT-IP is a separate protocol and remains unimplemented.
+GitHub Actions covers synthetic protocol, lifecycle, UI and security tests;
+signed-upgrade emulator and native desktop TUN tests use simulated upstreams.
+A successful synthetic or isolated transport test is not proof of the real
+Android UI, physical device, production desktop application, every network, or
+all updater/reconnect scenarios. The previous unauthenticated relay experiments
+in `connect-ip-probe.md` cannot establish authenticated Mozilla CONNECT-UDP
+support and are not used as proof for WARP.

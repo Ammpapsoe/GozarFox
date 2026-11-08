@@ -37,6 +37,15 @@ func TestWarpSettingRequiresConsentAndPersists(t *testing.T) {
 	}
 }
 
+func TestWarpDisablesHostWideSplitRoutes(t *testing.T) {
+	if allowSplitWithWarp(true, true) || allowSplitWithWarp(false, true) {
+		t.Fatal("WARP must not install host-wide split routes that also bypass UDP")
+	}
+	if !allowSplitWithWarp(true, false) || allowSplitWithWarp(false, false) {
+		t.Fatal("ordinary split setting changed when WARP is disabled")
+	}
+}
+
 func TestCancelConnectionAttemptCancelsPendingAndActiveContexts(t *testing.T) {
 	pendingCtx, pendingCancel := context.WithCancel(context.Background())
 	activeCtx, activeCancel := context.WithCancel(context.Background())

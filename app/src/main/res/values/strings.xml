@@ -459,7 +459,7 @@ AGPL-3.0-or-later</string>
     <string name="settings_group_protection">Protection &amp; connection</string>
     <string name="settings_group_app">Appearance &amp; app</string>
     <string name="warp_udp_title">UDP via Cloudflare WARP</string>
-    <string name="warp_udp_consent">Accepting Cloudflare’s application terms registers a free WARP device. IPv4 UDP uses WARP inside your Mozilla tunnel and is processed by Cloudflare. Endpoints are scanned automatically after the VPN connects. IPv6 traffic remains blocked by the tunnel. Existing UDP connections may be interrupted when this setting changes.</string>
+    <string name="warp_udp_consent">Accepting Cloudflare’s application terms registers a free WARP device. IPv4 UDP uses WARP inside your Mozilla tunnel and is processed by Cloudflare. Endpoints are scanned automatically after the VPN connects. Captured IPv6 is blocked. The encrypted device identity is kept for reuse; turning this off does not unregister it from Cloudflare. Existing UDP connections may be interrupted when this setting changes.</string>
     <string name="warp_terms">Cloudflare terms</string>
     <string name="warp_accept">Accept and enable</string>
     <string name="warp_off">Disabled; non-DNS UDP is blocked</string>

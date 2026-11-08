@@ -10,8 +10,11 @@ use native forms; supported Mozilla security checks and image challenges appear 
 account password is not saved. Separate Firefox sessions can be added and switched inside the app;
 switching, adding an account while connected, or signing out disconnects the VPN first. Signing out
 removes the active session while leaving other saved sessions available from the sign-in screen.
-Android stores session tokens in app-private preferences; desktop stores them in a local configuration
-file rather than the OS keychain. These tokens are sensitive and are not encrypted by Gozar.
+Android encrypts saved session tokens using Android Keystore where available, with an app-private
+software-key fallback. Desktop uses Windows user-bound protection or AES-GCM with a private local
+key on Unix; its older session-token helper can fall back to plaintext if protection fails. WARP
+device credentials use separate encrypted storage and fail closed rather than falling back to
+plaintext. All credentials remain sensitive, especially to other processes running as the same user.
 
 Android adds the GlobalSign E46 and R46 roots only for fastly-masque.net and its subdomains,
 while continuing to verify certificate chains and server hostnames. Its HTTP/2 and HTTP/1.1
@@ -24,9 +27,14 @@ Android exposes the system's Always-on VPN and Block connections without VPN set
 than pretending an app-only switch can provide system lockdown. Status is available only while
 an established VPN service can query Android 10 or later. Direct TCP rules are disabled during
 lockdown, whenever status cannot be checked, and on Android 9 or earlier. LAN bypass is TCP-only;
-local-network discovery and other UDP traffic are not covered. Per-app selection, experimental
+local-network discovery and other UDP traffic do not use that TCP bypass. Per-app selection, experimental
 root routing and system-level exceptions have separate limitations. Domain-based direct rules
 use DNS-to-IP associations, so shared IP addresses can make the match ambiguous.
+
+Android offers opt-in WARP CONNECT-IP for captured non-DNS IPv4 UDP. Enabling it requires accepting
+Cloudflare's terms and automatically scans endpoints after the Mozilla VPN connects. Captured IPv6
+is dropped; excluded apps and experimental root routing have separate limitations. The setting is
+experimental and does not guarantee UDP on every network or device.
 
 Android DNS can use the built-in encrypted providers or a custom HTTPS DNS endpoint. The optional
 ad/tracker protection selects AdGuard DNS without falling back to an unfiltered resolver. It
@@ -61,24 +69,27 @@ or automatically clear a system proxy. If an older version left a proxy behind, 
 proxy settings manually rather than assuming that a proxy belongs to Gozar. Abrupt termination can
 leave routes or DNS modified, especially on Linux and macOS. Windows installers are not
 Authenticode-signed, and macOS builds are not notarized. Desktop DNS queries
-use DNS over HTTPS through the authenticated Firefox proxy; unsupported UDP is refused so clients
-can fall back to TCP when they support it. Windows route commands do not open console windows.
+use DNS over HTTPS through the authenticated Firefox proxy. Optional non-DNS IPv4 UDP uses
+Cloudflare WARP CONNECT-IP inside the authenticated Mozilla tunnel after explicit terms consent;
+when unavailable it is refused instead of silently falling back to direct UDP. Windows route
+commands do not open console windows.
 
 The compact desktop dashboard uses a frameless window, a draggable header, and a real connect
-control. Relay location, exit address, traffic and usage are shown only when available. The firewall
-control is unavailable: this build does not implement a desktop kill switch. On ordinary window
-close, the application requests tunnel shutdown before exiting; forced termination is different.
+control. Relay location, exit address, traffic and usage are shown only when available. The UI's
+firewall control is unavailable; the backend can install operating-system firewall rules during a
+connection, with explicit LAN and relay exceptions and platform-specific failure modes. On ordinary
+window close, the application requests tunnel shutdown before exiting; forced termination is different.
 
 The desktop tunnel is experimental. Real Linux, Windows and macOS tunnel interfaces were tested
-with local simulated upstreams; the new Linux code has also been retested with a local TLS-verified
-HTTP/2 CONNECT relay. These tests do not verify a connection to a real Firefox proxy. The new
-Windows window frame and macOS interface have not been tested on native devices. Firefox account
-sign-in and registration have mock coverage. A real-account CI attempt reached email-code
-verification but the subsequent OAuth request received HTTP 406; it did not reach a real relay.
-See docs/real-account-validation.md. The non-interactive security check was also probed
-without account credentials. Mozilla may present an unsupported security challenge or refuse a request. IPv6 is not routed through
-the tunnel and may bypass it. UDP other than DNS is not supported. Mozilla's proxy supports only
-certain destination ports, including 80, 443, 8080, and 8443. Do not rely on this build for privacy
+with local simulated upstreams; the Linux code has also been tested with a local TLS-verified
+HTTP/2 CONNECT relay. A separate authorized live script authenticated a real Firefox account,
+refreshed its token and reached a Mozilla relay. CI-built Kotlin and Go WARP cores also passed UDP
+round trips through a restricted bridge into that relay. Those isolated results do not prove the
+complete Android or desktop app on a physical device. See docs/real-account-validation.md.
+Mozilla may present an unsupported security challenge or refuse a request. Desktop IPv6 and some
+existing LAN or relay routes may bypass the tunnel, including UDP. With WARP enabled, selective
+direct desktop split routes are paused, but this is not device-wide leak protection. WARP uses
+HTTP/2 over TCP and supports bounded IPv4 datagrams only. Do not rely on this build for privacy
 or as a complete device-wide VPN. The desktop interface provides language, appearance, account
 switching, recent-server preference, a manual release check, donation, and an ordered SOCKS5/HTTP
 proxy-chain editor. Proxy chains are used by the Go core when connecting; proxy authentication is

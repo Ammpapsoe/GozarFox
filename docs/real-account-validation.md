@@ -1,4 +1,24 @@
-# Real-account validation — incomplete
+# Real-account validation — transport verified, app validation incomplete
+
+## Later authorized test
+
+A later local, explicitly authorized test successfully authenticated the same
+Firefox account against Mozilla's alternate origin, refreshed the OAuth token,
+obtained the existing proxy pass and server list, and reached a target through
+an authenticated Mozilla relay. A separate free WARP test identity was used
+with the user's explicit consent. The Python script completed UDP through the
+Mozilla → WARP chain. CI-built Kotlin and Go diagnostics from commit
+`aa81e51` used the actual WARP cores through a restricted loopback-to-Mozilla
+bridge and each obtained a real UDP response. Kotlin also re-enrolled the same
+test device through the relay. Passwords, codes, tokens and device keys
+were not placed in CI artifacts. These results do not test the full Android VPN
+service, a physical phone or the desktop app end to end.
+
+An earlier test device's temporary credentials were lost during an environment
+reset; its remote deletion could not be confirmed. A replacement test identity
+was registered with renewed consent and must be deleted after testing.
+
+## Earlier 406 investigation
 
 In November 2026, an explicitly authorized Mozilla test account was used from a
 GitHub-hosted Linux runner against the Gozar desktop authentication code. The
@@ -71,13 +91,8 @@ password after finishing because it was shared in chat.
 
 Remaining work:
 
-- Investigate the rejected Mozilla security check through supported user-driven
-  authentication; do not assume that changing compression resolves it.
-- Verify account entitlement without silently enrolling or purchasing anything,
-  then test a real relay if access is available and explicitly authorized.
 - Exercise the actual Android UI, updater, VPN service, reconnects and routing
-  on appropriate emulators and physical devices. The real-account probe used
-  desktop authentication plus shared Android core code; it did not complete
-  the relay portion or test a physical device.
-- Never claim device-wide leak freedom or publish a stable release on the basis
-  of this incomplete result.
+  on appropriate emulators and physical devices, and validate the production
+  desktop path. The later real-account transport success is not a full app test.
+- Check exact-commit signed release builds and upgrade scenarios. Do not claim
+  device-wide leak freedom or publish stable on incomplete validation.

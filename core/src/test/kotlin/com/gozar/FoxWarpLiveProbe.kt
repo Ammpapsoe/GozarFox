@@ -28,7 +28,14 @@ object FoxWarpLiveProbe {
         val reenroll = args.size == 4
         var saved = if (reenroll) org.json.JSONObject(file.readText()).put("server_key", "").put("ipv4", "").toString() else file.readText()
         var enrolled = false
-        val warp = FoxWarp(port, { saved }, { updated -> saved = updated; enrolled = true; true }, { valid.get() })
+        val warp = FoxWarp(port, { saved }, { updated ->
+            // Keep the same private file usable if re-enrollment changes the
+            // address or pin; the file was checked for owner-only permissions.
+            file.writeText(updated)
+            saved = updated
+            enrolled = true
+            true
+        }, { valid.get() })
         var failed = false
         try {
             warp.start()
