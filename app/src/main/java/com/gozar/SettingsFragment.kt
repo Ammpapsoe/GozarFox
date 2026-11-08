@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.text.BidiFormatter
 import android.text.TextDirectionHeuristics
 import java.util.Locale
+import kotlin.concurrent.thread
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -29,7 +30,8 @@ class SettingsFragment : Fragment() {
     private var appPicker: AppPicker? = null
     private var section = ""
     private var changingSwitch = false
-    private var linkState: List<Boolean>? = null
+    private var warpUpdating = false
+    private var linkState: List<Any>? = null
     private var shownLeakReport: FoxLeakGuard.Report? = null
     private var usageState: Pair<Long, Long>? = null
     private var versionName: String? = null
@@ -50,7 +52,7 @@ class SettingsFragment : Fragment() {
     }
 
     private fun connectionState() = listOf(
-        FoxLink.connected, FoxLink.connecting, FoxVpnService.isAlive(), FoxVpnService.rootActive
+        FoxLink.connected, FoxLink.connecting, FoxVpnService.isAlive(), FoxVpnService.rootActive, FoxLink.warpStatus
     )
 
     private fun <T : View> find(id: Int): T = view!!.findViewById(id)
@@ -76,6 +78,12 @@ class SettingsFragment : Fragment() {
         }
         bind(R.id.rowGeo, R.id.swGeo, Store.geolocation(requireContext())) { Store.setGeolocation(requireContext(), it) }
         bind(R.id.rowRecents, R.id.swRecents, Store.recents(requireContext())) { Store.setRecents(requireContext(), it) }
+        find<MaterialSwitch>(R.id.swWarp).setOnCheckedChangeListener { _, checked ->
+            if (!changingSwitch) requestWarp(checked)
+        }
+        find<View>(R.id.rowWarp).setOnClickListener {
+            if (!warpUpdating) requestWarp(!Store.warpUdp(requireContext()))
+        }
 
         find<View>(R.id.btnBack).setOnClickListener {
             if (!goBack()) (activity as? MainActivity)?.showHome()
@@ -236,6 +244,17 @@ class SettingsFragment : Fragment() {
             }
             "connection" -> {
                 linkState = connectionState()
+                val enabled = Store.warpUdp(context)
+                changingSwitch = true
+                find<MaterialSwitch>(R.id.swWarp).apply { isChecked = enabled; isEnabled = !warpUpdating }
+                changingSwitch = false
+                find<TextView>(R.id.tvWarp).text = getString(when {
+                    !enabled -> R.string.warp_off
+                    FoxLink.warpStatus == 1 -> R.string.warp_scanning
+                    FoxLink.warpStatus == 2 -> R.string.warp_ready
+                    FoxLink.warpStatus == 3 -> R.string.warp_unavailable
+                    else -> R.string.warp_waiting
+                })
                 val hasDirectRoutes = Store.bypassLan(context) || Store.bypassList(context).isNotBlank()
                 val directGuarded = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q ||
                     (FoxVpnService.isAlive() && FoxVpnService.lockdownActive())
@@ -297,6 +316,46 @@ class SettingsFragment : Fragment() {
                 }
             }
             .show()
+    }
+
+    private fun requestWarp(enabled: Boolean) {
+        val context = context ?: return
+        paint() // Revert the visual switch until the choice has been confirmed.
+        if (warpUpdating || enabled == Store.warpUdp(context)) return
+        if (!enabled) {
+            applyWarpSetting(false)
+            return
+        }
+        val dialog = MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.warp_udp_title)
+            .setMessage(R.string.warp_udp_consent)
+            .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton(R.string.warp_terms, null)
+            .setPositiveButton(R.string.warp_accept) { _, _ -> applyWarpSetting(true) }
+            .show()
+        // Reading the terms does not itself accept them or dismiss the prompt.
+        dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+            openUrl("https://www.cloudflare.com/application/terms/")
+        }
+    }
+
+    private fun applyWarpSetting(enabled: Boolean) {
+        val context = context ?: return
+        if (!Store.setWarpUdp(context, enabled)) {
+            toast(R.string.warp_save_failed)
+            paint()
+            return
+        }
+        warpUpdating = true
+        paint()
+        val app = context.applicationContext
+        thread(isDaemon = true, name = "warp-setting") {
+            FoxLink.configureWarp(app)
+            activity?.runOnUiThread {
+                warpUpdating = false
+                if (isAdded && view != null) paint()
+            }
+        }
     }
 
     private fun changeProtection(action: () -> Unit) {

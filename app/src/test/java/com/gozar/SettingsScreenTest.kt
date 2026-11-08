@@ -82,6 +82,29 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun warpRequiresExplicitConsentBeforeEnabling() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller.get()
+        try {
+            openSettings(activity)
+            activity.findViewById<View>(R.id.sectionConnectionButton).performClick()
+            val toggle = activity.findViewById<MaterialSwitch>(R.id.swWarp)
+            assertFalse(toggle.isChecked)
+            activity.findViewById<View>(R.id.rowWarp).performClick()
+            var dialog = ShadowDialog.getLatestDialog() as AlertDialog
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+            assertFalse(Store.warpUdp(activity))
+            assertFalse(toggle.isChecked)
+            activity.findViewById<View>(R.id.rowWarp).performClick()
+            dialog = ShadowDialog.getLatestDialog() as AlertDialog
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            assertTrue(Store.warpUdp(activity))
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test
     fun signingOutFromTheAccountSectionReturnsToLogin() {
         val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val activity = controller.get()

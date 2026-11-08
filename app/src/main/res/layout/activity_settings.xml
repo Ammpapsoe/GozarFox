@@ -137,6 +137,14 @@
                 </LinearLayout>
                 <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swRecents" android:layout_width="wrap_content" android:layout_height="wrap_content" />
             </LinearLayout>
+            <LinearLayout android:id="@+id/rowWarp" style="@style/Gozar.Row" android:layout_marginTop="@dimen/stack_gap" android:background="@drawable/settings_group_middle">
+                <ImageView style="@style/Gozar.Tile" android:background="@drawable/settings_frame_cloud" android:backgroundTint="@color/settings_lavender_container" android:contentDescription="@string/warp_udp_title" android:src="@drawable/ic_link" app:tint="@color/settings_lavender_on_container" />
+                <LinearLayout style="@style/Gozar.Row.Text">
+                    <TextView style="@style/Gozar.Row.Title" android:text="@string/warp_udp_title" />
+                    <TextView android:id="@+id/tvWarp" style="@style/Gozar.Row.Subtitle" />
+                </LinearLayout>
+                <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swWarp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:contentDescription="@string/warp_udp_title" />
+            </LinearLayout>
             <LinearLayout android:id="@+id/rowRouting" style="@style/Gozar.Row" android:layout_marginTop="@dimen/stack_gap" android:background="@drawable/settings_group_middle">
                 <ImageView style="@style/Gozar.Tile" android:background="@drawable/settings_frame_slant" android:backgroundTint="@color/settings_blue_container" android:contentDescription="@string/routing" android:src="@drawable/ic_alt_route" app:tint="@color/settings_blue_on_container" />
                 <LinearLayout style="@style/Gozar.Row.Text">

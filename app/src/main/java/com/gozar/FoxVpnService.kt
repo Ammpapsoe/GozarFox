@@ -77,7 +77,9 @@ class FoxVpnService : VpnService() {
             abortStart(getString(R.string.fox_no_device))
             return
         }
-        val mtu = FoxNetwork.mtu(this)
+        // Reserve enough headroom for CONNECT-IP even when WARP is enabled
+        // after the interface was created; larger fragmented UDP is dropped.
+        val mtu = minOf(FoxNetwork.mtu(this), 1280)
         val builder = Builder()
             .setSession(getString(R.string.fox_title))
             .addAddress(LOCAL_ADDRESS, 32)
@@ -161,9 +163,7 @@ class FoxVpnService : VpnService() {
                     val isCurrent = { lifetime.get() && instance === this && FoxLink.transportIsCurrent(expected.ticket) }
                     val open: () -> FoxDatagramPipe = {
                         if (!isCurrent()) throw IOException("tunnel stopped")
-                        val token = FoxLink.pass(app)
-                        if (token.isEmpty()) throw IOException("no pass")
-                        val pipe = FoxTunnel.openUDP(expected.location, address, port, token, expectedTransport = expected.ticket)
+                        val pipe = FoxLink.openWarpUDP(expected.ticket, address, port)
                         if (!isCurrent()) {
                             pipe.close()
                             throw IOException("tunnel stopped")

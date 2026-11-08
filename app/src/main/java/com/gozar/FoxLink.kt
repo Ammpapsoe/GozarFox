@@ -47,6 +47,11 @@ object FoxLink {
     private val stateLock = attempts.monitor
     private val generation: Long get() = attempts.generation
     private var transportTicket: Long? = null
+    private var warp: FoxWarp? = null
+    private val warpStartLock = Any()
+    // 0=off, 1=scanning, 2=ready, 3=unavailable. No credentials are exposed.
+    @Volatile var warpStatus: Int = 0
+        private set
     private val main = Handler(Looper.getMainLooper())
     private var ticker: Thread? = null
     private var renewer: Thread? = null
@@ -194,6 +199,7 @@ object FoxLink {
                     startRenewal(app, attempt, ticket)
                 }
                 tick()
+                configureWarp(app)
                 FoxVpnService.activateRoot()
                 detectExit(verified, pass.token, attempt, ticket)
                 geoRefresh.set(System.currentTimeMillis())
@@ -201,8 +207,12 @@ object FoxLink {
                     FoxGeo.refresh(verified, pass.token, ticket)
                 }
             } catch (e: Exception) {
+                val retired: FoxWarp?
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
+                    retired = warp
+                    warp = null
+                    warpStatus = 0
                     connected = false
                     connecting = false
                     transportTicket = null
@@ -215,6 +225,7 @@ object FoxLink {
                     }
                     retireServers()
                 }
+                retired?.close()
                 tick()
                 if (FoxVpnService.alwaysOn()) {
                     main.postDelayed({
@@ -295,6 +306,73 @@ object FoxLink {
         connected && transportTicket == ticket && FoxTunnel.transportIsCurrent(ticket)
     }
 
+    /** Start or revoke WARP without replacing the VPN interface. All underlay
+     * sockets use the force-tunnel loopback proxy; no direct UDP fallback exists. */
+    fun configureWarp(c: Context) {
+        val app = c.applicationContext
+        val prior: FoxWarp?
+        val created: FoxWarp?
+        synchronized(stateLock) {
+            prior = warp
+            warp = null
+            warpStatus = 0
+            val ticket = transportTicket
+            if (Store.warpUdp(app) && connected && ticket != null && dnsPort > 0) {
+                var self: FoxWarp? = null
+                val candidate = FoxWarp(
+                    dnsPort,
+                    load = { WarpStore.load(app) },
+                    save = { WarpStore.save(app, it) },
+                    current = {
+                        synchronized(stateLock) {
+                            connected && transportTicket == ticket && warp === self && FoxTunnel.transportIsCurrent(ticket)
+                        }
+                    }
+                )
+                self = candidate
+                warp = candidate
+                created = candidate
+                warpStatus = 1
+            } else created = null
+        }
+        prior?.close()
+        tick()
+        if (created == null) return
+        thread(isDaemon = true, name = "warp-connect") {
+            try {
+                // Avoid registering multiple devices if the user toggles rapidly.
+                synchronized(warpStartLock) {
+                    val active = synchronized(stateLock) { warp === created && connected }
+                    if (!active) return@thread
+                    created.start()
+                }
+                synchronized(stateLock) { if (warp === created && connected) warpStatus = 2 }
+            } catch (_: Exception) {
+                created.close()
+                val retry = synchronized(stateLock) {
+                    if (warp === created && connected) { warpStatus = 3; true } else false
+                }
+                if (retry) main.postDelayed({
+                    val stillCurrent = synchronized(stateLock) { warp === created && connected && warpStatus == 3 }
+                    if (stillCurrent && Store.warpUdp(app)) configureWarp(app)
+                }, 15_000L)
+            }
+            tick()
+        }
+    }
+
+    internal fun openWarpUDP(ticket: Long, host: String, port: Int): FoxDatagramPipe {
+        val selected = synchronized(stateLock) {
+            if (!connected || transportTicket != ticket || warpStatus != 2) null else warp
+        } ?: throw java.io.IOException("WARP is not connected")
+        val result = selected.openUDP(host, port)
+        if (!transportIsCurrent(ticket)) {
+            result.close()
+            throw java.io.IOException("tunnel stopped")
+        }
+        return result
+    }
+
     /** Registers the socket before connect so a stop can interrupt a pending dial. */
     internal fun connectDirect(host: String, port: Int, ticket: Long): FoxPipe? =
         directSockets.connect(host, port, ticket)
@@ -308,9 +386,13 @@ object FoxLink {
     fun stop() = stopAttempt(null, "")
 
     private fun stopAttempt(attempt: Long?, reason: String) {
+        val retired: FoxWarp?
         synchronized(stateLock) {
             if (attempt != null && attempt != generation) return
             attempts.advance()
+            retired = warp
+            warp = null
+            warpStatus = 0
             transportTicket = null
             directSockets.stop()
             FoxTunnel.stopTransport()
@@ -331,6 +413,9 @@ object FoxLink {
             stopTicker()
             stopRenewal()
         }
+        // Never close a WARP session while holding stateLock: its cancellation
+        // checks the same lifecycle fence from worker threads.
+        retired?.close()
         tick()
     }
 
