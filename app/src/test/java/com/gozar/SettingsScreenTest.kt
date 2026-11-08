@@ -93,11 +93,13 @@ class SettingsScreenTest {
             activity.findViewById<View>(R.id.rowWarp).performClick()
             var dialog = ShadowDialog.getLatestDialog() as AlertDialog
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+            shadowOf(android.os.Looper.getMainLooper()).idle()
             assertFalse(Store.warpUdp(activity))
             assertFalse(toggle.isChecked)
             activity.findViewById<View>(R.id.rowWarp).performClick()
             dialog = ShadowDialog.getLatestDialog() as AlertDialog
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+            shadowOf(android.os.Looper.getMainLooper()).idle()
             assertTrue(Store.warpUdp(activity))
         } finally {
             controller.pause().stop().destroy()

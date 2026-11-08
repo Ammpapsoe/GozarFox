@@ -16,11 +16,35 @@ on:
         required: false
         type: boolean
         default: false
+      build_kotlin_warp_live_probe:
+        description: Build the opt-in Kotlin WARP live diagnostic (no credentials used in CI)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  build-kotlin-warp-live-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_kotlin_warp_live_probe }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build isolated diagnostic (no credentials)
+        run: bash ./gradlew :core:warpLiveProbeJar --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gozar-kotlin-warp-live
+          path: core/build/libs/gozar-kotlin-warp-live.jar
+          retention-days: 1
+
   build-warp-live-probe:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_warp_live_probe }}
     runs-on: ubuntu-latest
