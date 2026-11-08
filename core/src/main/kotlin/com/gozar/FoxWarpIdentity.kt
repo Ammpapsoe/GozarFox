@@ -264,7 +264,11 @@ internal object WarpTLS {
         val validity = seq(der(0x17, time.format(Date(now - 3_600_000)).toByteArray(Charsets.US_ASCII)),
             der(0x17, time.format(Date(now + 86_400_000)).toByteArray(Charsets.US_ASCII)))
         val serial = BigInteger(128, SecureRandom()).add(BigInteger.ONE).toByteArray()
-        val tbs = seq(der(0xa0, der(0x02, byteArrayOf(2))), der(0x02, serial), algorithm, seq(), validity, seq(), pub.encoded)
+        // Java rejects an empty issuer DN; both names are local-only labels,
+        // while WARP authenticates the device by its enrolled P-256 key.
+        val name = seq(der(0x31, seq(byteArrayOf(0x06, 0x03, 0x55, 0x04, 0x03),
+            der(0x0c, "Gozar WARP".toByteArray(Charsets.UTF_8)))))
+        val tbs = seq(der(0xa0, der(0x02, byteArrayOf(2))), der(0x02, serial), algorithm, name, validity, name, pub.encoded)
         val signature = Signature.getInstance("SHA256withECDSA").apply { initSign(private); update(tbs) }.sign()
         val encoded = seq(tbs, algorithm, der(0x03, byteArrayOf(0) + signature))
         val cert = CertificateFactory.getInstance("X.509").generateCertificate(ByteArrayInputStream(encoded)) as X509Certificate
