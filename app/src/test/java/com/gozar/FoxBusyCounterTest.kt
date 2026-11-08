@@ -9,6 +9,18 @@ import org.junit.Test
 
 class FoxBusyCounterTest {
     @Test
+    fun testOverrideCannotHideAnActuallyActiveOperation() {
+        val counter = FoxBusyCounter()
+        counter.busy = true
+        assertTrue(counter.busy)
+        counter.begin()
+        counter.busy = false
+        assertTrue(counter.busy)
+        counter.end()
+        assertFalse(counter.busy)
+    }
+
+    @Test
     fun finishingAnOldOperationCannotHideANewActiveOperation() {
         repeat(50) { iteration ->
             val afterDecrement = CountDownLatch(1)

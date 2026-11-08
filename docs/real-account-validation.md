@@ -40,9 +40,14 @@ verify the same session concurrently. The candidate serializes login-operation
 bodies, keeps an already verified login session for retry, and offers a
 retry action without asking for the code again. Run 42405147616 passed seven
 fake-provider tests, including 50 overlapping submissions and a Robolectric UI
-check. This does not establish that OAuth succeeds, that retry resolves HTTP
-406, or that Android devices were tested with the real account. The separate
-signup/link and account logout lifecycles require additional review.
+check. Another fake-provider test reproduced login completion restoring an
+account after logout (run 42408330942). The candidate uses an authentication
+epoch to revoke late login results before transport teardown; run 42408787304
+passed 17 tests, including logout during sign-in, verification, token and
+pass acquisition and 50 controlled logout races. These checks do not cancel
+requests already sent to the server. They do not establish that OAuth succeeds,
+that retry resolves HTTP 406, or that Android devices were tested with the real
+account. Signup/link flows and actual device lifecycles still require review.
 
 The probe encrypted input to the ephemeral CI job, did not upload passwords,
 verification codes, account identifiers or tokens as artifacts, and removed its

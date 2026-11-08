@@ -40,6 +40,7 @@ object Fox {
     @Volatile var reset: String = ""
     var busy: Boolean
         get() = operations.busy
+        // UI tests can force the indicator, but cannot hide actual active work.
         internal set(value) { operations.busy = value }
     @Volatile var message: String = ""
     @Volatile var stage: String = ""
@@ -100,28 +101,40 @@ object Fox {
 
     private fun work(c: Context, first: Int = 0, failureEpoch: Long? = null, body: () -> Unit) {
         operations.begin()
-        message = ""
-        if (first != 0) stage = c.getString(first)
-        notifyUi()
-        val app = c.applicationContext
-        thread {
-            var failure: String? = null
-            try {
-                body()
-            } catch (e: FoxError) {
-                failure = e.message ?: "Sign-in failed"
-            } catch (e: Exception) {
-                failure = e.message ?: "Network error"
-            }
-            operations.end()
-            if (!busy) stage = ""
-            failure?.let { text ->
-                synchronized(authLock) {
-                    if (failureEpoch == null || failureEpoch == authEpoch) message = text
+        try {
+            message = ""
+            if (first != 0) stage = c.getString(first)
+            notifyUi()
+            val app = c.applicationContext
+            thread {
+                var failure: String? = null
+                try {
+                    body()
+                } catch (e: FoxError) {
+                    failure = e.message ?: "Sign-in failed"
+                } catch (e: Exception) {
+                    failure = e.message ?: "Network error"
+                } finally {
+                    operations.end()
+                    if (!busy) stage = ""
+                    failure?.let { text ->
+                        synchronized(authLock) {
+                            if (failureEpoch == null || failureEpoch == authEpoch) message = text
+                        }
+                    }
+                    try {
+                        load(app)
+                    } finally {
+                        notifyUi()
+                    }
                 }
             }
-            load(app)
+        } catch (e: Throwable) {
+            // If scheduling failed synchronously, no worker owns this count.
+            operations.end()
+            if (!busy) stage = ""
             notifyUi()
+            throw e
         }
     }
 
@@ -383,25 +396,37 @@ object Fox {
         val app = c.applicationContext
         val session = FoxStore.credentials(app)
         operations.begin()
-        stage = c.getString(R.string.fox_stage_measure)
-        notifyUi()
-        thread {
-            val stale = servers.filter { freshProbe(it.host + ":" + it.port) == null }
-            for (sample in FoxPath.measure(stale)) {
-                probes[sample.host + ":" + sample.port] = ProbeEntry(sample, System.currentTimeMillis())
-            }
-            val chosen = FoxStore.selected(app)
-            if (chosen == "REC" || chosen == "AUTO" || chosen.isEmpty() || servers.none { it.code == chosen }) {
-                val best = autoCandidates(app).firstOrNull()
-                val current = FoxStore.credentials(app)
-                if (best != null && current.id == session.id && current.revision == session.revision) {
-                    FoxStore.setSelected(app, best.code)
+        try {
+            stage = c.getString(R.string.fox_stage_measure)
+            notifyUi()
+            thread {
+                try {
+                    val stale = servers.filter { freshProbe(it.host + ":" + it.port) == null }
+                    for (sample in FoxPath.measure(stale)) {
+                        probes[sample.host + ":" + sample.port] = ProbeEntry(sample, System.currentTimeMillis())
+                    }
+                    val chosen = FoxStore.selected(app)
+                    if (chosen == "REC" || chosen == "AUTO" || chosen.isEmpty() || servers.none { it.code == chosen }) {
+                        val best = autoCandidates(app).firstOrNull()
+                        val current = FoxStore.credentials(app)
+                        if (best != null && current.id == session.id && current.revision == session.revision) {
+                            FoxStore.setSelected(app, best.code)
+                        }
+                    }
+                    message = "ping"
+                } catch (e: Exception) {
+                    message = e.message ?: "Network error"
+                } finally {
+                    operations.end()
+                    if (!busy) stage = ""
+                    notifyUi()
                 }
             }
+        } catch (e: Throwable) {
             operations.end()
             if (!busy) stage = ""
-            message = "ping"
             notifyUi()
+            throw e
         }
     }
 
