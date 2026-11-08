@@ -152,7 +152,28 @@ class FoxVpnService : VpnService() {
                 }
                 open
             },
-            prepareDns = { dnsScope() }
+            prepareDns = { dnsScope() },
+            prepareUdp = { address, port ->
+                // UDP is always tunnelled, including split-routing cases; an
+                // unsupported relay is never replaced by an unprotected socket.
+                val scope = if (lifetime.get()) FoxLink.transportScope() else null
+                scope?.let { expected ->
+                    val open: () -> FoxDatagramPipe = {
+                        if (!lifetime.get() || !FoxLink.transportIsCurrent(expected.ticket)) throw IOException("tunnel stopped")
+                        val token = FoxLink.pass(app)
+                        if (token.isEmpty()) throw IOException("no pass")
+                        val pipe = FoxTunnel.openUDP(expected.location, address, port, token, expectedTransport = expected.ticket)
+                        if (!lifetime.get() || !FoxLink.transportIsCurrent(expected.ticket)) {
+                            pipe.close()
+                            throw IOException("tunnel stopped")
+                        }
+                        ScopedDatagramPipe(pipe) {
+                            lifetime.get() && FoxLink.transportIsCurrent(expected.ticket)
+                        }
+                    }
+                    open
+                }
+            }
         )
         engine.start()
         stack = engine

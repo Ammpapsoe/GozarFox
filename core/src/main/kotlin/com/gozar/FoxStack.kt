@@ -50,7 +50,10 @@ class FoxStack(
     // Capture a flow's lifecycle scope before it is submitted to a worker.
     private val prepareDial: ((String, String, Int) -> (() -> FoxPipe))? = null,
     // Capture DNS ownership at packet/flow admission, before worker dispatch.
-    private val prepareDns: (() -> FoxDnsScope?)? = null
+    private val prepareDns: (() -> FoxDnsScope?)? = null,
+    // Capture the owning transport attempt before a UDP flow is queued.
+    // Null means non-DNS UDP is explicitly unavailable, never direct.
+    private val prepareUdp: ((String, Int) -> (() -> FoxDatagramPipe)?)? = null
 ) {
 
     private val mtu = mtu.coerceIn(576, 65535)
@@ -71,6 +74,9 @@ class FoxStack(
         private const val FLIGHT_CAP = 256 * 1024
         private const val MASK = 0xFFFFFFFFL
         private const val MAX_FLOWS = 256
+        private const val MAX_UDP_FLOWS = 64
+        private const val MAX_UDP_QUEUED = 32
+        private const val UDP_IDLE_MS = 90_000L
         private const val MAX_NAMES = 4096
         private const val SYN_BURST = 256
         private const val MAX_PENDING = 10
@@ -79,6 +85,8 @@ class FoxStack(
     }
 
     private val flows = ConcurrentHashMap<Long, Flow>()
+    private val udpLock = Any()
+    private val udpFlows = HashMap<Long, UdpFlow>()
 
     /** Bounded LRU: the resolver learns a name per address and forgets the oldest instead of all. */
     private val names: MutableMap<Int, String> =
@@ -114,12 +122,17 @@ class FoxStack(
                     flows.remove(entry.key, entry.value)
                     entry.value.shutdown()
                 }
+                val udpLimit = System.currentTimeMillis() - UDP_IDLE_MS
+                val expired = synchronized(udpLock) { udpFlows.values.filter { it.idleAt < udpLimit } }
+                for (flow in expired) flow.shutdownIfIdle(udpLimit)
             }
         }
     }
 
     fun stop() {
         running = false
+        val datagrams = synchronized(udpLock) { udpFlows.values.toList() }
+        datagrams.forEach { it.shutdown() }
         for (flow in flows.values) {
             try {
                 flow.shutdown()
@@ -268,11 +281,12 @@ class FoxStack(
         val serverPort = u16(packet, header + 2)
         val length = u16(packet, header + 4)
         val start = header + 8
-        if (length < 20 || start + length - 8 > total) return
+        if (length < 8 || start + length - 8 > total) return
         if (serverPort != 53) {
-            unreachable(target, packet, total)
+            routeDatagram(packet, total, target, appPort, serverPort, start, length)
             return
         }
+        if (length < 20) return // DNS has a 12-byte minimum message header.
         val scope = try { prepareDns?.invoke() } catch (_: Exception) { null }
         if (prepareDns != null && scope == null) return
         if (scope?.isCurrent() == false) return
@@ -296,6 +310,136 @@ class FoxStack(
             if (running && scope?.isCurrent() != false && failure != null) replyUdp(target, appPort, serverPort, failure)
         }
     }
+
+    private fun routeDatagram(packet: ByteArray, total: Int, target: Int, appPort: Int, remotePort: Int, start: Int, length: Int) {
+        if (!running) return
+        val key = key(appPort, target, remotePort)
+        var selected = synchronized(udpLock) { udpFlows[key] }
+        var created = false
+        if (selected == null) {
+            val opener = try { prepareUdp?.invoke(address(target), remotePort) } catch (_: Exception) { null }
+            if (opener == null) {
+                unreachable(target, packet, total)
+                return
+            }
+            synchronized(udpLock) {
+                if (!running) return
+                selected = udpFlows[key]
+                if (selected == null && udpFlows.size < MAX_UDP_FLOWS) {
+                    selected = UdpFlow(key, appPort, target, remotePort, opener)
+                    udpFlows[key] = selected!!
+                    created = true
+                }
+            }
+        }
+        val flow = selected
+        if (flow == null) {
+            unreachable(target, packet, total)
+            return
+        }
+        val payload = packet.copyOfRange(start, start + length - 8)
+        if (flow.enqueue(payload)) {
+            meter(false, length.toLong())
+            if (created) flow.begin()
+        } else if (created) {
+            flow.shutdown()
+        }
+    }
+
+    private inner class UdpFlow(
+        private val key: Long,
+        private val appPort: Int,
+        private val target: Int,
+        private val remotePort: Int,
+        private val opener: () -> FoxDatagramPipe
+    ) {
+        private val lock = Any()
+        private val pending = ArrayBlockingQueue<ByteArray>(MAX_UDP_QUEUED)
+        @Volatile var idleAt: Long = System.currentTimeMillis()
+            private set
+        @Volatile private var closed = false
+        private var relay: FoxDatagramPipe? = null
+
+        fun enqueue(payload: ByteArray): Boolean = synchronized(lock) {
+            if (closed || !running) false else pending.offer(payload).also {
+                if (it) idleAt = System.currentTimeMillis()
+            }
+        }
+
+        fun begin() {
+            try {
+                workers.execute {
+                    try {
+                        val opened = opener()
+                        val accepted = synchronized(lock) {
+                            if (closed || !running) false else {
+                                relay = opened
+                                true
+                            }
+                        }
+                        if (!accepted) {
+                            opened.close()
+                            return@execute
+                        }
+                        try {
+                            workers.execute { receive(opened) }
+                        } catch (_: RejectedExecutionException) {
+                            shutdown()
+                            return@execute
+                        }
+                        while (running && !closed) {
+                            val payload = pending.poll(1, TimeUnit.SECONDS) ?: continue
+                            if (!running || closed) break
+                            opened.send(payload)
+                        }
+                    } catch (_: Exception) {
+                        // A refused/failed relay never falls back to direct UDP.
+                    } finally {
+                        shutdown()
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                shutdown()
+            }
+        }
+
+        private fun receive(opened: FoxDatagramPipe) {
+            try {
+                while (running && !closed) {
+                    val payload = opened.receive() ?: break
+                    // The stack does not implement IP fragmentation; never
+                    // emit a packet larger than the configured tunnel MTU.
+                    if (payload.size > mtu - 28) continue
+                    synchronized(lock) {
+                        if (closed || !running) return
+                        idleAt = System.currentTimeMillis()
+                        replyUdp(target, appPort, remotePort, payload)
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                shutdown()
+            }
+        }
+
+        fun shutdownIfIdle(limit: Long) = close(limit)
+        fun shutdown() = close(null)
+
+        private fun close(idleLimit: Long?) {
+            val old = synchronized(lock) {
+                if (closed || (idleLimit != null && idleAt >= idleLimit)) return
+                closed = true
+                relay.also { relay = null }
+            }
+            synchronized(udpLock) {
+                if (udpFlows[key] === this) udpFlows.remove(key)
+            }
+            pending.clear()
+            try { old?.close() } catch (_: Exception) { }
+        }
+    }
+
+    internal fun activeDatagrams(): Int = synchronized(udpLock) { udpFlows.size }
 
     private fun learn(query: ByteArray, answer: ByteArray) {
         val name = questionName(query) ?: return
