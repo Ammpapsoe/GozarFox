@@ -17,9 +17,9 @@ import (
 
 type echoDatagramTunnel struct {
 	packets chan []byte
-	done chan struct{}
-	once sync.Once
-	closes atomic.Int32
+	done    chan struct{}
+	once    sync.Once
+	closes  atomic.Int32
 }
 
 func newEchoDatagramTunnel() *echoDatagramTunnel {

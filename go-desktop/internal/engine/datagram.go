@@ -11,15 +11,15 @@ import (
 
 const (
 	maxDatagramFlows = 128
-	datagramIdle = 90 * time.Second
+	datagramIdle     = 90 * time.Second
 )
 
 // datagramFlow prevents a delayed upstream open from escaping Stop. The local
 // endpoint is owned immediately; a remote stream may be attached only while
 // the flow is still live. Neither path can fall back to a direct UDP socket.
 type datagramFlow struct {
-	mu sync.Mutex
-	local *gonet.UDPConn
+	mu     sync.Mutex
+	local  *gonet.UDPConn
 	remote DatagramTunnel
 	closed bool
 }

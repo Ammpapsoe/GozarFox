@@ -71,22 +71,22 @@ type resolver interface {
 }
 
 type Engine struct {
-	stack  *stack.Stack
-	device *tundev.Device
-	config tundev.Config
-	dial   Dialer
-	direct Dialer
-	split  *geo.Rules
-	dns    resolver
-	udpDial DatagramDialer
-	udpMu sync.Mutex
-	udpClosing bool
+	stack           *stack.Stack
+	device          *tundev.Device
+	config          tundev.Config
+	dial            Dialer
+	direct          Dialer
+	split           *geo.Rules
+	dns             resolver
+	udpDial         DatagramDialer
+	udpMu           sync.Mutex
+	udpClosing      bool
 	udpReservations int
-	udpFlows map[*datagramFlow]struct{}
-	down    atomic.Int64
-	up      atomic.Int64
-	routeMu sync.Mutex
-	once    sync.Once
+	udpFlows        map[*datagramFlow]struct{}
+	down            atomic.Int64
+	up              atomic.Int64
+	routeMu         sync.Mutex
+	once            sync.Once
 }
 
 func Start(proxyHost string, dial Dialer, protect []netip.Addr) (*Engine, error) {
