@@ -5,7 +5,6 @@ import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 data class FoxAccess(val token: String, val id: String, val revision: Long)
@@ -21,7 +20,7 @@ object Fox {
 
     private val probes = ConcurrentHashMap<String, ProbeEntry>()
     private val refreshLock = Any()
-    private val operations = AtomicInteger()
+    private val operations = FoxBusyCounter()
     private val authLock = Any()
     private var authInFlight = false
     private var authEpoch = 0L
@@ -39,7 +38,9 @@ object Fox {
     @Volatile var limit: Long = 0L
     @Volatile var remaining: Long = 0L
     @Volatile var reset: String = ""
-    @Volatile var busy: Boolean = false
+    var busy: Boolean
+        get() = operations.busy
+        internal set(value) { operations.busy = value }
     @Volatile var message: String = ""
     @Volatile var stage: String = ""
     @Volatile var servers: List<FoxLocation> = emptyList()
@@ -98,8 +99,7 @@ object Fox {
     }
 
     private fun work(c: Context, first: Int = 0, failureEpoch: Long? = null, body: () -> Unit) {
-        operations.incrementAndGet()
-        busy = true
+        operations.begin()
         message = ""
         if (first != 0) stage = c.getString(first)
         notifyUi()
@@ -113,7 +113,7 @@ object Fox {
             } catch (e: Exception) {
                 failure = e.message ?: "Network error"
             }
-            busy = operations.decrementAndGet() > 0
+            operations.end()
             if (!busy) stage = ""
             failure?.let { text ->
                 synchronized(authLock) {
@@ -382,8 +382,7 @@ object Fox {
         if (servers.isEmpty()) return
         val app = c.applicationContext
         val session = FoxStore.credentials(app)
-        operations.incrementAndGet()
-        busy = true
+        operations.begin()
         stage = c.getString(R.string.fox_stage_measure)
         notifyUi()
         thread {
@@ -399,7 +398,7 @@ object Fox {
                     FoxStore.setSelected(app, best.code)
                 }
             }
-            busy = operations.decrementAndGet() > 0
+            operations.end()
             if (!busy) stage = ""
             message = "ping"
             notifyUi()
