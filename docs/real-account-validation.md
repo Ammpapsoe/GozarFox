@@ -1,6 +1,6 @@
 # Real-account validation — incomplete
 
-On 2026-11-07, an explicitly authorized Mozilla test account was used from a
+In November 2026, an explicitly authorized Mozilla test account was used from a
 GitHub-hosted Linux runner against the Gozar desktop authentication code. The
 account password and a new emailed verification code were accepted by the
 sign-in and session-verification calls. The subsequent OAuth token request did
@@ -53,8 +53,14 @@ The same-commit emulator run 42469488226 initially stopped before the emulator
 started because direct downloads of old release APKs returned HTTP 504. The
 candidate CI fixture now uses pinned GitHub release-asset API IDs and SHA-256
 hashes, and still verifies the official signing certificate and package
-versions. This is a CI reliability change, not evidence about the app's network
-behavior.
+versions. After the two older preview releases were removed, their original
+byte-identical, signed universal APKs were recovered from prior Actions build
+artifacts and preserved in the CI-only draft release
+`ci-android-upgrade-fixtures`. The emulator job needs repository write
+permission to read these draft assets; hashes and official signing identity are
+still verified. Do not delete that draft unless its fixtures are preserved and
+repinned first. This is a CI reliability change, not evidence about the app's
+network behavior.
 
 The probe encrypted input to the ephemeral CI job, did not upload passwords,
 verification codes, account identifiers or tokens as artifacts, and removed its

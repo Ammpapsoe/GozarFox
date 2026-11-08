@@ -11,7 +11,7 @@ DEST="${GOZAR_APK_DIR:?set GOZAR_APK_DIR}"
 : "${KEYSTORE_PASSWORD:?}"
 : "${KEY_ALIAS:?}"
 : "${KEY_PASSWORD:?}"
-: "${GH_TOKEN:?GitHub Actions token is required to fetch the pinned public assets}"
+: "${GH_TOKEN:?GitHub Actions token is required to fetch the pinned release assets}"
 mkdir -p "$DEST"
 umask 077
 key=$(mktemp "${RUNNER_TEMP:?}/official-upgrade-test.XXXXXX")
@@ -19,8 +19,10 @@ trap 'rm -f "$key"' EXIT
 printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$key"
 export KEYSTORE_FILE="$key"
 
-# Fetch fixed public release asset IDs through GitHub's API. This avoids a
-# direct release-download 504 while still verifying exact bytes and the signer.
+# Fetch fixed release asset IDs through GitHub's API. The stable fixture is
+# public; the two deleted preview releases' byte-identical APKs are preserved
+# in a CI-only draft release (accessible to the workflow's repository token).
+# Hashes and the official signing identity are verified independently below.
 # curl strips Authorization on cross-host redirects; never use --location-trusted.
 fetch_official() {
   local id="$1" expected="$2" name="$3"
@@ -36,8 +38,8 @@ fetch_official() {
   test "$actual" = "$expected" || { echo "unexpected SHA-256 for $name" >&2; exit 1; }
 }
 fetch_official 713630711 d899da890c82761050e7ebac37be81aedf24aa0d51d45b3452f908f3e3a32a88 official-stable
-fetch_official 720949558 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
-fetch_official 721059789 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
+fetch_official 724340793 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
+fetch_official 724340872 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
 bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
 shopt -s nullglob
 candidates=(app/build/outputs/apk/release/*universal*.apk)

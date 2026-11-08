@@ -18,6 +18,10 @@ permissions:
 jobs:
   android-recovery-emulator:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
+    # Historical signed APKs are in a CI-only draft after their public releases
+    # were removed; GitHub requires push access to read draft release assets.
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

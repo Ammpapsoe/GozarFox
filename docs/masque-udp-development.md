@@ -1,75 +1,64 @@
-# Phase 7: UDP-over-HTTP development (not enabled)
+# UDP over HTTP/2: connected implementation, production validation pending
 
-The current application handles DNS over its existing tunnel, but other UDP is
-still refused. The Kotlin branch code provides **capsule framing only**. The Go
-branch also contains a target-specific, authenticated HTTP/2 extended-CONNECT
-client and serialized capsule stream, but it is **not wired into the desktop
-packet engine** and has no user-facing enable switch. Neither branch changes
-the published release. Do not present this as working app UDP, CONNECT-IP,
-WebRTC, HTTP/3, or a full IP VPN.
+The development branch routes non-DNS IPv4 UDP through the application's VPN
+packet paths on Android and desktop. Each target flow uses an authenticated,
+certificate-verified HTTP/2 extended CONNECT stream with DATAGRAM capsules.
+Existing DNS handling remains separate. Refusal or an unsupported peer does
+**not** fall back to an unprotected UDP socket.
+
+This describes the branch, not an already-published release. Real relay
+acceptance, authenticated account access, end-to-end UDP delivery and destination
+port policy remain unverified. In particular, an earlier unauthenticated probe
+saw `SETTINGS_ENABLE_CONNECT_PROTOCOL=1`, but the relay reset all tested streams;
+that does not prove UDP is supported or unsupported. Fastly's June 2026
+[architecture article](https://www.fastly.com/blog/we-built-proxy-behind-firefoxs-new-built-in-vpn-heres-how-it-works)
+describes the initial Firefox deployment as HTTP/2 TCP CONNECT and discusses
+full MASQUE over HTTP/3 as a future direction. It does not establish whether
+this account's current relay supports HTTP/2 CONNECT-UDP. A user-reported
+successful installation of the older 1.11.2 release is not a UDP test.
+
+## Protocol and routing
 
 The codec implements a bounded subset of the DATAGRAM Capsule Protocol from
 [RFC 9297](https://www.rfc-editor.org/rfc/rfc9297.html) and context-zero UDP
 payload encoding from [RFC 9298](https://www.rfc-editor.org/rfc/rfc9298.html).
-A clean end between capsules is distinct from an empty UDP datagram. Unknown
-types and context IDs are skipped, non-minimal QUIC integer encodings are
-accepted, truncated inputs fail, and resource use is bounded. Capsule values
-larger than 1 MiB are rejected as a local resource policy; UDP payloads above
-65,527 bytes are protocol errors. Stream decoding is incremental and consumes
-unknown values without allocating them in full.
+An empty datagram remains distinct from end of stream. Unknown capsule types
+and context IDs are skipped, malformed/truncated values fail, and memory is
+bounded. The target uses the default well-known UDP URI template; its use by a
+specific production service is an assumption, not a discovery result.
 
-## Disabled desktop stream prototype
+The client currently requires an explicit, unparameterized
+`Capsule-Protocol: ?1`, a 200 response without HTTP representation/body framing
+headers, and a live streaming body. This is stricter than the RFC and may reject
+otherwise-conforming proxies. HTTP/2 carries datagrams over an ordered, reliable
+TCP stream; it does not provide native QUIC datagrams and can suffer
+head-of-line delay. A per-flow idle timeout and concurrency limits bound
+resources. Neither implementation uses a direct UDP fallback on relay failure.
 
-`Manager.OpenUDP` uses the existing authenticated and certificate-verified
-HTTP/2 connection pool, a target-specific well-known UDP path, and
-`Proxy-Authorization`. The Go HTTP/2 client waits for the peer's initial
-`SETTINGS_ENABLE_CONNECT_PROTOCOL` before sending extended CONNECT. Failure
-returns an error; there is no direct UDP fallback. Close/reset of the manager
-closes tracked streams. UDP messages are serialized as bounded capsules, with
-no intermediate per-flow datagram queue. This does not yet account for flow
-limits or routing.
+On Android, non-DNS IPv4 UDP is demultiplexed in `FoxStack` and uses a
+service-lifetime/transport-generation-scoped `FoxTunnel.openUDP` stream. Its
+H2 pool checks the peer setting, decodes complete HPACK response blocks in
+wire order and validates the capsule response. IPv6 and fragmented IP packets
+remain fail-closed; oversized return datagrams are dropped because the stack
+does not fragment them. Split-routing UDP is also sent to the relay; it is not
+sent through the direct TCP bypass. On desktop, the gVisor packet engine uses
+`Manager.OpenUDP` with bounded tracked flows, while DNS keeps its existing
+resolver path. The current desktop engine is IPv4-only.
 
-The first implementation deliberately requires a successful response with an
-explicit, unparameterized `Capsule-Protocol: ?1`, no HTTP representation/body
-framing headers, and a live streaming body. This is stricter than RFC 9297,
-which only recommends that endpoints send the header and permits parameters:
-otherwise-conforming relays may be rejected. Its URI template is an explicit
-assumption requiring production validation, not proof that the relay supports
-it. The normal manager's session-acquisition wait is not guaranteed to fit
-within the supplied per-attempt timeout.
+## Automated evidence and remaining work
 
-Synthetic loopback HTTP/2 tests cover target and credential headers, TLS
-verification, explicit response acceptance, rejection without extended CONNECT
-settings, capsule round trips including empty and maximum-sized payloads, and
-pooled-session reuse. A separate synthetic proxy test forwards bounded capsules
-to a real loopback-only UDP echo socket; it does not exercise the app packet
-engine or an external relay. The test-only x/net server runs in a subprocess
-with `GODEBUG=http2xconnect=1` because that server implementation disables
-extended CONNECT by default; the setting is not changed in the application.
-Separate 50-iteration race tests exercise close while opening and concurrent
-capsule writes / blocked-I/O cancellation. CI results must be checked on the
-actual commit before treating any tests as passed.
+Unit tests use local fake TLS/H2 proxies and virtual packet interfaces. They
+cover datagram boundaries, empty packets, headers/authentication, peer settings,
+rejection without direct fallback and reset/stop races. Android tests also send
+packets through the stack and H2 capsule client in one synthetic path. Desktop
+builds include native TUN-to-local-proxy integration tests on Linux, Windows and
+macOS; results must be checked for the actual commit. Simulated and native-TUN
+local-proxy tests do not prove support by a real upstream relay.
 
-## Remaining work before any routing is enabled
-
-1. Implement equivalent authenticated extended CONNECT on Android. Its current
-   custom HTTP/2 decoder extracts only the status, so it must validate the
-   complete response and Capsule Protocol before sending datagrams. Confirm
-   handling of peer settings and full duplex, without weakening TLS or auth.
-2. Wire bounded per-flow queues and packet demultiplexing into the Android and
-   desktop TUN engines, with cancellation, flow expiry, memory limits, and at
-   least 50 iterations for each new concurrency race. Unsupported UDP must not
-   escape through an unprotected direct socket.
-3. Expand synthetic proxy tests to cover the packet engines, malformed capsules,
-   fragmentation, stop/reset, DNS, UDP replies, loss and backpressure. Then test
-   the actual production relay with user-authorized credentials without
-   publishing secrets.
-4. Investigate CONNECT-IP independently. It carries IP packets and has distinct
-   address, routing, and capsule requirements. A failed or unauthenticated probe
-   is not evidence that a relay lacks the protocol, and a transient/auth error
-   must not be cached as permanent lack of support.
-5. Reassess Android/desktop physical-interface captures and kill-switch behavior
-   before making any claim about device-wide leak protection.
-
-Even a successful synthetic proxy test would not establish production relay
-compatibility or satisfy the real-world Iran connectivity targets.
+Before representing the feature as verified for users, run an authorized
+end-to-end account/relay test against an actual UDP echo destination and
+relevant port policy. Login previously reached HTTP 406 after email verification
+without reaching a relay; see `real-account-validation.md`. Establish actual
+Android-device and desktop-network behavior separately where required. No
+synthetic test proves device-wide leak freedom or the behavior of every network.
+CONNECT-IP is a separate protocol and remains unimplemented.

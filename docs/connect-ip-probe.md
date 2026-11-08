@@ -30,15 +30,18 @@ this client, account, endpoint, or fallback behavior.
 
 ## Decision
 
-Do not enable CONNECT-IP (RFC 9484) or CONNECT-UDP (RFC 9298) solely on this
-probe. Extended CONNECT was advertised, but each protocol needs an authenticated
-in-app test of its actual request, response and datagram formats. CONNECT-IP
-and CONNECT-UDP have different semantics and requirements; they are not
-interchangeable simply by changing the `:protocol` header.
+This probe alone is not a basis for claiming production support for CONNECT-IP
+(RFC 9484) or CONNECT-UDP (RFC 9298). The later development branch connects an
+HTTP/2 CONNECT-UDP client to the application packet paths for automated
+loopback testing, but production acceptance has not been established. Each
+protocol needs an authenticated in-app test of its actual request, response and
+datagram formats. CONNECT-IP and CONNECT-UDP have different semantics and
+requirements; they are not interchangeable simply by changing the `:protocol`
+header.
 
 A failed request, timeout, connection reset or 4xx/5xx does not necessarily
 mean permanent lack of protocol support: authentication, rate limits, server
 health or the network may be responsible. Never cache those failures as a
 permanent downgrade, and never silently send unsupported UDP outside the VPN.
-See `masque-udp-development.md` for the disabled codec foundation and remaining
-validation work.
+See `masque-udp-development.md` for the connected development implementation
+and remaining validation work.
