@@ -138,7 +138,7 @@ jobs:
           cache-dependency-path: go-desktop/go.sum
       - name: Test UDP packet forwarding, capsule framing and HTTP/2 streams
         working-directory: go-desktop
-        run: go test -race ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine -count=1
+        run: go test -race ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config -count=1
 
   release-tools:
     runs-on: ubuntu-latest
