@@ -17,13 +17,16 @@ received HTTP 406; an isolated Python client using the very same access token
 obtained HTTP 200. A Java HTTPS retry restricted to TLS 1.2 also received HTTP
 200 with that same token, while changing common HTTP headers did not help. The
 candidate now retries only a 406 on Mozilla's exact read-only proxy-pass
-endpoint with TLS 1.2, retaining ordinary certificate and hostname checks.
-This desktop JVM is not Android; the retry and full app still require Android
-device validation. A separate real-account desktop Go diagnostic signed in but
-the OAuth exchange encountered a Mozilla security-check failure; a narrowly
-scoped TLS 1.2 retry is being evaluated for that endpoint and the read-only pass
-request. Passwords, codes, tokens and device keys were not placed in CI artifacts. These results do
-not test the full Android VPN service, a physical phone or the desktop app end to end.
+endpoint with TLS 1.2, retaining ordinary certificate and hostname checks. At
+`92fdccd`, the actual Kotlin account core on the desktop JVM successfully
+retrieved a nonempty proxy pass after that retry. At `72ea593`, the actual Go
+account core successfully signed in, exchanged and refreshed tokens, read the
+server list and obtained a pass with a read-only call. The Go candidate retries
+only specific Mozilla token endpoints after 406, with certificate verification
+intact. No entitlement activation was requested by the diagnostics. Passwords,
+codes, tokens and device keys were not placed in CI artifacts. These results
+still do not test the full Android VPN service, a physical phone or the desktop
+app end to end.
 
 An earlier test device's temporary credentials were lost during an environment
 reset; its remote deletion could not be confirmed. A replacement test identity
