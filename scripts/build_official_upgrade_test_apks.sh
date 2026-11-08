@@ -11,6 +11,7 @@ DEST="${GOZAR_APK_DIR:?set GOZAR_APK_DIR}"
 : "${KEYSTORE_PASSWORD:?}"
 : "${KEY_ALIAS:?}"
 : "${KEY_PASSWORD:?}"
+: "${GH_TOKEN:?GitHub Actions token is required to fetch the pinned public assets}"
 mkdir -p "$DEST"
 umask 077
 key=$(mktemp "${RUNNER_TEMP:?}/official-upgrade-test.XXXXXX")
@@ -18,18 +19,25 @@ trap 'rm -f "$key"' EXIT
 printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$key"
 export KEYSTORE_FILE="$key"
 
-curl --fail --location --silent --show-error --retry 3 \
-  https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.4-desktop/Gozar_1.10.4_universal.apk \
-  --output "$DEST/official-stable.apk"
-curl --fail --location --silent --show-error --retry 3 \
-  https://github.com/bardia049b-stack/Gozar/releases/download/v1.11.1/Gozar_1.11.1_universal.apk \
-  --output "$DEST/official-previous.apk"
-curl --fail --location --silent --show-error --retry 3 \
-  https://github.com/bardia049b-stack/Gozar/releases/download/v1.11.2/Gozar_1.11.2_universal.apk \
-  --output "$DEST/official-corrected.apk"
-test -s "$DEST/official-stable.apk"
-test -s "$DEST/official-previous.apk"
-test -s "$DEST/official-corrected.apk"
+# Fetch fixed public release asset IDs through GitHub's API. This avoids a
+# direct release-download 504 while still verifying exact bytes and the signer.
+# curl strips Authorization on cross-host redirects; never use --location-trusted.
+fetch_official() {
+  local id="$1" expected="$2" name="$3"
+  local path="$DEST/$name.apk" actual
+  curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+    --header "Authorization: Bearer $GH_TOKEN" \
+    --header 'Accept: application/octet-stream' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    "https://api.github.com/repos/bardia049b-stack/Gozar/releases/assets/$id" \
+    --output "$path"
+  test -s "$path"
+  actual=$(sha256sum "$path" | awk '{print $1}')
+  test "$actual" = "$expected" || { echo "unexpected SHA-256 for $name" >&2; exit 1; }
+}
+fetch_official 713630711 d899da890c82761050e7ebac37be81aedf24aa0d51d45b3452f908f3e3a32a88 official-stable
+fetch_official 720949558 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
+fetch_official 721059789 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
 bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
 shopt -s nullglob
 candidates=(app/build/outputs/apk/release/*universal*.apk)

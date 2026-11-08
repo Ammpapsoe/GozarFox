@@ -49,6 +49,13 @@ requests already sent to the server. They do not establish that OAuth succeeds,
 that retry resolves HTTP 406, or that Android devices were tested with the real
 account. Signup/link flows and actual device lifecycles still require review.
 
+The same-commit emulator run 42469488226 initially stopped before the emulator
+started because direct downloads of old release APKs returned HTTP 504. The
+candidate CI fixture now uses pinned GitHub release-asset API IDs and SHA-256
+hashes, and still verifies the official signing certificate and package
+versions. This is a CI reliability change, not evidence about the app's network
+behavior.
+
 The probe encrypted input to the ephemeral CI job, did not upload passwords,
 verification codes, account identifiers or tokens as artifacts, and removed its
 temporary repository secret. The completed jobs' logs were checked in memory
