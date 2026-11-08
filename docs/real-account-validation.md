@@ -14,9 +14,12 @@ test device through the relay. A separate diagnostic using the actual shared
 Android account core on a desktop JVM successfully signed in, exchanged and
 refreshed OAuth tokens, and read the server list. Its direct proxy-pass request
 received HTTP 406; an isolated Python client using the very same access token
-obtained HTTP 200. The cause is not established: a desktop JVM is not Android,
-and this result is a release blocker pending investigation and an actual
-Android app test. Passwords,
+obtained HTTP 200. A Java HTTPS retry restricted to TLS 1.2 also received HTTP
+200 with that same token, while changing common HTTP headers did not help. The
+candidate now retries only a 406 on Mozilla's exact read-only proxy-pass
+endpoint with TLS 1.2, retaining ordinary certificate and hostname checks.
+This desktop JVM is not Android; the retry and full app still require Android
+device validation. Passwords,
 codes, tokens and device keys were not placed in CI artifacts. These results do
 not test the full Android VPN service, a physical phone or the desktop app end to end.
 

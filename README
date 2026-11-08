@@ -85,8 +85,10 @@ with local simulated upstreams; the Linux code has also been tested with a local
 HTTP/2 CONNECT relay. A separate authorized live script authenticated a real Firefox account,
 refreshed its token and reached a Mozilla relay. CI-built Kotlin and Go WARP cores also passed UDP
 round trips through a restricted bridge into that relay. In a separate desktop-JVM diagnostic, the
-Android shared account core signed in and refreshed its token, but the proxy-pass request returned
-HTTP 406. These isolated results do not prove the complete Android or desktop app on a physical
+Android shared account core signed in and refreshed its token, but the default-TLS proxy-pass
+request returned HTTP 406; a same-token TLS 1.2 request succeeded. A narrowly scoped TLS 1.2 retry
+has been added, but needs validation on Android. These isolated results do not prove the complete
+Android or desktop app on a physical
 device. See docs/real-account-validation.md.
 Mozilla may present an unsupported security challenge or refuse a request. Desktop IPv6 and some
 existing LAN or relay routes may bypass the tunnel, including UDP. With WARP enabled, selective

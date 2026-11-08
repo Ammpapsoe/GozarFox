@@ -56,8 +56,10 @@ into that real Mozilla relay. The Kotlin core also re-enrolled the same test
 device through Mozilla. These tests are useful transport evidence, but the
 bridge is not the Android VPN interface or the desktop app's production tunnel
 manager. In a separate desktop-JVM diagnostic, the real Android account core
-signed in and refreshed tokens but its direct proxy-pass request received HTTP
-406. Do not treat the Python pass result as proof that the app can connect.
+signed in and refreshed tokens but its default-TLS proxy-pass request received
+HTTP 406; TLS 1.2 succeeded with the same token. A narrowly scoped retry is
+included but has not established actual Android app connectivity. Do not treat
+the Python pass result as proof that the app can connect.
 
 GitHub Actions covers synthetic protocol, lifecycle, UI and security tests;
 signed-upgrade emulator and native desktop TUN tests use simulated upstreams.

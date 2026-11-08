@@ -4,14 +4,35 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
 )
+
+func failure(stage string, err error) {
+	var api *fxa.Error
+	var challenge *fxa.ChallengeRequired
+	var network net.Error
+	switch {
+	case errors.As(err, &api):
+		fmt.Printf("STATE=GO_ACCOUNT_%s_FAILED HTTP=%d ERRNO=%d\n", stage, api.Status, api.Errno)
+	case errors.As(err, &challenge):
+		fmt.Printf("STATE=GO_ACCOUNT_%s_CHALLENGE_REQUIRED\n", stage)
+	case errors.As(err, &network) && network.Timeout():
+		fmt.Printf("STATE=GO_ACCOUNT_%s_TIMEOUT\n", stage)
+	case err != nil && strings.Contains(strings.ToLower(err.Error()), "security check"):
+		fmt.Printf("STATE=GO_ACCOUNT_%s_SECURITY_CHECK_FAILED\n", stage)
+	default:
+		fmt.Printf("STATE=GO_ACCOUNT_%s_FAILED\n", stage)
+	}
+}
 
 func main() {
 	if len(os.Args) != 3 || os.Args[1] != "--allow-account-test" {
@@ -44,7 +65,7 @@ func main() {
 	session, err := fxa.SignIn(input.Email, input.Password)
 	input.Email, input.Password = "", ""
 	if err != nil {
-		fmt.Println("STATE=GO_ACCOUNT_LOGIN_FAILED")
+		failure("LOGIN", err)
 		os.Exit(1)
 	}
 	if session.NeedsOTP {
@@ -52,14 +73,22 @@ func main() {
 		return
 	}
 	tokens, err := fxa.SessionTokens(session.Token)
-	if err != nil || tokens.Access == "" || tokens.Refresh == "" {
-		fmt.Println("STATE=GO_ACCOUNT_OAUTH_FAILED")
+	if err != nil {
+		failure("OAUTH", err)
+		os.Exit(1)
+	}
+	if tokens.Access == "" || tokens.Refresh == "" {
+		fmt.Println("STATE=GO_ACCOUNT_OAUTH_EMPTY_TOKEN")
 		os.Exit(1)
 	}
 	fmt.Println("STATE=GO_ACCOUNT_LOGIN_AND_OAUTH_OK")
 	refreshed, err := fxa.Refresh(tokens.Refresh)
-	if err != nil || refreshed.Access == "" {
-		fmt.Println("STATE=GO_ACCOUNT_REFRESH_FAILED")
+	if err != nil {
+		failure("REFRESH", err)
+		os.Exit(1)
+	}
+	if refreshed.Access == "" {
+		fmt.Println("STATE=GO_ACCOUNT_REFRESH_EMPTY_TOKEN")
 		os.Exit(1)
 	}
 	fmt.Println("STATE=GO_ACCOUNT_REAL_REFRESH_OK")

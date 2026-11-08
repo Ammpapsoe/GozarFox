@@ -3,6 +3,7 @@ package com.gozar
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 class FoxReply(
     val code: Int, val body: String, val headers: Map<String, String>,
@@ -31,6 +32,14 @@ object FoxNet {
 
     fun forget() = jar.clear()
 
+    internal fun mayRetryPassWithTls12(url: String, method: String, status: Int): Boolean = try {
+        val target = URL(url)
+        status == 406 && (method == "GET" || method == "HEAD") &&
+            target.protocol.equals("https", true) && target.host.equals("vpn.mozilla.org", true) &&
+            (target.port == -1 || target.port == 443) && target.path == "/api/v1/fpn/token" &&
+            target.query == null && target.ref == null && target.userInfo == null
+    } catch (_: Exception) { false }
+
     fun call(
         url: String,
         method: String = "GET",
@@ -42,6 +51,12 @@ object FoxNet {
         // The official endpoint may accept it directly; only a 406 warrants a
         // challenge attempt.
         var reply = once(url, method, body, headers, timeout)
+        if (mayRetryPassWithTls12(url, method, reply.code)) {
+            // Some Mozilla edge paths reject the default TLS fingerprint with
+            // 406. Retry only this idempotent pass endpoint, retaining the
+            // platform trust store and hostname verification.
+            reply = once(url, method, body, headers, timeout, tls12 = true)
+        }
         var round = 0
         while (reply.code == 406 && round < 4) {
             round++
@@ -54,6 +69,9 @@ object FoxNet {
             val solved = FoxShield.solve(jar, origin)
             if (!solved) break
             reply = once(url, method, body, headers, timeout)
+            if (mayRetryPassWithTls12(url, method, reply.code)) {
+                reply = once(url, method, body, headers, timeout, tls12 = true)
+            }
         }
         return reply
     }
@@ -63,9 +81,14 @@ object FoxNet {
         method: String,
         body: String?,
         headers: Map<String, String>,
-        timeout: Int
+        timeout: Int,
+        tls12: Boolean = false
     ): FoxReply {
         val connection = URL(url).openConnection() as HttpURLConnection
+        if (tls12) {
+            val secure = connection as? HttpsURLConnection ?: throw java.io.IOException("HTTPS required")
+            secure.sslSocketFactory = FoxTls12(secure.sslSocketFactory)
+        }
         connection.requestMethod = method
         connection.connectTimeout = timeout
         connection.readTimeout = timeout
