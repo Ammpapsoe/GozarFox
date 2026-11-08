@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/engine"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
 	"golang.org/x/net/http2"
 )
@@ -23,6 +24,11 @@ import (
 func TestLiveKernelTunnel(t *testing.T) {
 	if os.Getenv("GOZAR_LIVE_TUN_TEST") != "1" {
 		t.Skip("requires an isolated, privileged kernel tunnel environment")
+	}
+	// The synthetic x/net HTTP/2 server enables extended CONNECT at process
+	// startup. This uses only the isolated test namespace and a fake pass.
+	if !udpTestChild(t, true) {
+		return
 	}
 	if err := wintun.Ensure(); err != nil {
 		t.Fatal(err)
@@ -35,7 +41,34 @@ func TestLiveKernelTunnel(t *testing.T) {
 	defer listener.Close()
 	var lock sync.Mutex
 	requests := 0
+	udpRequests := 0
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodConnect && r.Header.Get(":protocol") == "connect-udp" {
+			if r.Header.Get("Proxy-Authorization") != "Bearer fake-pass" || r.URL.Path != "/.well-known/masque/udp/198.18.0.81/443/" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			lock.Lock()
+			udpRequests++
+			lock.Unlock()
+			w.Header().Set("Capsule-Protocol", "?1")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			for {
+				payload, err := masque.ReadDatagram(r.Body)
+				if err != nil {
+					return
+				}
+				wire, err := masque.EncodeDatagram(payload)
+				if err != nil {
+					return
+				}
+				if _, err = w.Write(wire); err != nil {
+					return
+				}
+				w.(http.Flusher).Flush()
+			}
+		}
 		if r.Method != http.MethodConnect || r.Host != "198.18.0.80:443" || r.Header.Get("Proxy-Authorization") != "Bearer fake-pass" {
 			w.WriteHeader(http.StatusForbidden)
 			return
@@ -77,9 +110,11 @@ func TestLiveKernelTunnel(t *testing.T) {
 		}
 		keep = append(keep, address)
 	}
-	device, err := engine.Start("localhost", func(host string, port int) (io.ReadWriteCloser, error) {
+	device, err := engine.StartSplitUDP("localhost", func(host string, port int) (io.ReadWriteCloser, error) {
 		return manager.Open(host, port, "fake-pass", 10*time.Second)
-	}, keep)
+	}, nil, keep, nil, func(host string, port int) (engine.DatagramTunnel, error) {
+		return manager.OpenUDP(host, port, "fake-pass", 10*time.Second)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,11 +157,30 @@ func TestLiveKernelTunnel(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	udp, err := net.DialTimeout("udp4", "198.18.0.81:443", 10*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = udp.SetDeadline(time.Now().Add(10 * time.Second))
+	for _, payload := range [][]byte{[]byte("one UDP packet"), []byte("another UDP packet")} {
+		if _, err = udp.Write(payload); err != nil {
+			udp.Close()
+			t.Fatal(err)
+		}
+		buffer := make([]byte, 1500)
+		n, err := udp.Read(buffer)
+		if err != nil || !bytes.Equal(buffer[:n], payload) {
+			udp.Close()
+			t.Fatalf("UDP echo: got %q, err=%v", buffer[:n], err)
+		}
+	}
+	udp.Close()
 	lock.Lock()
 	got := requests
+	gotUDP := udpRequests
 	lock.Unlock()
-	if got != count {
-		t.Fatalf("proxy received %d connections, want %d", got, count)
+	if got != count || gotUDP != 1 {
+		t.Fatalf("proxy received %d TCP and %d UDP streams, want %d and 1", got, gotUDP, count)
 	}
 	if runtime.GOOS == "linux" && os.Getenv("GOZAR_LIVE_DNS_CHANGE_TEST") == "1" {
 		if err := os.WriteFile("/etc/resolv.conf", []byte("nameserver 192.0.2.99\n"), 0o644); err != nil {
@@ -134,5 +188,5 @@ func TestLiveKernelTunnel(t *testing.T) {
 		}
 	}
 	device.Stop()
-	t.Logf("real %s packet path passed through a local TLS-verified HTTP/2 CONNECT proxy", device.Device())
+	t.Logf("real %s packet path passed TCP and UDP through a local TLS-verified HTTP/2 proxy", device.Device())
 }
