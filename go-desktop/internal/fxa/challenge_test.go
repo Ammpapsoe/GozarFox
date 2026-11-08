@@ -38,7 +38,7 @@ func TestChallengeRetriesLoginWithCookies(t *testing.T) {
 	hash := hex.EncodeToString(sum[:])
 	client.Transport = fakeTransport(func(r *http.Request) (*http.Response, error) {
 		switch {
-		case r.URL.Host == "api.accounts.firefox.com" && r.URL.Path == "/v1/account/login":
+		case r.URL.Host == "oauth.accounts.firefox.com" && r.URL.Path == "/v1/account/login":
 			requests++
 			if requests == 1 {
 				return testResponse(406, ""), nil
@@ -92,7 +92,7 @@ func TestCaptchaDisplayedAndRetriedInsideApp(t *testing.T) {
 	attempts := 0
 	client.Transport = fakeTransport(func(r *http.Request) (*http.Response, error) {
 		switch {
-		case r.URL.Host == "api.accounts.firefox.com" && r.URL.Path == "/v1/account/login":
+		case r.URL.Host == "oauth.accounts.firefox.com" && r.URL.Path == "/v1/account/login":
 			if _, err := r.Cookie("_fs_ch_cp_test"); err != nil {
 				return testResponse(406, ""), nil
 			}

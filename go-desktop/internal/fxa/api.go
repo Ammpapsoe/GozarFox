@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	userAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
+	userAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
 	clientID    = "5882386c6d801776"
 	scope       = "profile https://identity.mozilla.com/apps/vpn"
-	authBase    = "https://api.accounts.firefox.com/v1"
+	authBase    = "https://oauth.accounts.firefox.com/v1"
+	accountBase = "https://api.accounts.firefox.com/v1"
+	refreshURL  = "https://oauth.accounts.firefox.com/v1/token"
 	guardianURL = "https://vpn.mozilla.org"
 	serversURL  = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"
 )
@@ -39,7 +41,8 @@ func (e *Error) Error() string { return e.Message }
 func call(method, url, body string, headers map[string]string) (*Reply, error) {
 	for attempt := 0; attempt < 3; attempt++ {
 		reply, err := callOnce(method, url, body, headers)
-		if err != nil || reply.Code != http.StatusNotAcceptable || !strings.HasPrefix(url, authBase+"/") {
+		if err != nil || reply.Code != http.StatusNotAcceptable ||
+			(!strings.HasPrefix(url, authBase+"/") && !strings.HasPrefix(url, accountBase+"/")) {
 			return reply, err
 		}
 		if err := solveChallenge(); err != nil {
@@ -60,6 +63,9 @@ func callOnce(method, url, body string, headers map[string]string) (*Reply, erro
 	}
 	request.Header.Set("User-Agent", userAgent)
 	request.Header.Set("Accept", "application/json")
+	if strings.HasPrefix(url, authBase+"/") || strings.HasPrefix(url, accountBase+"/") {
+		request.Header.Set("Accept-Encoding", "identity")
+	}
 	if body != "" {
 		request.Header.Set("Content-Type", "application/json")
 	}
@@ -161,9 +167,8 @@ func signIn(email, password, unblock string) (*Session, error) {
 
 func signInAs(email, password, original, unblock string) (*Session, error) {
 	body := map[string]any{
-		"email":              email,
-		"authPW":             fmt.Sprintf("%x", AuthPW(email, password)),
-		"verificationMethod": "email-2fa",
+		"email":  email,
+		"authPW": fmt.Sprintf("%x", AuthPW(email, password)),
 	}
 	if original != "" {
 		body["originalLoginEmail"] = original
@@ -177,7 +182,7 @@ func signInAs(email, password, original, unblock string) (*Session, error) {
 		return nil, err
 	}
 	if reply.Code == 400 && replyCode(reply.Body) == 107 {
-		delete(body, "verificationMethod")
+		body["verificationMethod"] = "email-2fa"
 		payload, _ = json.Marshal(body)
 		if reply, err = call("POST", authBase+"/account/login", string(payload), nil); err != nil {
 			return nil, err
@@ -186,6 +191,12 @@ func signInAs(email, password, original, unblock string) (*Session, error) {
 	session, err := readSession(reply)
 	if err == nil {
 		session.Email = email
+		if session.VerificationMethod == "email" {
+			// Let Mozilla decide whether this normal email-method sign-in
+			// session is eligible for OAuth; this is not an OTP bypass.
+			session.NeedsOTP = false
+			session.ByLink = false
+		}
 	}
 	return session, err
 }
@@ -239,7 +250,7 @@ func Register(email, password string) (*Session, error) {
 		"service":            "sync",
 		"verificationMethod": "email-otp",
 	})
-	reply, err := call("POST", authBase+"/account/create", string(body), nil)
+	reply, err := call("POST", accountBase+"/account/create", string(body), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +264,7 @@ func Register(email, password string) (*Session, error) {
 
 func VerifySignup(uid, code string) error {
 	body, _ := json.Marshal(map[string]string{"uid": uid, "code": strings.TrimSpace(code)})
-	reply, err := call("POST", authBase+"/recovery_email/verify_code", string(body), nil)
+	reply, err := call("POST", accountBase+"/recovery_email/verify_code", string(body), nil)
 	if err != nil {
 		return err
 	}
@@ -321,7 +332,7 @@ func Refresh(refreshToken string) (*Tokens, error) {
 		"refresh_token": refreshToken,
 		"scope":         scope,
 	})
-	reply, err := call("POST", authBase+"/oauth/token", string(body), nil)
+	reply, err := call("POST", refreshURL, string(body), nil)
 	if err != nil {
 		return nil, err
 	}

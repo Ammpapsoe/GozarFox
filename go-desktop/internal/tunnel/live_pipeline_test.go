@@ -113,7 +113,11 @@ func TestLiveKernelTunnel(t *testing.T) {
 	device, err := engine.StartSplitUDP("localhost", func(host string, port int) (io.ReadWriteCloser, error) {
 		return manager.Open(host, port, "fake-pass", 10*time.Second)
 	}, nil, keep, nil, func(host string, port int) (engine.DatagramTunnel, error) {
-		return manager.OpenUDP(host, port, "fake-pass", 10*time.Second)
+		stream, err := manager.OpenUDP(host, port, "fake-pass", 10*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		return stream, nil
 	})
 	if err != nil {
 		t.Fatal(err)

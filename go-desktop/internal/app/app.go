@@ -758,7 +758,11 @@ func (a *App) connect() error {
 		a.noteActivity()
 		// Only the authenticated proxy is used for datagrams. An unsupported
 		// relay or a failed UDP open must never fall back to a direct socket.
-		return transport.OpenUDP(host, remotePort, current, 15*time.Second)
+		stream, err := transport.OpenUDP(host, remotePort, current, 15*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		return stream, nil
 	}
 	created, err := engine.StartSplitUDP(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
 	if err != nil {

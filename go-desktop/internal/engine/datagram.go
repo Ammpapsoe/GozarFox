@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"reflect"
 	"sync"
 	"time"
 
@@ -119,12 +120,27 @@ func (e *Engine) handleDatagram(request *udp.ForwarderRequest) {
 	go e.relayDatagrams(flow, id.LocalAddress.String(), int(id.LocalPort))
 }
 
+// An interface can contain a typed nil pointer. Treat it as absent before
+// invoking Close or Read: a refused dial must not crash the whole VPN process.
+func absentDatagram(remote DatagramTunnel) bool {
+	if remote == nil {
+		return true
+	}
+	value := reflect.ValueOf(remote)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
 func (e *Engine) relayDatagrams(flow *datagramFlow, host string, port int) {
 	defer e.forgetDatagram(flow)
 	defer flow.close()
 	remote, err := e.udpDial(host, port)
-	if err != nil || remote == nil {
-		if remote != nil {
+	if err != nil || absentDatagram(remote) {
+		if !absentDatagram(remote) {
 			_ = remote.Close()
 		}
 		return

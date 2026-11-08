@@ -390,6 +390,7 @@ func (s *challengeState) installCookies() error {
 	}
 	source, _ := url.Parse(s.base + "/")
 	api, _ := url.Parse("https://api.accounts.firefox.com/")
+	oauth, _ := url.Parse("https://oauth.accounts.firefox.com/")
 	site, _ := url.Parse("https://accounts.firefox.com/")
 	var cookies []*http.Cookie
 	for _, cookie := range s.client.Jar.Cookies(source) {
@@ -401,6 +402,7 @@ func (s *challengeState) installCookies() error {
 		return errors.New("security check did not issue a cookie")
 	}
 	client.Jar.SetCookies(api, cookies)
+	client.Jar.SetCookies(oauth, cookies)
 	client.Jar.SetCookies(site, cookies)
 	return nil
 }

@@ -60,7 +60,7 @@ object FoxApi {
             .put("service", "sync")
             .put("verificationMethod", "email-otp")
             .toString()
-        val reply = FoxNet.call(FoxNet.AUTH + "/account/create", "POST", body)
+        val reply = FoxNet.call(FoxNet.ACCOUNT_AUTH + "/account/create", "POST", body)
         val data = json(reply)
         val verified = data.optBoolean("verified", data.optBoolean("emailVerified", false))
         return FoxSession(data.optString("uid"), data.optString("sessionToken"), !verified, false)
@@ -68,7 +68,7 @@ object FoxApi {
 
     fun signIn(email: String, password: String): FoxSession {
         val authPw = FoxCrypto.hex(FoxCrypto.authPw(email, password))
-        val first = attemptSignIn(email, password, authPw, "email-2fa", "")
+        val first = attemptSignIn(email, password, authPw, "", "")
         if (first.code == 400) {
             val json = try {
                 JSONObject(first.body)
@@ -76,8 +76,8 @@ object FoxApi {
                 null
             }
             if (json != null && json.optInt("errno", 0) == 107) {
-                val plain = attemptSignIn(email, password, authPw, "", "")
-                return readSignIn(plain)
+                val twoFactor = attemptSignIn(email, password, authPw, "email-2fa", "")
+                return readSignIn(twoFactor)
             }
         }
         return readSignIn(first)
@@ -101,19 +101,22 @@ object FoxApi {
         return FoxNet.call(FoxNet.AUTH + "/account/login", "POST", body)
     }
 
-    private fun readSignIn(reply: FoxReply): FoxSession {
+    internal fun readSignIn(reply: FoxReply): FoxSession {
         val data = json(reply)
         val token = data.optString("sessionToken")
         val verified = data.optBoolean("verified", false)
         val method = data.optString("verificationMethod", "")
-        val byLink = method == "email"
-        return FoxSession(data.optString("uid"), token, !verified, byLink)
+        // A normal email-method session may be eligible for OAuth even when
+        // its sessionVerified flag is false. Let Mozilla decide in the token
+        // exchange; do not treat email-2fa or totp-2fa as already verified.
+        val tryExchange = verified || method == "email"
+        return FoxSession(data.optString("uid"), token, !tryExchange, false)
     }
 
     fun verifyEmail(sessionToken: String, uid: String, code: String) {
         var last: Exception? = null
         val signed = JSONObject().put("code", code).toString()
-        val url = java.net.URL(FoxNet.AUTH + "/recovery_email/verify_code")
+        val url = java.net.URL(FoxNet.ACCOUNT_AUTH + "/recovery_email/verify_code")
         try {
             val header = authHeader(sessionToken, "POST", url, signed)
             val reply = FoxNet.call(url.toString(), "POST", signed, mapOf("Authorization" to header))
@@ -124,7 +127,7 @@ object FoxApi {
         }
         val plain = JSONObject().put("uid", uid).put("code", code).toString()
         try {
-            val reply = FoxNet.call(FoxNet.AUTH + "/recovery_email/verify_code", "POST", plain)
+            val reply = FoxNet.call(FoxNet.ACCOUNT_AUTH + "/recovery_email/verify_code", "POST", plain)
             if (reply.code in 200..299) return
             last = failure(reply)
         } catch (e: Exception) {
@@ -152,7 +155,7 @@ object FoxApi {
     }
 
     fun resendSignupCode(sessionToken: String) {
-        val url = java.net.URL(FoxNet.AUTH + "/recovery_email/resend_code")
+        val url = java.net.URL(FoxNet.ACCOUNT_AUTH + "/recovery_email/resend_code")
         val header = authHeader(sessionToken, "POST", url, "")
         FoxNet.call(url.toString(), "POST", "", mapOf("Authorization" to header))
     }
@@ -189,7 +192,7 @@ object FoxApi {
             .put("refresh_token", refreshToken)
             .put("scope", FoxNet.SCOPE)
             .toString()
-        val reply = FoxNet.call(FoxNet.AUTH + "/oauth/token", "POST", body)
+        val reply = FoxNet.call(FoxNet.TOKEN_REFRESH, "POST", body)
         val data = json(reply)
         return FoxTokens(
             data.optString("access_token"),
