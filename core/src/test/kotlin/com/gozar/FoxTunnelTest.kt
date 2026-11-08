@@ -89,6 +89,39 @@ class FoxTunnelTest {
     }
 
     @Test
+    fun udpPacketsFlowThroughAuthenticatedProxyAndBackToTheStack() {
+        LocalProxy(udpMode = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            val input = PacketInput()
+            val output = PacketOutput()
+            val stack = FoxStack(
+                input, output, 0x0a6f0002, FoxResolver(0),
+                { _, _, _ -> throw java.io.IOException("unexpected direct dial") },
+                { _, _ -> },
+                prepareUdp = { host, port ->
+                    val open: () -> FoxDatagramPipe = { FoxTunnel.openUDP(location, host, port, "local-test-only", 4000) }
+                    open
+                }
+            )
+            stack.start()
+            try {
+                for (payload in listOf("through-proxy".toByteArray(), byteArrayOf())) {
+                    input.offer(udpPacket(payload))
+                    val reply = output.next()
+                    assertEquals(17, reply[9].toInt() and 255)
+                    assertArrayEquals(payload, reply.copyOfRange(28, reply.size))
+                }
+                assertTrue(proxy.authHeads.single().contains("Bearer local-test-only"))
+                assertTrue(proxy.authHeads.single().contains("/.well-known/masque/udp/203.0.113.7/443/"))
+            } finally {
+                stack.stop()
+                input.close()
+            }
+        }
+    }
+
+    @Test
     fun udpRequiresExtendedConnectAndCapsuleConfirmation() {
         for ((settings, capsule) in listOf(false to true, true to false)) {
             LocalProxy(udpMode = true, udpSettings = settings, udpCapsule = capsule).use { proxy ->
@@ -97,6 +130,24 @@ class FoxTunnelTest {
                 val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
                 assertTrue(runCatching { FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000) }.isFailure)
                 assertEquals(listOf("h2"), proxy.protocols.toList())
+            }
+        }
+    }
+
+    @Test
+    fun udpStreamRejectsWritesAfterResetAcrossFiftyRaces() {
+        LocalProxy(udpMode = true).use { proxy ->
+            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
+            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
+            repeat(50) { iteration ->
+                val stream = FoxTunnel.openUDP(location, "203.0.113.7", 443, "local-test-only", 4000)
+                try {
+                    FoxTunnel.resetTransport()
+                    assertTrue("UDP write survived reset at $iteration", runCatching { stream.send(byteArrayOf(7)) }.isFailure)
+                    assertEquals("UDP stream remained registered at $iteration", 0, FoxTunnel.activeH2Count())
+                } finally {
+                    stream.close()
+                }
             }
         }
     }
@@ -680,6 +731,21 @@ class FoxTunnelTest {
     }
 
     companion object {
+        private fun udpPacket(data: ByteArray): ByteArray {
+            val packet = ByteArray(28 + data.size)
+            packet[0] = 0x45
+            packet[8] = 64
+            packet[9] = 17
+            put16(packet, 2, packet.size)
+            byteArrayOf(10, 111, 0, 2).copyInto(packet, 12)
+            byteArrayOf(203.toByte(), 0, 113, 7).copyInto(packet, 16)
+            put16(packet, 20, 40000)
+            put16(packet, 22, 443)
+            put16(packet, 24, 8 + data.size)
+            data.copyInto(packet, 28)
+            return packet
+        }
+
         private fun tcp(sequence: Long, acknowledgment: Long, flags: Int, data: ByteArray): ByteArray {
             val packet = ByteArray(40 + data.size)
             packet[0] = 0x45
