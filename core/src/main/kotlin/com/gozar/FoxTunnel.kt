@@ -707,10 +707,17 @@ object FoxTunnel {
      * A reader thread demultiplexes the frames; each stream keeps its own inbox
      * and half of the flow-control state lives here, under [stateLock].
      */
-    internal class H2Session(location: FoxLocation, timeout: Int, generation: Long, private val udp: Boolean = false) {
+    internal class H2Session(
+        location: FoxLocation?, timeout: Int, generation: Long,
+        private val udp: Boolean = false,
+        providedSocket: SSLSocket? = null,
+        private val warp: Boolean = false
+    ) {
 
-        internal val socket: SSLSocket = connect(location, arrayOf("h2"), timeout, generation)
-        private val proxyAuthority = authority(location.host, location.port)
+        internal val socket: SSLSocket = providedSocket ?: connect(
+            location ?: throw java.io.IOException("missing relay"), arrayOf("h2"), timeout, generation
+        )
+        private val proxyAuthority = location?.let { authority(it.host, it.port) } ?: ""
         private val input: BufferedInputStream
         private val output: BufferedOutputStream
         private val outputLock = Any()
@@ -853,6 +860,46 @@ object FoxTunnel {
                 if (!stream.awaitOpen((deadline - System.currentTimeMillis()).coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())) {
                     throw stream.refusal() ?: java.io.IOException("the UDP proxy did not answer in time")
                 }
+                return FoxDuplex(stream)
+            } catch (error: Exception) {
+                removeStream(id)
+                cancel(id)
+                throw error
+            }
+        }
+
+        /** Cloudflare WARP's classic CONNECT-IP uses bare IP capsules, not CONNECT-UDP. */
+        fun openWarpIP(timeout: Int): FoxDuplex {
+            if (!udp || !warp) throw java.io.IOException("not a WARP session")
+            val deadline = System.currentTimeMillis() + timeout.coerceAtLeast(1)
+            val block = ByteArrayOutputStream().apply {
+                write(pair(":method", "CONNECT"))
+                write(pair(":authority", "cloudflareaccess.com:443"))
+                write(pair("cf-connect-proto", "cf-connect-ip"))
+                write(pair("pq-enabled", "false"))
+                write(pair("user-agent", ""))
+            }.toByteArray()
+            val (id, stream) = synchronized(udpOpenLock) {
+                val allocated = synchronized(stateLock) {
+                    if (dead || streams.size >= serverMaxStreams) throw java.io.IOException("WARP session unavailable")
+                    val next = nextId
+                    if (next <= 0 || next > Int.MAX_VALUE - 2) throw java.io.IOException("HTTP/2 stream IDs exhausted")
+                    nextId += 2
+                    val created = FoxDuplex.H2(this, next, bounded = true)
+                    streams[next] = created
+                    next to created
+                }
+                try {
+                    sendFrame(frame(0x01, 0x04, allocated.first, block))
+                } catch (error: Exception) {
+                    removeStream(allocated.first)
+                    throw error
+                }
+                allocated
+            }
+            try {
+                val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                if (!stream.awaitOpen(remaining)) throw stream.refusal() ?: java.io.IOException("WARP CONNECT-IP timed out")
                 return FoxDuplex(stream)
             } catch (error: Exception) {
                 removeStream(id)
@@ -1090,8 +1137,9 @@ object FoxTunnel {
                 }
                 if (reply !in 200..299) {
                     stream.fail(FoxProxyRefusal(reply, reason(reply, mapOf())))
-                } else if (reply in setOf(204, 205, 206) || ended || headers.invalidBodyHeaders ||
-                    headers.capsuleCount != 1 || headers.capsule != "?1") {
+                } else if ((warp && (reply != 200 || ended)) ||
+                    (!warp && (reply in setOf(204, 205, 206) || ended || headers.invalidBodyHeaders ||
+                        headers.capsuleCount != 1 || headers.capsule != "?1"))) {
                     stream.fail(java.io.IOException("the proxy did not establish a valid UDP capsule stream"))
                 } else {
                     stream.markOpen()
