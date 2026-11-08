@@ -99,7 +99,13 @@ object Fox {
         notifyUi()
     }
 
-    private fun work(c: Context, first: Int = 0, failureEpoch: Long? = null, body: () -> Unit) {
+    private fun work(
+        c: Context,
+        first: Int = 0,
+        failureEpoch: Long? = null,
+        onComplete: () -> Unit = {},
+        body: () -> Unit
+    ) {
         operations.begin()
         try {
             message = ""
@@ -115,17 +121,21 @@ object Fox {
                 } catch (e: Exception) {
                     failure = e.message ?: "Network error"
                 } finally {
-                    operations.end()
-                    if (!busy) stage = ""
-                    failure?.let { text ->
-                        synchronized(authLock) {
-                            if (failureEpoch == null || failureEpoch == authEpoch) message = text
-                        }
-                    }
                     try {
+                        failure?.let { text ->
+                            synchronized(authLock) {
+                                if (failureEpoch == null || failureEpoch == authEpoch) message = text
+                            }
+                        }
                         load(app)
                     } finally {
-                        notifyUi()
+                        try {
+                            onComplete()
+                        } finally {
+                            operations.end()
+                            if (!busy) stage = ""
+                            notifyUi()
+                        }
                     }
                 }
             }
@@ -147,15 +157,15 @@ object Fox {
             authEpoch
         }
         try {
-            work(c, first, failureEpoch = epoch) {
+            work(c, first, failureEpoch = epoch, onComplete = {
+                synchronized(authLock) { authInFlight = false }
+            }) {
                 try {
                     currentAuth(epoch) { }
                     body(epoch)
                 } catch (_: LoginCancelled) {
                     // Logout or cancellation revoked this job's authority to
                     // publish state. Already-started network requests may finish.
-                } finally {
-                    synchronized(authLock) { authInFlight = false }
                 }
             }
         } catch (e: Throwable) {
