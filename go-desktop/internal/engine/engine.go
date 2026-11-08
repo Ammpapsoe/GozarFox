@@ -55,6 +55,16 @@ func tuneTCP(created *stack.Stack) error {
 
 type Dialer func(host string, port int) (io.ReadWriteCloser, error)
 
+// DatagramTunnel is a message-preserving, authenticated UDP relay stream.
+// Close must unblock an in-progress ReadDatagram or WriteDatagram.
+type DatagramTunnel interface {
+	ReadDatagram() ([]byte, error)
+	WriteDatagram([]byte) error
+	Close() error
+}
+
+type DatagramDialer func(host string, port int) (DatagramTunnel, error)
+
 type resolver interface {
 	Resolve([]byte) ([]byte, error)
 	Close()
@@ -68,6 +78,11 @@ type Engine struct {
 	direct Dialer
 	split  *geo.Rules
 	dns    resolver
+	udpDial DatagramDialer
+	udpMu sync.Mutex
+	udpClosing bool
+	udpReservations int
+	udpFlows map[*datagramFlow]struct{}
 	down    atomic.Int64
 	up      atomic.Int64
 	routeMu sync.Mutex
@@ -82,7 +97,17 @@ func StartSplit(proxyHost string, dial, direct Dialer, protect []netip.Addr, spl
 	return start(proxyHost, dial, protect, nil, direct, split)
 }
 
+// StartSplitUDP enables non-DNS UDP through the authenticated datagram dialer.
+// A missing or refusing relay never causes a fallback to a direct UDP socket.
+func StartSplitUDP(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
+	return startUDP(proxyHost, dial, protect, nil, direct, split, udpDial)
+}
+
 func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules) (*Engine, error) {
+	return startUDP(proxyHost, dial, protect, testResolver, direct, split, nil)
+}
+
+func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
 	}
@@ -125,7 +150,7 @@ func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver res
 		{Destination: header.IPv4EmptySubnet, NIC: 1},
 	})
 
-	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver}
+	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver, udpDial: udpDial}
 	if engine.dns == nil {
 		engine.dns = dnsproxy.New(dial)
 	}
@@ -189,7 +214,9 @@ func (e *Engine) handleTCP(request *tcp.ForwarderRequest) {
 func (e *Engine) listenUDP(created *stack.Stack) {
 	forwarder := udp.NewForwarder(created, e.handleUDP)
 	created.SetTransportProtocolHandler(udp.ProtocolNumber, func(id stack.TransportEndpointID, packet *stack.PacketBuffer) bool {
-		if id.LocalPort != 53 {
+		if id.LocalPort != 53 && !e.reserveDatagram() {
+			// No relay, shutdown, or the bounded flow limit was reached.
+			// Returning false lets the stack signal unreachable, not bypass.
 			return false
 		}
 		return forwarder.HandlePacket(id, packet)
@@ -197,6 +224,10 @@ func (e *Engine) listenUDP(created *stack.Stack) {
 }
 
 func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
+	if request.ID().LocalPort != 53 {
+		e.handleDatagram(request)
+		return
+	}
 	go func() {
 		queue := &waiter.Queue{}
 		endpoint, terr := request.CreateEndpoint(queue)
@@ -308,6 +339,8 @@ func (e *Engine) Failures() <-chan error {
 
 func (e *Engine) Stop() {
 	e.once.Do(func() {
+		// Revoke datagram publication before network routes are restored.
+		e.shutdownDatagrams()
 		tundev.Restore(&e.config)
 		if e.dns != nil {
 			e.dns.Close()

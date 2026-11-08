@@ -750,7 +750,17 @@ func (a *App) connect() error {
 			return net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)), 15*time.Second)
 		}
 	}
-	created, err := engine.StartSplit(chosen.target.Host, dial, direct, chosen.keep, split)
+	udpDial := func(host string, remotePort int) (engine.DatagramTunnel, error) {
+		current, err := a.currentPass()
+		if err != nil {
+			return nil, err
+		}
+		a.noteActivity()
+		// Only the authenticated proxy is used for datagrams. An unsupported
+		// relay or a failed UDP open must never fall back to a direct socket.
+		return transport.OpenUDP(host, remotePort, current, 15*time.Second)
+	}
+	created, err := engine.StartSplitUDP(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
 	if err != nil {
 		transport.Close()
 		return err

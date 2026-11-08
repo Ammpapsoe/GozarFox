@@ -16,9 +16,9 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
 )
 
-// UDPStream is a single target's CONNECT-UDP capsule stream. This API is not
-// connected to the desktop packet engine yet. It never falls back to a direct
-// UDP socket; an unsupported proxy or failed authorization returns an error.
+// UDPStream is a single target's CONNECT-UDP capsule stream. The desktop
+// packet engine uses it without any direct-UDP fallback; an unsupported proxy
+// or failed authorization returns an error.
 type UDPStream struct {
 	stream  Dup
 	readMu  sync.Mutex
@@ -64,8 +64,8 @@ func (s *UDPStream) WriteDatagram(payload []byte) error {
 func (s *UDPStream) Close() error { return s.stream.Close() }
 
 // OpenUDP opens an authenticated HTTP/2 extended CONNECT stream for one UDP
-// destination. It is deliberately not wired into TUN yet. x/net/http2 waits for
-// the peer's SETTINGS_ENABLE_CONNECT_PROTOCOL before sending extended CONNECT.
+// destination. x/net/http2 waits for SETTINGS_ENABLE_CONNECT_PROTOCOL before
+// sending extended CONNECT; compatibility with any particular relay is not assumed.
 func (m *Manager) OpenUDP(host string, port int, pass string, timeout time.Duration) (*UDPStream, error) {
 	path, err := udpPath(host, port)
 	if err != nil {
