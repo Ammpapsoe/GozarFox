@@ -19,6 +19,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/killswitch"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
 )
 
@@ -35,6 +36,7 @@ type State struct {
 	Language   string           `json:"language"`
 	Theme      string           `json:"theme"`
 	Recents    bool             `json:"recents"`
+	WarpUDP    bool             `json:"warp_udp"`
 	LastServer string           `json:"last_server"`
 	Chain      []string         `json:"chain"`
 	Stage      string           `json:"stage"`
@@ -71,6 +73,8 @@ type App struct {
 	requestPass     func(string) (*fxa.Pass, error)
 	renewDelay      func(string, time.Time) time.Duration
 	renewCancel     context.CancelFunc
+	connectCancel   context.CancelFunc
+	activeCancel    context.CancelFunc
 	cfg             config.Config
 	servers         []fxa.Location
 	pass            *fxa.Pass
@@ -80,6 +84,7 @@ type App struct {
 	unblockFor      string
 	engine          *engine.Engine
 	transport       *tunnel.Manager
+	warp            *warp.Auto
 	stage           string
 	fault           string
 	live            bool
@@ -123,6 +128,7 @@ func (a *App) State() State {
 		Language:   a.cfg.Language,
 		Theme:      a.cfg.Theme,
 		Recents:    a.cfg.Recents,
+		WarpUDP:    a.cfg.WarpUDP,
 		LastServer: a.cfg.LastServer,
 		Chain:      append([]string(nil), a.cfg.Chain...),
 		Stage:      a.stage,
@@ -639,19 +645,35 @@ func (a *App) RefreshUsage() error {
 func (a *App) Connect() error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
+	return a.connectLocked()
+}
+
+// connectLocked serializes startup with disconnects and setting changes.
+func (a *App) connectLocked() error {
 	a.mu.Lock()
 	if a.live || a.connecting {
 		a.mu.Unlock()
 		return nil
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.connectCancel = cancel
 	a.connecting = true
 	a.fault = ""
 	a.needAdmin = false
 	a.stage = "در حال اتصال…"
 	a.mu.Unlock()
 
-	err := a.connect()
+	err := a.connect(ctx)
 	a.mu.Lock()
+	a.connectCancel = nil
+	if err == nil && ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err == nil {
+		a.activeCancel = cancel
+	} else {
+		cancel()
+	}
 	a.connecting = false
 	a.stage = ""
 	if err != nil {
@@ -667,7 +689,7 @@ func (a *App) Connect() error {
 	return err
 }
 
-func (a *App) connect() error {
+func (a *App) connect(ctx context.Context) error {
 	access, err := a.access()
 	if err != nil {
 		return err
@@ -695,6 +717,7 @@ func (a *App) connect() error {
 	code := a.cfg.Server
 	servers := append([]fxa.Location(nil), a.servers...)
 	chain := append([]string(nil), a.cfg.Chain...)
+	warpEnabled := a.cfg.WarpUDP
 	a.mu.Unlock()
 	hops, err := tunnel.ParseChain(chain)
 	if err != nil {
@@ -714,6 +737,10 @@ func (a *App) connect() error {
 	a.setStage("برقراری تونل…")
 	chosen, transport, err := choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
 	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		transport.Close()
 		return err
 	}
 	dial := func(host string, remotePort int) (io.ReadWriteCloser, error) {
@@ -750,28 +777,55 @@ func (a *App) connect() error {
 			return net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(remotePort)), 15*time.Second)
 		}
 	}
-	udpDial := func(host string, remotePort int) (engine.DatagramTunnel, error) {
-		current, err := a.currentPass()
+	var udpDial engine.DatagramDialer
+	var warpNow *warp.Auto
+	if warpEnabled {
+		a.setStage("Scanning Cloudflare WARP endpoints…")
+		warpNow, err = a.startWarp(ctx, transport)
 		if err != nil {
-			return nil, err
+			transport.Close()
+			return err
 		}
-		a.noteActivity()
-		// Only the authenticated proxy is used for datagrams. An unsupported
-		// relay or a failed UDP open must never fall back to a direct socket.
-		stream, err := transport.OpenUDP(host, remotePort, current, 15*time.Second)
-		if err != nil {
-			return nil, err
+		udpDial = func(host string, remotePort int) (engine.DatagramTunnel, error) {
+			flow, err := warpNow.OpenUDP(host, remotePort)
+			if err != nil {
+				return nil, err
+			}
+			a.noteActivity()
+			return flow, nil
 		}
-		return stream, nil
+	}
+	// Disabled, unavailable or refused UDP always fails closed. The old
+	// Mozilla CONNECT-UDP path is not used as a substitute for WARP.
+	if err := ctx.Err(); err != nil {
+		if warpNow != nil {
+			_ = warpNow.Close()
+		}
+		transport.Close()
+		return err
 	}
 	created, err := engine.StartSplitUDP(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
 	if err != nil {
+		if warpNow != nil {
+			_ = warpNow.Close()
+		}
+		transport.Close()
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		created.Stop()
+		if warpNow != nil {
+			_ = warpNow.Close()
+		}
 		transport.Close()
 		return err
 	}
 	if a.cfg.KillSwitch {
 		if err := killswitch.Enable(killswitch.Config{Interface: created.Device(), Proxy: chosen.keep, AllowDirect: a.cfg.SplitTunnel}); err != nil {
 			created.Stop()
+			if warpNow != nil {
+				_ = warpNow.Close()
+			}
 			transport.Close()
 			return err
 		}
@@ -780,6 +834,7 @@ func (a *App) connect() error {
 	a.engine = created
 	a.killActive = a.cfg.KillSwitch
 	a.transport = transport
+	a.warp = warpNow
 	a.activeServer = chosen.place
 	a.live = true
 	a.since = time.Now().Unix()
@@ -825,11 +880,15 @@ func (a *App) teardown() {
 	a.mu.Lock()
 	engineNow := a.engine
 	transport := a.transport
+	warpNow := a.warp
 	killActive := a.killActive
 	a.killActive = false
 	a.transport = nil
+	a.warp = nil
 	cancel := a.renewCancel
+	activeCancel := a.activeCancel
 	a.renewCancel = nil
+	a.activeCancel = nil
 	a.engine = nil
 	a.live = false
 	a.activeServer = fxa.Location{}
@@ -838,6 +897,12 @@ func (a *App) teardown() {
 	a.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	if activeCancel != nil {
+		activeCancel()
+	}
+	if warpNow != nil {
+		_ = warpNow.Close()
 	}
 	if transport != nil {
 		transport.Close()
@@ -850,7 +915,20 @@ func (a *App) teardown() {
 	}
 }
 
+func (a *App) cancelConnectionAttempt() {
+	a.mu.Lock()
+	pending, active := a.connectCancel, a.activeCancel
+	a.mu.Unlock()
+	if pending != nil {
+		pending()
+	}
+	if active != nil {
+		active()
+	}
+}
+
 func (a *App) Disconnect() {
+	a.cancelConnectionAttempt()
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
 	a.teardown()
@@ -861,6 +939,7 @@ func (a *App) Disconnect() {
 }
 
 func (a *App) Close() {
+	a.cancelConnectionAttempt()
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
 	a.teardown()

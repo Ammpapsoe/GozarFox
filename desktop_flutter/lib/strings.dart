@@ -105,9 +105,17 @@ class Words {
       'قطع امن تونل پیش از بستن برنامه انجام نشد؛ دوباره تلاش کنید.',
       'The tunnel could not be safely disconnected. Please try closing again.');
   String get tunnelNotice => pick(
-        'نسخهٔ آزمایشی: ترافیک IPv6 از تونل عبور نمی‌کند و UDP به‌جز DNS پشتیبانی نمی‌شود.',
-        'Experimental: IPv6 bypasses the tunnel, and UDP other than DNS is not supported.',
+        'نسخهٔ آزمایشی: IPv6 از تونل عبور نمی‌کند. UDP نسخهٔ IPv4 فقط با روشن‌کردن WARP پشتیبانی می‌شود.',
+        'Experimental: IPv6 bypasses the tunnel. IPv4 UDP requires the WARP setting.',
       );
+  String get warpUdp => pick('UDP با Cloudflare WARP', 'UDP via Cloudflare WARP');
+  String get warpConsent => pick(
+        'با پذیرش شرایط Cloudflare یک هویت رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP و از داخل تونل موزیلا عبور می‌کند؛ Cloudflare این ترافیک را پردازش می‌کند. ترافیک IPv6، از جمله UDP، خارج از تونل است. اگر VPN متصل باشد، اتصال مجدداً برقرار می‌شود و ممکن است محافظت موقتاً قطع شود.',
+        'Accepting Cloudflare’s terms registers a free WARP identity. IPv4 UDP travels through WARP inside the Mozilla tunnel; Cloudflare processes this traffic. IPv6 traffic, including UDP, is outside the tunnel. An active VPN will reconnect, and protection may briefly be interrupted.',
+      );
+  String get cloudflareTerms => pick('شرایط Cloudflare', 'Cloudflare terms');
+  String get warpReconnect => pick('اتصال VPN برای اعمال این تغییر قطع و دوباره برقرار می‌شود.', 'The VPN will disconnect and reconnect to apply this change.');
+  String get accept => pick('می‌پذیرم', 'Accept');
   String get credentialsRequired =>
       pick('ایمیل و گذرواژه را وارد کنید.', 'Enter your email and password.');
   String get codeRequired =>

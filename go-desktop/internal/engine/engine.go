@@ -111,7 +111,13 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
 	}
-	device, err := tundev.Open(mtu)
+	deviceMTU := mtu
+	if udpDial != nil {
+		// WARP's CONNECT-IP inner path uses a 1280-byte MTU; avoid emitting
+		// UDP fragments that the initial packet demultiplexer cannot reassemble.
+		deviceMTU = 1280
+	}
+	device, err := tundev.Open(deviceMTU)
 	if err != nil {
 		return nil, err
 	}

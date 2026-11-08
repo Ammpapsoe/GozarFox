@@ -557,6 +557,53 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     }
   }
 
+  Future<void> _toggleWarp(bool enabled) async {
+    if (_busy) return;
+    if (enabled) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(words.warpUdp),
+          content: Text(words.warpConsent),
+          actions: [
+            TextButton(
+              onPressed: () => unawaited(_openPage('https://www.cloudflare.com/application/terms/')),
+              child: Text(words.cloudflareTerms),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(words.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(words.accept),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    } else if (_state.live || _state.connecting) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(words.warpUdp),
+          content: Text(words.warpReconnect),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(words.cancel)),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(words.accept)),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() => _busy = true);
+    try {
+      await _requestSetting('warp_udp', {'enabled': enabled, 'consent': enabled});
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _chooseTheme() async {
     final choice = await showDialog<String>(
       context: context,
@@ -1300,6 +1347,14 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                   ? null
                   : (value) =>
                       unawaited(_requestSetting('recents', {'enabled': value})),
+            )),
+        Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: SwitchListTile(
+              secondary: const Icon(Icons.public, color: soft),
+              title: Text(words.warpUdp),
+              value: _state.warpUdp,
+              onChanged: _busy ? null : (value) => unawaited(_toggleWarp(value)),
             )),
         _settingTile(
             Icons.alt_route,

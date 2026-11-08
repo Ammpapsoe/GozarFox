@@ -11,11 +11,34 @@ on:
         required: false
         type: boolean
         default: false
+      build_warp_live_probe:
+        description: Build the opt-in Linux WARP live diagnostic (no credentials used in CI)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
+  build-warp-live-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_warp_live_probe }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.6'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Build isolated diagnostic
+        working-directory: go-desktop
+        run: go build -trimpath -o "$RUNNER_TEMP/gozar-warp-live" ./tools/warp-live
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gozar-warp-live-linux
+          path: ${{ runner.temp }}/gozar-warp-live
+          retention-days: 1
+
   android-recovery-emulator:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
     # Historical signed APKs are in a CI-only draft after their public releases
@@ -138,7 +161,7 @@ jobs:
           cache-dependency-path: go-desktop/go.sum
       - name: Test UDP packet forwarding, capsule framing and HTTP/2 streams
         working-directory: go-desktop
-        run: go test -race ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config -count=1
+        run: go test -race ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app -count=1
 
   release-tools:
     runs-on: ubuntu-latest

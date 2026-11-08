@@ -45,6 +45,7 @@ type Config struct {
 	KillSwitch      bool      `json:"kill_switch"`
 	SplitTunnel     bool      `json:"split_tunnel"`
 	BypassLAN       bool      `json:"bypass_lan"`
+	WarpUDP         bool      `json:"warp_udp"`
 	Bypass          []string  `json:"bypass"`
 	Chain           []string  `json:"chain"`
 	Port            int       `json:"port"`

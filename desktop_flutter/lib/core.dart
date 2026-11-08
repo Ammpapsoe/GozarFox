@@ -58,6 +58,7 @@ class CoreState {
     this.language = '',
     this.theme = 'system',
     this.recents = false,
+    this.warpUdp = false,
     this.chain = const [],
     this.accounts = const [],
     this.stage = '',
@@ -84,6 +85,7 @@ class CoreState {
   final String language;
   final String theme;
   final bool recents;
+  final bool warpUdp;
   final List<String> chain;
   final List<SavedAccount> accounts;
   final String stage;
@@ -115,6 +117,7 @@ class CoreState {
       language: json['language'] as String? ?? '',
       theme: json['theme'] as String? ?? 'system',
       recents: json['recents'] as bool? ?? false,
+      warpUdp: json['warp_udp'] as bool? ?? false,
       chain: rawChain.whereType<String>().toList(growable: false),
       accounts: rawAccounts
           .whereType<Map<String, dynamic>>()

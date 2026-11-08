@@ -269,6 +269,16 @@ func (s *Server) handle(request Request) Response {
 		} else if err := s.app.SetRecents(*body.Enabled); err != nil {
 			response.Error = err.Error()
 		}
+	case "warp_udp":
+		var body struct {
+			Enabled *bool `json:"enabled"`
+			Consent bool  `json:"consent"`
+		}
+		if err := json.Unmarshal(request.Params, &body); err != nil || body.Enabled == nil {
+			response.Error = "invalid WARP UDP setting"
+		} else if err := s.app.SetWarpUDP(*body.Enabled, body.Consent); err != nil {
+			response.Error = err.Error()
+		}
 	case "chain":
 		var body struct {
 			Hops []string `json:"hops"`
