@@ -214,7 +214,32 @@ jobs:
           cache-dependency-path: go-desktop/go.sum
       - name: Test UDP packet forwarding, capsule framing and HTTP/2 streams
         working-directory: go-desktop
-        run: go test -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app -count=1
+        run: |
+          set -uo pipefail
+          log="${RUNNER_TEMP}/gozar-desktop-protocols.log"
+          set +e
+          go test -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app -count=1 2>&1 | tee "$log"
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            python3 - "$log" <<'PY'
+          import re
+          import sys
+          pattern = re.compile(r'(--- FAIL|panic|DATA RACE|FAIL\s|fatal error|expected|actual|timeout)', re.I)
+          count = 0
+          with open(sys.argv[1], errors='replace') as source:
+              for raw in source:
+                  line = raw.strip()
+                  if not line or not pattern.search(line):
+                      continue
+                  line = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                  print('::error::' + line[:900])
+                  count += 1
+                  if count >= 60:
+                      break
+          PY
+          fi
+          exit "$status"
 
   release-tools:
     runs-on: ubuntu-latest

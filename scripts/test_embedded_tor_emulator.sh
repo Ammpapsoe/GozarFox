@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
+app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
+mapfile -t test_apks < <(find app/build/outputs/apk/androidTest/debug -maxdepth 1 -type f -name '*.apk' | sort)
+test -s "$app_apk"
+test "${#test_apks[@]}" -eq 1
+test -s "${test_apks[0]}"
+adb install -r "$app_apk"
+adb install -r "${test_apks[0]}"
+adb shell pm list instrumentation | grep -F 'instrumentation:com.gozar.test/androidx.test.runner.AndroidJUnitRunner' >/dev/null
 result="${RUNNER_TEMP:-/tmp}/embedded-tor-instrumentation.txt"
 set +e
 adb shell am instrument -w -r -e class com.gozar.FoxTorInstrumentedTest com.gozar.test/androidx.test.runner.AndroidJUnitRunner | tee "$result"
