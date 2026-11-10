@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -180,5 +181,21 @@ func TestServerCacheExpiry(t *testing.T) {
 	}
 	if _, err := a.LoadServers(); err != nil || calls.Load() != 1 {
 		t.Fatalf("expired in-memory snapshot reused: err=%v calls=%d", err, calls.Load())
+	}
+}
+
+func TestMayRetryFreshListOnlyForOrdinaryFailuresOfCachedLists(t *testing.T) {
+	ordinary := errors.New("relay unreachable")
+	if !mayRetryFreshList(true, ordinary, nil) {
+		t.Fatal("ordinary failure of a cached list must allow one fresh fetch")
+	}
+	if mayRetryFreshList(false, ordinary, nil) {
+		t.Fatal("a live list must not be refetched")
+	}
+	if mayRetryFreshList(true, nil, nil) {
+		t.Fatal("success must not refetch")
+	}
+	if mayRetryFreshList(true, ordinary, context.Canceled) {
+		t.Fatal("cancelled connection must not refetch")
 	}
 }

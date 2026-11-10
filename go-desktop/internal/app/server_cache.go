@@ -9,6 +9,7 @@ import (
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
 )
 
 // A cached Mozilla list is a bootstrap hint, not a permanent server registry.
@@ -162,4 +163,11 @@ func (a *App) refreshServersThroughTunnel() {
 		return
 	}
 	_ = a.saveFreshServersLocked(locations, time.Now())
+}
+
+// mayRetryFreshList allows one fetch of the official list after a connection that
+// used a cached list fails for an ordinary reason. Relay refusals (401/403/407/429/451)
+// and cancellation never trigger a retry, so a refused pass is not re-requested.
+func mayRetryFreshList(usingCached bool, err, ctxErr error) bool {
+	return err != nil && usingCached && !tunnel.IsRefusal(err) && ctxErr == nil
 }

@@ -796,7 +796,7 @@ func (a *App) connect(ctx context.Context) error {
 		return choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
 	}
 	chosen, transport, err := selectAndVerify(servers)
-	if err != nil && usingCachedServers && !tunnel.IsRefusal(err) && ctx.Err() == nil {
+	if mayRetryFreshList(usingCachedServers, err, ctx.Err()) {
 		// A previously authenticated list can become stale before its TTL.
 		// If its relays no longer work, try a fresh public Mozilla list. This
 		// is not a credential or proxy-pass renewal request.
