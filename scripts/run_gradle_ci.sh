@@ -24,5 +24,29 @@ with open(sys.argv[1], errors='replace') as source:
         if count >= 80:
             break
 PY
+  python3 - <<'PY'
+from pathlib import Path
+import xml.etree.ElementTree as ET
+count = 0
+for path in Path('.').glob('**/build/test-results/**/*.xml'):
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError:
+        continue
+    for case in root.iter('testcase'):
+        failure = case.find('failure')
+        if failure is None:
+            failure = case.find('error')
+        if failure is None:
+            continue
+        detail = (failure.get('message') or failure.text or '').strip().splitlines()
+        message = detail[0] if detail else 'test failed'
+        name = case.get('classname', '') + '.' + case.get('name', 'test')
+        message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+        print('::error::' + (name + ': ' + message)[:900])
+        count += 1
+        if count >= 80:
+            raise SystemExit(0)
+PY
 fi
 exit "$status"
