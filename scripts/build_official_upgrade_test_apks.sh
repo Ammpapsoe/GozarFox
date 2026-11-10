@@ -21,7 +21,9 @@ export KEYSTORE_FILE="$key"
 
 # Fetch fixed release asset IDs through GitHub's API. The stable fixture is
 # public; the two deleted preview releases' byte-identical APKs are preserved
-# in a CI-only draft release (accessible to the workflow's repository token).
+# in a CI-only draft release tagged ci-official-upgrade-fixtures (accessible to the
+# workflow's repository token). The earlier draft was removed; its APKs were re-uploaded
+# byte-for-byte from the retained build artifacts and re-verified against the pins below.
 # Hashes and the official signing identity are verified independently below.
 # curl strips Authorization on cross-host redirects; never use --location-trusted.
 fetch_official() {
@@ -38,8 +40,8 @@ fetch_official() {
   test "$actual" = "$expected" || { echo "unexpected SHA-256 for $name" >&2; exit 1; }
 }
 fetch_official 713630711 d899da890c82761050e7ebac37be81aedf24aa0d51d45b3452f908f3e3a32a88 official-stable
-fetch_official 724340793 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
-fetch_official 724340872 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
+fetch_official 730844479 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
+fetch_official 730844502 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
 bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
 shopt -s nullglob
 candidates=(app/build/outputs/apk/release/*universal*.apk)
