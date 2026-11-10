@@ -438,25 +438,25 @@ func parseInt(text string) (int64, error) {
 	return value, err
 }
 
-func PassToken(access string) (*Pass, error) { return passToken(access, true, call) }
+func PassToken(access string) (*Pass, error) { return passToken(access, true, true, call) }
 
 func PassTokenViaRelay(access string) (*Pass, error) { return passTokenRelay(access, true) }
 
 // ExistingPassToken is read-only and never activates an entitlement. This is
 // useful for explicitly authorized diagnostics against an existing account.
-func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false, call) }
+func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false, true, call) }
 
 // Renewing an existing pass must never activate an entitlement implicitly.
 func PassTokenThrough(access string, control *http.Client) (*Pass, error) {
 	if control == nil {
 		return nil, errors.New("control tunnel unavailable")
 	}
-	return passToken(access, false, func(method, address, body string, headers map[string]string) (*Reply, error) {
+	return passToken(access, false, false, func(method, address, body string, headers map[string]string) (*Reply, error) {
 		return controlCall(control, method, address, body, headers)
 	})
 }
 
-func passToken(access string, allowActivate bool, request apiCall) (*Pass, error) {
+func passToken(access string, allowActivate bool, allowRelay bool, request apiCall) (*Pass, error) {
 	reply, err := request("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
 		"Authorization": "Bearer " + access,
 	})
@@ -474,7 +474,7 @@ func passToken(access string, allowActivate bool, request apiCall) (*Pass, error
 			return nil, err
 		}
 	}
-	if reply.Code == http.StatusUnavailableForLegalReasons {
+	if allowRelay && reply.Code == http.StatusUnavailableForLegalReasons {
 		if len(relaytransport.Endpoints()) == 0 {
 			return nil, failure(reply)
 		}
