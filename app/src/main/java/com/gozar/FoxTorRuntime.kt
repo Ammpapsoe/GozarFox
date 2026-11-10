@@ -115,6 +115,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
     private class AndroidAttempt(private val app: Context, private val mode: FoxTorPlan.Mode) : FoxTorAttempt {
         private val ready = CountDownLatch(1)
         private val stopped = CountDownLatch(1)
+        private val destroyed = CountDownLatch(1)
         private var controller: Controller? = null
         private var transport: String? = null
         private var connection: ServiceConnection? = null
@@ -195,7 +196,11 @@ internal object FoxTorRuntime : FoxLoginTransport {
                         TorService.ACTION_ERROR -> serviceError = intent.getStringExtra(Intent.EXTRA_TEXT) ?: "Unknown TorService error"
                         TorService.ACTION_STATUS -> {
                             val status = intent.getStringExtra(TorService.EXTRA_STATUS)
-                            if (status == TorService.STATUS_STOPPING || status == TorService.STATUS_OFF) stopped.countDown()
+                            if (status == TorService.STATUS_STOPPING) stopped.countDown()
+                            if (status == TorService.STATUS_OFF) {
+                                stopped.countDown()
+                                destroyed.countDown()
+                            }
                         }
                     }
                 }
@@ -275,6 +280,18 @@ internal object FoxTorRuntime : FoxLoginTransport {
                     } catch (error: Exception) {
                         Log.w("GozarTor", "Tor unbind failed: " + error.javaClass.simpleName)
                     }
+                }
+            }
+            if (bound) {
+                val off = try {
+                    destroyed.await(20, TimeUnit.SECONDS)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    false
+                }
+                if (!off) {
+                    Log.w("GozarTor", "Tor service destruction did not finish within 20 seconds")
+                    app.stopService(Intent(app, TorService::class.java))
                 }
             }
             bound = false

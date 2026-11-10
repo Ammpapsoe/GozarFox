@@ -56,14 +56,14 @@ with open(sys.argv[1], errors='replace') as source:
 if count == 0:
     print('::error::Embedded Tor instrumentation did not report its required single passing test')
 PY
-adb logcat -d -v brief -t 1200 > "${RUNNER_TEMP:-/tmp}/embedded-tor-logcat-raw.txt" || true
+adb logcat -d -v threadtime -t 3000 > "${RUNNER_TEMP:-/tmp}/embedded-tor-logcat-raw.txt" || true
 python3 - "${RUNNER_TEMP:-/tmp}/embedded-tor-logcat-raw.txt" "${RUNNER_TEMP:-/tmp}/embedded-tor-native-failure.txt" <<'PY'
 import re
 import sys
-pattern = re.compile(r'(AndroidRuntime|FATAL|Fatal signal|UnsatisfiedLinkError|dlopen|SIGSEGV|SIGABRT|TorService|org\.torproject|IPtProxy|GoLog|Go log|gozar)', re.I)
+pattern = re.compile(r'(AndroidRuntime|FATAL|Fatal signal|UnsatisfiedLinkError|dlopen|SIGSEGV|SIGABRT|TorService|org\.torproject|IPtProxy|GoLog|Go log|gozar|DEBUG|crash_dump|backtrace|libtor|Abort message|terminating|signal \d+)', re.I)
 with open(sys.argv[1], errors='replace') as source:
     lines = [line.strip() for line in source if pattern.search(line)]
-lines = lines[-120:]
+lines = lines[-240:]
 with open(sys.argv[2], 'w') as output:
     for line in lines:
         output.write(line + '\n')
