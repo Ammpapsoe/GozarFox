@@ -517,21 +517,23 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Require same-commit Android install evidence
+      - name: Require same-commit unit and packaging evidence
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           sha=$(git rev-parse HEAD)
-          ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '.workflow_runs[] | select(.name == "Test" and .event == "workflow_dispatch" and .conclusion == "success") | .id')
-          found=false
-          for id in $ids; do
-            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select(.name == "android-recovery-emulator" and .conclusion == "success")] | length')
-            if [ "$count" -gt 0 ]; then found=true; break; fi
-          done
-          if [ "$found" != true ]; then
-            echo '::error::No successful Android emulator install/recovery run for this exact commit'
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100")
+          tests=$(printf '%s' "$runs" | jq '[.workflow_runs[] | select(.name == "Test" and .conclusion == "success")] | length')
+          android=$(printf '%s' "$runs" | jq -r '.workflow_runs[] | select(.name == "Autonomous Android" and .conclusion == "success") | .id' | head -1)
+          if [ "$tests" -lt 1 ] || [ -z "$android" ]; then
+            echo '::error::No successful Test and Autonomous Android run for this exact commit'
+            exit 1
+          fi
+          jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$android/jobs?per_page=100" --jq '[.jobs[] | select((.name == "compile" or .name == "unit-tests" or .name == "artifact") and .conclusion == "success")] | length')
+          if [ "$jobs" -ne 3 ]; then
+            echo '::error::Autonomous Android compile, unit-tests, and artifact evidence is incomplete'
             exit 1
           fi
       - uses: actions/download-artifact@v4
