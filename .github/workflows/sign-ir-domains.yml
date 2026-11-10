@@ -2,8 +2,7 @@ name: Sign IR domain list
 
 on:
   push:
-    # mission/autonomous-v1 is temporary until this workflow exists on main.
-    branches: [main, mission/autonomous-v1]
+    branches: [main]
     paths: ['packaging/ir-domains.txt', '.github/workflows/sign-ir-domains.yml']
   workflow_dispatch:
 
