@@ -71,12 +71,15 @@ type App struct {
 	authRevision    uint64
 	refreshToken    func(string) (*fxa.Tokens, error)
 	requestPass     func(string) (*fxa.Pass, error)
+	fetchServers    func() ([]fxa.Location, error)
 	renewDelay      func(string, time.Time) time.Duration
 	renewCancel     context.CancelFunc
 	connectCancel   context.CancelFunc
 	activeCancel    context.CancelFunc
 	cfg             config.Config
 	servers         []fxa.Location
+	serversUntil    time.Time
+	serversCached   bool
 	pass            *fxa.Pass
 	pending         *fxa.Session
 	pendingFor      string
@@ -114,7 +117,9 @@ func New(version string) *App {
 	} else {
 		cfg.Server = ""
 	}
-	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, geo: geo.Default()}
+	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, fetchServers: fxa.Servers, geo: geo.Default()}
+	created.servers, created.serversUntil = decodeServerCache(cfg.ServerCache, time.Now())
+	created.serversCached = len(created.servers) != 0
 	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
 	go created.sampler()
 	return created
@@ -204,14 +209,43 @@ func (a *App) Rates() (int64, int64) {
 }
 
 func (a *App) LoadServers() ([]fxa.Location, error) {
-	servers, err := fxa.Servers()
+	a.mu.Lock()
+	a.expireServersLocked(time.Now())
+	if len(a.servers) != 0 {
+		servers := append([]fxa.Location(nil), a.servers...)
+		a.mu.Unlock()
+		return servers, nil
+	}
+	live, transport, revision := a.live, a.transport, a.sessionRevision
+	a.mu.Unlock()
+	var servers []fxa.Location
+	var err error
+	if live {
+		client, closeIdle, ok := a.controlClient()
+		if !ok {
+			return nil, errors.New("Mozilla control tunnel is unavailable")
+		}
+		defer closeIdle()
+		servers, err = fxa.ServersThrough(client)
+	} else {
+		fetch := a.fetchServers
+		if fetch == nil {
+			fetch = fxa.Servers
+		}
+		servers, err = fetch()
+	}
 	if err != nil {
 		return nil, err
 	}
+	if len(servers) == 0 {
+		return nil, errors.New("Mozilla returned no servers")
+	}
 	a.mu.Lock()
-	a.servers = servers
-	err = config.Save(a.cfg)
-	a.mu.Unlock()
+	defer a.mu.Unlock()
+	if live && (!a.live || a.transport != transport || a.sessionRevision != revision) {
+		return nil, errors.New("Mozilla control tunnel stopped")
+	}
+	err = a.saveFreshServersLocked(servers, time.Now())
 	return servers, err
 }
 
@@ -725,6 +759,7 @@ func (a *App) connect(ctx context.Context) error {
 	}
 
 	a.mu.Lock()
+	a.expireServersLocked(time.Now())
 	needsServers := len(a.servers) == 0
 	a.mu.Unlock()
 	if needsServers {
@@ -735,6 +770,7 @@ func (a *App) connect(ctx context.Context) error {
 	a.mu.Lock()
 	code := a.cfg.Server
 	servers := append([]fxa.Location(nil), a.servers...)
+	usingCachedServers := a.serversCached
 	chain := append([]string(nil), a.cfg.Chain...)
 	warpEnabled := a.cfg.WarpUDP
 	splitConfigured := a.cfg.SplitTunnel
@@ -744,19 +780,37 @@ func (a *App) connect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	var candidates []pathCandidate
-	if autoSelected(code) {
-		a.setStage("سنجش مسیرها…")
-		candidates = autoCandidates(servers, hops, 2, 1200*time.Millisecond, 8)
-	} else {
-		place, err := pickLocation(servers, code)
-		if err != nil {
-			return err
+	selectAndVerify := func(list []fxa.Location) (pathCandidate, *tunnel.Manager, error) {
+		var candidates []pathCandidate
+		if autoSelected(code) {
+			a.setStage("سنجش مسیرها…")
+			candidates = autoCandidates(list, hops, 2, 1200*time.Millisecond, 8)
+		} else {
+			place, err := pickLocation(list, code)
+			if err != nil {
+				return pathCandidate{}, nil, err
+			}
+			candidates = []pathCandidate{preparePath(place, hops)}
 		}
-		candidates = []pathCandidate{preparePath(place, hops)}
+		a.setStage("برقراری تونل…")
+		return choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
 	}
-	a.setStage("برقراری تونل…")
-	chosen, transport, err := choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
+	chosen, transport, err := selectAndVerify(servers)
+	if err != nil && usingCachedServers && !tunnel.IsRefusal(err) && ctx.Err() == nil {
+		// A previously authenticated list can become stale before its TTL.
+		// If its relays no longer work, try a fresh public Mozilla list. This
+		// is not a credential or proxy-pass renewal request.
+		a.mu.Lock()
+		if a.serversCached {
+			a.servers = nil
+			a.serversUntil = time.Time{}
+			a.serversCached = false
+		}
+		a.mu.Unlock()
+		if fresh, loadErr := a.LoadServers(); loadErr == nil && ctx.Err() == nil {
+			chosen, transport, err = selectAndVerify(fresh)
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -874,6 +928,7 @@ func (a *App) connect(ctx context.Context) error {
 	a.mu.Unlock()
 	go a.watchTunnel(created)
 	a.startRenewal()
+	go a.refreshServersThroughTunnel()
 	if ip, err := transport.Probe(pass.Token, 12*time.Second); err == nil {
 		a.mu.Lock()
 		a.exit = ip

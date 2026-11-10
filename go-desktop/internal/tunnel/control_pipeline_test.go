@@ -31,7 +31,7 @@ func TestControlRenewalThroughAuthenticatedH2Relay(t *testing.T) {
 		t.Fatal(err)
 	}
 	originCert := &x509.Certificate{SerialNumber: big.NewInt(42), Subject: pkix.Name{CommonName: "synthetic origin"},
-		DNSNames:  []string{"vpn.mozilla.org", "oauth.accounts.firefox.com"},
+		DNSNames:  []string{"vpn.mozilla.org", "oauth.accounts.firefox.com", "firefox.settings.services.mozilla.com"},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
@@ -60,6 +60,11 @@ func TestControlRenewalThroughAuthenticatedH2Relay(t *testing.T) {
 			fmt.Fprint(w, `{"token":"new-synthetic-pass"}`)
 		case r.Method == "POST" && r.Host == "oauth.accounts.firefox.com" && r.URL.Path == "/v1/token":
 			fmt.Fprint(w, `{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600}`)
+		case r.Method == "GET" && r.Host == "firefox.settings.services.mozilla.com" && r.URL.Path == "/v1/buckets/main/collections/vpn-serverlist/records":
+			if r.Header.Get("Authorization") != "" {
+				t.Error("account credentials sent to public server list")
+			}
+			fmt.Fprint(w, `{"data":[{"code":"NL","name":"Netherlands","cities":[{"name":"Amsterdam","servers":[{"hostname":"nl.mozilla.example","port":2499}]}]}]}`)
 		default:
 			w.WriteHeader(http.StatusBadRequest)
 		}
@@ -101,7 +106,7 @@ func TestControlRenewalThroughAuthenticatedH2Relay(t *testing.T) {
 	var relayRequests atomic.Int32
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "CONNECT" || r.Header.Get("Proxy-Authorization") != "Bearer old-synthetic-pass" ||
-			(r.Host != "vpn.mozilla.org:443" && r.Host != "oauth.accounts.firefox.com:443") {
+			(r.Host != "vpn.mozilla.org:443" && r.Host != "oauth.accounts.firefox.com:443" && r.Host != "firefox.settings.services.mozilla.com:443") {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -165,19 +170,23 @@ func TestControlRenewalThroughAuthenticatedH2Relay(t *testing.T) {
 	if err != nil || tokens.Refresh != "new-refresh" {
 		t.Fatalf("OAuth renewal failed: %v", err)
 	}
+	locations, err := fxa.ServersThrough(control)
+	if err != nil || len(locations) != 1 || locations[0].Host != "nl.mozilla.example" {
+		t.Fatalf("server-list refresh through relay failed: %v", err)
+	}
 	_, err = fxa.PassTokenThrough("simulated-block", control)
 	var apiErr *fxa.Error
 	if !errors.As(err, &apiErr) || apiErr.Status != 451 {
 		t.Fatalf("lost in-tunnel 451: %v", err)
 	}
-	if relayRequests.Load() != 3 || originRequests.Load() != 4 {
+	if relayRequests.Load() != 4 || originRequests.Load() != 5 {
 		t.Fatal("unexpected retry or destination")
 	}
 	_ = manager.Close()
 	if _, err := fxa.PassTokenThrough("synthetic-access", control); err == nil {
 		t.Fatal("renewal succeeded after tunnel closed")
 	}
-	if originRequests.Load() != 4 {
+	if originRequests.Load() != 5 {
 		t.Fatal("request escaped a closed tunnel")
 	}
 }

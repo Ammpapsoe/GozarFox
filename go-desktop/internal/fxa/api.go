@@ -521,8 +521,21 @@ type serverCity struct {
 	} `json:"servers"`
 }
 
-func Servers() ([]Location, error) {
-	reply, err := call("GET", serversURL, "", nil)
+func Servers() ([]Location, error) { return serversUsing(call) }
+
+// ServersThrough fetches only Mozilla's public settings list over the current
+// account's already-authorized tunnel; no credential is sent to that origin.
+func ServersThrough(control *http.Client) ([]Location, error) {
+	if control == nil {
+		return nil, errors.New("control tunnel unavailable")
+	}
+	return serversUsing(func(method, address, body string, headers map[string]string) (*Reply, error) {
+		return controlCall(control, method, address, body, headers)
+	})
+}
+
+func serversUsing(request apiCall) ([]Location, error) {
+	reply, err := request("GET", serversURL, "", nil)
 	if err != nil {
 		return nil, err
 	}

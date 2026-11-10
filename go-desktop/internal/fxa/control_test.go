@@ -24,6 +24,7 @@ func TestControlPolicyLimitsDestinations(t *testing.T) {
 	allowed := []struct{ method, url string }{
 		{"GET", "https://vpn.mozilla.org/api/v1/fpn/token"},
 		{"POST", "https://oauth.accounts.firefox.com/v1/token"},
+		{"GET", "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"},
 	}
 	for _, item := range allowed {
 		if !allowedControlRequest(item.method, item.url) {
@@ -41,6 +42,9 @@ func TestControlPolicyLimitsDestinations(t *testing.T) {
 		{"POST", "https://vpn.mozilla.org/api/v1/fpn/token"},
 		{"GET", "https://oauth.accounts.firefox.com/v1/token"},
 		{"POST", "https://oauth.accounts.firefox.com/v1/account/create"},
+		{"POST", "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"},
+		{"GET", "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records?x=1"},
+		{"GET", "https://firefox.settings.services.mozilla.com.evil.invalid/v1/buckets/main/collections/vpn-serverlist/records"},
 	}
 	for _, item := range denied {
 		if allowedControlRequest(item.method, item.url) {
@@ -75,7 +79,7 @@ func TestSimulated451IsNotRetriedDirectOrUsedToActivate(t *testing.T) {
 func testControlServer(t *testing.T, handler http.Handler, names ...string) (*httptest.Server, *x509.CertPool) {
 	t.Helper()
 	if len(names) == 0 {
-		names = []string{"vpn.mozilla.org", "oauth.accounts.firefox.com"}
+		names = []string{"vpn.mozilla.org", "oauth.accounts.firefox.com", "firefox.settings.services.mozilla.com"}
 	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -119,6 +123,11 @@ func TestSimulatedTunnelRenewalVerifiesTLSAndNeverFollowsRedirect(t *testing.T) 
 			fmt.Fprint(w, `{"token":"fresh-synthetic-pass"}`)
 		case "/v1/token":
 			fmt.Fprint(w, `{"access_token":"fresh-access","refresh_token":"fresh-refresh","expires_in":3600}`)
+		case "/v1/buckets/main/collections/vpn-serverlist/records":
+			if r.Method != "GET" || r.Host != "firefox.settings.services.mozilla.com" || r.Header.Get("Authorization") != "" {
+				t.Error("server-list request was not public and exact")
+			}
+			fmt.Fprint(w, `{"data":[{"code":"NL","name":"Netherlands","cities":[{"name":"Amsterdam","servers":[{"hostname":"nl.mozilla.example","port":2499}]}]}]}`)
 		default:
 			w.Header().Set("Location", "https://untrusted.invalid/")
 			w.WriteHeader(http.StatusFound)
@@ -128,7 +137,7 @@ func TestSimulatedTunnelRenewalVerifiesTLSAndNeverFollowsRedirect(t *testing.T) 
 	var dials atomic.Int32
 	newClient := func() (*http.Client, func()) {
 		return NewControlClient(func(_ context.Context, host string, port int) (io.ReadWriteCloser, error) {
-			if port != 443 || (host != "vpn.mozilla.org" && host != "oauth.accounts.firefox.com") {
+			if port != 443 || (host != "vpn.mozilla.org" && host != "oauth.accounts.firefox.com" && host != "firefox.settings.services.mozilla.com") {
 				return nil, errors.New("unexpected target")
 			}
 			dials.Add(1)
@@ -146,10 +155,14 @@ func TestSimulatedTunnelRenewalVerifiesTLSAndNeverFollowsRedirect(t *testing.T) 
 	if err != nil || tokens.Refresh != "fresh-refresh" {
 		t.Fatalf("refresh: %v", err)
 	}
-	if requests.Load() != 2 || dials.Load() != 2 {
+	locations, err := ServersThrough(control)
+	if err != nil || len(locations) != 1 || locations[0].Host != "nl.mozilla.example" {
+		t.Fatalf("server list through tunnel: %v", err)
+	}
+	if requests.Load() != 3 || dials.Load() != 3 {
 		t.Fatalf("requests=%d dials=%d", requests.Load(), dials.Load())
 	}
-	if _, err := PassTokenThrough("redirect-test", control); err == nil || requests.Load() != 3 || dials.Load() != 3 {
+	if _, err := PassTokenThrough("redirect-test", control); err == nil || requests.Load() != 4 || dials.Load() != 4 {
 		t.Fatal("redirect was followed or accepted")
 	}
 
@@ -160,7 +173,7 @@ func TestSimulatedTunnelRenewalVerifiesTLSAndNeverFollowsRedirect(t *testing.T) 
 	if _, err := PassTokenThrough("secret-must-not-arrive", untrusted); err == nil {
 		t.Fatal("accepted an untrusted test certificate")
 	}
-	if requests.Load() != 3 {
+	if requests.Load() != 4 {
 		t.Fatal("HTTP request reached untrusted server")
 	}
 }

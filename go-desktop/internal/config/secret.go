@@ -26,38 +26,44 @@ func unseal(value string) string {
 	return string(plain)
 }
 
+// New security-sensitive values never fall back to plaintext, unlike legacy
+// account tokens. This also authenticates cached official relay locations.
+func sealStrict(value string) string {
+	if value == "" || strings.HasPrefix(value, sealedPrefix) {
+		return value
+	}
+	packed, err := protect([]byte(value))
+	if err != nil || packed == "" {
+		return ""
+	}
+	return sealedPrefix + packed
+}
+
+func unsealStrict(value string) string {
+	if !strings.HasPrefix(value, sealedPrefix) {
+		return ""
+	}
+	return unseal(value)
+}
+
 func (c *Config) sealTokens() {
 	c.Access = seal(c.Access)
 	c.Refresh = seal(c.Refresh)
+	c.ServerCache = sealStrict(c.ServerCache)
 	for index := range c.Accounts {
 		c.Accounts[index].Access = seal(c.Accounts[index].Access)
 		c.Accounts[index].Refresh = seal(c.Accounts[index].Refresh)
-		// Proxy passes are new: unlike legacy account tokens, never fall back
-		// to plaintext if the OS/keystore cannot encrypt this short-lived secret.
-		value := c.Accounts[index].ProxyPass
-		if value != "" && !strings.HasPrefix(value, sealedPrefix) {
-			packed, err := protect([]byte(value))
-			if err != nil || packed == "" {
-				value = ""
-			} else {
-				value = sealedPrefix + packed
-			}
-		}
-		c.Accounts[index].ProxyPass = value
+		c.Accounts[index].ProxyPass = sealStrict(c.Accounts[index].ProxyPass)
 	}
 }
 
 func (c *Config) unsealTokens() {
 	c.Access = unseal(c.Access)
 	c.Refresh = unseal(c.Refresh)
+	c.ServerCache = unsealStrict(c.ServerCache)
 	for index := range c.Accounts {
 		c.Accounts[index].Access = unseal(c.Accounts[index].Access)
 		c.Accounts[index].Refresh = unseal(c.Accounts[index].Refresh)
-		if strings.HasPrefix(c.Accounts[index].ProxyPass, sealedPrefix) {
-			c.Accounts[index].ProxyPass = unseal(c.Accounts[index].ProxyPass)
-		} else {
-			// Reject injected or legacy plaintext pass values.
-			c.Accounts[index].ProxyPass = ""
-		}
+		c.Accounts[index].ProxyPass = unsealStrict(c.Accounts[index].ProxyPass)
 	}
 }

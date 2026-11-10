@@ -13,8 +13,8 @@ import (
 )
 
 // allowedControlRequest deliberately excludes account creation, activation,
-// redirects and arbitrary destinations. Only an already-authorized session
-// can renew its short-lived credentials through the Mozilla tunnel.
+// redirects and arbitrary destinations. An authorized session may renew
+// short-lived credentials or fetch Mozilla's public list through the tunnel.
 func allowedControlRequest(method, address string) bool {
 	u, err := url.Parse(address)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
@@ -26,6 +26,9 @@ func allowedControlRequest(method, address string) bool {
 		return method == http.MethodGet || method == http.MethodHead
 	case strings.EqualFold(u.Hostname(), "oauth.accounts.firefox.com") && u.EscapedPath() == "/v1/token":
 		return method == http.MethodPost
+	case strings.EqualFold(u.Hostname(), "firefox.settings.services.mozilla.com") &&
+		u.EscapedPath() == "/v1/buckets/main/collections/vpn-serverlist/records":
+		return method == http.MethodGet
 	default:
 		return false
 	}
@@ -54,7 +57,8 @@ func NewControlClient(dial RelayDial) (*http.Client, func()) {
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(address)
 			if err != nil || port != "443" ||
-				(!strings.EqualFold(host, "vpn.mozilla.org") && !strings.EqualFold(host, "oauth.accounts.firefox.com")) {
+				(!strings.EqualFold(host, "vpn.mozilla.org") && !strings.EqualFold(host, "oauth.accounts.firefox.com") &&
+					!strings.EqualFold(host, "firefox.settings.services.mozilla.com")) {
 				return nil, errors.New("control tunnel host is not permitted")
 			}
 			if network != "tcp" && network != "tcp4" && network != "tcp6" {

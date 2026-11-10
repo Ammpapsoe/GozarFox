@@ -49,7 +49,10 @@ type Config struct {
 	WarpUDP         bool      `json:"warp_udp"`
 	Bypass          []string  `json:"bypass"`
 	Chain           []string  `json:"chain"`
-	Port            int       `json:"port"`
+	// The authenticated server snapshot is public data, but sealing prevents
+	// a modified cache from directing an account's bearer pass to a new host.
+	ServerCache string `json:"server_cache,omitempty"`
+	Port        int    `json:"port"`
 }
 
 func Dir() string {
