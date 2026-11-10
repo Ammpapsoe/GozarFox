@@ -113,6 +113,7 @@ func TestControlRenewalThroughAuthenticatedH2Relay(t *testing.T) {
 		relayRequests.Add(1)
 		upstream, err := net.DialTimeout("tcp", origin.Listener.Addr().String(), 2*time.Second)
 		if err != nil {
+			t.Logf("synthetic origin dial failed: %v", err)
 			w.WriteHeader(http.StatusBadGateway)
 			return
 		}
