@@ -64,6 +64,12 @@
             android:exported="false" />
 
         <service
+            android:name=".RemoteTorService"
+            android:exported="false"
+            android:process=":tor"
+            android:stopWithTask="false" />
+
+        <service
             android:name=".FoxVpnService"
             android:exported="false"
             android:permission="android.permission.BIND_VPN_SERVICE"
