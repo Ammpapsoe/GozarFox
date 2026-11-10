@@ -23,22 +23,47 @@ class FoxTorInstrumentedTest {
         val originalFactory = FoxTorRuntime.attemptFactory
         val originalReachability = FoxTorRuntime.reachability
         val modes = mutableListOf<FoxTorPlan.Mode>()
+        val failures = mutableListOf<String>()
         var current = FoxTorPlan.Mode.DIRECT
         var port = 0
         try {
             FoxTorRuntime.attemptFactory = { context, mode ->
                 current = mode
                 modes += mode
-                originalFactory(context, mode)
+                val attempt = originalFactory(context, mode)
+                object : FoxTorAttempt {
+                    override val port: Int get() = attempt.port
+                    override fun start(): Int {
+                        try {
+                            return attempt.start()
+                        } catch (error: Exception) {
+                            failures += mode.name + ":" + error.javaClass.simpleName + ":" + (error.message ?: "").take(180)
+                            throw error
+                        }
+                    }
+                    override fun close() = attempt.close()
+                }
             }
             FoxTorRuntime.reachability = { socksPort ->
-                if (current != FoxTorPlan.Mode.MEEK) throw IOException("synthetic escalation")
-                originalReachability(socksPort)
+                if (current != FoxTorPlan.Mode.MEEK) {
+                    failures += current.name + ":synthetic escalation"
+                    throw IOException("synthetic escalation")
+                }
+                try {
+                    originalReachability(socksPort)
+                } catch (error: Exception) {
+                    failures += current.name + "_PROBE:" + error.javaClass.simpleName + ":" + (error.message ?: "").take(180)
+                    throw error
+                }
             }
-            FoxTorRuntime.run(app) {
-                assertEquals(FoxTorPlan.Mode.MEEK, current)
-                port = FoxNet.loginSocksPort() ?: 0
-                assertTrue(port in 1..65535)
+            try {
+                FoxTorRuntime.run(app) {
+                    assertEquals(FoxTorPlan.Mode.MEEK, current)
+                    port = FoxNet.loginSocksPort() ?: 0
+                    assertTrue(port in 1..65535)
+                }
+            } catch (error: FoxError) {
+                throw AssertionError("transport failures=" + failures.joinToString("|"))
             }
             assertEquals(FoxTorPlan.Mode.MEEK, modes.last())
             assertNull(FoxNet.loginSocksPort())
