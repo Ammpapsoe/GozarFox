@@ -31,6 +31,7 @@ class FoxVerifiedLoginTest {
         val verified = AtomicBoolean()
         val tokenRequests = AtomicInteger()
         val passRequests = AtomicInteger()
+        val logins = AtomicInteger()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val loginEntered = CountDownLatch(1)
@@ -63,6 +64,7 @@ class FoxVerifiedLoginTest {
             return FoxSession("fake-uid", "fake-session", needsCode, false)
         }
         override fun signIn(email: String, password: String): FoxSession {
+            logins.incrementAndGet()
             loginEntered.countDown()
             if (blockLogin) check(loginRelease.await(10, TimeUnit.SECONDS))
             return FoxSession("fake-uid", "fake-session", needsCode, byLink)
@@ -136,6 +138,26 @@ class FoxVerifiedLoginTest {
     private fun start() {
         Fox.signIn(context, "fake@example.invalid", "fake-password")
         await { !Fox.busy && Fox.needsCode() }
+    }
+
+    @Test
+    fun freshSignInClearsCachedFailureAndStartsANewNetworkAttempt() {
+        provider.needsCode = false
+        provider.failFirstToken = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        await { !Fox.busy && Fox.message == "Synthetic OAuth failure" }
+        assertTrue(Fox.needsStep())
+        provider.failFirstToken = false
+        provider.blockLogin = true
+        Fox.signIn(context, "fake@example.invalid", "fake-password")
+        await { provider.logins.get() == 2 }
+        assertEquals("", Fox.message)
+        assertFalse(Fox.needsStep())
+        assertTrue(Fox.busy)
+        provider.loginRelease.countDown()
+        await { !Fox.busy }
+        assertEquals(2, provider.logins.get())
+        assertTrue(Fox.signedIn(context))
     }
 
     @Test

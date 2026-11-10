@@ -1,0 +1,121 @@
+name: Tor Device Validation
+
+on:
+  push:
+    branches: ['mission/autonomous-v1']
+  workflow_dispatch:
+    inputs:
+      authorize:
+        description: Authorize native Tor and real-account activation tests in an isolated emulator
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tor-device-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build application and native test APKs
+        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tor-validation-apks
+          path: |
+            app/build/outputs/apk/debug/app-x86_64-debug.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  native:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tor-validation-apks
+          path: app/build/outputs
+      - name: Configure emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
+      - name: Run two native Tor lifecycles with root and permissive test SELinux
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: -no-snapshot-save -noaudio -no-window -gpu swiftshader_indirect
+          script: bash scripts/test_embedded_tor_emulator.sh
+      - name: Upload sanitized native diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tor-native-diagnostics
+          path: |
+            ${{ runner.temp }}/embedded-tor-instrumentation.txt
+            ${{ runner.temp }}/embedded-tor-native-failure.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+  account:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize }}
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tor-validation-apks
+          path: app/build/outputs
+      - name: Configure emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
+      - name: Test two real logins and signup with sanitized credentials
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOZAR_LIVE_INPUT: ${{ secrets.GOZAR_LIVE_INPUT }}
+          GOZAR_CI_SIGNUP_INPUT: ${{ secrets.GOZAR_CI_SIGNUP_INPUT }}
+        with:
+          api-level: 29
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: -no-snapshot-save -noaudio -no-window -gpu swiftshader_indirect
+          script: bash scripts/test_tor_accounts_emulator.sh

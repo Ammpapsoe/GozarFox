@@ -44,6 +44,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
 
     override fun run(context: Context, body: () -> Unit) = synchronized(lock) {
         val app = context.applicationContext
+        clean(app)
         var active: FoxTorAttempt? = null
         val failures = mutableListOf<String>()
         for (mode in FoxTorPlan.order) {

@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+adb wait-for-device
+adb root
+adb wait-for-device
+adb shell id | grep -F 'uid=0(root)' >/dev/null
+adb shell setenforce 0
+adb shell getenforce | grep -F 'Permissive' >/dev/null
 app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
 mapfile -t test_apks < <(find app/build/outputs/apk/androidTest/debug -maxdepth 1 -type f -name '*.apk' | sort)
 test -s "$app_apk"

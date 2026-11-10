@@ -189,6 +189,7 @@ object Fox {
 
     fun signUp(c: Context, mail: String, password: String) {
         val clean = mail.trim()
+        prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signup) { epoch ->
             currentAuth(epoch) { loginSessionVerified = false }
             val session = try {
@@ -287,8 +288,20 @@ object Fox {
         }
     }
 
+    private fun prepareFreshLogin(c: Context) {
+        synchronized(authLock) {
+            if (authInFlight) return
+            authEpoch++
+            clearPendingLocked()
+            stage = ""
+        }
+        FoxTorRuntime.clean(c.applicationContext)
+        notifyUi()
+    }
+
     fun signIn(c: Context, mail: String, password: String) {
         val clean = mail.trim()
+        prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signin) { epoch ->
             signInNow(c.applicationContext, clean, password, false, epoch)
         }
