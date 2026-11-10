@@ -72,14 +72,17 @@ func TestSimulated451IsNotRetriedDirectOrUsedToActivate(t *testing.T) {
 	}
 }
 
-func testControlServer(t *testing.T, handler http.Handler) (*httptest.Server, *x509.CertPool) {
+func testControlServer(t *testing.T, handler http.Handler, names ...string) (*httptest.Server, *x509.CertPool) {
 	t.Helper()
+	if len(names) == 0 {
+		names = []string{"vpn.mozilla.org", "oauth.accounts.firefox.com"}
+	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cert := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "synthetic control test"},
-		DNSNames:  []string{"vpn.mozilla.org", "oauth.accounts.firefox.com"},
+		DNSNames:  names,
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, IsCA: true, BasicConstraintsValid: true}
@@ -159,6 +162,22 @@ func TestSimulatedTunnelRenewalVerifiesTLSAndNeverFollowsRedirect(t *testing.T) 
 	}
 	if requests.Load() != 3 {
 		t.Fatal("HTTP request reached untrusted server")
+	}
+}
+
+func TestTrustedWrongHostnameIsRejectedBeforeBearer(t *testing.T) {
+	var requests atomic.Int32
+	server, roots := testControlServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}), "wrong-host.invalid")
+	defer server.Close()
+	control, closeIdle := NewControlClient(func(_ context.Context, _ string, _ int) (io.ReadWriteCloser, error) {
+		return net.Dial("tcp", server.Listener.Addr().String())
+	})
+	defer closeIdle()
+	control.Transport.(*http.Transport).TLSClientConfig = &tls.Config{RootCAs: roots}
+	if _, err := PassTokenThrough("must-not-arrive", control); err == nil || requests.Load() != 0 {
+		t.Fatal("wrong hostname accepted or HTTP request reached server")
 	}
 }
 

@@ -18,6 +18,9 @@ func TestPassRenewalTimingAndCurrentToken(t *testing.T) {
 	if got := renewalDelay(token(now.Add(10*time.Minute).Unix()), now); got != 5*time.Minute {
 		t.Fatal(got)
 	}
+	if got := renewalDelay(token(now.Add(5*time.Minute+20*time.Second).Unix()), now); got != 20*time.Second {
+		t.Fatal(got)
+	}
 	if got := renewalDelay(token(now.Add(3*time.Minute).Unix()), now); got != 90*time.Second {
 		t.Fatal(got)
 	}

@@ -110,6 +110,7 @@ class FoxStoreAccountsTest {
         assertEquals(now + 180_000L, expiry)
         assertEquals(90_000L, FoxStore.renewalDelay(expiry, now))
         assertEquals(300_000L, FoxStore.renewalDelay(now + 600_000L, now))
+        assertEquals(20_000L, FoxStore.renewalDelay(now + 320_000L, now))
         assertEquals(15_000L, FoxStore.renewalDelay(now - 1, now))
         assertEquals(240_000L, FoxStore.passExpiry("malformed", now) - now)
         assertEquals(120_000L, FoxStore.renewalDelay(FoxStore.passExpiry("malformed", now), now))

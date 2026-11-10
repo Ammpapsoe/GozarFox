@@ -45,7 +45,7 @@ func renewalDelay(token string, now time.Time) time.Duration {
 		remaining = 0
 	}
 	delay := remaining / 2
-	if remaining > 5*time.Minute+30*time.Second {
+	if remaining > 5*time.Minute+15*time.Second {
 		delay = remaining - 5*time.Minute
 	}
 	if delay < 15*time.Second {

@@ -45,7 +45,7 @@ object FoxStore {
     // its half-life instead of hammering the service every few seconds.
     internal fun renewalDelay(expiry: Long, now: Long = System.currentTimeMillis()): Long {
         val remaining = (expiry - now).coerceAtLeast(0L)
-        val delay = if (remaining > 330_000L) remaining - 300_000L else remaining / 2L
+        val delay = if (remaining > 315_000L) remaining - 300_000L else remaining / 2L
         return delay.coerceIn(15_000L, 60 * 60_000L)
     }
     fun limit(c: Context): Long = p(c).getLong("limit", 0L)
