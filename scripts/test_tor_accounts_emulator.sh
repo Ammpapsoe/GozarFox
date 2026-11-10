@@ -12,11 +12,25 @@ for value in "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" "$GOZAR_SIGNUP_EMAIL" 
   if [ -n "$value" ]; then printf '::add-mask::%s\n' "$value"; fi
 done
 adb wait-for-device
-adb root
+adb root || true
 adb wait-for-device
-adb shell id | grep -F 'uid=0(root)' >/dev/null
-adb shell setenforce 0
-adb shell getenforce | grep -F 'Permissive' >/dev/null
+rooted=false
+for attempt in $(seq 1 30); do
+  identity=$(adb shell id 2>/dev/null | tr -d '\r' || true)
+  if printf '%s' "$identity" | grep -F 'uid=0(root)' >/dev/null; then rooted=true; break; fi
+  sleep 1
+done
+if [ "$rooted" != true ]; then
+  printf '%s\n' '::error::Emulator adbd did not enter root mode'
+  exit 1
+fi
+printf '%s\n' '::notice::STATE=EMULATOR_ADB_ROOT_OK'
+if adb shell setenforce 0; then
+  enforcement=$(adb shell getenforce | tr -d '\r')
+  printf '::notice::STATE=EMULATOR_SELINUX_%s\n' "$enforcement"
+else
+  printf '%s\n' '::warning::Root is active but this emulator image refused permissive SELinux; continuing account validation'
+fi
 app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
 mapfile -t test_apks < <(find app/build/outputs/apk/androidTest/debug -maxdepth 1 -type f -name '*.apk' | sort)
 test -s "$app_apk"
@@ -25,6 +39,7 @@ test -s "${test_apks[0]}"
 adb install -r "$app_apk"
 adb install -r "${test_apks[0]}"
 adb shell pm list instrumentation | grep -F 'instrumentation:com.gozar.test/androidx.test.runner.AndroidJUnitRunner' >/dev/null
+printf '%s\n' '::notice::STATE=ACCOUNT_APKS_INSTALLED'
 result="${RUNNER_TEMP:-/tmp}/tor-account-instrumentation.txt"
 umask 077
 trap 'rm -f "$result" "${RUNNER_TEMP:-/tmp}/tor-account-logcat-raw.txt"' EXIT
@@ -48,7 +63,7 @@ run_account_test() {
   local status=$?
   set -e
   if [ "$status" -eq 0 ] && grep -E 'OK \(1 test\)' "$result" >/dev/null; then
-    printf '%s\n' "$marker"
+    printf '::notice::%s\n' "$marker"
     return 0
   fi
   python3 - "$result" <<'PY' | sanitize
