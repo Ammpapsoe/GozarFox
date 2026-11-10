@@ -1,0 +1,54 @@
+name: Sign IR domain list
+
+on:
+  push:
+    branches: [main]
+    paths: ['packaging/ir-domains.txt']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sign-ir-domains-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Sign the list with the dedicated list key
+        env:
+          LIST_KEY_PEM: ${{ secrets.GOZAR_LIST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$LIST_KEY_PEM" || { echo '::error::GOZAR_LIST_KEY is missing'; exit 1; }
+          umask 077
+          key="$RUNNER_TEMP/gozar-list-key.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$LIST_KEY_PEM" > "$key"
+          GOZAR_LIST_KEY_FILE="$key" bash tools/sign-ir-domains.sh packaging/ir-domains.txt packaging/ir-domains.txt.sig
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.6'
+      - name: Verify the signature with the Go verifier
+        run: |
+          set -euo pipefail
+          cd go-desktop
+          go test -count=1 -run TestPackagedListVerifiesWithPinnedKey ./internal/geo
+      - name: Commit the signature
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packaging/ir-domains.txt.sig
+          if git diff --cached --quiet; then
+            echo 'signature unchanged'
+          else
+            git commit -m 'Sign split-tunnel domain list'
+            git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          fi

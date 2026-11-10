@@ -133,3 +133,28 @@ for real installation, migration or recovery tests.
 Key rotation requires a client that already trusts the replacement key (or a
 separate trusted update channel); simply switching the server key strands old
 clients. A compromised signing key cannot currently be revoked remotely.
+
+## Split-tunnel domain list (`packaging/ir-domains.txt`)
+
+The desktop and Android clients fetch this list through the verified tunnel to
+decide which destinations go direct. It is signed with a **separate** Ed25519
+key, `GOZAR_LIST_KEY`, pinned as `ListKeyHex` (Go, `internal/geo/listsig.go`)
+and `FoxGeo.LIST_KEY_HEX` (Android/core). The application update key
+(`GOZAR_UPDATE_KEY`, `FoxUpdate.KEY_HEX`) is not used for this list.
+
+* `packaging/ir-domains.txt.sig` is a detached signature: 128 lowercase hex
+  characters (a 64-byte Ed25519 signature) over the exact bytes of
+  `GOZAR-IR-DOMAINS-V1\n` followed by the list file.
+* A client replaces its domain rules only when the list and its signature
+  both download with HTTP 200 within size limits and the signature verifies.
+  Any failure keeps the previously verified rules, and the built-in list is
+  used at first start.
+* `.github/workflows/sign-ir-domains.yml` signs on a push to `main` that changes
+  the list, or on manual dispatch, refuses any key that is not the pinned list
+  key, verifies the result with the Go verifier, and commits only the `.sig`
+  file. Signing is not done on a developer machine.
+* Scope and limits: the signature prevents tampering and substitution on the
+  network path. It does not protect against a compromised repository key, and
+  it does not prevent an older correctly signed list from being replayed. The
+  list is a routing hint, not a credential, and the list key is separate from
+  the update key so that compromise of one does not extend to the other.

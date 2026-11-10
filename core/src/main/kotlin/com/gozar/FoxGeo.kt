@@ -31,35 +31,77 @@ object FoxGeo {
         return true
     }
 
+    /**
+     * Fetches the domain list and its detached Ed25519 signature through the
+     * current tunnel. The list is replaced only when the signature verifies
+     * with the pinned list key over the exact downloaded bytes.
+     */
     fun refresh(location: FoxLocation, pass: String, expectedTransport: Long? = null): Boolean {
         return try {
-            val pipe = FoxTunnel.open(location, "raw.githubusercontent.com", 443, pass, 15000, expectedTransport)
-            try {
-                val request = ("GET /bardia049b-stack/Gozar/main/packaging/ir-domains.txt HTTP/1.1\r\n" +
-                    "Host: raw.githubusercontent.com\r\nConnection: close\r\n\r\n").toByteArray(Charsets.UTF_8)
-                pipe.write(request, 0, request.size)
-                val buffer = ByteArray(8192)
-                val all = ByteArrayOutputStream()
-                while (true) {
-                    val count = pipe.read(buffer, 0, buffer.size)
-                    if (count <= 0) break
-                    all.write(buffer, 0, count)
-                    if (all.size() > 1_100_000) return false
-                }
-                val bytes = all.toByteArray()
-                val text = String(bytes, Charsets.ISO_8859_1)
-                val split = text.indexOf("\r\n\r\n")
-                if (split < 0) return false
-                val head = text.substring(0, split)
-                if (!head.startsWith("HTTP/") || !head.contains(" 200 ")) return false
-                if (expectedTransport != null && !FoxTunnel.transportIsCurrent(expectedTransport)) return false
-                update(String(bytes, split + 4, bytes.size - split - 4, Charsets.UTF_8))
-            } finally {
-                pipe.close()
-            }
+            val list = fetchResource(location, pass, expectedTransport, LIST_PATH, 1_100_000) ?: return false
+            val signature = fetchResource(location, pass, expectedTransport, LIST_PATH + ".sig", 512) ?: return false
+            if (!acceptSigned(list, String(signature, Charsets.ISO_8859_1))) return false
+            if (expectedTransport != null && !FoxTunnel.transportIsCurrent(expectedTransport)) return false
+            update(String(list, Charsets.UTF_8))
         } catch (e: Exception) {
             false
         }
+    }
+
+    private fun fetchResource(
+        location: FoxLocation,
+        pass: String,
+        expectedTransport: Long?,
+        path: String,
+        limit: Int
+    ): ByteArray? {
+        val pipe = FoxTunnel.open(location, "raw.githubusercontent.com", 443, pass, 15000, expectedTransport)
+        try {
+            val request = ("GET $path HTTP/1.1\r\n" +
+                "Host: raw.githubusercontent.com\r\nConnection: close\r\n\r\n").toByteArray(Charsets.UTF_8)
+            pipe.write(request, 0, request.size)
+            val buffer = ByteArray(8192)
+            val all = ByteArrayOutputStream()
+            while (true) {
+                val count = pipe.read(buffer, 0, buffer.size)
+                if (count <= 0) break
+                all.write(buffer, 0, count)
+                if (all.size() > limit + 4096) return null
+            }
+            val bytes = all.toByteArray()
+            val text = String(bytes, Charsets.ISO_8859_1)
+            val split = text.indexOf("\r\n\r\n")
+            if (split < 0) return null
+            val head = text.substring(0, split)
+            if (!head.startsWith("HTTP/") || !head.contains(" 200 ")) return null
+            val body = bytes.copyOfRange(split + 4, bytes.size)
+            return if (body.size > limit) null else body
+        } finally {
+            pipe.close()
+        }
+    }
+
+    /** Ed25519 key that signs packaging/ir-domains.txt; separate from the update key. */
+    const val LIST_KEY_HEX = "5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
+    private const val LIST_PATH = "/bardia049b-stack/Gozar/main/packaging/ir-domains.txt"
+    private const val LIST_PREFIX = "GOZAR-IR-DOMAINS-V1\n"
+
+    /** Verifies a detached signature (128 hex characters) over the exact list bytes. */
+    internal fun acceptSigned(list: ByteArray, signatureText: String, public: ByteArray = hexBytes(LIST_KEY_HEX)!!): Boolean {
+        val hex = signatureText.trim()
+        if (hex.length != 128) return false
+        val signature = hexBytes(hex) ?: return false
+        val message = LIST_PREFIX.toByteArray(Charsets.UTF_8) + list
+        return FoxSign.verify(public, message, signature)
+    }
+
+    private fun hexBytes(text: String): ByteArray? {
+        if (text.length % 2 != 0 || !text.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
+        val out = ByteArray(text.length / 2)
+        for (i in out.indices) {
+            out[i] = text.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
+        return out
     }
 
     private fun parse(text: String): Set<String>? {
