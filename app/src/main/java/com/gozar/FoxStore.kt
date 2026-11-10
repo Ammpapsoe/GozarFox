@@ -89,9 +89,17 @@ object FoxStore {
             prefs.getString("reset", "").orEmpty()), id, prefs.getLong("session_revision", 0L))
     }
 
-    /** This callback never performs renewal: control requests must not recurse. */
-    internal fun controlPass(c: Context, now: Long = System.currentTimeMillis()): String? =
-        bootstrap(c, 5_000L, now)?.pass?.token
+    /** The DNS/WARP listener shares this callback. Do not recurse into
+     * renewal; preserve legacy opaque passes until their stored deadline. */
+    internal fun controlPass(c: Context, now: Long = System.currentTimeMillis()): String? = synchronized(lock) {
+        val prefs = p(c)
+        if (activeId(prefs).isEmpty() || secret(c, prefs, "refresh").isEmpty() ||
+            prefs.getLong("pass_until", 0L) <= now + 5_000L) return@synchronized null
+        val token = secret(c, prefs, "pass")
+        val expiry = explicitPassExpiry(token)
+        if (expiry != null && expiry <= now + 5_000L) return@synchronized null
+        token.takeIf { it.isNotEmpty() && it.none { char -> char == '\r' || char == '\n' || char == '\u0000' } }
+    }
 
     internal fun isCurrent(c: Context, cached: FoxBootstrap): Boolean = synchronized(lock) {
         val prefs = p(c)

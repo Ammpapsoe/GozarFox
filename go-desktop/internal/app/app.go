@@ -498,6 +498,9 @@ func (a *App) commitAccount(account config.Account, pass *fxa.Pass, authRevision
 		return errors.New("invalid account")
 	}
 	account.ProxyPass = persistablePass(pass, time.Now())
+	if pass != nil {
+		account.Limit, account.Remaining, account.Reset = pass.Limit, pass.Remaining, pass.Reset
+	}
 	next := a.cfg.PutAccount(account)
 	if err := config.Save(next); err != nil {
 		return err

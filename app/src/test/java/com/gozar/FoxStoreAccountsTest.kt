@@ -116,6 +116,36 @@ class FoxStoreAccountsTest {
     }
 
     @Test
+    fun bootstrapRequiresEncryptedExplicitExpiryAndIsBoundToTheAccount() {
+        val now = System.currentTimeMillis()
+        fun token(expiresAt: Long): String {
+            val body = "{\"exp\":${expiresAt / 1000L}}"
+            val encoded = android.util.Base64.encodeToString(body.toByteArray(),
+                android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+            return "header.$encoded.synthetic"
+        }
+        val valid = token(now + 600_000L)
+        FoxStore.saveAccount(context, "first@example.test", "first", FoxTokens("access", "refresh", 3600),
+            FoxPass(valid, 1000, 900, "reset"))
+        val prefs = context.getSharedPreferences("fox", Context.MODE_PRIVATE)
+        assertFalse(prefs.getString("pass", "").orEmpty().contains(valid))
+        val cached = FoxStore.bootstrap(context, 90_000L, now)
+        assertTrue(cached != null && cached.pass.token == valid && FoxStore.isCurrent(context, cached))
+        assertTrue(FoxStore.bootstrap(context, 90_000L, now + 600_000L) == null)
+        save("second@example.test", "second", "second", 300)
+        assertFalse(FoxStore.isCurrent(context, cached!!))
+        assertTrue(FoxStore.bootstrap(context, 90_000L, now) == null)
+        assertTrue(FoxStore.switchAccount(context, cached.accountId))
+        assertTrue(FoxStore.bootstrap(context, 90_000L, now)?.pass?.token == valid)
+        // Forged metadata, an opaque token, and legacy plaintext cannot create
+        // a bootstrap credential with an unknown lifetime.
+        prefs.edit().putLong("pass_until", now + 3_600_000L).commit()
+        assertTrue(FoxStore.bootstrap(context, 0L, now + 600_000L) == null)
+        prefs.edit().putString("pass", valid).commit()
+        assertTrue(FoxStore.bootstrap(context, 0L, now) == null)
+    }
+
+    @Test
     fun unknownSwitchDoesNotAlterTheActiveSession() {
         save("first@example.test", "first", "first", 800)
         val revision = FoxStore.credentials(context).revision
