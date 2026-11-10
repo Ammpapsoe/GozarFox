@@ -1,0 +1,3 @@
+# Signed list bytes must reach every checkout unchanged (no EOL conversion).
+packaging/ir-domains.txt -text
+packaging/ir-domains.txt.sig -text
