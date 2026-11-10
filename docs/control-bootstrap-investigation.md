@@ -49,9 +49,12 @@ not introduce public/shared relays or discover unknown proxy servers.
   GitHub diagnostic (run 42770989249) received HTTP 400 / errno 101 for an
   already-existing account; that is not a successful new signup and is not
   evidence that email verification or OAuth would work for a new account.
-* Simulated 451 tests use local TLS endpoints and synthetic credentials. They
-  are not a real geographic-block test, real relay renewal, physical-device
-  test, or a production DNS/leak-freedom proof.
+* Simulated 451 tests use local TLS endpoints and synthetic credentials. One
+  desktop integration test passes nested TLS through the production HTTP/2
+  CONNECT manager, authenticates the synthetic pass, renews both tokens,
+  verifies an in-tunnel 451, and checks that a closed tunnel fails closed.
+  These are not a real geographic-block test, real relay renewal, physical-
+  device test, or a production DNS/leak-freedom proof.
 
 ## Release gate
 
