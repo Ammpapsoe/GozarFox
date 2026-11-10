@@ -48,7 +48,7 @@ func TestDirect451FallsBackToTheNextRelay(t *testing.T) {
 	}
 }
 
-func TestPassTokenThrough451UsesRelayWithoutDirectFallback(t *testing.T) {
+func TestPassTokenThrough451FailsClosedWithoutRelayFallback(t *testing.T) {
 	old := client
 	defer func() { client = old }()
 	client = &http.Client{Transport: fakeTransport(func(*http.Request) (*http.Response, error) {
@@ -59,17 +59,26 @@ func TestPassTokenThrough451UsesRelayWithoutDirectFallback(t *testing.T) {
 	})}
 	restoreEndpoints := relaytransport.ReplaceForTest(relayEndpoints()[:1])
 	defer restoreEndpoints()
+	relayCalls := 0
 	restoreCall := relaytransport.ReplaceCallForTest(func(endpoint, path, method, access string, body []byte) (*relaytransport.Reply, error) {
-		return &relaytransport.Reply{Code: 200, Body: []byte(`{"token":"through-relay"}`), Headers: make(http.Header)}, nil
+		relayCalls++
+		return &relaytransport.Reply{Code: 200, Body: []byte(`{"token":"unexpected-relay-pass"}`), Headers: make(http.Header)}, nil
 	})
 	defer restoreCall()
 	pass, err := PassTokenThrough("synthetic-access", control)
-	if err != nil || pass.Token != "through-relay" {
-		t.Fatalf("PassTokenThrough did not use the relay: %v", err)
+	if pass != nil {
+		t.Fatal("control-scoped 451 unexpectedly returned a pass")
+	}
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.Status != 451 {
+		t.Fatalf("control-scoped 451 was not preserved: %v", err)
+	}
+	if relayCalls != 0 {
+		t.Fatalf("control-scoped request used relay fallback %d times", relayCalls)
 	}
 }
 
-func TestFirstLoginActivationThroughRelayNeedsNoExistingPass(t *testing.T) {
+func TestDirectFirstLoginActivationThroughRelayNeedsNoExistingPass(t *testing.T) {
 	old := client
 	defer func() { client = old }()
 	client = &http.Client{Transport: fakeTransport(func(*http.Request) (*http.Response, error) {
