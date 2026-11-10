@@ -100,5 +100,7 @@ PY
   fi
   return 1
 }
-run_account_test realLoginTwiceAndOpenDirectTunnel "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" '' 'STATE=LOGIN_PASS_AND_DIRECT_TUNNEL_TWICE_OK'
-run_account_test realSignupReceivesCodeAndOpensTunnel "$GOZAR_SIGNUP_EMAIL" "$GOZAR_SIGNUP_PASSWORD" "$GOZAR_SIGNUP_CODE" 'STATE=SIGNUP_LOGIN_PASS_AND_TUNNEL_OK'
+overall=0
+run_account_test realLoginTwiceAndOpenDirectTunnel "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" '' 'STATE=LOGIN_PASS_AND_DIRECT_TUNNEL_TWICE_OK' || overall=1
+run_account_test realSignupReceivesCodeAndOpensTunnel "$GOZAR_SIGNUP_EMAIL" "$GOZAR_SIGNUP_PASSWORD" "$GOZAR_SIGNUP_CODE" 'STATE=SIGNUP_LOGIN_PASS_AND_TUNNEL_OK' || overall=1
+exit "$overall"

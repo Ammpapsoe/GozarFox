@@ -76,7 +76,9 @@ class FoxAccountInstrumentedTest {
         }
         if (Fox.isLinkStep()) throw AssertionError(label + "_EMAIL_LINK_REQUIRED")
         if (!Fox.signedIn(app)) {
-            throw AssertionError(label + "_FAILED: " + Fox.message.ifBlank { "unknown account failure" })
+            val summary = Fox.message.ifBlank { "unknown account failure" }
+            val detail = Fox.lastFailureDiagnostic.ifBlank { "no failure diagnostic" }
+            throw AssertionError(label + "_FAILED: " + summary + "; " + detail)
         }
     }
 

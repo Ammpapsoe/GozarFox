@@ -45,6 +45,7 @@ object Fox {
         internal set(value) { operations.busy = value }
     @Volatile var message: String = ""
     @Volatile var stage: String = ""
+    @Volatile internal var lastFailureDiagnostic: String = ""
     @Volatile var servers: List<FoxLocation> = emptyList()
     // Serializes list loading: view creation and connect share one fetch.
     private val serversLock = Any()
@@ -124,15 +125,19 @@ object Fox {
             val app = c.applicationContext
             thread {
                 var failure: String? = null
+                var diagnostic = ""
                 try {
                     body()
                 } catch (e: FoxError) {
                     failure = e.message ?: "Sign-in failed"
+                    diagnostic = e.javaClass.simpleName + "; http=" + e.status + "; errno=" + e.errno
                 } catch (e: Exception) {
                     failure = e.message ?: "Network error"
+                    diagnostic = e.javaClass.simpleName
                 } finally {
                     try {
                         failure?.let { text ->
+                            lastFailureDiagnostic = diagnostic + "; stage=" + stage.take(160)
                             synchronized(authLock) {
                                 if (failureEpoch == null || failureEpoch == authEpoch) message = text
                             }
@@ -294,6 +299,7 @@ object Fox {
             authEpoch++
             clearPendingLocked()
             stage = ""
+            lastFailureDiagnostic = ""
         }
         FoxTorRuntime.clean(c.applicationContext)
         notifyUi()
