@@ -57,6 +57,25 @@ class FoxTorPlanTest {
         assertEquals(42, FoxTorPlan.bootstrapProgress("PROGRESS=42 TAG=x"))
         assertEquals(-1, FoxTorPlan.bootstrapProgress("PROGRESS=abc"))
         assertEquals(-1, FoxTorPlan.bootstrapProgress(null))
+        assertEquals("Done", FoxTorPlan.bootstrapSummary("PROGRESS=100 SUMMARY=\"Done\""))
+    }
+
+    @Test
+    fun everyTransportUsesNinetySecondBootstrapTimeout() {
+        for (mode in FoxTorPlan.order) assertEquals(90_000L, FoxTorPlan.timeoutMs(mode))
+    }
+
+    @Test
+    fun diagnosticLogIsNoticeLevelAndSafelyConfigured() {
+        val config = FoxTorPlan.torrc(FoxTorPlan.Mode.DIRECT, 0, "/cache/login/tor.log")
+        assertTrue(config.contains("Log notice file /cache/login/tor.log"))
+        assertTrue(config.contains("SafeLogging 1"))
+        assertFalse(config.contains("/dev/null"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun diagnosticLogRejectsConfigurationInjection() {
+        FoxTorPlan.torrc(FoxTorPlan.Mode.DIRECT, 0, "/cache/tor.log\nSocksPort 0.0.0.0:9050")
     }
 
     @Test(expected = IllegalArgumentException::class)

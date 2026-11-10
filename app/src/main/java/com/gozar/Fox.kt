@@ -104,6 +104,11 @@ object Fox {
         notifyUi()
     }
 
+    internal fun updateLoginStage(text: String) {
+        stage = text
+        notifyUi()
+    }
+
     private fun work(
         c: Context,
         first: Int = 0,

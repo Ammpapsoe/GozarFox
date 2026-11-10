@@ -331,7 +331,13 @@ AGPL-3.0-or-later</string>
     <string name="login_fill">ایمیل و رمز عبور را وارد کنید.</string>
     <string name="login_mismatch">دو رمز عبور یکسان نیستند.</string>
     <string name="login_working">در حال انجام…</string>
-    <string name="login_secure_connecting">در حال اتصال امن...</string>
+    <string name="login_secure_connecting">در حال برقراری اتصال امن…</string>
+    <string name="login_tor_direct">Tor مستقیم</string>
+    <string name="login_tor_snowflake">Snowflake</string>
+    <string name="login_tor_meek">Meek</string>
+    <string name="login_tor_starting">راه‌اندازی %1$s…</string>
+    <string name="login_tor_bootstrap">%1$s · bootstrap تور %2$d%%</string>
+    <string name="login_tor_checking">Tor متصل شد؛ دسترسی به موزیلا بررسی می‌شود…</string>
     <string name="login_no_browser">مرورگری برای صفحه حساب فایرفاکس پیدا نشد.</string>
     <string name="account_refresh">به‌روزرسانی مصرف</string>
     <string name="account_refreshing">مصرف شما به‌روز می‌شود…</string>

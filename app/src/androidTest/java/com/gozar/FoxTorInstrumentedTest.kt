@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class FoxTorInstrumentedTest {
-    @Test(timeout = 420_000)
+    @Test(timeout = 900_000)
     fun embeddedEscalationReachesMozillaAndStopsNativeTransport() {
         val app = ApplicationProvider.getApplicationContext<Context>()
         val originalFactory = FoxTorRuntime.attemptFactory
@@ -56,24 +56,27 @@ class FoxTorInstrumentedTest {
                     throw error
                 }
             }
-            try {
-                FoxTorRuntime.run(app) {
-                    assertEquals(FoxTorPlan.Mode.MEEK, current)
-                    port = FoxNet.loginSocksPort() ?: 0
-                    assertTrue(port in 1..65535)
+            repeat(2) { attempt ->
+                try {
+                    FoxTorRuntime.run(app) {
+                        assertEquals(FoxTorPlan.Mode.MEEK, current)
+                        port = FoxNet.loginSocksPort() ?: 0
+                        assertTrue(port in 1..65535)
+                    }
+                } catch (error: FoxError) {
+                    throw AssertionError("attempt=$attempt transport failures=" + failures.joinToString("|") + "\n" + error.message)
                 }
-            } catch (error: FoxError) {
-                throw AssertionError("transport failures=" + failures.joinToString("|"))
+                assertEquals(FoxTorPlan.Mode.MEEK, modes.last())
+                assertNull(FoxNet.loginSocksPort())
+                try {
+                    Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 2_000) }
+                    fail("Tor SOCKS listener remained open after attempt $attempt")
+                } catch (_: IOException) {
+                }
+                assertFalse(File(app.cacheDir, "gozar-login-transport").exists())
+                assertFalse(File(app.filesDir.parentFile, "app_TorService").exists())
             }
-            assertEquals(FoxTorPlan.Mode.MEEK, modes.last())
-            assertNull(FoxNet.loginSocksPort())
-            try {
-                Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 2_000) }
-                fail("Tor SOCKS listener remained open")
-            } catch (_: IOException) {
-            }
-            assertFalse(File(app.cacheDir, "gozar-login-transport").exists())
-            assertFalse(File(app.filesDir.parentFile, "app_TorService").exists())
+            assertEquals(FoxTorPlan.order + FoxTorPlan.order, modes)
         } finally {
             FoxTorRuntime.attemptFactory = originalFactory
             FoxTorRuntime.reachability = originalReachability

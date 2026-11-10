@@ -22,14 +22,11 @@ object FoxTorPlan {
         Mode.MEEK -> "meek_lite"
     }
 
-    fun timeoutMs(mode: Mode): Long = when (mode) {
-        Mode.DIRECT -> 45_000L
-        Mode.SNOWFLAKE -> 100_000L
-        Mode.MEEK -> 120_000L
-    }
+    fun timeoutMs(mode: Mode): Long = 90_000L
 
-    fun torrc(mode: Mode, transportPort: Int): String {
+    fun torrc(mode: Mode, transportPort: Int, logPath: String? = null): String {
         require(mode == Mode.DIRECT || transportPort in 1..65535) { "invalid transport port" }
+        require(logPath == null || (logPath.isNotBlank() && logPath.none { it == '\n' || it == '\r' || it == ' ' })) { "invalid Tor log path" }
         val lines = mutableListOf(
             "ClientOnly 1",
             "SocksPort 127.0.0.1:auto IsolateDestAddr",
@@ -41,9 +38,9 @@ object FoxTorPlan {
             "NATDPort 0",
             "ControlPort 0",
             "AvoidDiskWrites 1",
-            "SafeLogging 1",
-            "Log notice file /dev/null"
+            "SafeLogging 1"
         )
+        if (logPath != null) lines += "Log notice file $logPath"
         val transport = transportName(mode)
         if (transport != null) {
             lines += "UseBridges 1"
@@ -66,5 +63,13 @@ object FoxTorPlan {
         if (start < 0) return -1
         val number = reply.substring(start + marker.length).takeWhile { it.isDigit() }
         return number.toIntOrNull()?.coerceIn(0, 100) ?: -1
+    }
+
+    fun bootstrapSummary(reply: String?): String {
+        if (reply == null) return ""
+        val marker = "SUMMARY=\""
+        val start = reply.indexOf(marker)
+        if (start < 0) return ""
+        return reply.substring(start + marker.length).substringBefore('"').take(160)
     }
 }

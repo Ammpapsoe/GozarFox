@@ -106,6 +106,7 @@ class LoginActivity : BaseActivity() {
         switchButton = findViewById(R.id.loginSwitch)
         progress = findViewById(R.id.loginProgress)
         error = findViewById(R.id.loginError)
+        error.setTextIsSelectable(true)
         reveal = findViewById(R.id.loginReveal)
         systemAccounts = findViewById(R.id.loginSystemAccounts)
         savedAccounts = findViewById(R.id.loginSavedAccounts)
@@ -286,9 +287,10 @@ class LoginActivity : BaseActivity() {
             else -> getString(R.string.login_action)
         }
         val busy = Fox.busy
-        if (busy) subtitle.text = getString(R.string.login_secure_connecting)
+        val busyStage = Fox.stage.ifBlank { getString(R.string.login_secure_connecting) }
+        if (busy) subtitle.text = busyStage
         primary.text = if (busy) "" else action
-        primary.contentDescription = if (busy) getString(R.string.login_secure_connecting) else null
+        primary.contentDescription = if (busy) busyStage else null
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         primary.isEnabled = !busy
         languageButton.isEnabled = !busy

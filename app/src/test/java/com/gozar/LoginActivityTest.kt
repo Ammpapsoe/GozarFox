@@ -67,7 +67,7 @@ class LoginActivityTest {
         assertTrue(secret.transformationMethod is PasswordTransformationMethod)
 
         Fox.busy = true
-        Fox.stage = "request status that should not appear"
+        Fox.stage = "Direct Tor · Tor bootstrap 42%"
         Fox.message = "hidden while working"
         render()
 
@@ -76,8 +76,8 @@ class LoginActivityTest {
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("", primary.text.toString())
-        assertEquals(activity.getString(R.string.login_secure_connecting), activity.findViewById<TextView>(R.id.loginSubtitle).text.toString())
-        assertEquals(activity.getString(R.string.login_secure_connecting), primary.contentDescription.toString())
+        assertEquals("Direct Tor · Tor bootstrap 42%", activity.findViewById<TextView>(R.id.loginSubtitle).text.toString())
+        assertEquals("Direct Tor · Tor bootstrap 42%", primary.contentDescription.toString())
         assertEquals(View.VISIBLE, progress.visibility)
         assertSame(primary.parent, progress.parent)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loginError).visibility)

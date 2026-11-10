@@ -22,6 +22,7 @@ class FoxTorRuntimeTest {
     private lateinit var context: Context
     private lateinit var originalFactory: (Context, FoxTorPlan.Mode) -> FoxTorAttempt
     private lateinit var originalReachability: (Int) -> Unit
+    private lateinit var originalStatusCallback: (String) -> Unit
     private val created = mutableListOf<FoxTorPlan.Mode>()
     private val closed = mutableListOf<FoxTorPlan.Mode>()
 
@@ -40,8 +41,10 @@ class FoxTorRuntimeTest {
     @Before
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        originalStatusCallback = FoxTorRuntime.statusCallback
         created.clear()
         closed.clear()
+        FoxTorRuntime.statusCallback = { }
         FoxTorRuntime.attemptFactory = { _, mode ->
             created += mode
             FakeAttempt(mode, 19000 + mode.ordinal)
@@ -53,6 +56,7 @@ class FoxTorRuntimeTest {
     fun tearDown() {
         FoxTorRuntime.attemptFactory = { app, mode -> throw IllegalStateException("native backend was not restored") }
         FoxTorRuntime.reachability = { }
+        FoxTorRuntime.statusCallback = originalStatusCallback
     }
 
     @Test
@@ -126,6 +130,7 @@ class FoxTorRuntimeTest {
             object : FoxTorAttempt {
                 override val port: Int = 0
                 override fun start(): Int = throw IOException("synthetic transport failure")
+                override fun diagnostics(): String = "Last bootstrap: 17% synthetic stall"
                 override fun close() {
                     closed += mode
                 }
@@ -136,7 +141,12 @@ class FoxTorRuntimeTest {
             FoxTorRuntime.run(context) { calls++ }
             fail("exhausted transports unexpectedly succeeded")
         } catch (error: FoxError) {
-            assertEquals("Secure connection could not be established", error.message)
+            val detail = error.message.orEmpty()
+            assertTrue(detail.startsWith("Secure connection could not be established"))
+            assertTrue(detail.contains("DIRECT: IOException: synthetic transport failure"))
+            assertTrue(detail.contains("SNOWFLAKE: IOException: synthetic transport failure"))
+            assertTrue(detail.contains("MEEK: IOException: synthetic transport failure"))
+            assertTrue(detail.contains("Last bootstrap: 17% synthetic stall"))
         }
         assertEquals(0, calls)
         assertEquals(FoxTorPlan.order, created)

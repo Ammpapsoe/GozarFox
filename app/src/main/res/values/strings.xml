@@ -331,7 +331,13 @@ AGPL-3.0-or-later</string>
     <string name="login_fill">Enter your email and password.</string>
     <string name="login_mismatch">The two passwords do not match.</string>
     <string name="login_working">Working…</string>
-    <string name="login_secure_connecting">در حال اتصال امن...</string>
+    <string name="login_secure_connecting">Establishing a secure connection…</string>
+    <string name="login_tor_direct">Direct Tor</string>
+    <string name="login_tor_snowflake">Snowflake</string>
+    <string name="login_tor_meek">Meek</string>
+    <string name="login_tor_starting">Starting %1$s…</string>
+    <string name="login_tor_bootstrap">%1$s · Tor bootstrap %2$d%%</string>
+    <string name="login_tor_checking">Tor connected. Checking Mozilla access…</string>
     <string name="login_no_browser">No browser found for the Firefox account page.</string>
     <string name="account_refresh">Refresh usage</string>
     <string name="account_refreshing">Updating your usage…</string>
