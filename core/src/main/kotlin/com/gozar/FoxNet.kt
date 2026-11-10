@@ -73,7 +73,7 @@ object FoxNet {
         throw IllegalStateException("unreachable")
     }
 
-    internal fun loginSocksPort(): Int? = loginSocksPort.get()
+    fun loginSocksPort(): Int? = loginSocksPort.get()
 
     internal fun controlScoped(): Boolean = controlPort.get() != null
 
