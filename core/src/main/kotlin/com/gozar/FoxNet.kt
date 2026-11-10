@@ -60,17 +60,16 @@ object FoxNet {
 
     fun <T> throughLoginSocks(port: Int, action: () -> T): T {
         require(port in 1..65535 && loginSocksPort.get() == null && controlPort.get() == null && loginProxyPort.get() == null) { "invalid login transport" }
-        FoxSocksHttpBridge(port).use { bridge ->
+        val bridge = FoxSocksHttpBridge(port)
+        try {
             loginSocksPort.set(port)
             loginProxyPort.set(bridge.port)
-            try {
-                return action()
-            } finally {
-                loginProxyPort.remove()
-                loginSocksPort.remove()
-            }
+            return action()
+        } finally {
+            loginProxyPort.remove()
+            loginSocksPort.remove()
+            bridge.close()
         }
-        throw IllegalStateException("unreachable")
     }
 
     fun loginSocksPort(): Int? = loginSocksPort.get()
