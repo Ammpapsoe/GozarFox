@@ -1,0 +1,44 @@
+name: Authorized live relay login
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorize:
+        description: Explicitly authorize account access, activation and optional account creation
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    if: ${{ inputs.authorize }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.6'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Check all relay health endpoints
+        run: |
+          set -euo pipefail
+          for name in a b c; do
+            curl --fail --silent --show-error --max-time 20 "https://gozar-guardian-${name}.gozarfox7.workers.dev/health" | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data == {"ready": True, "version": 1}'
+          done
+      - name: Run the authorized real-account relay diagnostic
+        working-directory: go-desktop
+        env:
+          GOZAR_LIVE_INPUT: ${{ secrets.GOZAR_LIVE_INPUT }}
+        run: |
+          set -euo pipefail
+          test -n "$GOZAR_LIVE_INPUT" || { echo '::error::GOZAR_LIVE_INPUT is not configured'; exit 2; }
+          umask 077
+          input="$RUNNER_TEMP/gozar-live-input.json"
+          trap 'rm -f "$input"' EXIT
+          printf '%s' "$GOZAR_LIVE_INPUT" > "$input"
+          chmod 600 "$input"
+          go run ./tools/relay-live --allow-account-test --allow-activation --allow-create-account "$input"

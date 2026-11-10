@@ -52,6 +52,7 @@ type Config struct {
 	// The authenticated server snapshot is public data, but sealing prevents
 	// a modified cache from directing an account's bearer pass to a new host.
 	ServerCache string `json:"server_cache,omitempty"`
+	RelayCache  string `json:"relay_cache,omitempty"`
 	Port        int    `json:"port"`
 }
 

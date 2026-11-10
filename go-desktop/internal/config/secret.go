@@ -50,6 +50,7 @@ func (c *Config) sealTokens() {
 	c.Access = seal(c.Access)
 	c.Refresh = seal(c.Refresh)
 	c.ServerCache = sealStrict(c.ServerCache)
+	c.RelayCache = sealStrict(c.RelayCache)
 	for index := range c.Accounts {
 		c.Accounts[index].Access = seal(c.Accounts[index].Access)
 		c.Accounts[index].Refresh = seal(c.Accounts[index].Refresh)
@@ -61,6 +62,7 @@ func (c *Config) unsealTokens() {
 	c.Access = unseal(c.Access)
 	c.Refresh = unseal(c.Refresh)
 	c.ServerCache = unsealStrict(c.ServerCache)
+	c.RelayCache = unsealStrict(c.RelayCache)
 	for index := range c.Accounts {
 		c.Accounts[index].Access = unseal(c.Accounts[index].Access)
 		c.Accounts[index].Refresh = unseal(c.Accounts[index].Refresh)

@@ -144,6 +144,31 @@ jobs:
             ${{ runner.temp }}/recovery-apks/official-*-launch.txt
           if-no-files-found: ignore
 
+  relay-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: relay/worker/package-lock.json
+      - name: Test Worker policy and validate deployment configuration
+        working-directory: relay/worker
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          npm run check
+          npx wrangler deploy --dry-run --config wrangler.jsonc
+      - name: Verify the published endpoint signature when present
+        run: |
+          if [ -f packaging/relay-endpoints.json.sig ]; then
+            bash tools/verify-relay-endpoints.sh
+          else
+            echo 'signature pending from Sign relay endpoints workflow'
+          fi
+
   desktop-ui:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -189,7 +214,7 @@ jobs:
           cache-dependency-path: go-desktop/go.sum
       - name: Test UDP packet forwarding, capsule framing and HTTP/2 streams
         working-directory: go-desktop
-        run: go test -race ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app -count=1
+        run: go test -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app -count=1
 
   release-tools:
     runs-on: ubuntu-latest

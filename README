@@ -100,6 +100,8 @@ proxy-chain editor. Proxy chains are used by the Go core when connecting; proxy 
 not supported. Desktop per-application and per-domain routing, a dedicated LAN-bypass control,
 and the route map are not implemented. Existing OS LAN routes may still bypass the tunnel.
 
+Guardian HTTP 451 bootstrap uses fixed-route Cloudflare Workers, signed multi-endpoint discovery, ordered fallback and application-side CA, hostname and SPKI verification. The Workers do not carry VPN traffic or accept arbitrary destinations. Cloudflare rate limiting is approximate per location; no Zone-scoped WAF is configured, and a legitimate compromised Worker can still read proxied credentials. Certificate rotation and live-login requirements are documented in docs/guardian-relays.md. These controls do not establish universal uncensored access or protection against the relay operator itself.
+
 Planned desktop work, subject to feasibility and testing, includes application-based routing
 on Windows and Linux first; domain rules, an explicit LAN-bypass option and a route view;
 provider-supported system-email selection; investigation of OS-backed token storage; and

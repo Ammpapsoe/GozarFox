@@ -234,6 +234,40 @@ object FoxApi {
                 mapOf("Authorization" to "Bearer $access")
             )
         }
+        if (reply.code == 451) return relayPass(access, allowActivate)
+        return readPass(reply)
+    }
+
+    private fun relayPass(access: String, allowActivate: Boolean): FoxPass {
+        var lastReply: FoxReply? = null
+        var lastFailure: Exception? = null
+        for (endpoint in FoxRelayDiscovery.relays()) {
+            val reply = try {
+                var candidate = FoxRelay.once(endpoint, "/v1/guardian/pass", "GET", access)
+                if (candidate.code == 403 && allowActivate) {
+                    val activation = FoxRelay.once(endpoint, "/v1/guardian/activate", "POST", access, "{}")
+                    if (FoxRelay.retry(activation.code)) {
+                        lastReply = activation
+                        continue
+                    }
+                    candidate = FoxRelay.once(endpoint, "/v1/guardian/pass", "GET", access)
+                }
+                candidate
+            } catch (error: Exception) {
+                lastFailure = error
+                null
+            } ?: continue
+            if (FoxRelay.retry(reply.code)) {
+                lastReply = reply
+                continue
+            }
+            return readPass(reply)
+        }
+        lastReply?.let { throw failure(it) }
+        throw lastFailure ?: FoxError("no verified relay is available", status = 451)
+    }
+
+    private fun readPass(reply: FoxReply): FoxPass {
         if (reply.code != 200) throw failure(reply)
         val token = try {
             JSONObject(reply.body).optString("token")
@@ -258,18 +292,20 @@ object FoxApi {
     }
 
     fun quota(access: String): FoxPass? {
-        val reply = FoxNet.call(
+        var reply = FoxNet.call(
             FoxNet.GUARDIAN + "/api/v1/fpn/token",
             "HEAD",
             null,
             mapOf("Authorization" to "Bearer $access")
         )
+        if (reply.code == 451) reply = FoxRelay.call("/v1/guardian/pass", "HEAD", access)
         if (reply.code != 200) return null
         return quota(reply)
     }
 
     fun servers(): List<FoxLocation> {
-        val reply = FoxNet.call(FoxNet.SERVERS, "GET")
+        var reply = FoxNet.call(FoxNet.SERVERS, "GET")
+        if (reply.code == 451) reply = FoxRelay.call("/v1/mozilla/servers", "GET")
         if (reply.code != 200) throw failure(reply)
         val data = JSONObject(reply.body).optJSONArray("data") ?: JSONArray()
         val out = ArrayList<FoxLocation>()

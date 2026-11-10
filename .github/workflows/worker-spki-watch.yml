@@ -1,0 +1,51 @@
+name: Watch relay SPKI pins
+
+on:
+  schedule:
+    - cron: '17 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pins=()
+          for name in a b c; do
+            host="gozar-guardian-${name}.gozarfox7.workers.dev"
+            pin=$(echo | openssl s_client -connect "${host}:443" -servername "$host" 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER 2>/dev/null | openssl dgst -sha256 -binary | od -An -tx1 | tr -d ' \n')
+            [[ "$pin" =~ ^[0-9a-f]{64}$ ]]
+            pins+=("$pin")
+          done
+          python3 tools/update-worker-spki.py "${pins[@]}"
+          if git diff --quiet; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create a reviewed pin-update pull request
+        if: steps.inspect.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch="bot/worker-spki-$(date -u +%Y-%m-%d)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add core/src/main/kotlin/com/gozar/FoxPinnedTls.kt go-desktop/internal/relay/relay.go
+          git commit -m 'Update observed Cloudflare relay SPKI pins'
+          git push -u origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --json number --jq '.[0].number')" ]; then
+            gh pr create --base main --head "$branch" --title 'Update Cloudflare relay SPKI pins' --body 'The monthly watcher observed a relay public-key change. Existing pins are retained. Exact-commit CI and deployment verification are required before merge. Managed workers.dev certificates can rotate without overlap, so applications with no matching pin may fail closed until updated.'
+          fi

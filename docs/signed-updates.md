@@ -1,5 +1,7 @@
 # Android signed updates and recovery
 
+Guardian relay endpoint documents use the separate pinned list key and the domain-separated `GOZAR-RELAY-ENDPOINTS-V1` scheme. They are not release manifests and do not authorize application downgrades. See `guardian-relays.md` for their cache, rotation and threat-model limits.
+
 ## Scope and threat model
 
 An attacker who can alter or block GitHub responses must not be able to offer

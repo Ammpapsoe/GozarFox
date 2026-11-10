@@ -17,6 +17,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/killswitch"
+	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
@@ -121,6 +122,7 @@ func New(version string) *App {
 	created.servers, created.serversUntil = decodeServerCache(cfg.ServerCache, time.Now())
 	created.serversCached = len(created.servers) != 0
 	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
+	relaytransport.RestoreCache(cfg.RelayCache, time.Now())
 	go created.sampler()
 	return created
 }

@@ -56,12 +56,14 @@ func main() {
 
 func runRPC() {
 	current := app.New(version)
+	current.StartRelayDiscovery()
 	rpc.Run(current)
 	current.Close()
 }
 
 func runHeadless() {
 	current := app.New(version)
+	current.StartRelayDiscovery()
 	defer current.Close()
 	if err := current.Connect(); err != nil {
 		fmt.Println("failed: " + err.Error())
@@ -88,6 +90,7 @@ func printServers() {
 func signIn(email, password, code string) {
 	reader := bufio.NewReader(os.Stdin)
 	current := app.New(version)
+	current.StartRelayDiscovery()
 	defer current.Close()
 	err := current.SignIn(email, password, code)
 	if app.NeedsCode(err) {
@@ -114,6 +117,7 @@ func report(headless bool) string {
 	out.WriteString("Gozar " + version + "\n")
 	out.WriteString("admin    : " + yesNo(tundev.Privileged()) + "\n")
 	current := app.New(version)
+	current.StartRelayDiscovery()
 	defer current.Close()
 	state := current.State()
 	out.WriteString("signed in: " + yesNo(state.SignedIn) + "\n")

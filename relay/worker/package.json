@@ -1,0 +1,12 @@
+{
+  "name": "gozar-guardian-relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check worker.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.49.0"
+  }
+}

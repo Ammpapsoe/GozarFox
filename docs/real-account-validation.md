@@ -1,5 +1,9 @@
 # Real-account validation — transport verified, app validation incomplete
 
+## Guardian relay candidate, 2026-11-10
+
+The fixed-route Cloudflare relay candidate is not a validated account transport. Its three health checks succeeded, but live server-list and deliberately invalid-credential Guardian requests through every Worker returned HTTP 403 / edge error 1010. Equivalent direct diagnostic requests returned 200 and 401 respectively. A real test account was therefore not sent through this failing route, and the live-account workflow has not been presented as successful. Synthetic 451/fallback tests do not remove this release blocker. See `guardian-relays.md` for the exact provider and pinning limitations.
+
 ## Later authorized test
 
 A later local, explicitly authorized test successfully authenticated the same

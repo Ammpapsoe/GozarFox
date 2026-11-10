@@ -18,6 +18,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
 )
 
 func TestControlPolicyLimitsDestinations(t *testing.T) {
@@ -54,6 +56,8 @@ func TestControlPolicyLimitsDestinations(t *testing.T) {
 }
 
 func TestSimulated451IsNotRetriedDirectOrUsedToActivate(t *testing.T) {
+	restoreRelays := relaytransport.ReplaceForTest(nil)
+	defer restoreRelays()
 	old := client
 	defer func() { client = old }()
 	var outside atomic.Int32

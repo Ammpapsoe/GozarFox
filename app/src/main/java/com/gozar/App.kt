@@ -35,6 +35,7 @@ class App : Application() {
         watchPower()
         UpdateChecker.schedule(this)
         UpdateChecker.check(this)
+        FoxRelayStore.initialize(this)
     }
 
     /** Respect the system battery-saver setting without penalizing normal use. */

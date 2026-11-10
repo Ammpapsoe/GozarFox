@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
 )
 
 const (
@@ -438,6 +440,8 @@ func parseInt(text string) (int64, error) {
 
 func PassToken(access string) (*Pass, error) { return passToken(access, true, call) }
 
+func PassTokenViaRelay(access string) (*Pass, error) { return passTokenRelay(access, true) }
+
 // ExistingPassToken is read-only and never activates an entitlement. This is
 // useful for explicitly authorized diagnostics against an existing account.
 func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false, call) }
@@ -470,6 +474,65 @@ func passToken(access string, allowActivate bool, request apiCall) (*Pass, error
 			return nil, err
 		}
 	}
+	if reply.Code == http.StatusUnavailableForLegalReasons {
+		if len(relaytransport.Endpoints()) == 0 {
+			return nil, failure(reply)
+		}
+		return passTokenRelay(access, allowActivate)
+	}
+	return readPass(reply)
+}
+
+func fromRelay(reply *relaytransport.Reply) *Reply {
+	if reply == nil {
+		return nil
+	}
+	return &Reply{Code: reply.Code, Body: reply.Body, Headers: reply.Headers}
+}
+
+func passTokenRelay(access string, allowActivate bool) (*Pass, error) {
+	var lastReply *Reply
+	var lastFailure error
+	for _, endpoint := range relaytransport.Endpoints() {
+		candidate, err := relaytransport.RoundTrip(endpoint, "/v1/guardian/pass", http.MethodGet, access, nil)
+		if err != nil {
+			lastFailure = err
+			continue
+		}
+		reply := fromRelay(candidate)
+		if reply.Code == http.StatusForbidden && allowActivate {
+			activation, err := relaytransport.RoundTrip(endpoint, "/v1/guardian/activate", http.MethodPost, access, []byte("{}"))
+			if err != nil {
+				lastFailure = err
+				continue
+			}
+			if relaytransport.Retry(activation.Code) {
+				lastReply = fromRelay(activation)
+				continue
+			}
+			candidate, err = relaytransport.RoundTrip(endpoint, "/v1/guardian/pass", http.MethodGet, access, nil)
+			if err != nil {
+				lastFailure = err
+				continue
+			}
+			reply = fromRelay(candidate)
+		}
+		if relaytransport.Retry(reply.Code) {
+			lastReply = reply
+			continue
+		}
+		return readPass(reply)
+	}
+	if lastReply != nil {
+		return nil, failure(lastReply)
+	}
+	if lastFailure != nil {
+		return nil, lastFailure
+	}
+	return nil, errors.New("no verified relay is available")
+}
+
+func readPass(reply *Reply) (*Pass, error) {
 	if reply.Code != 200 {
 		return nil, failure(reply)
 	}
@@ -492,7 +555,12 @@ func Usage(access string) (*Pass, error) {
 	reply, err := call("HEAD", guardianURL+"/api/v1/fpn/token", "", map[string]string{
 		"Authorization": "Bearer " + access,
 	})
-	if err != nil || reply.Code != 200 {
+	if err == nil && reply.Code == http.StatusUnavailableForLegalReasons {
+		var relayReply *relaytransport.Reply
+		relayReply, err = relaytransport.Do("/v1/guardian/pass", http.MethodHead, access, nil)
+		reply = fromRelay(relayReply)
+	}
+	if err != nil || reply == nil || reply.Code != 200 {
 		return nil, errors.New("usage is not available")
 	}
 	return quota(reply), nil
@@ -521,10 +589,30 @@ type serverCity struct {
 	} `json:"servers"`
 }
 
-func Servers() ([]Location, error) { return serversUsing(call) }
+func Servers() ([]Location, error) {
+	return serversUsing(func(method, address, body string, headers map[string]string) (*Reply, error) {
+		reply, err := call(method, address, body, headers)
+		if err == nil && reply.Code == http.StatusUnavailableForLegalReasons && method == http.MethodGet && address == serversURL {
+			var relayReply *relaytransport.Reply
+			relayReply, err = relaytransport.Do("/v1/mozilla/servers", http.MethodGet, "", nil)
+			reply = fromRelay(relayReply)
+		}
+		return reply, err
+	})
+}
 
 // ServersThrough fetches only Mozilla's public settings list over the current
 // account's already-authorized tunnel; no credential is sent to that origin.
+func ServersViaRelay() ([]Location, error) {
+	return serversUsing(func(method, address, body string, headers map[string]string) (*Reply, error) {
+		if method != http.MethodGet || address != serversURL {
+			return nil, errors.New("relay server-list request is not permitted")
+		}
+		reply, err := relaytransport.Do("/v1/mozilla/servers", http.MethodGet, "", nil)
+		return fromRelay(reply), err
+	})
+}
+
 func ServersThrough(control *http.Client) ([]Location, error) {
 	if control == nil {
 		return nil, errors.New("control tunnel unavailable")

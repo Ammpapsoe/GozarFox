@@ -1,0 +1,51 @@
+name: Sign relay endpoints
+
+on:
+  push:
+    branches: [main, 'mission/**']
+    paths:
+      - 'packaging/relay-endpoints.json'
+      - '.github/workflows/sign-endpoints.yml'
+      - 'tools/sign-relay-endpoints.sh'
+      - 'tools/verify-relay-endpoints.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sign-relay-endpoints-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Sign exact endpoint bytes
+        env:
+          LIST_KEY_PEM: ${{ secrets.GOZAR_LIST_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$LIST_KEY_PEM"
+          umask 077
+          key="$RUNNER_TEMP/gozar-list-key.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$LIST_KEY_PEM" > "$key"
+          GOZAR_LIST_KEY_FILE="$key" bash tools/sign-relay-endpoints.sh
+          bash tools/verify-relay-endpoints.sh
+      - name: Commit the detached signature
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packaging/relay-endpoints.json.sig
+          if git diff --cached --quiet; then
+            echo 'signature unchanged'
+          else
+            git commit -m 'Sign Guardian relay endpoints'
+            git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          fi

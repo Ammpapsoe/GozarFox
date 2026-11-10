@@ -1,0 +1,30 @@
+{
+  "name": "gozar-guardian-a",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-10",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 0,
+    "logs": {
+      "enabled": false,
+      "invocation_logs": false,
+      "head_sampling_rate": 0
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 0
+    }
+  },
+  "ratelimits": [
+    {
+      "name": "GOZAR_RATE_LIMIT",
+      "namespace_id": "45111",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ]
+}
