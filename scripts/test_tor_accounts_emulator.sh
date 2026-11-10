@@ -65,10 +65,11 @@ for raw in sys.stdin:
 run_account_test() {
   local method="$1" email="$2" password="$3" code="$4" marker="$5"
   adb logcat -c
+  local arguments=(shell am instrument -w -r -e class "com.gozar.FoxAccountInstrumentedTest#$method" -e email "$email" -e password "$password")
+  if [ -n "$code" ]; then arguments+=(-e code "$code"); fi
+  arguments+=(com.gozar.test/androidx.test.runner.AndroidJUnitRunner)
   set +e
-  adb shell am instrument -w -r -e class "com.gozar.FoxAccountInstrumentedTest#$method" \
-    -e email "$email" -e password "$password" -e code "$code" \
-    com.gozar.test/androidx.test.runner.AndroidJUnitRunner > "$result" 2>&1
+  adb "${arguments[@]}" > "$result" 2>&1
   local status=$?
   set -e
   if [ "$status" -eq 0 ] && grep -E 'OK \(1 test\)' "$result" >/dev/null; then
