@@ -92,10 +92,11 @@ object FoxNet {
     internal fun open(target: URL): HttpURLConnection {
         val control = controlPort.get()
         val socks = loginSocksPort.get()
-        val proxy = when {
-            control != null -> Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", control))
-            socks != null -> Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socks))
-            else -> Proxy.NO_PROXY
+        if (control == null && socks == null) return target.openConnection() as HttpURLConnection
+        val proxy = if (control != null) {
+            Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", control))
+        } else {
+            Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socks!!))
         }
         return target.openConnection(proxy) as HttpURLConnection
     }
