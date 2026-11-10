@@ -3,11 +3,14 @@ package com.gozar
 import java.io.DataInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.Socket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -115,6 +118,32 @@ class FoxLoginSocksTest {
             failure.get()?.let { throw it }
             assertEquals(3, addressType.get())
             assertEquals("firefox.settings.services.mozilla.com", hostname.get())
+        }
+    }
+
+    @Test
+    fun bridgeRejectsOtherDestinationsBeforeOpeningSocks() {
+        val accepted = AtomicBoolean(false)
+        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { tor ->
+            tor.soTimeout = 2000
+            val worker = thread {
+                try {
+                    tor.accept().close()
+                    accepted.set(true)
+                } catch (_: Exception) {
+                }
+            }
+            FoxSocksHttpBridge(tor.localPort).use { bridge ->
+                Socket(InetAddress.getLoopbackAddress(), bridge.port).use { client ->
+                    client.soTimeout = 2000
+                    client.getOutputStream().write("CONNECT example.invalid:443 HTTP/1.1\r\nHost: example.invalid\r\n\r\n".toByteArray())
+                    client.getOutputStream().flush()
+                    val status = client.getInputStream().bufferedReader().readLine()
+                    assertEquals("HTTP/1.1 403 Forbidden", status)
+                }
+            }
+            worker.join(3000)
+            assertFalse(accepted.get())
         }
     }
 }

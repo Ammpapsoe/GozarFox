@@ -33,6 +33,7 @@ object FoxNet {
     // The scope is per-thread, not a process-wide proxy configuration.
     private val controlPort = ThreadLocal<Int>()
     private val loginSocksPort = ThreadLocal<Int>()
+    private val loginProxyPort = ThreadLocal<Int>()
 
     fun forget() = jar.clear()
 
@@ -52,15 +53,24 @@ object FoxNet {
     } catch (_: Exception) { false }
 
     fun <T> throughControlTunnel(port: Int, action: () -> T): T {
-        require(port in 1..65535 && controlPort.get() == null) { "invalid control tunnel" }
+        require(port in 1..65535 && controlPort.get() == null && loginSocksPort.get() == null && loginProxyPort.get() == null) { "invalid control tunnel" }
         controlPort.set(port)
         try { return action() } finally { controlPort.remove() }
     }
 
     fun <T> throughLoginSocks(port: Int, action: () -> T): T {
-        require(port in 1..65535 && loginSocksPort.get() == null && controlPort.get() == null) { "invalid login transport" }
-        loginSocksPort.set(port)
-        try { return action() } finally { loginSocksPort.remove() }
+        require(port in 1..65535 && loginSocksPort.get() == null && controlPort.get() == null && loginProxyPort.get() == null) { "invalid login transport" }
+        FoxSocksHttpBridge(port).use { bridge ->
+            loginSocksPort.set(port)
+            loginProxyPort.set(bridge.port)
+            try {
+                return action()
+            } finally {
+                loginProxyPort.remove()
+                loginSocksPort.remove()
+            }
+        }
+        throw IllegalStateException("unreachable")
     }
 
     internal fun loginSocksPort(): Int? = loginSocksPort.get()
@@ -91,14 +101,10 @@ object FoxNet {
 
     internal fun open(target: URL): HttpURLConnection {
         val control = controlPort.get()
-        val socks = loginSocksPort.get()
-        if (control == null && socks == null) return target.openConnection() as HttpURLConnection
-        val proxy = if (control != null) {
-            Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", control))
-        } else {
-            Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", socks!!))
-        }
-        return target.openConnection(proxy) as HttpURLConnection
+        val login = loginProxyPort.get()
+        if (control == null && login == null) return target.openConnection() as HttpURLConnection
+        val port = control ?: login ?: throw IllegalStateException("missing login proxy")
+        return target.openConnection(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", port))) as HttpURLConnection
     }
 
     internal fun mayRetryRefreshWithTls12(url: String, method: String, status: Int): Boolean =

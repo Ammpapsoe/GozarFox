@@ -26,8 +26,9 @@ class FoxRelayDiscoveryTest {
         assertFalse(FoxRelayDiscovery.verify(document.replace('"', '\''), signed, hex(public)))
         assertFalse(FoxRelayDiscovery.verify(document.replace("guardian-a", "guardian-x"), signed, hex(public)))
         assertFalse(FoxRelayDiscovery.verify(document, signed, hex(FoxSign.publicFromSeed(ByteArray(32) { 8 }))))
-        assertTrue(FoxRelayDiscovery.acceptPublished(document, signed))
-        assertEquals(2, FoxRelayDiscovery.relays().size)
+        val previous = FoxRelayDiscovery.relays()
+        assertFalse(FoxRelayDiscovery.acceptPublished(document, signed))
+        assertEquals(previous, FoxRelayDiscovery.relays())
     }
 
     @Test fun endpointSchemaRejectsArbitraryDestinationsAndDuplicates() {
