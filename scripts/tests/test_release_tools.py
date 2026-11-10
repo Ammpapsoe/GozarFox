@@ -152,6 +152,29 @@ class ReleaseToolsTest(unittest.TestCase):
                            "-in", str(path), "-sigfile", str(sigfile))
         self.assertEqual(0, verified.returncode, verified.stderr)
 
+    def test_desktop_manifest_accepts_release_candidate_tag(self):
+        names = ["Gozar-Windows-x64-Setup.exe", "Gozar-Windows-x64.zip", "Gozar-Linux-amd64.deb",
+                 "Gozar-Linux-amd64.tar.xz", "Gozar-1.11.4-rc.1-x86_64.AppImage",
+                 "Gozar-1.11.4-rc.1-x86_64.flatpak", "Gozar_1.11.4-rc.1_amd64.snap",
+                 "Gozar-Fedora-x86_64.rpm", "Gozar-RHEL-x86_64.rpm",
+                 "Gozar-1.11.4-rc.1-x86_64.pkg.tar.zst", "Gozar-macOS-ARM.tar.xz", "Gozar-macOS-Intel.tar.xz"]
+        for name in names:
+            (self.apkdir / name).write_bytes(("rc fixture " + name).encode())
+        env = dict(self.env, GOZAR_RELEASE_TAG="v1.11.4-rc.1")
+        result = command("bash", str(self.desktop_script), "1.11.4-rc.1", str(self.apkdir), "rc notes", env=env)
+        self.assertEqual(0, result.returncode, result.stderr)
+        manifest = json.loads((self.apkdir / "desktop-update.json").read_bytes())
+        self.assertEqual("1.11.4-rc.1", manifest["version"])
+        self.assertEqual("v1.11.4-rc.1", manifest["release_tag"])
+        self.assertIn("/v1.11.4-rc.1/", manifest["artifacts"][0]["url"])
+
+    def test_desktop_manifest_rejects_other_prerelease_forms(self):
+        for version, tag in (("1.11.4-beta.1", "v1.11.4-beta.1"), ("1.11.4-rc.1.2", "v1.11.4-rc.1"),
+                             ("1.11.4", "v1.11.4-rc.x")):
+            env = dict(self.env, GOZAR_RELEASE_TAG=tag)
+            result = command("bash", str(self.desktop_script), version, str(self.apkdir), env=env)
+            self.assertNotEqual(0, result.returncode, (version, tag))
+
     def test_desktop_signing_fails_closed_when_artifacts_are_missing(self):
         result = command("bash", str(self.desktop_script), "1.10.4", str(self.apkdir), env=self.env)
         self.assertNotEqual(0, result.returncode)

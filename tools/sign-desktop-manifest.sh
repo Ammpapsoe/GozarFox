@@ -20,9 +20,9 @@ trap 'rm -rf "$WORK"' EXIT
 python3 - "$VERSION" "$TAG" "$ARTIFACT_DIR" "$NOTES" "$WORK/desktop-update.json" <<'PY'
 import hashlib, json, os, re, sys, time
 version, tag, directory, notes, output = sys.argv[1:]
-if not re.fullmatch(r"[0-9]{1,4}(\.[0-9]{1,4}){2}", version):
+if not re.fullmatch(r"[0-9]{1,4}(\.[0-9]{1,4}){2}(-rc\.[0-9]{1,3})?", version):
     raise SystemExit("invalid desktop version")
-if not re.fullmatch(r"v[0-9]{1,4}(\.[0-9]{1,4}){1,3}(-desktop)?", tag):
+if not re.fullmatch(r"v[0-9]{1,4}(\.[0-9]{1,4}){1,3}(-rc\.[0-9]{1,3}|-desktop)?", tag):
     raise SystemExit("invalid release tag")
 if len(notes.encode("utf-8")) > 16_000:
     raise SystemExit("release notes too long")
