@@ -21,12 +21,13 @@ else
   printf '%s\n' '::warning::Root is active but this emulator image refused permissive SELinux; continuing native validation'
 fi
 app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
-mapfile -t test_apks < <(find app/build/outputs/apk/androidTest/debug -maxdepth 1 -type f -name '*.apk' | sort)
+test_apk=app/build/outputs/apk/androidTest/debug/app-x86_64-debug-androidTest.apk
 test -s "$app_apk"
-test "${#test_apks[@]}" -eq 1
-test -s "${test_apks[0]}"
+test -s "$test_apk"
+printf '%s\n' '::notice::STATE=NATIVE_APK_LAYOUT_OK'
 adb install -r "$app_apk"
-adb install -r "${test_apks[0]}"
+printf '%s\n' '::notice::STATE=NATIVE_APP_APK_INSTALLED'
+adb install -r "$test_apk"
 adb shell pm list instrumentation | grep -F 'instrumentation:com.gozar.test/androidx.test.runner.AndroidJUnitRunner' >/dev/null
 printf '%s\n' '::notice::STATE=NATIVE_APKS_INSTALLED'
 result="${RUNNER_TEMP:-/tmp}/embedded-tor-instrumentation.txt"

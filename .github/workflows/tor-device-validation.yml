@@ -42,7 +42,7 @@ jobs:
           name: tor-validation-apks
           path: |
             app/build/outputs/apk/debug/app-x86_64-debug.apk
-            app/build/outputs/apk/androidTest/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/app-x86_64-debug-androidTest.apk
           if-no-files-found: error
           retention-days: 1
 
