@@ -41,6 +41,10 @@ internal object FoxTorRuntime : FoxLoginTransport {
         }
     }
     @Volatile internal var statusCallback: (String) -> Unit = { Fox.updateLoginStage(it) }
+    private var sharedController: Controller? = null
+
+    private fun transportController(state: File): Controller = sharedController
+        ?: Controller(state.absolutePath, false, false, "ERROR", null).also { sharedController = it }
 
     override fun run(context: Context, body: () -> Unit) = synchronized(lock) {
         val app = context.applicationContext
@@ -119,12 +123,14 @@ internal object FoxTorRuntime : FoxLoginTransport {
         private var bound = false
         private var logFile: File? = null
         @Volatile private var serviceError: String? = null
+        @Volatile private var diagnosticStage = "created"
         @Volatile private var lastProgress = -1
         @Volatile private var lastSummary = ""
         override var port: Int = 0
             private set
 
         override fun start(): Int {
+            diagnosticStage = "prepare-state"
             clean(app)
             val state = File(app.cacheDir, "gozar-login-transport")
             if (!state.mkdirs() && !state.isDirectory) throw FoxError("Cannot create Tor diagnostic directory")
@@ -135,7 +141,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
             val torrc = TorService.getTorrc(app)
             val directory = torrc.parentFile ?: throw FoxError("Tor configuration directory is unavailable")
             if (!directory.mkdirs() && !directory.isDirectory) throw FoxError("Cannot recreate Tor configuration directory")
+            diagnosticStage = "write-torrc"
             torrc.writeText(FoxTorPlan.torrc(mode, transportPort, diagnosticLog.absolutePath))
+            diagnosticStage = "bind-service"
             observeService()
             val connected = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -151,6 +159,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             bound = app.bindService(Intent(app, TorService::class.java), connected, Context.BIND_AUTO_CREATE)
             if (!bound) throw FoxError("Android refused to bind TorService")
             if (!ready.await(15, TimeUnit.SECONDS)) throw FoxError("TorService binding timed out after 15 seconds")
+            diagnosticStage = "bootstrap"
             val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FoxTorPlan.timeoutMs(mode))
             while (System.nanoTime() < deadline) {
                 serviceError?.let { throw FoxError("TorService error at bootstrap $lastProgress%: $it") }
@@ -200,7 +209,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
 
         private fun startTransport(state: File): Int {
             val name = transport ?: return 0
-            val native = Controller(state.absolutePath, false, false, "ERROR", null)
+            diagnosticStage = "create-$name-controller"
+            val native = transportController(state)
+            diagnosticStage = "configure-$name"
             controller = native
             if (mode == FoxTorPlan.Mode.SNOWFLAKE) {
                 native.snowflakeBrokerUrl = FoxTorPlan.SNOWFLAKE_BROKER
@@ -211,7 +222,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 native.snowflakeSqsCreds = ""
                 native.snowflakeMaxPeers = 1L
             }
+            diagnosticStage = "start-$name"
             native.start(name, "")
+            diagnosticStage = "read-$name-port"
             val localPort = native.port(name).toInt()
             if (localPort !in 1..65535) throw FoxError("$name returned invalid local port $localPort")
             return localPort
@@ -219,6 +232,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
 
         override fun diagnostics(): String {
             val details = mutableListOf<String>()
+            details += "Last native stage: $diagnosticStage"
             if (lastProgress >= 0 || lastSummary.isNotBlank()) details += "Last bootstrap: $lastProgress% $lastSummary"
             serviceError?.let { details += "Service error: $it" }
             logFile?.takeIf { it.isFile }?.let { file ->
