@@ -30,7 +30,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile Kotlin and Java
-        run: bash ./gradlew :app:compileDebugKotlin :app:compileDebugJavaWithJavac --no-daemon --stacktrace
+        run: bash scripts/run_gradle_ci.sh compile :app:compileDebugKotlin :app:compileDebugJavaWithJavac
 
   unit-tests:
     needs: compile
@@ -50,7 +50,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Run Tor configuration, SOCKS, DNS and application unit tests
-        run: bash ./gradlew :core:test :app:testDebugUnitTest --no-daemon --stacktrace
+        run: bash scripts/run_gradle_ci.sh unit :core:test :app:testDebugUnitTest
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

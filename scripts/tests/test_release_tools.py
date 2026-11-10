@@ -223,7 +223,7 @@ class ReleaseToolsTest(unittest.TestCase):
         env["GOZAR_ALLOW_DRAFT_NOTES"] = "1"
         dry = command("python3", str(notes), "1.10.4", "bardia049b-stack/Gozar", "1.11.1", "v1.11.1", env=env)
         self.assertEqual(0, dry.returncode, dry.stderr)
-        self.assertIn("Gozar_1.11.1_universal.apk", dry.stdout)
+        self.assertIn("Gozar_1.11.1_arm64-v8a.apk", dry.stdout)
         self.assertIn("/v1.11.1/", dry.stdout)
         self.assertNotIn("## Gozar 1.10.4", dry.stdout)
 
