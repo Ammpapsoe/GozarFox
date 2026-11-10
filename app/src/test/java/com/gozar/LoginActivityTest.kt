@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.TextView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import org.junit.After
@@ -56,7 +57,7 @@ class LoginActivityTest {
     }
 
     @Test
-    fun busyKeepsFieldsLocksControlsAndShowsOnlyTheButtonSpinner() {
+    fun busyKeepsFieldsLocksControlsAndShowsOnlySecureConnectionStatus() {
         val mail = activity.findViewById<EditText>(R.id.loginMail)
         val secret = activity.findViewById<EditText>(R.id.loginSecret)
         val primary = activity.findViewById<MaterialButton>(R.id.loginPrimary)
@@ -75,6 +76,8 @@ class LoginActivityTest {
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("", primary.text.toString())
+        assertEquals(activity.getString(R.string.login_secure_connecting), activity.findViewById<TextView>(R.id.loginSubtitle).text.toString())
+        assertEquals(activity.getString(R.string.login_secure_connecting), primary.contentDescription.toString())
         assertEquals(View.VISIBLE, progress.visibility)
         assertSame(primary.parent, progress.parent)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loginError).visibility)

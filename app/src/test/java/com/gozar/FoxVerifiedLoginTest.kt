@@ -108,6 +108,7 @@ class FoxVerifiedLoginTest {
         context.getSharedPreferences("fox", Context.MODE_PRIVATE).edit().clear().commit()
         provider = FakeProvider()
         Fox.loginProvider = provider
+        Fox.loginTransport = FoxDirectLoginTransport
     }
 
     @After
@@ -122,6 +123,7 @@ class FoxVerifiedLoginTest {
         await { !Fox.busy }
         Fox.cancelLogin()
         Fox.loginProvider = MozillaLoginProvider
+        Fox.loginTransport = FoxTorRuntime
         context.getSharedPreferences("fox", Context.MODE_PRIVATE).edit().clear().commit()
     }
 

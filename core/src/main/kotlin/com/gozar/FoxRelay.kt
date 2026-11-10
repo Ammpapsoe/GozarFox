@@ -42,7 +42,7 @@ object FoxRelay {
         if (body != null && body.toByteArray(Charsets.UTF_8).size > 4096) throw IOException("relay request body is too large")
         testHandler?.let { return it(Request(endpoint, path, method, access, body)) }
         val target = URL(endpoint.removeSuffix("/") + path)
-        val connection = target.openConnection() as HttpsURLConnection
+        val connection = FoxNet.open(target) as HttpsURLConnection
         connection.sslSocketFactory = FoxPinnedTls.socketFactory()
         connection.requestMethod = method
         connection.connectTimeout = 20000

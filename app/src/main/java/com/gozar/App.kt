@@ -36,6 +36,7 @@ class App : Application() {
         UpdateChecker.schedule(this)
         UpdateChecker.check(this)
         FoxRelayStore.initialize(this)
+        FoxTorRuntime.clean(this)
     }
 
     /** Respect the system battery-saver setting without penalizing normal use. */

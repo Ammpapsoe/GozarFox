@@ -54,11 +54,9 @@ windows_logo = 'data:image/svg+xml;base64,' + base64.b64encode(windows_svg.encod
 apk = f'Gozar_{android}_'
 rows = [
     ('**Android**', stack(
-        badge('APK', 'Universal', '1a7f37', 'android', apk + 'universal.apk'),
         badge('APK', 'ARM64', '2da44e', 'android', apk + 'arm64-v8a.apk'),
         badge('APK', 'ARMv7', '2da44e', 'android', apk + 'armeabi-v7a.apk'),
-        badge('APK', 'x86__64', '2da44e', 'android', apk + 'x86_64.apk'),
-        badge('APK', 'x86', '2da44e', 'android', apk + 'x86.apk'))),
+        badge('APK', 'x86__64', '2da44e', 'android', apk + 'x86_64.apk'))),
     ('**Windows**', stack(
         badge('Installer', 'EXE__x64', '0550ae', windows_logo, 'Gozar-Windows-x64-Setup.exe'),
         badge('Portable', 'ZIP__x64', '0550ae', windows_logo, 'Gozar-Windows-x64.zip'))),

@@ -33,6 +33,7 @@ object Fox {
     }
 
     @Volatile internal var loginProvider: FoxLoginProvider = MozillaLoginProvider
+    @Volatile internal var loginTransport: FoxLoginTransport = FoxTorRuntime
 
     @Volatile var email: String = ""
     @Volatile var limit: Long = 0L
@@ -166,7 +167,7 @@ object Fox {
             }) {
                 try {
                     currentAuth(epoch) { }
-                    body(epoch)
+                    loginTransport.run(c.applicationContext) { body(epoch) }
                 } catch (_: LoginCancelled) {
                     // Logout or cancellation revoked this job's authority to
                     // publish state. Already-started network requests may finish.

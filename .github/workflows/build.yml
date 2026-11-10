@@ -86,7 +86,7 @@ jobs:
               *armeabi-v7a*) abi=armeabi-v7a ;;
               *x86_64*) abi=x86_64 ;;
               *x86*) abi=x86 ;;
-              *) abi=universal ;;
+              *) echo "Unexpected APK name: $b"; exit 1 ;;
             esac
             cp "$f" "out/Gozar_${VERSION}_${abi}.apk"
           done
@@ -580,7 +580,7 @@ jobs:
           DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
         run: |
           set -e
-          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
+          for f in "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
             test -s "collected/$f" || { echo "::error::Missing release file: $f"; exit 1; }
           done
       - name: Import signing key
@@ -679,7 +679,7 @@ jobs:
         run: |
           set -e
           assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
+          for f in "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
             printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done

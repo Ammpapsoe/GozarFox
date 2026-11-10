@@ -286,8 +286,9 @@ class LoginActivity : BaseActivity() {
             else -> getString(R.string.login_action)
         }
         val busy = Fox.busy
+        if (busy) subtitle.text = getString(R.string.login_secure_connecting)
         primary.text = if (busy) "" else action
-        primary.contentDescription = if (busy) getString(R.string.login_working) else null
+        primary.contentDescription = if (busy) getString(R.string.login_secure_connecting) else null
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         primary.isEnabled = !busy
         languageButton.isEnabled = !busy
