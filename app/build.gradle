@@ -111,7 +111,9 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     implementation project(':core')
-    implementation 'info.guardianproject:tor-android:0.4.9.14'
+    implementation files('libs/tor-android-0.4.9.14.aar')
+    implementation 'info.guardianproject:jtorctl:0.4.5.7'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
     implementation 'com.netzarchitekten:IPtProxy:5.8.0'
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'androidx.core:core:1.17.0'

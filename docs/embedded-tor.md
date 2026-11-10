@@ -10,7 +10,7 @@ The visible login status is only `در حال اتصال امن...`. Transport n
 
 ## Verified upstream inputs
 
-- `info.guardianproject:tor-android:0.4.9.14`, Maven Central, SHA-256 `28ff2bb6d4d42eabe57183dedd7a97fce77e8ce4b6f5af6fa03993b3ca054edd`.
+- `info.guardianproject:tor-android:0.4.9.14`, Maven Central, SHA-256 `28ff2bb6d4d42eabe57183dedd7a97fce77e8ce4b6f5af6fa03993b3ca054edd`. The vendored AAR retains every class, manifest entry and native binary from that artifact; only its automatically generated `aar-metadata.properties` is omitted so the existing AGP 8.12 / compileSdk 36 build can consume it without an AGP 9 migration. The repackaged AAR SHA-256 is `2f5844ccb313b617f556ad6ad571f89e422bbb4f628714c8e8d688ddb0c57f21`. Its service source uses no API 37 functionality and its manifest retains minSdk 24.
 - `com.netzarchitekten:IPtProxy:5.8.0`, Maven Central, SHA-256 `1f9ba9314ac2862e358134e60f20d89bce988e34bd60ae8b1b02797cdb9439c1`.
 - Tor Browser 16.0.1 Tor Expert Bundle, `https://dist.torproject.org/torbrowser/16.0.1/`, supplied the Snowflake and Meek bridge parameters. The Android AArch64 bundle SHA-256 is `0091927b9fd72992a88021d55416b23a8380dc39a70c4b73a2cca9ee6a3dbcec`; the Linux x86_64 bundle SHA-256 is `7039cb16060ab22e669852e55774d894b55f25ea8bd0ab7194d3478429a58725`. Both matched the published `sha256sums-signed-build.txt` during acquisition.
 
