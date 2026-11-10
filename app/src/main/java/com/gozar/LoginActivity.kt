@@ -25,6 +25,7 @@ class LoginActivity : BaseActivity() {
     companion object {
         const val ADD_ACCOUNT = "com.gozar.ADD_ACCOUNT"
         private const val ACCOUNT_PAGE = "https://accounts.firefox.com/signin"
+        private const val CREATE_PAGE = "https://accounts.firefox.com/signup"
         private const val RESET_PAGE = "https://accounts.firefox.com/reset_password"
 
         internal fun systemEmail(data: Intent?): String? {
@@ -122,7 +123,7 @@ class LoginActivity : BaseActivity() {
         }
 
         primary.setOnClickListener { act() }
-        forgot.setOnClickListener { web(RESET_PAGE) }
+        forgot.setOnClickListener { web(if (create) CREATE_PAGE else RESET_PAGE) }
         switchButton.setOnClickListener {
             create = !create
             error.visibility = View.GONE
@@ -258,7 +259,8 @@ class LoginActivity : BaseActivity() {
         secretBox.visibility = if (step) View.GONE else View.VISIBLE
         confirmBox.visibility = if (create && !step) View.VISIBLE else View.GONE
         codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
-        forgot.visibility = if (step || create) View.GONE else View.VISIBLE
+        forgot.visibility = if (step) View.GONE else View.VISIBLE
+        forgot.text = getString(if (create) R.string.login_create_browser else R.string.login_forgot)
         switchButton.visibility = if (step) View.GONE else View.VISIBLE
         savedAccounts.visibility = if (!adding && !step && FoxStore.accounts(this).isNotEmpty()) View.VISIBLE else View.GONE
         cancelAdd.visibility = if (adding) View.VISIBLE else View.GONE

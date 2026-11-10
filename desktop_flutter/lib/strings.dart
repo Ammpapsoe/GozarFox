@@ -16,6 +16,8 @@ class Words {
         'Enter your details to create a Firefox account.',
       );
   String get createAction => pick('ساخت حساب', 'Create account');
+  String get createOnMozilla => pick(
+      'ساخت حساب در وب‌سایت موزیلا', 'Create account on Mozilla’s website');
   String get haveAccount =>
       pick('حساب دارید؟ وارد شوید', 'Already have an account? Sign in');
   String get repeatPassword => pick('تکرار گذرواژه', 'Repeat password');

@@ -115,6 +115,7 @@ func New(version string) *App {
 		cfg.Server = ""
 	}
 	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, geo: geo.Default()}
+	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
 	go created.sampler()
 	return created
 }
@@ -496,6 +497,7 @@ func (a *App) commitAccount(account config.Account, pass *fxa.Pass, authRevision
 	if account.ID() == "" || account.Email == "" || (account.Access == "" && account.Refresh == "") {
 		return errors.New("invalid account")
 	}
+	account.ProxyPass = persistablePass(pass, time.Now())
 	next := a.cfg.PutAccount(account)
 	if err := config.Save(next); err != nil {
 		return err
@@ -531,7 +533,7 @@ func (a *App) SwitchAccount(id string) error {
 		return err
 	}
 	a.cfg = next
-	a.pass = nil
+	a.pass = cachedAccountPass(next.ActiveAccount(), time.Now())
 	a.sessionRevision++
 	a.authRevision++
 	a.pending = nil
@@ -572,7 +574,9 @@ type accountAccess struct {
 	revision uint64
 }
 
-func (a *App) access() (accountAccess, error) {
+func (a *App) access() (accountAccess, error) { return a.accessWith(a.refreshForControl) }
+
+func (a *App) accessWith(refresh func(string) (*fxa.Tokens, error)) (accountAccess, error) {
 	a.refreshMu.Lock()
 	defer a.refreshMu.Unlock()
 	a.mu.Lock()
@@ -583,7 +587,7 @@ func (a *App) access() (accountAccess, error) {
 		return accountAccess{}, errors.New("not signed in")
 	}
 	if (current.Access == "" || (current.ExpiresAt > 0 && time.Now().Unix() >= current.ExpiresAt)) && current.Refresh != "" {
-		tokens, err := a.refreshToken(current.Refresh)
+		tokens, err := refresh(current.Refresh)
 		if err != nil {
 			return accountAccess{}, err
 		}
@@ -620,7 +624,11 @@ func (a *App) saveUsageLocked(pass *fxa.Pass, access accountAccess) error {
 		return errors.New("account changed")
 	}
 	current := a.cfg.ActiveAccount()
+	if pass == nil || pass.Token == "" {
+		return errors.New("Mozilla returned no proxy pass")
+	}
 	current.Limit, current.Remaining, current.Reset = pass.Limit, pass.Remaining, pass.Reset
+	current.ProxyPass = persistablePass(pass, time.Now())
 	next := a.cfg.PutAccount(current)
 	if err := config.Save(next); err != nil {
 		return err
@@ -631,11 +639,14 @@ func (a *App) saveUsageLocked(pass *fxa.Pass, access accountAccess) error {
 }
 
 func (a *App) RefreshUsage() error {
+	// Serialize manual and automatic renewal so stale results cannot win.
+	a.passMu.Lock()
+	defer a.passMu.Unlock()
 	access, err := a.access()
 	if err != nil {
 		return err
 	}
-	pass, err := a.requestPass(access.token)
+	pass, err := a.passForControl(access.token)
 	if err != nil {
 		return err
 	}
@@ -690,19 +701,24 @@ func (a *App) connectLocked() error {
 }
 
 func (a *App) connect(ctx context.Context) error {
-	access, err := a.access()
-	if err != nil {
-		return err
-	}
-	a.mu.Lock()
-	a.stage = "دریافت پاس پروکسی…"
-	a.mu.Unlock()
-	pass, err := a.requestPass(access.token)
-	if err != nil {
-		return err
-	}
-	if err := a.saveUsage(pass, access); err != nil {
-		return err
+	// A successful sign-in already fetched a short-lived Mozilla pass. Using
+	// it first avoids another direct Guardian request when the network changes.
+	pass := a.bootstrapPass(time.Now())
+	if pass == nil {
+		access, err := a.access()
+		if err != nil {
+			return err
+		}
+		a.mu.Lock()
+		a.stage = "دریافت پاس پروکسی…"
+		a.mu.Unlock()
+		pass, err = a.requestPass(access.token)
+		if err != nil {
+			return err
+		}
+		if err := a.saveUsage(pass, access); err != nil {
+			return err
+		}
 	}
 
 	a.mu.Lock()

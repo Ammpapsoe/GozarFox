@@ -150,7 +150,10 @@ func failure(reply *Reply) error {
 		message = fmt.Sprintf("HTTP %d", reply.Code)
 	}
 	if reply.Code == 406 {
-		message = "Mozilla security check was not accepted; try again"
+		message = "Mozilla security check was not accepted; try the official account page"
+	}
+	if reply.Code == 451 {
+		message = "Mozilla is unavailable from this network (HTTP 451). Use a trusted connection to sign in again."
 	}
 	return &Error{Message: message, Status: reply.Code, Errno: data.Errno, Email: data.Email}
 }
@@ -300,7 +303,9 @@ func Register(email, password string) (*Session, error) {
 		"service":            "sync",
 		"verificationMethod": "email-otp",
 	})
-	reply, err := call("POST", accountBase+"/account/create", string(body), nil)
+	// Use the same Mozilla origin as sign-in; the account API edge can
+	// reject account/create with 406 before reaching the service.
+	reply, err := call("POST", authBase+"/account/create", string(body), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +319,7 @@ func Register(email, password string) (*Session, error) {
 
 func VerifySignup(uid, code string) error {
 	body, _ := json.Marshal(map[string]string{"uid": uid, "code": strings.TrimSpace(code)})
-	reply, err := call("POST", accountBase+"/recovery_email/verify_code", string(body), nil)
+	reply, err := call("POST", authBase+"/recovery_email/verify_code", string(body), nil)
 	if err != nil {
 		return err
 	}
@@ -375,14 +380,28 @@ func SessionTokens(sessionToken string) (*Tokens, error) {
 	return &out, nil
 }
 
-func Refresh(refreshToken string) (*Tokens, error) {
+type apiCall func(method, address, body string, headers map[string]string) (*Reply, error)
+
+func Refresh(refreshToken string) (*Tokens, error) { return refreshUsing(refreshToken, call) }
+
+// RefreshThrough uses only the caller's scoped, TLS-verifying control client.
+func RefreshThrough(refreshToken string, control *http.Client) (*Tokens, error) {
+	if control == nil {
+		return nil, errors.New("control tunnel unavailable")
+	}
+	return refreshUsing(refreshToken, func(method, address, body string, headers map[string]string) (*Reply, error) {
+		return controlCall(control, method, address, body, headers)
+	})
+}
+
+func refreshUsing(refreshToken string, request apiCall) (*Tokens, error) {
 	body, _ := json.Marshal(map[string]string{
 		"client_id":     clientID,
 		"grant_type":    "refresh_token",
 		"refresh_token": refreshToken,
 		"scope":         scope,
 	})
-	reply, err := call("POST", refreshURL, string(body), nil)
+	reply, err := request("POST", refreshURL, string(body), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -417,24 +436,34 @@ func parseInt(text string) (int64, error) {
 	return value, err
 }
 
-func PassToken(access string) (*Pass, error) { return passToken(access, true) }
+func PassToken(access string) (*Pass, error) { return passToken(access, true, call) }
 
 // ExistingPassToken is read-only and never activates an entitlement. This is
 // useful for explicitly authorized diagnostics against an existing account.
-func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false) }
+func ExistingPassToken(access string) (*Pass, error) { return passToken(access, false, call) }
 
-func passToken(access string, allowActivate bool) (*Pass, error) {
-	reply, err := call("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
+// Renewing an existing pass must never activate an entitlement implicitly.
+func PassTokenThrough(access string, control *http.Client) (*Pass, error) {
+	if control == nil {
+		return nil, errors.New("control tunnel unavailable")
+	}
+	return passToken(access, false, func(method, address, body string, headers map[string]string) (*Reply, error) {
+		return controlCall(control, method, address, body, headers)
+	})
+}
+
+func passToken(access string, allowActivate bool, request apiCall) (*Pass, error) {
+	reply, err := request("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
 		"Authorization": "Bearer " + access,
 	})
 	if err != nil {
 		return nil, err
 	}
 	if reply.Code == 403 && allowActivate {
-		call("POST", guardianURL+"/api/v1/fpn/activate", "{}", map[string]string{
+		request("POST", guardianURL+"/api/v1/fpn/activate", "{}", map[string]string{
 			"Authorization": "Bearer " + access,
 		})
-		reply, err = call("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
+		reply, err = request("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
 			"Authorization": "Bearer " + access,
 		})
 		if err != nil {

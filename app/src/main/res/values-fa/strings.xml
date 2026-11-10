@@ -350,6 +350,7 @@ AGPL-3.0-or-later</string>
     <string name="login_signin_title">ورود</string>
     <string name="login_signin_sub">با حساب فایرفاکس خود هر ماه ۵۰ گیگابایت دریافت کنید.</string>
     <string name="login_forgot">رمز عبور را فراموش کرده‌اید؟</string>
+    <string name="login_create_browser">ساخت حساب در وب‌سایت موزیلا</string>
     <string name="login_terms">گذر رمز عبور شما را ذخیره نمی‌کند. ورود از طریق سرورهای موزیلا انجام می‌شود.</string>
     <string name="usage_month">مصرف ماهانه</string>
     <string name="usage_left">%1$s باقی‌مانده</string>

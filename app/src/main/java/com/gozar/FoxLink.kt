@@ -89,7 +89,9 @@ object FoxLink {
             if (prepared) return true
             socks = FoxProxy(0) { pass(app).ifEmpty { null } }
             web = FoxProxy(0) { pass(app).ifEmpty { null } }
-            dns = FoxProxy(0, forceTunnel = true, countTraffic = false) { pass(app).ifEmpty { null } }
+            // The force-tunnel proxy must never recursively renew the pass
+            // while it carries the control request itself.
+            dns = FoxProxy(0, forceTunnel = true, countTraffic = false) { FoxStore.controlPass(app) }
             if (socks?.start() != true || web?.start() != true || dns?.start() != true) {
                 stopServers()
                 return false
@@ -131,10 +133,18 @@ object FoxLink {
                         transportTicket = it
                     }
                 } ?: return@thread
-                val access = Fox.validAccess(app)
+                // Reuse the active account's encrypted, unexpired pass first;
+                // this avoids a second direct Guardian call after switching networks.
+                val bootstrap = FoxStore.bootstrap(app, 90_000L)
+                var pass = if (bootstrap != null) bootstrap.pass else {
+                    val access = Fox.validAccess(app)
+                    if (!current(attempt)) return@thread
+                    val fetched = FoxApi.pass(access.token)
+                    if (!storePass(app, fetched, access, attempt)) return@thread
+                    fetched
+                }
                 if (!current(attempt)) return@thread
-                var pass = FoxApi.pass(access.token)
-                if (!storePass(app, pass, access, attempt)) return@thread
+                if (bootstrap != null && !FoxStore.isCurrent(app, bootstrap)) throw FoxError("Account changed")
                 if (Fox.servers.isEmpty()) {
                     val servers = FoxApi.servers()
                     if (attempts.ifCurrent(attempt) { Fox.servers = servers } == null) return@thread
@@ -179,6 +189,7 @@ object FoxLink {
                 } ?: FoxError("No server available")
                 synchronized(stateLock) {
                     if (attempt != generation) return@thread
+                    if (bootstrap != null && !FoxStore.isCurrent(app, bootstrap)) throw FoxError("Account changed")
                     exitIp = ""
                     connected = true
                     connecting = false
@@ -497,8 +508,6 @@ object FoxLink {
         stopRenewal()
         renewer = thread(isDaemon = true, name = "fox-renew") {
             var retry = 0L
-            var seenDown = down
-            var seenUp = up
             while (current(attempt) && connected) {
                 val wait = if (retry > 0) retry else FoxStore.renewalDelay(FoxStore.passUntil(app))
                 try {
@@ -507,17 +516,11 @@ object FoxLink {
                     break
                 }
                 if (!current(attempt) || !connected) break
-                val totalDown = down
-                val totalUp = up
-                val idle = totalDown == seenDown && totalUp == seenUp &&
-                    System.currentTimeMillis() - lastTraffic.get() >= 30_000L
-                seenDown = totalDown
-                seenUp = totalUp
-                if (idle && retry == 0L) continue
+                // Renew even while idle; an expired pass cannot build the
+                // control tunnel needed to renew itself on a restricted network.
                 try {
-                    val access = Fox.validAccess(app)
-                    val pass = FoxApi.pass(access.token)
-                    if (!storePass(app, pass, access, attempt, true)) break
+                    val observed = FoxStore.pass(app)
+                    val pass = renewThroughTunnel(app, attempt, observed)
                     retry = 0L
                     Fox.load(app)
                     tick()
@@ -536,22 +539,42 @@ object FoxLink {
         }
     }
 
+    private fun renewThroughTunnel(app: Context, attempt: Long, observed: String): FoxPass = synchronized(renewLock) {
+        if (!current(attempt) || !connected) throw FoxError("Tunnel stopped")
+        // Another worker may have already renewed while this one waited.
+        if (FoxStore.pass(app) != observed) {
+            return@synchronized FoxStore.bootstrap(app, 0L)?.pass ?: throw FoxError("Proxy pass changed")
+        }
+        val (access, fresh) = FoxNet.throughControlTunnel(dnsPort) {
+            val current = Fox.validAccess(app)
+            current to FoxApi.existingPass(current.token)
+        }
+        if (!storePass(app, fresh, access, attempt, true)) throw FoxError("Tunnel or account changed")
+        fresh
+    }
+
+    /** Manual quota refresh follows the same scoped transport while live. */
+    internal fun refreshUsageThroughTunnel(app: Context): FoxPass {
+        val attempt = synchronized(stateLock) { if (connected) generation else null }
+            ?: throw FoxError("Tunnel stopped")
+        return renewThroughTunnel(app, attempt, FoxStore.pass(app))
+    }
+
     fun pass(app: Context): String {
         val token = FoxStore.pass(app)
         val attempt = synchronized(stateLock) { if (connected) generation else null } ?: return token
         if (token.isEmpty()) return token
         if (FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return token
-        return synchronized(renewLock) {
-            val saved = FoxStore.pass(app)
-            if (!current(attempt) || !connected || saved.isEmpty() ||
-                FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return@synchronized saved
-            try {
-                val access = Fox.validAccess(app)
-                val fresh = FoxApi.pass(access.token)
-                if (storePass(app, fresh, access, attempt, true)) fresh.token else saved
-            } catch (_: Exception) {
-                saved
-            }
+        val saved = FoxStore.pass(app)
+        if (!current(attempt) || !connected || saved.isEmpty()) return ""
+        if (FoxStore.passUntil(app) - System.currentTimeMillis() > 120_000L) return saved
+        return try {
+            renewThroughTunnel(app, attempt, saved).token
+        } catch (_: Exception) {
+            // A transient control failure must not drop a still-valid pass,
+            // but never present it after expiry, account change or stop.
+            if (current(attempt) && connected && FoxStore.pass(app) == saved &&
+                FoxStore.passUntil(app) > System.currentTimeMillis()) saved else ""
         }
     }
 

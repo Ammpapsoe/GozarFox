@@ -15,10 +15,10 @@ func TestPassRenewalTimingAndCurrentToken(t *testing.T) {
 	token := func(seconds int64) string {
 		return "header." + base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, seconds))) + ".signature"
 	}
-	if got := renewalDelay(token(now.Add(10*time.Minute).Unix()), now); got != 4*time.Minute {
+	if got := renewalDelay(token(now.Add(10*time.Minute).Unix()), now); got != 5*time.Minute {
 		t.Fatal(got)
 	}
-	if got := renewalDelay(token(now.Add(3*time.Minute).Unix()), now); got != time.Minute {
+	if got := renewalDelay(token(now.Add(3*time.Minute).Unix()), now); got != 90*time.Second {
 		t.Fatal(got)
 	}
 	if got := renewalDelay(token(now.Add(-time.Second).Unix()), now); got != 15*time.Second {

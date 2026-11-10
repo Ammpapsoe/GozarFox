@@ -387,9 +387,14 @@ object Fox {
     fun refreshUsage(c: Context) {
         if (!signedIn(c)) return
         work(c, R.string.fox_stage_usage) {
-            val access = validAccess(c)
-            val pass = FoxApi.pass(access.token)
-            if (FoxStore.saveUsage(c, pass, access.id, access.revision)) message = "quota"
+            if (FoxLink.connected) {
+                FoxLink.refreshUsageThroughTunnel(c.applicationContext)
+                message = "quota"
+            } else {
+                val access = validAccess(c)
+                val pass = FoxApi.pass(access.token)
+                if (FoxStore.saveUsage(c, pass, access.id, access.revision)) message = "quota"
+            }
         }
     }
 

@@ -350,6 +350,7 @@ AGPL-3.0-or-later</string>
     <string name="login_signin_title">Sign in</string>
     <string name="login_signin_sub">Use your Firefox account to unlock 50 GB every month.</string>
     <string name="login_forgot">Forgot password?</string>
+    <string name="login_create_browser">Create account on Mozilla’s website</string>
     <string name="login_terms">Gozar does not store your password. Sign-in happens through Mozilla servers.</string>
     <string name="usage_month">Monthly usage</string>
     <string name="usage_left">%1$s left</string>

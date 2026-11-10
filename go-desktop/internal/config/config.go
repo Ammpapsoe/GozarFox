@@ -12,6 +12,7 @@ type Account struct {
 	UID       string `json:"uid"`
 	Access    string `json:"access"`
 	Refresh   string `json:"refresh"`
+	ProxyPass string `json:"proxy_pass,omitempty"`
 	ExpiresAt int64  `json:"expires_at"`
 	Limit     int64  `json:"limit,omitempty"`
 	Remaining int64  `json:"remaining,omitempty"`
@@ -71,7 +72,7 @@ func (c Config) ActiveAccount() Account {
 	a := Account{Email: c.Email, UID: c.UID, Access: c.Access, Refresh: c.Refresh, ExpiresAt: c.ExpiresAt}
 	for _, saved := range c.Accounts {
 		if saved.ID() == a.ID() && a.ID() != "" {
-			a.Limit, a.Remaining, a.Reset = saved.Limit, saved.Remaining, saved.Reset
+			a.Limit, a.Remaining, a.Reset, a.ProxyPass = saved.Limit, saved.Remaining, saved.Reset, saved.ProxyPass
 			break
 		}
 	}

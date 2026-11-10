@@ -37,7 +37,8 @@ object FoxApi {
             }
         } catch (_: Exception) {
         }
-        if (reply.code == 406) message = "Mozilla's anti-bot check needs another try"
+        if (reply.code == 406) message = "Mozilla's security check was not accepted; try the official account page"
+        if (reply.code == 451) message = "Mozilla is unavailable from this network (HTTP 451). Use a trusted connection to sign in again."
         return FoxError(message, errno, reply.code)
     }
 
@@ -60,7 +61,7 @@ object FoxApi {
             .put("service", "sync")
             .put("verificationMethod", "email-otp")
             .toString()
-        val reply = FoxNet.call(FoxNet.ACCOUNT_AUTH + "/account/create", "POST", body)
+        val reply = FoxNet.call(FoxNet.AUTH + "/account/create", "POST", body)
         val data = json(reply)
         val verified = data.optBoolean("verified", data.optBoolean("emailVerified", false))
         return FoxSession(data.optString("uid"), data.optString("sessionToken"), !verified, false)
@@ -116,7 +117,7 @@ object FoxApi {
     fun verifyEmail(sessionToken: String, uid: String, code: String) {
         var last: Exception? = null
         val signed = JSONObject().put("code", code).toString()
-        val url = java.net.URL(FoxNet.ACCOUNT_AUTH + "/recovery_email/verify_code")
+        val url = java.net.URL(FoxNet.AUTH + "/recovery_email/verify_code")
         try {
             val header = authHeader(sessionToken, "POST", url, signed)
             val reply = FoxNet.call(url.toString(), "POST", signed, mapOf("Authorization" to header))
@@ -127,7 +128,7 @@ object FoxApi {
         }
         val plain = JSONObject().put("uid", uid).put("code", code).toString()
         try {
-            val reply = FoxNet.call(FoxNet.ACCOUNT_AUTH + "/recovery_email/verify_code", "POST", plain)
+            val reply = FoxNet.call(FoxNet.AUTH + "/recovery_email/verify_code", "POST", plain)
             if (reply.code in 200..299) return
             last = failure(reply)
         } catch (e: Exception) {
@@ -155,7 +156,7 @@ object FoxApi {
     }
 
     fun resendSignupCode(sessionToken: String) {
-        val url = java.net.URL(FoxNet.ACCOUNT_AUTH + "/recovery_email/resend_code")
+        val url = java.net.URL(FoxNet.AUTH + "/recovery_email/resend_code")
         val header = authHeader(sessionToken, "POST", url, "")
         FoxNet.call(url.toString(), "POST", "", mapOf("Authorization" to header))
     }
@@ -212,14 +213,19 @@ object FoxApi {
         return FoxPass("", limit, remaining, reset)
     }
 
-    fun pass(access: String): FoxPass {
+    fun pass(access: String): FoxPass = pass(access, true)
+
+    // Renewal must never activate an entitlement implicitly.
+    fun existingPass(access: String): FoxPass = pass(access, false)
+
+    private fun pass(access: String, allowActivate: Boolean): FoxPass {
         var reply = FoxNet.call(
             FoxNet.GUARDIAN + "/api/v1/fpn/token",
             "GET",
             null,
             mapOf("Authorization" to "Bearer $access")
         )
-        if (reply.code == 403) {
+        if (reply.code == 403 && allowActivate) {
             activate(access)
             reply = FoxNet.call(
                 FoxNet.GUARDIAN + "/api/v1/fpn/token",

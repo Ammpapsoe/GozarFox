@@ -2,6 +2,8 @@ package com.gozar
 
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
@@ -20,8 +22,7 @@ object FoxNet {
     const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
     const val CLIENT_ID = "5882386c6d801776"
     const val SCOPE = "profile https://identity.mozilla.com/apps/vpn"
-    // The OAuth origin serves the session-token endpoints used for sign-in.
-    // The original API origin is retained for the separate account-create flow.
+    // Use the OAuth account origin for the supported account/session endpoints.
     const val AUTH = "https://oauth.accounts.firefox.com/v1"
     const val ACCOUNT_AUTH = "https://api.accounts.firefox.com/v1"
     const val TOKEN_REFRESH = "https://oauth.accounts.firefox.com/v1/token"
@@ -29,8 +30,31 @@ object FoxNet {
     const val SERVERS = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"
 
     private val jar = FoxJar()
+    // The scope is per-thread, not a process-wide proxy configuration.
+    private val controlPort = ThreadLocal<Int>()
 
     fun forget() = jar.clear()
+
+    internal fun controlAllowed(url: String, method: String): Boolean = try {
+        val target = URL(url)
+        val clean = target.protocol.equals("https", true) && (target.port == -1 || target.port == 443) &&
+            target.userInfo == null && target.query == null && target.ref == null
+        clean && when {
+            target.host.equals("vpn.mozilla.org", true) && target.path == "/api/v1/fpn/token" ->
+                method == "GET" || method == "HEAD"
+            target.host.equals("oauth.accounts.firefox.com", true) && target.path == "/v1/token" -> method == "POST"
+            else -> false
+        }
+    } catch (_: Exception) { false }
+
+    fun <T> throughControlTunnel(port: Int, action: () -> T): T {
+        require(port in 1..65535 && controlPort.get() == null) { "invalid control tunnel" }
+        controlPort.set(port)
+        try { return action() } finally { controlPort.remove() }
+    }
+
+    internal fun mayRetryRefreshWithTls12(url: String, method: String, status: Int): Boolean =
+        status == 406 && method == "POST" && url == TOKEN_REFRESH
 
     internal fun mayRetryPassWithTls12(url: String, method: String, status: Int): Boolean = try {
         val target = URL(url)
@@ -47,18 +71,19 @@ object FoxNet {
         headers: Map<String, String> = emptyMap(),
         timeout: Int = 25000
     ): FoxReply {
-        // Do not run an unrelated browser challenge before the first request.
-        // The official endpoint may accept it directly; only a 406 warrants a
-        // challenge attempt.
-        var reply = once(url, method, body, headers, timeout)
-        if (mayRetryPassWithTls12(url, method, reply.code)) {
-            // Some Mozilla edge paths reject the default TLS fingerprint with
-            // 406. Retry only this idempotent pass endpoint, retaining the
-            // platform trust store and hostname verification.
-            reply = once(url, method, body, headers, timeout, tls12 = true)
+        val port = controlPort.get()
+        if (port != null && !controlAllowed(url, method)) {
+            throw java.io.IOException("Control tunnel destination is not permitted")
+        }
+        var reply = once(url, method, body, headers, timeout, proxyPort = port)
+        if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
+            // Normal system trust and hostname verification remain enabled.
+            reply = once(url, method, body, headers, timeout, tls12 = true, proxyPort = port)
         }
         var round = 0
-        while (reply.code == 406 && round < 4) {
+        // The challenge solver can use direct sockets and is never invoked by
+        // an explicitly tunnel-scoped request.
+        while (port == null && reply.code == 406 && round < 4) {
             round++
             val origin = try {
                 val parsed = URL(url)
@@ -69,7 +94,7 @@ object FoxNet {
             val solved = FoxShield.solve(jar, origin)
             if (!solved) break
             reply = once(url, method, body, headers, timeout)
-            if (mayRetryPassWithTls12(url, method, reply.code)) {
+            if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
                 reply = once(url, method, body, headers, timeout, tls12 = true)
             }
         }
@@ -82,9 +107,12 @@ object FoxNet {
         body: String?,
         headers: Map<String, String>,
         timeout: Int,
-        tls12: Boolean = false
+        tls12: Boolean = false,
+        proxyPort: Int? = null
     ): FoxReply {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val target = URL(url)
+        val connection = (if (proxyPort == null) target.openConnection() else
+            target.openConnection(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", proxyPort)))) as HttpURLConnection
         if (tls12) {
             val secure = connection as? HttpsURLConnection ?: throw java.io.IOException("HTTPS required")
             secure.sslSocketFactory = FoxTls12(secure.sslSocketFactory)

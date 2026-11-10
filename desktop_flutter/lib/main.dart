@@ -1610,17 +1610,19 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                           ),
                         ),
                       ],
-                      if (!_creating)
-                        Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: TextButton(
-                            onPressed: _busy
-                                ? null
-                                : () => _openPage(
-                                    'https://accounts.firefox.com/reset_password'),
-                            child: Text(words.forgotPassword),
-                          ),
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _openPage(_creating
+                                  ? 'https://accounts.firefox.com/signup'
+                                  : 'https://accounts.firefox.com/reset_password'),
+                          child: Text(_creating
+                              ? words.createOnMozilla
+                              : words.forgotPassword),
                         ),
+                      ),
                       if (_error != null) ...[
                         ErrorText(_message(_error!)),
                         const SizedBox(height: 12),
