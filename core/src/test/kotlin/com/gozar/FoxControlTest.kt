@@ -49,6 +49,7 @@ class FoxControlTest {
     @Test fun allowlistRequiresExactHostPathPortAndMethod() {
         assertTrue(FoxNet.controlAllowed("https://vpn.mozilla.org/api/v1/fpn/token", "GET"))
         assertTrue(FoxNet.controlAllowed("https://oauth.accounts.firefox.com/v1/token", "POST"))
+        assertTrue(FoxNet.controlAllowed(FoxNet.SERVERS, "GET"))
         val rejected = listOf(
             "http://vpn.mozilla.org/api/v1/fpn/token" to "GET",
             "https://vpn.mozilla.org.evil.invalid/api/v1/fpn/token" to "GET",
@@ -59,7 +60,11 @@ class FoxControlTest {
             "https://vpn.mozilla.org/api/v1/fpn/activate" to "POST",
             "https://vpn.mozilla.org/api/v1/fpn/token" to "POST",
             "https://oauth.accounts.firefox.com/v1/token" to "GET",
-            "https://oauth.accounts.firefox.com/v1/account/create" to "POST"
+            "https://oauth.accounts.firefox.com/v1/account/create" to "POST",
+            FoxNet.SERVERS to "POST",
+            "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records?x=1" to "GET",
+            "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/other/records" to "GET",
+            "https://firefox.settings.services.mozilla.com.evil.invalid/v1/buckets/main/collections/vpn-serverlist/records" to "GET"
         )
         for ((url, method) in rejected) assertFalse("accepted $url", FoxNet.controlAllowed(url, method))
         assertTrue(FoxNet.mayRetryRefreshWithTls12(FoxNet.TOKEN_REFRESH, "POST", 406))
@@ -128,6 +133,21 @@ class FoxControlTest {
                 FoxNet.throughControlTunnel(proxy.port) { FoxApi.existingPass("synthetic") }
             }.isFailure)
             assertEquals(0, proxy.requests.size)
+        }
+    }
+
+    @Test fun serverListFetchesOnlyThroughScopedTunnelWithVerifiedCertificate() {
+        val list = "{\"data\":[{\"code\":\"NL\",\"name\":\"Netherlands\",\"cities\":[{\"name\":\"Amsterdam\",\"servers\":[{\"hostname\":\"nl.mozilla.example\",\"port\":2499}]}]}]}"
+        LocalProxy { head, body, _ ->
+            assertTrue(head.startsWith("GET /v1/buckets/main/collections/vpn-serverlist/records "))
+            Answer(200, list)
+        }.use { tunnel ->
+            useDefaultProxy(tunnel.port)
+            val places = FoxNet.throughControlTunnel(tunnel.port) { FoxApi.servers() }
+            assertEquals("nl.mozilla.example", places.single().host)
+            assertEquals(1, tunnel.connects.size)
+            assertTrue(tunnel.connects.single().startsWith("CONNECT firefox.settings.services.mozilla.com:443 "))
+            assertTrue(tunnel.problems.isEmpty())
         }
     }
 

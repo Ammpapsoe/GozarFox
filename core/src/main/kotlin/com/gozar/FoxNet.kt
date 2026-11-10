@@ -43,6 +43,9 @@ object FoxNet {
             target.host.equals("vpn.mozilla.org", true) && target.path == "/api/v1/fpn/token" ->
                 method == "GET" || method == "HEAD"
             target.host.equals("oauth.accounts.firefox.com", true) && target.path == "/v1/token" -> method == "POST"
+            // Mozilla's public server list: exact host, path and GET only. It carries no credential.
+            target.host.equals("firefox.settings.services.mozilla.com", true) &&
+                target.path == "/v1/buckets/main/collections/vpn-serverlist/records" -> method == "GET"
             else -> false
         }
     } catch (_: Exception) { false }
