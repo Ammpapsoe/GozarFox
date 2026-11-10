@@ -45,6 +45,10 @@ object Fox {
     @Volatile var message: String = ""
     @Volatile var stage: String = ""
     @Volatile var servers: List<FoxLocation> = emptyList()
+    // Serializes list loading: view creation and connect share one fetch.
+    private val serversLock = Any()
+    @Volatile private var serversUntil = 0L
+    @Volatile private var serversFromCache = false
 
     @Volatile private var byLink = false
     @Volatile private var step = STEP_NONE
@@ -399,12 +403,42 @@ object Fox {
     }
 
     fun loadServers(c: Context) {
-        if (servers.isNotEmpty()) return
+        if (servers.isNotEmpty() && serversUntil > System.currentTimeMillis()) return
         work(c, R.string.fox_stage_servers) {
-            servers = FoxApi.servers()
+            obtainServers(c.applicationContext, forceFresh = false) { FoxApi.servers() }
             message = "servers"
         }
     }
+
+    /**
+     * The active list. An unexpired sealed snapshot is used before any network call. A
+     * fresh fetch is stored only after it succeeds, and a failed fetch leaves the current
+     * list untouched. Reuse never extends the stored fetched_at.
+     */
+    internal fun obtainServers(app: Context, forceFresh: Boolean, fetch: () -> List<FoxLocation>): List<FoxLocation> {
+        synchronized(serversLock) {
+            val now = System.currentTimeMillis()
+            if (!forceFresh) {
+                if (servers.isNotEmpty() && serversUntil > now) return servers
+                FoxServerCache.decode(FoxStore.serverCache(app), now)?.let { snapshot ->
+                    servers = snapshot.locations
+                    serversUntil = snapshot.expiresAt
+                    serversFromCache = true
+                    return snapshot.locations
+                }
+            }
+            val fresh = fetch()
+            if (fresh.isEmpty()) throw FoxError("Mozilla returned no servers")
+            servers = fresh
+            serversUntil = now + FoxServerCache.LIFETIME_MS
+            serversFromCache = false
+            FoxServerCache.encode(fresh, now)?.let { FoxStore.saveServerCache(app, it) }
+            return fresh
+        }
+    }
+
+    /** True while the list in use came from the sealed snapshot rather than a live fetch. */
+    internal fun serversCameFromCache(): Boolean = serversFromCache
 
     fun measure(c: Context) {
         if (servers.isEmpty()) return

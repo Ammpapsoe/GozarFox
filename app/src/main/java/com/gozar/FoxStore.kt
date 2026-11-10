@@ -48,6 +48,16 @@ object FoxStore {
         val delay = if (remaining > 315_000L) remaining - 300_000L else remaining / 2L
         return delay.coerceIn(15_000L, 60 * 60_000L)
     }
+    /** Sealed server-list snapshot. Unsealed text is ignored, never trusted as a list. */
+    fun serverCache(c: Context): String = synchronized(lock) {
+        val stored = p(c).getString("server_cache", "").orEmpty()
+        if (SecretBox.isSealed(stored)) SecretBox.open(c, stored) else ""
+    }
+
+    fun saveServerCache(c: Context, json: String) = synchronized(lock) {
+        p(c).edit().putString("server_cache", SecretBox.seal(c, json)).apply()
+    }
+
     fun limit(c: Context): Long = p(c).getLong("limit", 0L)
     fun remaining(c: Context): Long = p(c).getLong("remaining", 0L)
     fun reset(c: Context): String = p(c).getString("reset", "") ?: ""

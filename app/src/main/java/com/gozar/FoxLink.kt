@@ -145,10 +145,8 @@ object FoxLink {
                 }
                 if (!current(attempt)) return@thread
                 if (bootstrap != null && !FoxStore.isCurrent(app, bootstrap)) throw FoxError("Account changed")
-                if (Fox.servers.isEmpty()) {
-                    val servers = FoxApi.servers()
-                    if (attempts.ifCurrent(attempt) { Fox.servers = servers } == null) return@thread
-                }
+                Fox.obtainServers(app, forceFresh = false) { FoxApi.servers() }
+                if (!current(attempt)) return@thread
                 val candidates = Fox.autoCandidates(app)
                 if (candidates.isEmpty()) throw FoxError("No server available")
                 val lower = pass.limit > 0 && pass.remaining <= 0
@@ -158,31 +156,46 @@ object FoxLink {
                 var chosen: FoxLocation? = null
                 var lastError: Exception? = null
                 var renewed = false
-                for (candidate in candidates) {
-                    if (!current(attempt)) return@thread
-                    synchronized(stateLock) {
-                        if (attempt != generation) return@thread
-                        location = candidate
-                    }
-                    try {
-                        try {
-                            FoxTunnel.verify(candidate, pass.token, ticket)
-                        } catch (e: Exception) {
-                            if (!FoxTunnel.passRejected(e) || renewed) throw e
-                            renewed = true
-                            if (!current(attempt)) return@thread
-                            val fresh = Fox.validAccess(app)
-                            pass = FoxApi.pass(fresh.token)
-                            if (!storePass(app, pass, fresh, attempt)) return@thread
-                            FoxTunnel.verify(candidate, pass.token, ticket)
+                var retriedFresh = false
+                var pending = candidates
+                while (true) {
+                    for (candidate in pending) {
+                        if (!current(attempt)) return@thread
+                        synchronized(stateLock) {
+                            if (attempt != generation) return@thread
+                            location = candidate
                         }
-                        chosen = candidate
-                        break
-                    } catch (e: Exception) {
-                        Log.w("Gozar", "Server ${candidate.host} failed during verification", e)
-                        if (FoxTunnel.isTlsFailure(e) || FoxTunnel.passRejected(e) || e is FoxError) throw e
-                        lastError = e
+                        try {
+                            try {
+                                FoxTunnel.verify(candidate, pass.token, ticket)
+                            } catch (e: Exception) {
+                                if (!FoxTunnel.passRejected(e) || renewed) throw e
+                                renewed = true
+                                if (!current(attempt)) return@thread
+                                val fresh = Fox.validAccess(app)
+                                pass = FoxApi.pass(fresh.token)
+                                if (!storePass(app, pass, fresh, attempt)) return@thread
+                                FoxTunnel.verify(candidate, pass.token, ticket)
+                            }
+                            chosen = candidate
+                            break
+                        } catch (e: Exception) {
+                            Log.w("Gozar", "Server ${candidate.host} failed during verification", e)
+                            if (FoxTunnel.isTlsFailure(e) || FoxTunnel.passRejected(e) || e is FoxError) throw e
+                            lastError = e
+                        }
                     }
+                    if (chosen != null || retriedFresh || lastError == null || !Fox.serversCameFromCache()) break
+                    retriedFresh = true
+                    try {
+                        Fox.obtainServers(app, forceFresh = true) { FoxApi.servers() }
+                    } catch (_: Exception) {
+                        break
+                    }
+                    if (!current(attempt)) return@thread
+                    pending = Fox.autoCandidates(app)
+                    if (pending.isEmpty()) break
+                    lastError = null
                 }
                 val verified = chosen ?: throw lastError?.let {
                     FoxError("Server ${location?.host ?: "unknown"} failed because of ${it.message ?: it.javaClass.simpleName}")
@@ -210,6 +223,7 @@ object FoxLink {
                     startRenewal(app, attempt, ticket)
                 }
                 tick()
+                thread(isDaemon = true, name = "fox-servers") { refreshServersThroughTunnel(app, attempt) }
                 configureWarp(app)
                 FoxVpnService.activateRoot()
                 detectExit(verified, pass.token, attempt, ticket)
@@ -536,6 +550,22 @@ object FoxLink {
                     retry = if (retry == 0L) 15_000L else (retry * 2).coerceAtMost(60_000L)
                 }
             }
+        }
+    }
+
+    /**
+     * Refreshes the official list through the live, scoped control tunnel. The old list stays
+     * in use on any failure, and a result is stored only while this attempt is still current.
+     */
+    private fun refreshServersThroughTunnel(app: Context, attempt: Long) {
+        try {
+            Fox.obtainServers(app, forceFresh = true) {
+                val list = FoxNet.throughControlTunnel(dnsPort) { FoxApi.servers() }
+                if (!current(attempt) || !connected) throw FoxError("Tunnel stopped")
+                list
+            }
+        } catch (_: Exception) {
+            // Keep the list already in use.
         }
     }
 
