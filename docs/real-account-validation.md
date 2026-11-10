@@ -113,4 +113,4 @@ Remaining work:
   on appropriate emulators and physical devices, and validate the production
   desktop path. The later real-account transport success is not a full app test.
 - Check exact-commit signed release builds and upgrade scenarios. Do not claim
-  device-wide leak freedom or publish stable on incomplete validation.
+  device-wide leak freedom. For 1.11.4 the maintainer explicitly deferred physical-device validation; the release notes and `physical-device-tor-validation.md` keep that limitation visible.

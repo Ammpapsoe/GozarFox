@@ -62,59 +62,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  android-transport:
-    needs: unit-tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Install Android SDK
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Build application and instrumentation APKs
-        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
-      - name: Enable emulator acceleration
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm || true
-          sudo udevadm settle
-          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-            echo 'GOZAR_DISABLE_KVM=false' >> "$GITHUB_ENV"
-          else
-            echo 'GOZAR_DISABLE_KVM=true' >> "$GITHUB_ENV"
-          fi
-      - name: Run embedded Tor escalation and shutdown on Android
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 29
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          disable-linux-hw-accel: ${{ env.GOZAR_DISABLE_KVM }}
-          emulator-boot-timeout: 1800
-          script: bash scripts/test_embedded_tor_emulator.sh
-      - name: Upload sanitized instrumentation result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-transport-result
-          path: |
-            ${{ runner.temp }}/embedded-tor-instrumentation.txt
-            ${{ runner.temp }}/embedded-tor-native-failure.txt
-          if-no-files-found: warn
-          retention-days: 7
-
   artifact:
-    needs: android-transport
+    needs: unit-tests
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

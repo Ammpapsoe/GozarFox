@@ -225,7 +225,7 @@ jobs:
             python3 - "$log" <<'PY'
           import re
           import sys
-          pattern = re.compile(r'(--- FAIL|panic|DATA RACE|FAIL\s|fatal error|expected|actual|timeout)', re.I)
+          pattern = re.compile(r'(--- FAIL|panic|DATA RACE|FAIL\s|fatal error|expected|actual|timeout|\.go:\d+:)', re.I)
           count = 0
           with open(sys.argv[1], errors='replace') as source:
               for raw in source:
