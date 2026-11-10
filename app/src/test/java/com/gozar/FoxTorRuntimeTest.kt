@@ -97,6 +97,16 @@ class FoxTorRuntimeTest {
 
     @Test
     fun accountFailureDoesNotRetryCredentialsOnAnotherTransport() {
+        FoxTorRuntime.attemptFactory = { _, mode ->
+            created += mode
+            object : FoxTorAttempt {
+                override val port: Int = 19050
+                override fun start(): Int = port
+                override fun close() {
+                    closed += mode
+                }
+            }
+        }
         val failure = FoxError("synthetic account rejection")
         try {
             FoxTorRuntime.run(context) { throw failure }
