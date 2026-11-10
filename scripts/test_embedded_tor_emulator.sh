@@ -36,6 +36,7 @@ adb shell am instrument -w -r -e class com.gozar.FoxTorInstrumentedTest com.goza
 status=${PIPESTATUS[0]}
 set -e
 if [ "$status" -eq 0 ] && grep -E 'OK \(1 test\)' "$result" >/dev/null; then
+  printf '%s\n' '::notice::STATE=NATIVE_TOR_TWO_CYCLES_OK'
   exit 0
 fi
 python3 - "$result" <<'PY'

@@ -54,6 +54,14 @@ text=re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[email]", text)
 text=re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+", r"\1[redacted]", text)
 print(text)'
 }
+annotate_errors() {
+  python3 -c 'import sys
+for raw in sys.stdin:
+ line=raw.strip()
+ if line:
+  line=line.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+  print("::error::" + line[:1400])'
+}
 run_account_test() {
   local method="$1" email="$2" password="$3" code="$4" marker="$5"
   adb logcat -c
@@ -67,10 +75,10 @@ run_account_test() {
     printf '::notice::%s\n' "$marker"
     return 0
   fi
-  python3 - "$result" <<'PY' | sanitize
+  python3 - "$result" <<'PY' | sanitize | annotate_errors
 import re
 import sys
-pattern = re.compile(r'(STATE=|CODE_REQUIRED|LINK_REQUIRED|TUNNEL_|AssertionError|FoxError|Exception|INSTRUMENTATION_CODE|FAILURE|Error:|bootstrap|TorService)', re.I)
+pattern = re.compile(r'(STATE=|CODE_REQUIRED|LINK_REQUIRED|TUNNEL_|AssertionError|FoxError|Exception|INSTRUMENTATION_CODE|INSTRUMENTATION_RESULT|shortMsg|Process crashed|FAILURE|Error:|bootstrap|TorService)', re.I)
 count = 0
 with open(sys.argv[1], errors='replace') as source:
     for raw in source:
