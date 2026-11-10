@@ -234,7 +234,7 @@ object FoxApi {
                 mapOf("Authorization" to "Bearer $access")
             )
         }
-        if (reply.code == 451) return relayPass(access, allowActivate)
+        if (reply.code == 451 && !FoxNet.controlScoped()) return relayPass(access, allowActivate)
         return readPass(reply)
     }
 
@@ -298,14 +298,14 @@ object FoxApi {
             null,
             mapOf("Authorization" to "Bearer $access")
         )
-        if (reply.code == 451) reply = FoxRelay.call("/v1/guardian/pass", "HEAD", access)
+        if (reply.code == 451 && !FoxNet.controlScoped()) reply = FoxRelay.call("/v1/guardian/pass", "HEAD", access)
         if (reply.code != 200) return null
         return quota(reply)
     }
 
     fun servers(): List<FoxLocation> {
         var reply = FoxNet.call(FoxNet.SERVERS, "GET")
-        if (reply.code == 451) reply = FoxRelay.call("/v1/mozilla/servers", "GET")
+        if (reply.code == 451 && !FoxNet.controlScoped()) reply = FoxRelay.call("/v1/mozilla/servers", "GET")
         if (reply.code != 200) throw failure(reply)
         val data = JSONObject(reply.body).optJSONArray("data") ?: JSONArray()
         val out = ArrayList<FoxLocation>()

@@ -75,6 +75,8 @@ object FoxNet {
 
     internal fun loginSocksPort(): Int? = loginSocksPort.get()
 
+    internal fun controlScoped(): Boolean = controlPort.get() != null
+
     internal fun loginAllowed(url: String, method: String): Boolean = try {
         val target = URL(url)
         val clean = target.protocol.equals("https", true) && (target.port == -1 || target.port == 443) &&

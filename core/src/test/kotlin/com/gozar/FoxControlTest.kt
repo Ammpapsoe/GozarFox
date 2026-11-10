@@ -119,6 +119,28 @@ class FoxControlTest {
         }
     }
 
+    @Test fun controlScopedServerListDoesNotUseRelayFallback() {
+        val previous = FoxRelayDiscovery.installForTest(listOf("https://gozar-guardian-a.gozarfox7.workers.dev"))
+        val requests = mutableListOf<FoxRelay.Request>()
+        val restore = FoxRelay.installForTest { request ->
+            requests.add(request)
+            FoxReply(200, "{}", emptyMap())
+        }
+        try {
+            LocalProxy { _, _, _ -> Answer(451, "{}") }.use { tunnel ->
+                val failure = runCatching {
+                    FoxNet.throughControlTunnel(tunnel.port) { FoxApi.servers() }
+                }.exceptionOrNull() as? FoxError
+                assertEquals(451, failure?.status)
+                assertEquals(1, tunnel.requests.size)
+            }
+        } finally {
+            restore()
+            FoxRelayDiscovery.installForTest(previous)
+        }
+        assertTrue(requests.isEmpty())
+    }
+
     @Test fun scoped406RetriesOnlyWithVerifiedTls12() {
         val protocols = Collections.synchronizedList(mutableListOf<String>())
         LocalProxy { _, _, version ->
