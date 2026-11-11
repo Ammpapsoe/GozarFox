@@ -110,7 +110,6 @@ class FoxVerifiedLoginTest {
         context.getSharedPreferences("fox", Context.MODE_PRIVATE).edit().clear().commit()
         provider = FakeProvider()
         Fox.loginProvider = provider
-        Fox.loginTransport = FoxDirectLoginTransport
     }
 
     @After
@@ -125,7 +124,6 @@ class FoxVerifiedLoginTest {
         await { !Fox.busy }
         Fox.cancelLogin()
         Fox.loginProvider = MozillaLoginProvider
-        Fox.loginTransport = FoxTorRuntime
         context.getSharedPreferences("fox", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
@@ -411,48 +409,6 @@ class FoxVerifiedLoginTest {
             assertEquals("duplicate verification at $index", 1, provider.verifies.get())
             assertEquals("unexpected token request at $index", 1, provider.tokenRequests.get())
         }
-    }
-
-    @Test
-    fun successfulPassFinishesOwnedTransport() {
-        var finished = 0
-        Fox.loginTransport = object : FoxLoginTransport {
-            override fun run(context: Context, body: () -> Unit) = body()
-            override fun isActive(): Boolean = true
-            override fun finish(context: Context) {
-                finished++
-            }
-        }
-        provider.needsCode = false
-        provider.failFirstToken = false
-        Fox.signIn(context, "fake@example.invalid", "fake-password")
-        await { !Fox.busy && Fox.signedIn(context) }
-        assertEquals(1, finished)
-    }
-
-    @Test
-    fun failedPassRetainsTransportUntilExplicitStop() {
-        var finished = 0
-        var stopped = 0
-        Fox.loginTransport = object : FoxLoginTransport {
-            override fun run(context: Context, body: () -> Unit) = body()
-            override fun isActive(): Boolean = true
-            override fun finish(context: Context) {
-                finished++
-            }
-            override fun stop(context: Context) {
-                stopped++
-            }
-        }
-        provider.needsCode = false
-        provider.failFirstToken = true
-        Fox.signIn(context, "fake@example.invalid", "fake-password")
-        await { !Fox.busy && Fox.canRetryLogin() }
-        assertEquals(0, finished)
-        assertEquals(0, stopped)
-        Fox.stopLogin(context)
-        assertEquals(1, stopped)
-        assertFalse(Fox.needsStep())
     }
 
     @Test

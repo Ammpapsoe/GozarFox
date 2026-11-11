@@ -33,7 +33,6 @@ object Fox {
     }
 
     @Volatile internal var loginProvider: FoxLoginProvider = MozillaLoginProvider
-    @Volatile internal var loginTransport: FoxLoginTransport = FoxTorRuntime
 
     @Volatile var email: String = ""
     @Volatile var limit: Long = 0L
@@ -177,8 +176,7 @@ object Fox {
             }) {
                 try {
                     currentAuth(epoch) { }
-                    loginTransport.run(c.applicationContext) { body(epoch) }
-                    if (signedIn(c.applicationContext)) loginTransport.finish(c.applicationContext)
+                    body(epoch)
                 } catch (_: LoginCancelled) {
                     // Logout or cancellation revoked this job's authority to
                     // publish state. Already-started network requests may finish.
@@ -422,7 +420,6 @@ object Fox {
             // Store publication and logout are ordered by the same lock.
             FoxStore.saveAccount(c, mail, uid, tokens, pass)
             clearPendingLocked()
-            FoxBridgeStore.clear()
         }
     }
 
@@ -586,16 +583,13 @@ object Fox {
         message = ""
     }
 
-    fun canStopLogin(): Boolean = authInFlight || needsStep() || loginTransport.isActive()
+    fun canStopLogin(): Boolean = authInFlight || needsStep()
 
     fun stopLogin(c: Context) {
         synchronized(authLock) {
             authEpoch++
             clearPendingLocked()
         }
-        FoxBridgeStore.clear()
-        stage = c.getString(R.string.login_stopping)
-        loginTransport.stop(c.applicationContext)
         notifyUi()
     }
 
@@ -605,8 +599,6 @@ object Fox {
             authEpoch++
             clearPendingLocked()
         }
-        FoxBridgeStore.clear()
-        if (c != null) loginTransport.stop(c.applicationContext)
         notifyUi()
     }
 
@@ -617,7 +609,6 @@ object Fox {
             authEpoch
         }
         try {
-            loginTransport.stop(c.applicationContext)
             FoxVpnService.stop(c)
             val switched = synchronized(authLock) {
                 if (epoch != authEpoch || !FoxStore.switchAccount(c, id)) false
@@ -644,10 +635,8 @@ object Fox {
                 authEpoch++
                 clearPendingLocked()
                 FoxStore.clear(c)
-                FoxBridgeStore.clear()
             }
         } finally {
-            loginTransport.stop(c.applicationContext)
             FoxVpnService.stop(c)
         }
         load(c)

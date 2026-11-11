@@ -33,8 +33,6 @@ object FoxNet {
     private val jar = FoxJar()
     // The scope is per-thread, not a process-wide proxy configuration.
     private val controlPort = ThreadLocal<Int>()
-    private val loginSocksPort = ThreadLocal<Int>()
-    private val loginProxyPort = ThreadLocal<Int>()
 
     fun forget() = jar.clear()
 
@@ -54,59 +52,16 @@ object FoxNet {
     } catch (_: Exception) { false }
 
     fun <T> throughControlTunnel(port: Int, action: () -> T): T {
-        require(port in 1..65535 && controlPort.get() == null && loginSocksPort.get() == null && loginProxyPort.get() == null) { "invalid control tunnel" }
+        require(port in 1..65535 && controlPort.get() == null) { "invalid control tunnel" }
         controlPort.set(port)
         try { return action() } finally { controlPort.remove() }
     }
 
-    fun <T> throughLoginSocks(port: Int, action: () -> T): T {
-        require(port in 1..65535 && loginSocksPort.get() == null && controlPort.get() == null && loginProxyPort.get() == null) { "invalid login transport" }
-        val bridge = FoxSocksHttpBridge(port)
-        try {
-            loginSocksPort.set(port)
-            loginProxyPort.set(bridge.port)
-            return action()
-        } finally {
-            loginProxyPort.remove()
-            loginSocksPort.remove()
-            bridge.close()
-        }
-    }
-
-    fun loginSocksPort(): Int? = loginSocksPort.get()
-
     internal fun controlScoped(): Boolean = controlPort.get() != null
 
-    internal fun loginAllowed(url: String, method: String): Boolean = try {
-        val target = URL(url)
-        val clean = target.protocol.equals("https", true) && (target.port == -1 || target.port == 443) &&
-            target.userInfo == null && target.query == null && target.ref == null
-        clean && when {
-            target.host.equals("oauth.accounts.firefox.com", true) -> when (target.path) {
-                "/v1/account/create", "/v1/account/login", "/v1/token", "/v1/oauth/token",
-                "/v1/recovery_email/verify_code", "/v1/recovery_email/resend_code", "/v1/session/verify_code" -> method == "POST"
-                "/v1/recovery_email/status" -> method == "GET"
-                else -> false
-            }
-            target.host.equals("vpn.mozilla.org", true) -> when (target.path) {
-                "/api/v1/fpn/token" -> method == "GET" || method == "HEAD"
-                "/api/v1/fpn/activate" -> method == "POST"
-                else -> false
-            }
-            target.host.equals("firefox.settings.services.mozilla.com", true) ->
-                target.path == "/v1/buckets/main/collections/vpn-serverlist/records" && method == "GET"
-            else -> false
-        }
-    } catch (_: Exception) {
-        false
-    }
-
     internal fun open(target: URL): HttpURLConnection {
-        val control = controlPort.get()
-        val login = loginProxyPort.get()
-        if (control == null && login == null) return target.openConnection() as HttpURLConnection
-        val port = control ?: login ?: throw IllegalStateException("missing login proxy")
-        return target.openConnection(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", port))) as HttpURLConnection
+        val control = controlPort.get() ?: return target.openConnection() as HttpURLConnection
+        return target.openConnection(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", control))) as HttpURLConnection
     }
 
     internal fun mayRetryRefreshWithTls12(url: String, method: String, status: Int): Boolean =
@@ -128,12 +83,11 @@ object FoxNet {
         timeout: Int = 25000
     ): FoxReply {
         val port = controlPort.get()
-        val socks = loginSocksPort.get()
         if (port != null && !controlAllowed(url, method)) {
             throw java.io.IOException("Control tunnel destination is not permitted")
         }
-        if (socks != null && !loginAllowed(url, method)) {
-            throw java.io.IOException("Login destination is not permitted")
+        if (port == null && FoxRelay.relayPath(url, method) != null) {
+            return FoxRelay.forward(url, method, body, headers, timeout)
         }
         var reply = once(url, method, body, headers, timeout)
         if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
@@ -143,7 +97,7 @@ object FoxNet {
         var round = 0
         // The challenge solver can use direct sockets and is never invoked by
         // an explicitly tunnel-scoped request.
-        while (port == null && socks == null && reply.code == 406 && round < 4) {
+        while (port == null && reply.code == 406 && round < 4) {
             round++
             val origin = try {
                 val parsed = URL(url)

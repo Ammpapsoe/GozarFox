@@ -10,12 +10,12 @@ object FoxRelayDiscovery {
     const val MAX_SKEW_MS = 5L * 60 * 1000
     const val MAX_DOCUMENT_BYTES = 16 * 1024
     private const val PREFIX = "GOZAR-RELAY-ENDPOINTS-V1\n"
-    private const val DOCUMENT_URL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json"
+    private const val DOCUMENT_URL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/mission/autonomous-v1/packaging/relay-endpoints.json"
     private const val SIGNATURE_URL = "$DOCUMENT_URL.sig"
     private val defaults = listOf(
+        "https://script.google.com/macros/s/AKfycbwMXiE-wFBEaC_ZpZOode1yvgPG1xIHsrty-sM4czaFz6ZBabAWuCd9udiPW4PLH2GR/exec",
         "https://gozar-guardian-a.gozarfox7.workers.dev",
-        "https://gozar-guardian-b.gozarfox7.workers.dev",
-        "https://gozar-guardian-c.gozarfox7.workers.dev"
+        "https://gozar-guardian-b.gozarfox7.workers.dev"
     )
     private val refreshLock = Any()
     @Volatile private var active = defaults
@@ -23,22 +23,37 @@ object FoxRelayDiscovery {
 
     fun relays(): List<String> = active
 
+    private fun prioritize(values: List<String>): List<String> {
+        val primary = defaults.first()
+        return (listOf(primary) + values.filterNot { it == primary }).distinct().take(3)
+    }
+
     fun validUrl(raw: String): Boolean {
         if (raw.isEmpty() || raw.length > 255 || raw != raw.trim()) return false
         return try {
             val url = URI(raw)
             val host = url.host?.lowercase() ?: return false
-            url.scheme == "https" && url.port == -1 && url.userInfo == null &&
-                url.rawQuery == null && url.rawFragment == null &&
-                (url.rawPath.isNullOrEmpty() || url.rawPath == "/") &&
+            val clean = url.scheme == "https" && url.port == -1 && url.userInfo == null &&
+                url.rawQuery == null && url.rawFragment == null
+            clean && when {
+                host == "script.google.com" -> url.rawPath?.matches(Regex("/macros/s/[A-Za-z0-9_-]{20,}/exec")) == true
                 host.endsWith(".gozarfox7.workers.dev") && host.length > ".gozarfox7.workers.dev".length &&
-                host.substringBefore(".gozarfox7.workers.dev").let { prefix ->
-                    prefix.isNotEmpty() && !prefix.contains('.') && prefix.all { it in 'a'..'z' || it in '0'..'9' || it == '-' } &&
-                        !prefix.startsWith('-') && !prefix.endsWith('-')
-                }
+                    (url.rawPath.isNullOrEmpty() || url.rawPath == "/") ->
+                    host.substringBefore(".gozarfox7.workers.dev").let { prefix ->
+                        prefix.isNotEmpty() && !prefix.contains('.') && prefix.all { it in 'a'..'z' || it in '0'..'9' || it == '-' } &&
+                            !prefix.startsWith('-') && !prefix.endsWith('-')
+                    }
+                else -> false
+            }
         } catch (_: Exception) {
             false
         }
+    }
+
+    fun isGoogle(raw: String): Boolean = try {
+        URI(raw).host?.equals("script.google.com", true) == true
+    } catch (_: Exception) {
+        false
     }
 
     private fun normalize(raw: String): String = raw.removeSuffix("/")
@@ -73,7 +88,7 @@ object FoxRelayDiscovery {
     fun acceptPublished(document: String, signatureText: String): Boolean {
         if (!verify(document, signatureText)) return false
         val parsed = parse(document) ?: return false
-        active = parsed
+        active = prioritize(parsed)
         fetchedAt = System.currentTimeMillis()
         return true
     }
@@ -107,7 +122,7 @@ object FoxRelayDiscovery {
 
     fun restoreCache(raw: String, now: Long = System.currentTimeMillis()): Boolean {
         val cached = decodeCache(raw, now) ?: return false
-        active = cached.first
+        active = prioritize(cached.first)
         fetchedAt = cached.second
         return true
     }
@@ -120,7 +135,7 @@ object FoxRelayDiscovery {
         if (signature.code != 200) return@synchronized false
         if (!verify(document.body, signature.body)) return@synchronized false
         val parsed = parse(document.body) ?: return@synchronized false
-        active = parsed
+        active = prioritize(parsed)
         fetchedAt = now
         true
     }

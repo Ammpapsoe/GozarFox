@@ -1,0 +1,54 @@
+name: Apps Script Account Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      authorize:
+        description: Authorize the existing-account login and one test signup through Apps Script
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  account:
+    if: ${{ inputs.authorize }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the two account-test APKs
+        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - name: Configure emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
+      - name: Test login with Pass and signup through code delivery
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOZAR_LIVE_INPUT: ${{ secrets.GOZAR_LIVE_INPUT }}
+          GOZAR_CI_SIGNUP_INPUT: ${{ secrets.GOZAR_CI_SIGNUP_INPUT }}
+        with:
+          api-level: 29
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-boot-timeout: 600
+          emulator-options: -no-snapshot-save -noaudio -no-window -gpu swiftshader_indirect
+          script: bash scripts/test_apps_script_accounts_emulator.sh

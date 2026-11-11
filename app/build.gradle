@@ -18,8 +18,8 @@ android {
         applicationId 'com.gozar'
         minSdk 24
         targetSdk 35
-        versionCode 47
-        versionName '1.12.0-rc.4'
+        versionCode 48
+        versionName '1.12.1'
         manifestPlaceholders.appLabel = '@string/app_name'
         manifestPlaceholders.xiaomiAppId = System.getenv('XIAOMI_APP_ID') ?: ''
         manifestPlaceholders.xiaomiDebug = 'false'
@@ -114,14 +114,6 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     implementation project(':core')
-    implementation files('libs/tor-android-0.4.9.14.aar')
-    implementation 'info.guardianproject:jtorctl:0.4.5.7'
-    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
-    if (file('libs/IPtProxy-5.8.0-android.aar').exists()) {
-        implementation files('libs/IPtProxy-5.8.0-android.aar')
-    } else {
-        implementation 'com.netzarchitekten:IPtProxy:5.8.0'
-    }
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.appcompat:appcompat:1.7.1'

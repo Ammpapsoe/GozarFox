@@ -3,13 +3,11 @@ package com.gozar
 import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.util.Patterns
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
@@ -18,9 +16,9 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.progressindicator.CircularProgressIndicator
-import com.google.android.material.textfield.TextInputLayout
 import android.text.InputType
 import android.widget.EditText
+import android.widget.ImageView
 
 class LoginActivity : BaseActivity() {
 
@@ -46,20 +44,15 @@ class LoginActivity : BaseActivity() {
     private lateinit var secret: EditText
     private lateinit var confirm: EditText
     private lateinit var codeInput: EditText
-    private lateinit var bridgeBox: View
-    private lateinit var bridge: EditText
-    private lateinit var bridgeHelp: TextInputLayout
-    private lateinit var reveal: TextInputLayout
+    private lateinit var reveal: ImageView
     private var shown = false
     private lateinit var primary: MaterialButton
-    private lateinit var stop: MaterialButton
     private lateinit var forgot: MaterialButton
     private lateinit var switchButton: MaterialButton
     private lateinit var languageButton: MaterialButton
-    private lateinit var logsButton: MaterialButton
     private lateinit var progress: CircularProgressIndicator
     private lateinit var error: TextView
-    private lateinit var systemAccounts: TextInputLayout
+    private lateinit var systemAccounts: View
     private lateinit var savedAccounts: MaterialButton
     private lateinit var cancelAdd: MaterialButton
 
@@ -91,17 +84,11 @@ class LoginActivity : BaseActivity() {
         adding = savedInstanceState?.getBoolean("adding") ?: intent.getBooleanExtra(ADD_ACCOUNT, false)
         initialRevision = savedInstanceState?.getLong("initial_revision") ?: FoxStore.authRevision(this)
         languageButton = findViewById(R.id.loginLanguage)
-        logsButton = findViewById(R.id.loginLogs)
         languageButton.setOnClickListener { if (!Fox.busy) showLanguagePicker(this) }
-        logsButton.setOnClickListener { showLogs() }
-        val topBar = findViewById<View>(R.id.loginTopBar)
-        val scroll = findViewById<View>(R.id.loginScroll)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.loginRoot)) { _, insets ->
-            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-            topBar.layoutParams = (topBar.layoutParams as android.widget.FrameLayout.LayoutParams).apply { topMargin = top }
-            scroll.layoutParams = (scroll.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
-                topMargin = top + (64 * resources.displayMetrics.density).toInt()
-            }
+            val params = languageButton.layoutParams as android.widget.FrameLayout.LayoutParams
+            params.topMargin = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            languageButton.layoutParams = params
             insets
         }
         title = findViewById(R.id.loginTitle)
@@ -114,33 +101,19 @@ class LoginActivity : BaseActivity() {
         secret = findViewById(R.id.loginSecret)
         confirm = findViewById(R.id.loginConfirm)
         codeInput = findViewById(R.id.loginCode)
-        bridgeBox = findViewById(R.id.loginBridgeBox)
-        bridge = findViewById(R.id.loginBridge)
-        bridgeHelp = findViewById(R.id.loginBridgeHelp)
-        bridge.setText(FoxBridgeStore.manual)
-        bridgeHelp.setEndIconOnClickListener {
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.login_bridge_help)
-                .setMessage(R.string.login_bridge_help_text)
-                .setNeutralButton(R.string.login_bridge_open_bot) { _, _ -> web("https://t.me/GetBridgesBot") }
-                .setPositiveButton(R.string.ok, null)
-                .show()
-        }
         primary = findViewById(R.id.loginPrimary)
-        stop = findViewById(R.id.loginStop)
         forgot = findViewById(R.id.loginForgot)
         switchButton = findViewById(R.id.loginSwitch)
         progress = findViewById(R.id.loginProgress)
         error = findViewById(R.id.loginError)
-        error.setTextIsSelectable(true)
         reveal = findViewById(R.id.loginReveal)
         systemAccounts = findViewById(R.id.loginSystemAccounts)
         savedAccounts = findViewById(R.id.loginSavedAccounts)
         cancelAdd = findViewById(R.id.loginCancelAdd)
-        systemAccounts.setEndIconOnClickListener { chooseSystemAccount() }
+        systemAccounts.setOnClickListener { chooseSystemAccount() }
         savedAccounts.setOnClickListener { chooseSavedAccount() }
         cancelAdd.setOnClickListener { onBackPressed() }
-        reveal.setEndIconOnClickListener {
+        reveal.setOnClickListener {
             shown = !shown
             val mode = if (shown) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else
                 InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -150,7 +123,6 @@ class LoginActivity : BaseActivity() {
         }
 
         primary.setOnClickListener { act() }
-        stop.setOnClickListener { Fox.stopLogin(this) }
         forgot.setOnClickListener { web(if (create) CREATE_PAGE else RESET_PAGE) }
         switchButton.setOnClickListener {
             create = !create
@@ -204,7 +176,7 @@ class LoginActivity : BaseActivity() {
             toast(R.string.account_wait)
             return
         }
-        Fox.cancelLogin(this)
+        Fox.cancelLogin()
         super.onBackPressed()
     }
 
@@ -228,23 +200,6 @@ class LoginActivity : BaseActivity() {
                 else toast(R.string.account_wait)
             }
             .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun showLogs() {
-        val content = TextView(this).apply {
-            text = FoxTorLog.render().ifBlank { getString(R.string.login_logs_empty) }
-            typeface = Typeface.MONOSPACE
-            textSize = 12f
-            setTextIsSelectable(true)
-            setPadding(48, 32, 48, 24)
-        }
-        val scroll = ScrollView(this).apply { addView(content) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.login_logs_title)
-            .setView(scroll)
-            .setNeutralButton(R.string.login_logs_clear) { _, _ -> FoxTorLog.clear() }
-            .setPositiveButton(R.string.close, null)
             .show()
     }
 
@@ -283,13 +238,6 @@ class LoginActivity : BaseActivity() {
             show(getString(R.string.login_mismatch))
             return
         }
-        val rawBridge = bridge.text?.toString().orEmpty().trim()
-        val manualBridge = if (rawBridge.isEmpty()) null else FoxBridge.manual(rawBridge)
-        if (rawBridge.isNotEmpty() && manualBridge == null) {
-            show(getString(R.string.login_bridge_invalid))
-            return
-        }
-        FoxBridgeStore.manual = manualBridge?.line.orEmpty()
         if (create) Fox.signUp(this, address, password) else Fox.signIn(this, address, password)
         render()
     }
@@ -298,8 +246,6 @@ class LoginActivity : BaseActivity() {
         val signed = Fox.signedIn(this)
         val completed = !adding || FoxStore.authRevision(this) != initialRevision
         if (signed && !Fox.busy && completed) {
-            FoxBridgeStore.clear()
-            bridge.text?.clear()
             secret.text?.clear()
             confirm.text?.clear()
             if (!adding) startActivity(Intent(this, MainActivity::class.java))
@@ -313,7 +259,6 @@ class LoginActivity : BaseActivity() {
         secretBox.visibility = if (step) View.GONE else View.VISIBLE
         confirmBox.visibility = if (create && !step) View.VISIBLE else View.GONE
         codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
-        bridgeBox.visibility = if (step) View.GONE else View.VISIBLE
         forgot.visibility = if (step) View.GONE else View.VISIBLE
         forgot.text = getString(if (create) R.string.login_create_browser else R.string.login_forgot)
         switchButton.visibility = if (step) View.GONE else View.VISIBLE
@@ -341,20 +286,15 @@ class LoginActivity : BaseActivity() {
             else -> getString(R.string.login_action)
         }
         val busy = Fox.busy
-        val busyStage = Fox.stage.ifBlank { getString(R.string.login_secure_connecting) }
-        if (busy) subtitle.text = busyStage
         primary.text = if (busy) "" else action
-        primary.contentDescription = if (busy) busyStage else null
+        primary.contentDescription = if (busy) getString(R.string.login_working) else null
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         primary.isEnabled = !busy
-        stop.visibility = if (busy || Fox.canStopLogin()) View.VISIBLE else View.GONE
         languageButton.isEnabled = !busy
         mail.isEnabled = !busy
         secret.isEnabled = !busy
         confirm.isEnabled = !busy
         codeInput.isEnabled = !busy
-        bridge.isEnabled = !busy
-        bridgeHelp.isEnabled = !busy
         reveal.isEnabled = !busy
         forgot.isEnabled = !busy
         switchButton.isEnabled = !busy

@@ -4,8 +4,10 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
+import org.json.JSONObject
 
 object FoxRelay {
     private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -18,7 +20,62 @@ object FoxRelay {
         "/v1/guardian/pass" -> method == "GET" || method == "HEAD"
         "/v1/guardian/activate" -> method == "POST"
         "/v1/mozilla/servers" -> method == "GET"
+        "/v1/mozilla/account/create", "/v1/mozilla/account/login", "/v1/mozilla/token",
+        "/v1/mozilla/oauth/token", "/v1/mozilla/recovery-email/verify-code",
+        "/v1/mozilla/recovery-email/resend-code", "/v1/mozilla/session/verify-code" -> method == "POST"
+        "/v1/mozilla/recovery-email/status" -> method == "GET"
         else -> false
+    }
+
+    fun relayPath(url: String, method: String): String? = try {
+        val target = URL(url)
+        if (target.protocol != "https" || target.port !in setOf(-1, 443) || target.userInfo != null || target.query != null || target.ref != null) {
+            null
+        } else {
+            val path = when {
+                target.host.equals("vpn.mozilla.org", true) -> when (target.path) {
+                    "/api/v1/fpn/token" -> "/v1/guardian/pass"
+                    "/api/v1/fpn/activate" -> "/v1/guardian/activate"
+                    else -> null
+                }
+                target.host.equals("oauth.accounts.firefox.com", true) -> when (target.path) {
+                    "/v1/account/create" -> "/v1/mozilla/account/create"
+                    "/v1/account/login" -> "/v1/mozilla/account/login"
+                    "/v1/token" -> "/v1/mozilla/token"
+                    "/v1/oauth/token" -> "/v1/mozilla/oauth/token"
+                    "/v1/recovery_email/status" -> "/v1/mozilla/recovery-email/status"
+                    "/v1/recovery_email/verify_code" -> "/v1/mozilla/recovery-email/verify-code"
+                    "/v1/recovery_email/resend_code" -> "/v1/mozilla/recovery-email/resend-code"
+                    "/v1/session/verify_code" -> "/v1/mozilla/session/verify-code"
+                    else -> null
+                }
+                target.host.equals("firefox.settings.services.mozilla.com", true) &&
+                    target.path == "/v1/buckets/main/collections/vpn-serverlist/records" -> "/v1/mozilla/servers"
+                else -> null
+            }
+            path?.takeIf { allowed(it, method) }
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    fun forward(url: String, method: String, body: String?, headers: Map<String, String>, timeout: Int): FoxReply {
+        val path = relayPath(url, method) ?: throw IOException("relay request is not permitted")
+        val authorization = headers.entries.firstOrNull { it.key.equals("Authorization", true) }?.value
+        var lastReply: FoxReply? = null
+        var lastFailure: Exception? = null
+        for (endpoint in FoxRelayDiscovery.relays()) {
+            if (!FoxRelayDiscovery.isGoogle(endpoint) && path !in setOf("/v1/guardian/pass", "/v1/guardian/activate", "/v1/mozilla/servers")) continue
+            try {
+                val reply = request(endpoint, path, method, null, body, authorization, timeout)
+                if (!retry(reply.code)) return reply
+                lastReply = reply
+            } catch (error: Exception) {
+                lastFailure = error
+            }
+        }
+        lastReply?.let { return it }
+        throw lastFailure ?: IOException("no verified relay is configured")
     }
 
     fun call(path: String, method: String, access: String? = null, body: String? = null): FoxReply {
@@ -37,35 +94,108 @@ object FoxRelay {
         throw lastFailure ?: IOException("no verified relay is configured")
     }
 
-    fun once(endpoint: String, path: String, method: String, access: String? = null, body: String? = null): FoxReply {
+    fun once(endpoint: String, path: String, method: String, access: String? = null, body: String? = null): FoxReply =
+        request(endpoint, path, method, access, body, access?.let { "Bearer $it" }, 20000)
+
+    private fun request(
+        endpoint: String,
+        path: String,
+        method: String,
+        access: String?,
+        body: String?,
+        authorization: String?,
+        timeout: Int
+    ): FoxReply {
         if (!FoxRelayDiscovery.validUrl(endpoint) || !allowed(path, method)) throw IOException("relay request is not permitted")
         if (body != null && body.toByteArray(Charsets.UTF_8).size > 4096) throw IOException("relay request body is too large")
         testHandler?.let { return it(Request(endpoint, path, method, access, body)) }
-        val target = URL(endpoint.removeSuffix("/") + path)
+        val google = FoxRelayDiscovery.isGoogle(endpoint)
+        val target = URL(if (google) endpoint else endpoint.removeSuffix("/") + path)
+        val payload = if (google) {
+            JSONObject()
+                .put("v", 1)
+                .put("path", path)
+                .put("method", method)
+                .put("authorization", authorization ?: JSONObject.NULL)
+                .put("body", body ?: JSONObject.NULL)
+                .toString()
+        } else {
+            body
+        }
+        val connection = open(target, google, timeout)
+        connection.requestMethod = if (google) "POST" else method
+        connection.setRequestProperty("Accept", "application/json")
+        connection.setRequestProperty("Accept-Encoding", "identity")
+        connection.setRequestProperty("Cache-Control", "no-store")
+        if (!google && !authorization.isNullOrEmpty()) connection.setRequestProperty("Authorization", authorization)
+        if (payload != null) {
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.doOutput = true
+            connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+        }
+        return if (google) readGoogle(connection, timeout, 0) else readDirect(connection)
+    }
+
+    private fun open(target: URL, google: Boolean, timeout: Int): HttpURLConnection {
         val connection = FoxNet.open(target) as HttpsURLConnection
-        connection.sslSocketFactory = FoxPinnedTls.socketFactory()
-        connection.requestMethod = method
-        connection.connectTimeout = 20000
-        connection.readTimeout = 20000
+        if (!google) connection.sslSocketFactory = FoxPinnedTls.socketFactory()
+        connection.connectTimeout = timeout
+        connection.readTimeout = timeout
         connection.instanceFollowRedirects = false
         connection.useCaches = false
-        connection.setRequestProperty("Accept", "application/json")
-        connection.setRequestProperty("Cache-Control", "no-store")
-        if (!access.isNullOrEmpty()) connection.setRequestProperty("Authorization", "Bearer $access")
-        if (body != null) connection.setRequestProperty("Content-Type", "application/json")
-        try {
-            if (body != null) {
-                connection.doOutput = true
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+        return connection
+    }
+
+    private fun readGoogle(connection: HttpURLConnection, timeout: Int, redirects: Int): FoxReply {
+        val code = connection.responseCode
+        if (code in setOf(301, 302, 303, 307, 308)) {
+            if (redirects != 0) throw IOException("too many relay redirects")
+            val location = connection.getHeaderField("Location") ?: throw IOException("missing relay redirect")
+            connection.disconnect()
+            val uri = URI(location)
+            if (uri.scheme != "https" || uri.host != "script.googleusercontent.com" || uri.port != -1 || uri.userInfo != null || uri.fragment != null) {
+                throw IOException("relay redirect is not permitted")
             }
+            val redirected = open(uri.toURL(), true, timeout)
+            redirected.requestMethod = "GET"
+            redirected.setRequestProperty("Accept", "application/json")
+            redirected.setRequestProperty("Accept-Encoding", "identity")
+            redirected.setRequestProperty("Cache-Control", "no-store")
+            return readGoogle(redirected, timeout, 1)
+        }
+        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+        val text = stream?.let { String(readBounded(it), Charsets.UTF_8) } ?: ""
+        connection.disconnect()
+        if (code != 200) throw IOException("Apps Script relay HTTP $code")
+        return try {
+            val root = JSONObject(text)
+            val status = root.optInt("status", 0)
+            val body = root.optString("body")
+            val source = root.optJSONObject("headers") ?: JSONObject()
+            if (status !in 100..599 || root.length() != 3 || body.toByteArray(Charsets.UTF_8).size > MAX_RESPONSE_BYTES) {
+                throw IOException("invalid Apps Script response")
+            }
+            val headers = HashMap<String, String>()
+            for (name in listOf("Content-Type", "X-Quota-Unlimited", "X-Quota-Limit", "X-Quota-Remaining", "X-Quota-Reset")) {
+                val value = source.optString(name)
+                if (value.isNotEmpty() && value.length <= 1024) headers[name] = value
+            }
+            FoxReply(status, body, headers)
+        } catch (error: IOException) {
+            throw error
+        } catch (error: Exception) {
+            throw IOException("invalid Apps Script response", error)
+        }
+    }
+
+    private fun readDirect(connection: HttpURLConnection): FoxReply {
+        try {
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.let { String(readBounded(it), Charsets.UTF_8) } ?: ""
             val headers = HashMap<String, String>()
             for ((name, values) in connection.headerFields) {
-                if (name != null && values.isNotEmpty() && name.equals("Set-Cookie", true).not()) {
-                    headers[name] = values.joinToString(",")
-                }
+                if (name != null && values.isNotEmpty() && !name.equals("Set-Cookie", true)) headers[name] = values.joinToString(",")
             }
             return FoxReply(code, text, headers)
         } finally {

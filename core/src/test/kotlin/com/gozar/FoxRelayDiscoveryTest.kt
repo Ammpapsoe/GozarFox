@@ -15,6 +15,7 @@ class FoxRelayDiscoveryTest {
     private val public = FoxSign.publicFromSeed(seed)
     private val prefix = "GOZAR-RELAY-ENDPOINTS-V1\n".toByteArray(Charsets.UTF_8)
     private val document = "{\"version\":1,\"relays\":[\"https://gozar-guardian-a.gozarfox7.workers.dev\",\"https://gozar-guardian-b.gozarfox7.workers.dev\"]}"
+    private val appsScript = "https://script.google.com/macros/s/AKfycbwMXiE-wFBEaC_ZpZOode1yvgPG1xIHsrty-sM4czaFz6ZBabAWuCd9udiPW4PLH2GR/exec"
 
     private fun hex(bytes: ByteArray): String = bytes.joinToString("") { "%02x".format(it) }
     private fun signature(raw: String): String = hex(FoxSign.sign(seed, prefix + raw.toByteArray(Charsets.UTF_8)))
@@ -34,6 +35,9 @@ class FoxRelayDiscoveryTest {
     @Test fun endpointSchemaRejectsArbitraryDestinationsAndDuplicates() {
         val valid = FoxRelayDiscovery.parse(document)
         assertEquals(2, valid?.size)
+        assertTrue(FoxRelayDiscovery.validUrl(appsScript))
+        assertFalse(FoxRelayDiscovery.validUrl(appsScript.removeSuffix("/exec") + "/dev"))
+        assertFalse(FoxRelayDiscovery.validUrl("https://script.google.com/macros/s/short/exec"))
         val invalid = listOf(
             "http://gozar-guardian-a.gozarfox7.workers.dev",
             "https://example.org",
@@ -59,7 +63,7 @@ class FoxRelayDiscoveryTest {
         assertNull(FoxRelayDiscovery.decodeCache(raw, now - FoxRelayDiscovery.MAX_SKEW_MS - 1))
         assertNull(FoxRelayDiscovery.decodeCache(raw.replace("guardian-a", "guardian-x.evil"), now))
         assertTrue(FoxRelayDiscovery.restoreCache(raw, now))
-        assertEquals(relays, FoxRelayDiscovery.relays())
+        assertEquals(listOf(appsScript) + relays, FoxRelayDiscovery.relays())
     }
 
     @Test fun invalidRefreshKeepsThePreviousVerifiedList() {

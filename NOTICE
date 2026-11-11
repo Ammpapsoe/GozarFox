@@ -1,18 +1,6 @@
 Gozar notices
 ===============
 
-Guardian Project, Orbot and Tor-Android
----------------------------------------
-Thanks to The Guardian Project, Nathan Freitas, and the Orbot contributors.
-The Android Tor connection lifecycle adapts Orbot's TorService binding, start-request guard,
-control connection, shutdown, unbind, and binding-death handling.
-
-Copyright (c) 2009-2026, Nathan Freitas, The Guardian Project
-Orbot source: https://github.com/guardianproject/orbot-android
-Tor-Android source: https://github.com/guardianproject/tor-android
-License: BSD 3-Clause; see ORBOT-LICENSE.txt.
-The upstream names are used for attribution only and do not imply endorsement.
-
 Home interface and offline route canvas adaptation
 --------------------------------------------------
 Portions of the home-screen interface, including the morphing connection-control state model,
