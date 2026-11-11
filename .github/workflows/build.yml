@@ -329,7 +329,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ../scripts/test_windows_ui.ps1 -Bundle $runner.DirectoryName -Core "$env:RUNNER_TEMP/gozar-ui-test-core.exe" -TestLog "$env:RUNNER_TEMP/gozar-ui-test.log" -Screenshot "$env:RUNNER_TEMP/gozar-ui-simulated.png"
       - uses: actions/upload-artifact@v4
-        if: matrix.platform == 'windows' && !startsWith(github.ref, 'refs/tags/v')
+        if: ${{ matrix.platform == 'windows' && !startsWith(github.ref, 'refs/tags/v') && !(github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         with:
           name: gozar-windows-ui-simulated
           path: ${{ runner.temp }}/gozar-ui-simulated.png
