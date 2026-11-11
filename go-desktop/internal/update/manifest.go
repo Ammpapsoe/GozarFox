@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const KeyHex = "75ec9a23ecb173ddb9683e1c574515b3d4676453836804f327e86492896184e8"
+const KeyHex = "14cf2b6901d20a703c241674b8d2f1cdbb3fe87cba85529af82f004115575903"
 const maxManifestBytes = 65536
 const maxArtifactSize = 512 * 1024 * 1024
 
@@ -152,7 +152,7 @@ func trustedArtifactURL(raw, tag, name string) bool {
 		u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
 		return false
 	}
-	path := "/bardia049b-stack/Gozar/releases/download/" + tag + "/" + name
+	path := "/Ammpapsoe/GozarFox/releases/download/" + tag + "/" + name
 	return u.Path == path && u.EscapedPath() == path
 }
 

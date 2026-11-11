@@ -83,7 +83,7 @@ object FoxGeo {
 
     /** Ed25519 key that signs packaging/ir-domains.txt; separate from the update key. */
     const val LIST_KEY_HEX = "5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
-    private const val LIST_PATH = "/bardia049b-stack/Gozar/main/packaging/ir-domains.txt"
+    private const val LIST_PATH = "/Ammpapsoe/GozarFox/main/packaging/ir-domains.txt"
     private const val LIST_PREFIX = "GOZAR-IR-DOMAINS-V1\n"
 
     /** Verifies a detached signature (128 hex characters) over the exact list bytes. */

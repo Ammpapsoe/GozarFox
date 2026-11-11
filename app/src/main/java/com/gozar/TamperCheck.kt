@@ -11,7 +11,7 @@ import android.os.Build
  */
 object TamperCheck {
 
-    private const val PINNED = "bc9d3368f2671175f81be047a1ff72bca0cfc58e8b1b8f9f87e24694ba45f5b1"
+    private const val PINNED = "800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3"
 
     fun trusted(hashes: List<String>): Boolean = hashes.any { it.equals(PINNED, true) }
     internal fun trustedCurrentSigners(hashes: List<String>): Boolean = hashes.size == 1 && trusted(hashes)

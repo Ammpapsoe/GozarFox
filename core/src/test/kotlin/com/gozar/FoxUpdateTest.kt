@@ -127,7 +127,7 @@ class FoxUpdateTest {
         channelMin: String = "1.8.0",
         rollback: Boolean = false,
         issuedAt: Long = 1_793_000_000,
-        artifacts: String = """[{"name":"gozar-$version.apk","sha256":"${"a".repeat(64)}","size":1048576,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v$version/gozar-$version.apk"}]"""
+        artifacts: String = """[{"name":"gozar-$version.apk","sha256":"${"a".repeat(64)}","size":1048576,"url":"https://github.com/Ammpapsoe/GozarFox/releases/download/v$version/gozar-$version.apk"}]"""
     ): String = """{"version":"$version","channel_min":"$channelMin","rollback":$rollback,"issued_at":$issuedAt,"notes":"n","artifacts":$artifacts}"""
 
     private fun sign(body: String): String = base64(FoxSign.sign(seed1, body.toByteArray(Charsets.UTF_8)))
@@ -209,11 +209,11 @@ class FoxUpdateTest {
         assertTrue(expect(negativeDate, sign(negativeDate)) is FoxUpdate.Verdict.Reject)
         val emptyArtifacts = manifest(artifacts = "[]")
         assertTrue(expect(emptyArtifacts, sign(emptyArtifacts)) is FoxUpdate.Verdict.Reject)
-        val badSha = manifest(artifacts = """[{"name":"a.apk","sha256":"zz","size":10,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk"}]""")
+        val badSha = manifest(artifacts = """[{"name":"a.apk","sha256":"zz","size":10,"url":"https://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk"}]""")
         assertTrue(expect(badSha, sign(badSha)) is FoxUpdate.Verdict.Reject)
         val badUrl = manifest(artifacts = """[{"name":"a.apk","sha256":"${"b".repeat(64)}","size":10,"url":"https://evil.example/a.apk"}]""")
         assertTrue(expect(badUrl, sign(badUrl)) is FoxUpdate.Verdict.Reject)
-        val zeroSize = manifest(artifacts = """[{"name":"a.apk","sha256":"${"b".repeat(64)}","size":0,"url":"https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk"}]""")
+        val zeroSize = manifest(artifacts = """[{"name":"a.apk","sha256":"${"b".repeat(64)}","size":0,"url":"https://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk"}]""")
         assertTrue(expect(zeroSize, sign(zeroSize)) is FoxUpdate.Verdict.Reject)
     }
 
@@ -288,7 +288,7 @@ class FoxUpdateTest {
         val bytes = ByteArray(64) { (it * 7).toByte() }
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
-        val artifact = FoxUpdate.Artifact("a.apk", digest, 64, "https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk")
+        val artifact = FoxUpdate.Artifact("a.apk", digest, 64, "https://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk")
         assertTrue(FoxUpdate.verifyArtifact(bytes, artifact))
         assertFalse(FoxUpdate.verifyArtifact(bytes.copyOfRange(0, 63), artifact))
         assertFalse(FoxUpdate.verifyArtifact(bytes.copyOf().also { it[0] = (it[0].toInt() xor 1).toByte() }, artifact))
@@ -310,16 +310,16 @@ class FoxUpdateTest {
 
     @Test
     fun onlyProjectReleaseDownloadUrlsAreTrusted() {
-        assertTrue(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v1.12.0/a.apk"))
-        assertTrue(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar1/releases/download/v1.12.0/a.apk"))
+        assertTrue(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v1.12.0/a.apk"))
+        assertTrue(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v1.12.0/a.apk"))
         assertFalse(FoxUpdate.trusted("https://github.com/someone-else/Gozar/releases/download/v/a.apk"))
-        assertFalse(FoxUpdate.trusted("https://raw.githubusercontent.com/bardia049b-stack/Gozar/main/a.apk"))
-        assertFalse(FoxUpdate.trusted("http://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk"))
-        assertFalse(FoxUpdate.trusted("https://github.com@evil.example/bardia049b-stack/Gozar/releases/download/v/a.apk"))
-        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/../a.apk"))
-        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/%2e%2e"))
-        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk?target=other"))
-        assertFalse(FoxUpdate.trusted("https://github.com/bardia049b-stack/Gozar/releases/download/v/a.apk#other"))
+        assertFalse(FoxUpdate.trusted("https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/a.apk"))
+        assertFalse(FoxUpdate.trusted("http://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk"))
+        assertFalse(FoxUpdate.trusted("https://github.com@evil.example/Ammpapsoe/GozarFox/releases/download/v/a.apk"))
+        assertFalse(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v/../a.apk"))
+        assertFalse(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v/%2e%2e"))
+        assertFalse(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk?target=other"))
+        assertFalse(FoxUpdate.trusted("https://github.com/Ammpapsoe/GozarFox/releases/download/v/a.apk#other"))
         assertFalse(FoxUpdate.trusted("not a url"))
     }
 

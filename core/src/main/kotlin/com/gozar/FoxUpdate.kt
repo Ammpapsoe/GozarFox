@@ -23,12 +23,12 @@ import org.json.JSONObject
 object FoxUpdate {
 
     /** Pinned Ed25519 release public key (hex). The private half never ships. */
-    const val KEY_HEX = "75ec9a23ecb173ddb9683e1c574515b3d4676453836804f327e86492896184e8"
+    const val KEY_HEX = "14cf2b6901d20a703c241674b8d2f1cdbb3fe87cba85529af82f004115575903"
 
     private const val MAX_MANIFEST_BYTES = 65_536
     private const val MAX_CLOCK_SKEW_SECONDS = 24L * 60 * 60
-    private const val OWNER = "bardia049b-stack"
-    private val REPOSITORIES = listOf("Gozar", "Gozar1")
+    private const val OWNER = "Ammpapsoe"
+    private val REPOSITORIES = listOf("GozarFox")
     private val VERSION = Regex("^\\d{1,4}(\\.\\d{1,4}){1,3}(-[0-9A-Za-z.]{1,16})?$")
     private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
 

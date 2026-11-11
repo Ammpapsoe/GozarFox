@@ -19,7 +19,7 @@ func fixture() Manifest {
 		Artifacts: []Artifact{{
 			ID: "linux-amd64-deb", OS: "linux", Arch: "amd64", Kind: "deb",
 			Name: "Gozar-Linux-amd64.deb", SHA256: strings.Repeat("a", 64), Size: 100,
-			URL: "https://github.com/bardia049b-stack/Gozar/releases/download/v1.11.1/Gozar-Linux-amd64.deb",
+			URL: "https://github.com/Ammpapsoe/GozarFox/releases/download/v1.11.1/Gozar-Linux-amd64.deb",
 		}},
 	}
 }

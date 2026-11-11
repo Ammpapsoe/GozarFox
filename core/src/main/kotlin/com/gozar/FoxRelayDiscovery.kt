@@ -10,7 +10,7 @@ object FoxRelayDiscovery {
     const val MAX_SKEW_MS = 5L * 60 * 1000
     const val MAX_DOCUMENT_BYTES = 16 * 1024
     private const val PREFIX = "GOZAR-RELAY-ENDPOINTS-V1\n"
-    private const val DOCUMENT_URL = "https://raw.githubusercontent.com/bardia049b-stack/Gozar/main/packaging/relay-endpoints.json"
+    private const val DOCUMENT_URL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json"
     private const val SIGNATURE_URL = "$DOCUMENT_URL.sig"
     private val defaults = listOf(
         "https://gozar-guardian-a.gozarfox7.workers.dev",

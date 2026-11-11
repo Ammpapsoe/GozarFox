@@ -1376,7 +1376,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           words.about,
           'Gozar ${_state.version} · AGPL-3.0',
           () => unawaited(
-              _openPage('https://github.com/bardia049b-stack/Gozar1'))),
+              _openPage('https://github.com/Ammpapsoe/GozarFox'))),
       _settingTile(Icons.favorite_outline, words.donate, 'TON',
           () => unawaited(_showDonation())),
     ]);

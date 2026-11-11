@@ -12,7 +12,7 @@ import (
 )
 
 const geoListURL = "raw.githubusercontent.com"
-const geoListPath = "/bardia049b-stack/Gozar/main/packaging/ir-domains.txt"
+const geoListPath = "/Ammpapsoe/GozarFox/main/packaging/ir-domains.txt"
 
 const maxGeoListBytes = 1_100_000
 const maxGeoSignatureBytes = 512

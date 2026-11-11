@@ -10,7 +10,7 @@ import org.robolectric.RuntimeEnvironment
 @RunWith(RobolectricTestRunner::class)
 class TamperCheckTest {
 
-    private val official = "bc9d3368f2671175f81be047a1ff72bca0cfc58e8b1b8f9f87e24694ba45f5b1"
+    private val official = "800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3"
 
     @Test
     fun onlyTheOfficialSigningDigestIsTrusted() {

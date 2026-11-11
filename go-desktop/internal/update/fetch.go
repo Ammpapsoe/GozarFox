@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const latestURL = "https://api.github.com/repos/bardia049b-stack/Gozar/releases/latest"
+const latestURL = "https://api.github.com/repos/Ammpapsoe/GozarFox/releases/latest"
 const releaseJSONLimit = 1 << 20
 
 var updateHTTPClient = &http.Client{

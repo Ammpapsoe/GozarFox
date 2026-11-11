@@ -9,7 +9,7 @@ ARTIFACT_DIR="${2:?missing artifact dir}"
 NOTES="${3:-}"
 TAG="${GOZAR_RELEASE_TAG:?set GOZAR_RELEASE_TAG to the actual GitHub release tag}"
 KEY="${GOZAR_RELEASE_KEY:?set GOZAR_RELEASE_KEY to the release private key pem}"
-EXPECTED_PUB="75ec9a23ecb173ddb9683e1c574515b3d4676453836804f327e86492896184e8"
+EXPECTED_PUB="14cf2b6901d20a703c241674b8d2f1cdbb3fe87cba85529af82f004115575903"
 ACTUAL_DER=$(openssl pkey -in "$KEY" -pubout -outform DER | od -An -tx1 | tr -d ' \n')
 if [ "$ACTUAL_DER" != "302a300506032b6570032100$EXPECTED_PUB" ]; then
     echo 'refusing to sign: the key is not the pinned Ed25519 release key' >&2

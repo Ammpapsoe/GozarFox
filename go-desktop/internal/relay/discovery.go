@@ -21,7 +21,7 @@ const CacheTTL = 24 * time.Hour
 const MaxDocumentBytes = 16 * 1024
 
 const signaturePrefix = "GOZAR-RELAY-ENDPOINTS-V1\n"
-const documentURL = "https://raw.githubusercontent.com/bardia049b-stack/Gozar/main/packaging/relay-endpoints.json"
+const documentURL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json"
 const signatureURL = documentURL + ".sig"
 
 var state = struct {

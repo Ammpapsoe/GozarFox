@@ -17,7 +17,7 @@ if [[ "$TAG" != "v$VERSION" && "$TAG" != "v$VERSION-desktop" ]]; then
 fi
 
 # SubjectPublicKeyInfo for Ed25519 is exactly this prefix followed by 32 bytes.
-EXPECTED_PUB="75ec9a23ecb173ddb9683e1c574515b3d4676453836804f327e86492896184e8"
+EXPECTED_PUB="14cf2b6901d20a703c241674b8d2f1cdbb3fe87cba85529af82f004115575903"
 ACTUAL_DER=$(openssl pkey -in "$KEY" -pubout -outform DER | od -An -tx1 | tr -d ' \n')
 if [ "$ACTUAL_DER" != "302a300506032b6570032100$EXPECTED_PUB" ]; then
     echo 'refusing to sign: the key is not the Ed25519 key pinned in FoxUpdate.KEY_HEX' >&2

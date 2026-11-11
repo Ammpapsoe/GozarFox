@@ -27,7 +27,7 @@ func testClient(responses map[string][]byte) *http.Client {
 }
 
 func releaseFixture(tag string) releaseMetadata {
-	base := "https://github.com/bardia049b-stack/Gozar/releases/download/" + tag + "/"
+	base := "https://github.com/Ammpapsoe/GozarFox/releases/download/" + tag + "/"
 	return releaseMetadata{Tag: tag, Assets: []releaseAsset{
 		{Name: "desktop-update.json", URL: base + "desktop-update.json"},
 		{Name: "desktop-update.json.sig", URL: base + "desktop-update.json.sig"},

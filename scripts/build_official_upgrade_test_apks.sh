@@ -50,7 +50,7 @@ if [ "${#candidates[@]}" -ne 1 ]; then
   exit 1
 fi
 cp "${candidates[0]}" "$DEST/official-candidate.apk"
-expected=bc9d3368f2671175f81be047a1ff72bca0cfc58e8b1b8f9f87e24694ba45f5b1
+expected=800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3
 for apk in "$DEST/official-stable.apk" "$DEST/official-previous.apk" "$DEST/official-corrected.apk" "$DEST/official-candidate.apk"; do
   info=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk")
   printf '%s\n' "$info" | grep -Fx 'Number of signers: 1' >/dev/null

@@ -57,7 +57,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
         run: |
           set -e
-          expected=bc9d3368f2671175f81be047a1ff72bca0cfc58e8b1b8f9f87e24694ba45f5b1
+          expected=800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3
           for apk in app/build/outputs/apk/release/*.apk; do
             test -s "$apk"
             info=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk")
@@ -612,7 +612,7 @@ jobs:
           printf '%s\n' "$GPG_PRIVATE_KEY" > "$RUNNER_TEMP/gpg.asc"
           gpg --batch --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --import "$RUNNER_TEMP/gpg.asc"
           FPR=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
-          if [ "$FPR" != '4C83608102387A6EFFEB12E181A19769C40808F7' ]; then
+          if [ "$FPR" != 'E20479907B23A61FC7BD252EC5F49406E92B2564' ]; then
             echo "::error::OpenPGP signing key does not match the published Gozar key"
             exit 1
           fi

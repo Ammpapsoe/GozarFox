@@ -28,7 +28,7 @@ class FoxLoginSocksTest {
         assertTrue(!FoxNet.loginAllowed("https://oauth.accounts.firefox.com.evil.invalid/v1/account/login", "POST"))
         assertTrue(!FoxNet.loginAllowed("http://vpn.mozilla.org/api/v1/fpn/token", "GET"))
         assertTrue(!FoxNet.loginAllowed("https://example.invalid/", "GET"))
-        assertTrue(!FoxNet.loginAllowed("https://raw.githubusercontent.com/bardia049b-stack/Gozar/main/packaging/relay-endpoints.json", "GET"))
+        assertTrue(!FoxNet.loginAllowed("https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json", "GET"))
     }
 
     @Test
