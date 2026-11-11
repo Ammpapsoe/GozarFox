@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 output="${1:?usage: build-iptproxy-android.sh <output.aar>}"
+case "$output" in
+    /*) ;;
+    *) output="$PWD/$output" ;;
+esac
 source_commit="5b33fa42bed1d7b16ee0d61402178a35822eb115"
 gomobile_version="v0.0.0-20261011034528-197770444867"
 ndk_version="28.0.13004108"
