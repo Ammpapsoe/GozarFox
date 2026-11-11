@@ -101,7 +101,8 @@ class FoxAccountInstrumentedTest {
               };
               const submit = e => {
                 const form = e.closest('form') || document;
-                const button = [...form.querySelectorAll('button[type=submit],button')].find(visible);
+                const button = [...form.querySelectorAll('button[type=submit]')].find(visible) ||
+                  [...form.querySelectorAll('button')].find(visible);
                 if (button) setTimeout(() => button.click(), 100);
               };
               const passwords = [...document.querySelectorAll('input[type=password]')].filter(visible);
@@ -110,14 +111,17 @@ class FoxAccountInstrumentedTest {
                 submit(passwords[0]);
                 return 'PASSWORD_SUBMITTED';
               }
-              const email = [...document.querySelectorAll('input[type=email],input[name=email],input[name=login],input[autocomplete=username],#email')].find(visible);
+              const code = [...document.querySelectorAll('input[name=code],input[inputmode=numeric],input[autocomplete=one-time-code]')].find(visible);
+              if (code) return 'CODE_REQUIRED';
+              const email = [...document.querySelectorAll('input[type=email],input[name=email],input[name=login],input[autocomplete=username],#email')].find(visible) ||
+                [...document.querySelectorAll('input')].find(e => visible(e) &&
+                  !['hidden','password','checkbox','radio','submit','button'].includes(e.type) &&
+                  e.inputMode !== 'numeric' && e.autocomplete !== 'one-time-code');
               if (email) {
                 fill(email, ${JSONObject.quote(argument("email"))});
                 submit(email);
                 return 'EMAIL_SUBMITTED';
               }
-              const code = [...document.querySelectorAll('input[name=code],input[inputmode=numeric],input[autocomplete=one-time-code]')].find(visible);
-              if (code) return 'CODE_REQUIRED';
               const frame = [...document.querySelectorAll('iframe')].find(e => visible(e) && /captcha|challenge/i.test(e.src + ' ' + e.title));
               if (frame) return 'CAPTCHA_REQUIRED';
               const text = document.body ? document.body.innerText : '';
