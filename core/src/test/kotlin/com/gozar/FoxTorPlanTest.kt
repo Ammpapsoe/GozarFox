@@ -43,17 +43,18 @@ class FoxTorPlanTest {
 
     @Test
     fun bridgeIsAppliedOnlyThroughControlAfterOfflineStartup() {
-        val activation = FoxTorPlan.activate(FoxTorPlan.Mode.OBFS4, bridge)
-        assertTrue(activation.startsWith("SETCONF UseBridges=1 Bridge=\""))
-        assertTrue(activation.endsWith(" DisableNetwork=0"))
-        assertTrue(activation.contains(bridge))
-        assertEquals("SETCONF DisableNetwork=0", FoxTorPlan.activate(FoxTorPlan.Mode.DIRECT))
+        val configuration = FoxTorPlan.configure(FoxTorPlan.Mode.OBFS4, bridge, 23456)
+        assertTrue(configuration.startsWith("SETCONF ClientTransportPlugin=\"obfs4 socks5 127.0.0.1:23456\" UseBridges=1 Bridge=\""))
+        assertTrue(configuration.contains(bridge))
+        assertFalse(configuration.contains("DisableNetwork=0"))
+        assertEquals("SETCONF UseBridges=0", FoxTorPlan.configure(FoxTorPlan.Mode.DIRECT, null, 0))
+        assertEquals("SETCONF DisableNetwork=0", FoxTorPlan.activate())
     }
 
     @Test
     fun officialSnowflakeAndMeekParametersAreComplete() {
-        val snowflake = FoxTorPlan.activate(FoxTorPlan.Mode.SNOWFLAKE)
-        val meek = FoxTorPlan.activate(FoxTorPlan.Mode.MEEK)
+        val snowflake = FoxTorPlan.configure(FoxTorPlan.Mode.SNOWFLAKE, null, 23456)
+        val meek = FoxTorPlan.configure(FoxTorPlan.Mode.MEEK, null, 23456)
         assertTrue(snowflake.contains("url=https://1098762253.rsc.cdn77.org/"))
         assertTrue(snowflake.contains("fronts=app.datapacket.com,www.datapacket.com"))
         assertTrue(snowflake.contains("fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72"))
@@ -97,6 +98,6 @@ class FoxTorPlanTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun dynamicBridgeRejectsConfigurationInjection() {
-        FoxTorPlan.activate(FoxTorPlan.Mode.OBFS4, bridge + "\nSocksPort 0.0.0.0:9050")
+        FoxTorPlan.configure(FoxTorPlan.Mode.OBFS4, bridge + "\nSocksPort 0.0.0.0:9050", 23456)
     }
 }

@@ -57,8 +57,9 @@ object FoxTorPlan {
         return lines.joinToString("\n", postfix = "\n")
     }
 
-    fun activate(mode: Mode, bridge: String? = null): String {
-        if (mode == Mode.DIRECT) return "SETCONF DisableNetwork=0"
+    fun configure(mode: Mode, bridge: String? = null, transportPort: Int): String {
+        if (mode == Mode.DIRECT) return "SETCONF UseBridges=0"
+        require(transportPort in 1..65535) { "invalid transport port" }
         val line = when (mode) {
             Mode.OBFS4, Mode.WEBTUNNEL -> FoxBridge.parse(bridge.orEmpty())?.takeIf { it.mode == mode }?.line
             Mode.SNOWFLAKE -> SNOWFLAKE_BRIDGE
@@ -66,8 +67,11 @@ object FoxTorPlan {
             Mode.DIRECT -> null
         } ?: throw IllegalArgumentException("invalid bridge")
         require(line.none { it == '\n' || it == '\r' || it == '"' || it == '\\' })
-        return "SETCONF UseBridges=1 Bridge=\"$line\" DisableNetwork=0"
+        val transport = transportName(mode) ?: throw IllegalArgumentException("invalid transport")
+        return "SETCONF ClientTransportPlugin=\"$transport socks5 127.0.0.1:$transportPort\" UseBridges=1 Bridge=\"$line\""
     }
+
+    fun activate(): String = "SETCONF DisableNetwork=0"
 
     fun fastFailure(reply: String?): Boolean {
         if (reply == null) return false

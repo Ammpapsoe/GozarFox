@@ -216,6 +216,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
         @Volatile private var networkEnabled = false
         @Volatile private var bridgeConfigured = false
         @Volatile private var transportConfigured = false
+        private var transportPort = 0
         override var port: Int = 0
             private set
 
@@ -228,7 +229,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             val state = File(app.cacheDir, "gozar-login-transport")
             if (!state.mkdirs() && !state.isDirectory) throw FoxError("Cannot create Tor state directory")
             transport = FoxTorPlan.transportName(mode)
-            val transportPort = startTransport(state)
+            transportPort = startTransport(state)
             val torrc = TorService.getTorrc(app)
             val directory = torrc.parentFile ?: throw FoxError("Tor configuration directory is unavailable")
             if (!directory.mkdirs() && !directory.isDirectory) throw FoxError("Cannot recreate Tor configuration directory")
@@ -309,8 +310,8 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 RemoteControl(socket).also {
                     it.command("AUTHENTICATE")
                     diagnosticStage = "activate-network"
-                    it.command(FoxTorPlan.activate(mode, bridge))
-                    it.command("SETCONF DisableNetwork=0")
+                    it.command(FoxTorPlan.configure(mode, bridge, transportPort))
+                    it.command(FoxTorPlan.activate())
                     it.command("SIGNAL ACTIVE")
                     val configured = it.command("GETCONF DisableNetwork UseBridges Bridge ClientTransportPlugin")
                     networkEnabled = configured.lineSequence().any { line -> line.endsWith("DisableNetwork=0") }
