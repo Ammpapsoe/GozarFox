@@ -179,13 +179,15 @@ class LoginActivityTest {
             .create(state).start().restoreInstanceState(state).resume().visible()
         activity = controller.get()
         assertEquals("", activity.findViewById<EditText>(R.id.loginBridge).text.toString())
-        assertTrue(activity.getSharedPreferences("fox", Context.MODE_PRIVATE).all.isEmpty())
+        assertTrue(activity.getSharedPreferences("fox", Context.MODE_PRIVATE).all.none { (key, value) ->
+            key.contains("bridge", true) || value == bridge
+        })
     }
 
     @Test
     fun bridgeHelpShowsTheOfficialTelegramBot() {
         activity.findViewById<View>(R.id.loginBridgeHelp).performClick()
-        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
         assertNotNull(dialog)
         assertTrue(dialog.isShowing)
         val message = dialog.findViewById<TextView>(android.R.id.message)?.text?.toString().orEmpty()

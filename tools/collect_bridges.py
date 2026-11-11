@@ -121,7 +121,7 @@ def collect(fetch=download, now=None):
                 if not isinstance(raw, str):
                     continue
                 line = canonical_bridge(raw)
-                if line:
+                if line and line.startswith(transport + " "):
                     official[transport].add(line)
                     accepted += 1
         if accepted:
@@ -137,7 +137,7 @@ def collect(fetch=download, now=None):
                 text = fetch(template.format(transport)).decode("utf-8")
                 for raw in text.splitlines()[:5000]:
                     line = canonical_bridge(raw)
-                    if line:
+                    if line and line.startswith(transport + " "):
                         community[transport].add(line)
                         accepted += 1
             except Exception as error:

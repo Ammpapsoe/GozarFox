@@ -39,8 +39,8 @@ class BridgeCollectorTest(unittest.TestCase):
         self.assertEqual([OBFS4, WEBTUNNEL], document["bridges"])
         self.assertEqual(36 * 3600, document["expires_at"] - document["issued_at"])
         self.assertIn("tor-moat-builtin", document["sources"])
-        self.assertEqual(2, counts["community-delta-kronecker"])
-        self.assertEqual(2, counts["community-onionhop"])
+        self.assertEqual(1, counts["community-delta-kronecker"])
+        self.assertEqual(1, counts["community-onionhop"])
 
     def test_official_outage_does_not_invent_community_trust(self):
         def fetch(url):

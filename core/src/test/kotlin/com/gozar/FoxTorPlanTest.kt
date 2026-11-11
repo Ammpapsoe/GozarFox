@@ -58,7 +58,7 @@ class FoxTorPlanTest {
         assertTrue(snowflake.contains("fronts=app.datapacket.com,www.datapacket.com"))
         assertTrue(snowflake.contains("fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72"))
         assertTrue(snowflake.contains("ice=stun:"))
-        assertTrue(meek.contains("Bridge meek_lite 192.0.2.20:80"))
+        assertTrue(meek.contains("Bridge=\"meek_lite 192.0.2.20:80"))
         assertTrue(meek.contains("url=https://1603026938.rsc.cdn77.org"))
         assertTrue(meek.contains("front=www.phpmyadmin.net"))
         assertTrue(meek.contains("utls=HelloRandomizedALPN"))

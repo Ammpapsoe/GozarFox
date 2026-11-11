@@ -10,7 +10,7 @@ python3 - "$work/public.der" "$work/signature.raw" "$signature" <<'PY'
 import base64
 import sys
 public = bytes.fromhex("302a300506032b6570032100") + bytes.fromhex("5560cebe849c94040a1a7af57232a64981f5884bd6ef058e1170d0a92d74319d")
-signature = base64.b64decode(open(sys.argv[3], "rb").read(), validate=True)
+signature = base64.b64decode(open(sys.argv[3], "rb").read().strip(), validate=True)
 if len(signature) != 64:
     raise SystemExit("invalid bridge signature length")
 open(sys.argv[1], "wb").write(public)

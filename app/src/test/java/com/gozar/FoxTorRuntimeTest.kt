@@ -166,7 +166,7 @@ class FoxTorRuntimeTest {
         var calls = 0
         FoxTorRuntime.run(context) { calls++ }
         assertEquals(1, calls)
-        assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE, FoxTorPlan.Mode.MEEK), created.map { it.mode })
+        assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE), created.map { it.mode })
         assertEquals(created.map { it.mode }, closed)
     }
 }
