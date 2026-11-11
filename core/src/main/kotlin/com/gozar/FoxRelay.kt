@@ -62,12 +62,13 @@ object FoxRelay {
     fun forward(url: String, method: String, body: String?, headers: Map<String, String>, timeout: Int): FoxReply {
         val path = relayPath(url, method) ?: throw IOException("relay request is not permitted")
         val authorization = headers.entries.firstOrNull { it.key.equals("Authorization", true) }?.value
+        val access = authorization?.takeIf { it.startsWith("Bearer ") }?.substring(7)
         var lastReply: FoxReply? = null
         var lastFailure: Exception? = null
         for (endpoint in FoxRelayDiscovery.relays()) {
             if (!FoxRelayDiscovery.isGoogle(endpoint) && path !in setOf("/v1/guardian/pass", "/v1/guardian/activate", "/v1/mozilla/servers")) continue
             try {
-                val reply = request(endpoint, path, method, null, body, authorization, timeout)
+                val reply = request(endpoint, path, method, access, body, authorization, timeout)
                 if (!retry(reply.code)) return reply
                 lastReply = reply
             } catch (error: Exception) {

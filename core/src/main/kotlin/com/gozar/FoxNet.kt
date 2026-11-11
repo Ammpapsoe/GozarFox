@@ -87,7 +87,10 @@ object FoxNet {
             throw java.io.IOException("Control tunnel destination is not permitted")
         }
         if (port == null && FoxRelay.relayPath(url, method) != null) {
-            return FoxRelay.forward(url, method, body, headers, timeout)
+            try {
+                return FoxRelay.forward(url, method, body, headers, timeout)
+            } catch (_: IOException) {
+            }
         }
         var reply = once(url, method, body, headers, timeout)
         if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {

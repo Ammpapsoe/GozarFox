@@ -185,14 +185,19 @@ class FoxControlTest {
             Answer(200, "{\"uid\":\"synthetic\",\"sessionToken\":\"synthetic\",\"verified\":false}")
         }.use { proxy ->
             useDefaultProxy(proxy.port)
-            assertTrue(FoxApi.register("person@example.invalid", "synthetic-password").needsCode)
+            val previous = FoxRelayDiscovery.installForTest(emptyList())
+            try {
+                assertTrue(FoxApi.register("person@example.invalid", "synthetic-password").needsCode)
+            } finally {
+                FoxRelayDiscovery.installForTest(previous)
+            }
             assertEquals(1, proxy.connects.size)
             assertTrue(proxy.connects.single().startsWith("CONNECT oauth.accounts.firefox.com:443 "))
             assertTrue(proxy.problems.isEmpty())
         }
     }
 
-    @Test fun direct451UsesTheNextVerifiedRelayWithoutReturningDirectly() {
+    @Test fun relay451UsesTheNextVerifiedRelayWithoutFallingBackDirectly() {
         val endpoints = listOf(
             "https://gozar-guardian-a.gozarfox7.workers.dev",
             "https://gozar-guardian-b.gozarfox7.workers.dev"
@@ -210,7 +215,7 @@ class FoxControlTest {
                 val pass = FoxApi.existingPass("synthetic-access")
                 assertEquals("relay-pass", pass.token)
                 assertEquals(50L, pass.limit)
-                assertEquals(1, direct.requests.size)
+                assertEquals(0, direct.requests.size)
             }
         } finally {
             restore()
@@ -237,7 +242,7 @@ class FoxControlTest {
             LocalProxy { _, _, _ -> Answer(451, "{}") }.use { direct ->
                 useDefaultProxy(direct.port)
                 assertEquals("first-pass", FoxApi.pass("first-login-access").token)
-                assertEquals(1, direct.requests.size)
+                assertEquals(0, direct.requests.size)
             }
         } finally {
             restore()
@@ -247,7 +252,7 @@ class FoxControlTest {
         assertTrue(requests.all { it.access == "first-login-access" })
     }
 
-    @Test fun serverListUsesRelayFallbackAfter451() {
+    @Test fun serverListUsesPrimaryRelay() {
         val endpoint = "https://gozar-guardian-a.gozarfox7.workers.dev"
         val previous = FoxRelayDiscovery.installForTest(listOf(endpoint))
         val list = "{\"data\":[{\"code\":\"NL\",\"name\":\"Netherlands\",\"cities\":[{\"name\":\"Amsterdam\",\"servers\":[{\"hostname\":\"nl.mozilla.example\",\"port\":2499}]}]}]}"
@@ -260,7 +265,7 @@ class FoxControlTest {
             LocalProxy { _, _, _ -> Answer(451, "{}") }.use { direct ->
                 useDefaultProxy(direct.port)
                 assertEquals("nl.mozilla.example", FoxApi.servers().single().host)
-                assertEquals(1, direct.requests.size)
+                assertEquals(0, direct.requests.size)
             }
         } finally {
             restore()
