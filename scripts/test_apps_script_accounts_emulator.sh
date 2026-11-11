@@ -11,7 +11,7 @@ for value in "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" "$GOZAR_SIGNUP_EMAIL" 
   printf '::add-mask::%s\n' "$value"
 done
 app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
-test_apk=app/build/outputs/apk/androidTest/debug/app-x86_64-debug-androidTest.apk
+test_apk=app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 test -s "$app_apk"
 test -s "$test_apk"
 adb wait-for-device
