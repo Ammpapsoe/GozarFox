@@ -84,7 +84,7 @@ object FoxBridge {
         val endpoint = endpoint(parts[1]) ?: return null
         val fingerprint = fingerprint(parts[2]) ?: return null
         val certificate = parts[3].removePrefix("cert=")
-        if (parts[3] == certificate || !Regex("[A-Za-z0-9+/]{86}(?:==)?").matches(certificate)) return null
+        if (parts[3] == certificate || !Regex("[A-Za-z0-9+/]{70}(?:==)?").matches(certificate)) return null
         val mode = parts[4].removePrefix("iat-mode=")
         if (parts[4] == mode || mode !in setOf("0", "1", "2")) return null
         val line = "obfs4 $endpoint $fingerprint cert=$certificate iat-mode=$mode"

@@ -28,7 +28,7 @@ class FoxTorInstrumentedTest {
         val failures = mutableListOf<String>()
         var current = FoxTorPlan.Mode.OBFS4
         var port = 0
-        val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+        val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(70)} iat-mode=0"
         val webtunnel = "webtunnel 1.1.1.1:443 ${"B".repeat(40)} url=https://bridge.example.com/a1B2 ver=0.0.1"
         try {
             FoxBridgeStore.manual = ""

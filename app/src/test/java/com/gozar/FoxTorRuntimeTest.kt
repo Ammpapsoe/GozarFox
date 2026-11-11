@@ -30,7 +30,7 @@ class FoxTorRuntimeTest {
     private lateinit var originalAutomatic: (Context) -> List<FoxBridge.Candidate>
     private val created = mutableListOf<Plan>()
     private val closed = mutableListOf<FoxTorPlan.Mode>()
-    private val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+    private val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(70)} iat-mode=0"
     private val webtunnel = "webtunnel 1.1.1.1:443 ${"B".repeat(40)} url=https://bridge.example.com/a1B2 ver=0.0.1"
 
     private inner class FakeAttempt(private val mode: FoxTorPlan.Mode, private val socksPort: Int, private val failing: Set<FoxTorPlan.Mode>) : FoxTorAttempt {

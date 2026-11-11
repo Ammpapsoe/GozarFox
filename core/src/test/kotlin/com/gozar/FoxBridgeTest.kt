@@ -9,7 +9,7 @@ import org.junit.Test
 
 class FoxBridgeTest {
     private val fingerprint = "A".repeat(40)
-    private val certificate = "A".repeat(86)
+    private val certificate = "A".repeat(70)
     private val obfs4 = "obfs4 8.8.8.8:443 $fingerprint cert=$certificate iat-mode=0"
     private val webtunnel = "webtunnel 1.1.1.1:443 ${"B".repeat(40)} url=https://bridge.example.com/a1B2 ver=0.0.1"
     private val seed = ByteArray(32) { it.toByte() }

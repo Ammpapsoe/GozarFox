@@ -14,7 +14,7 @@ COMMUNITIES = {
     "community-delta-kronecker": "https://raw.githubusercontent.com/Delta-Kronecker/Tor-Bridges-Collector/main/bridge/{}_tested.txt",
     "community-onionhop": "https://raw.githubusercontent.com/center2055/OnionHop-Bridges-Collector/main/bridge/{}_tested.txt",
 }
-CERT = re.compile(r"[A-Za-z0-9+/]{86}(?:==)?\Z")
+CERT = re.compile(r"[A-Za-z0-9+/]{70}(?:==)?\Z")
 FINGERPRINT = re.compile(r"[0-9A-Fa-f]{40}\Z")
 VERSION = re.compile(r"[A-Za-z0-9.+_-]{1,16}\Z")
 DOMAIN = re.compile(r"[a-z0-9-]+\Z")

@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FoxTorPlanTest {
-    private val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+    private val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(70)} iat-mode=0"
 
     @Test
     fun escalationOrderIsObfs4WebTunnelSnowflakeMeek() {

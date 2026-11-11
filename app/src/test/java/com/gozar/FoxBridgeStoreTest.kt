@@ -18,7 +18,7 @@ class FoxBridgeStoreTest {
     private lateinit var context: Context
     private lateinit var originalFetcher: (String, Int) -> ByteArray?
     private lateinit var originalVerifier: (String, String) -> List<FoxBridge.Candidate>?
-    private val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+    private val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(70)} iat-mode=0"
 
     @Before
     fun setUp() {

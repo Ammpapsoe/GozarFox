@@ -6,7 +6,7 @@ from tools.collect_bridges import MOAT, canonical_bridge, collect
 
 
 FINGERPRINT = "A" * 40
-CERTIFICATE = "A" * 86
+CERTIFICATE = "A" * 70
 OBFS4 = f"obfs4 8.8.8.8:443 {FINGERPRINT} cert={CERTIFICATE} iat-mode=0"
 WEBTUNNEL = f"webtunnel 1.1.1.1:443 {'B' * 40} url=https://bridge.example.com/a1B2 ver=0.0.1"
 

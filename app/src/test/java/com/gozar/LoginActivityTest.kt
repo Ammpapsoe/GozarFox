@@ -171,7 +171,7 @@ class LoginActivityTest {
 
     @Test
     fun manualBridgeIsNotSavedInViewStateOrPreferences() {
-        val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+        val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(70)} iat-mode=0"
         activity.findViewById<EditText>(R.id.loginBridge).setText(bridge)
         val state = Bundle()
         controller.saveInstanceState(state).pause().stop().destroy()
