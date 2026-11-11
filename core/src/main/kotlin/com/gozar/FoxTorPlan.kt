@@ -50,11 +50,9 @@ object FoxTorPlan {
         )
         val transport = transportName(mode)
         if (transport != null) {
-            lines += "UseBridges 1"
             lines += "ClientTransportPlugin $transport socks5 127.0.0.1:$transportPort"
-        } else {
-            lines += "UseBridges 0"
         }
+        lines += "UseBridges 0"
         return lines.joinToString("\n", postfix = "\n")
     }
 

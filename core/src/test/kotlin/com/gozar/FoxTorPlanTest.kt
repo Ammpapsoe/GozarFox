@@ -33,7 +33,7 @@ class FoxTorPlanTest {
         for (mode in FoxTorPlan.order) {
             val config = FoxTorPlan.torrc(mode, 23456)
             val transport = FoxTorPlan.transportName(mode)
-            assertTrue(config.contains("UseBridges 1"))
+            assertTrue(config.contains("UseBridges 0"))
             assertTrue(config.contains("DisableNetwork 1"))
             assertTrue(config.contains("ClientTransportPlugin $transport socks5 127.0.0.1:23456"))
             assertFalse(config.contains("Bridge "))
