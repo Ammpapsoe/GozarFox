@@ -241,7 +241,19 @@ object Fox {
                 loginSessionVerified = true
             }
         }
-        if (!session.needsCode) finish(c, session.token, session.uid, mail, epoch)
+        if (!session.needsCode) {
+            try {
+                finish(c, session.token, session.uid, mail, epoch)
+            } catch (e: FoxError) {
+                if (e.errno != 104) throw e
+                currentAuth(epoch) {
+                    step = if (created) STEP_SIGNUP else STEP_LOGIN
+                    byLink = false
+                    loginSessionVerified = false
+                    message = "code"
+                }
+            }
+        }
     }
 
     fun isLinkStep(): Boolean = step != STEP_NONE && byLink
