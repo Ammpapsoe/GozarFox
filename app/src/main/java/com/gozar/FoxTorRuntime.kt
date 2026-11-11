@@ -213,6 +213,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
         @Volatile private var diagnosticStage = "created"
         @Volatile private var lastProgress = -1
         @Volatile private var lastBootstrapSummary = ""
+        @Volatile private var networkEnabled = false
+        @Volatile private var bridgeConfigured = false
+        @Volatile private var transportConfigured = false
         override var port: Int = 0
             private set
 
@@ -309,6 +312,10 @@ internal object FoxTorRuntime : FoxLoginTransport {
                     it.command(FoxTorPlan.activate(mode, bridge))
                     it.command("SETCONF DisableNetwork=0")
                     it.command("SIGNAL ACTIVE")
+                    val configured = it.command("GETCONF DisableNetwork UseBridges Bridge ClientTransportPlugin")
+                    networkEnabled = configured.lineSequence().any { line -> line.endsWith("DisableNetwork=0") }
+                    bridgeConfigured = mode == FoxTorPlan.Mode.DIRECT || configured.lineSequence().any { line -> line.substringAfter(' ').startsWith("Bridge=") }
+                    transportConfigured = mode == FoxTorPlan.Mode.DIRECT || configured.lineSequence().any { line -> line.substringAfter(' ').startsWith("ClientTransportPlugin=") }
                     diagnosticStage = "bootstrap"
                 }
             } catch (error: Exception) {
@@ -346,6 +353,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
         override fun diagnostics(): String {
             val details = mutableListOf<String>()
             details += "stage=$diagnosticStage"
+            details += "network=$networkEnabled;bridge=$bridgeConfigured;transport=$transportConfigured"
             if (lastProgress >= 0) details += "bootstrap=$lastProgress%"
             if (lastBootstrapSummary.isNotBlank()) details += "state=$lastBootstrapSummary"
             if (remoteDisconnected) details += "process=disconnected"
