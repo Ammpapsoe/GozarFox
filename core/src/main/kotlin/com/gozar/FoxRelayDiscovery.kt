@@ -5,7 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object FoxRelayDiscovery {
-    const val KEY_HEX = "5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
+    const val KEY_HEX = "bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"
     const val TTL_MS = 24L * 60 * 60 * 1000
     const val MAX_SKEW_MS = 5L * 60 * 1000
     const val MAX_DOCUMENT_BYTES = 16 * 1024

@@ -3,7 +3,7 @@ set -euo pipefail
 umask 077
 LIST="${1:-packaging/relay-endpoints.json}"
 SIGNATURE="${2:-${LIST}.sig}"
-EXPECTED_PUB="5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
+EXPECTED_PUB="bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 printf '%s' "302a300506032b6570032100$EXPECTED_PUB" | xxd -r -p > "$WORK/public.der"

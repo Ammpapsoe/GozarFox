@@ -9,7 +9,7 @@ OUT="${2:-${LIST}.sig}"
 KEY="${GOZAR_LIST_KEY_FILE:?set GOZAR_LIST_KEY_FILE to the list private key pem}"
 
 # Must equal ListKeyHex in go-desktop/internal/geo/listsig.go and FoxGeo.LIST_KEY_HEX.
-EXPECTED_PUB="5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
+EXPECTED_PUB="bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"
 ACTUAL_PUB=$(openssl pkey -in "$KEY" -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')
 if [ "$ACTUAL_PUB" != "$EXPECTED_PUB" ]; then
     echo 'refusing to sign: the key is not the list key pinned in ListKeyHex' >&2

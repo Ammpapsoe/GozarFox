@@ -10,7 +10,7 @@ import (
 // ListKeyHex pins the Ed25519 key that signs packaging/ir-domains.txt. It is
 // deliberately separate from the application update key, so compromise of
 // one signing domain does not extend to the other.
-const ListKeyHex = "5a74ff31ae5dff9923384ae85eb403cd26967c0f63fe78cf03e5471788aec446"
+const ListKeyHex = "bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"
 
 // The prefix binds a signature to this list format and prevents reuse of any
 // other Ed25519 signature (for example an update manifest) as a list signature.
