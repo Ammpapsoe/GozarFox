@@ -199,8 +199,16 @@ internal object FoxTorRuntime : FoxLoginTransport {
     }
 
     private fun failureDetail(error: Exception, candidate: FoxTorAttempt): String {
+        val message = error.message.orEmpty()
+            .replace(Regex("(?i)(obfs4|webtunnel)\\s+\\S+.*"), "[bridge redacted]")
+            .replace(Regex("(?i)(cert=|url=|front=|fingerprint=)\\S+"), "$1[redacted]")
+            .replace(Regex("(?i)(password|token|authorization|cookie)=?\\S*"), "$1[redacted]")
+            .replace(Regex("(?<![0-9])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?![0-9])"), "[ip]")
+            .replace(Regex("(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])"), "[fingerprint]")
+            .replace(Regex("[\\r\\n\\t]+"), " ")
+            .take(240)
         val native = candidate.diagnostics()
-        return listOf(error.javaClass.simpleName, native).filter { it.isNotBlank() }.joinToString("; ").take(640)
+        return listOf(error.javaClass.simpleName, message, native).filter { it.isNotBlank() }.joinToString("; ").take(640)
     }
 
     private fun processMatches(pid: Int, processName: String): Boolean {
@@ -229,7 +237,8 @@ internal object FoxTorRuntime : FoxLoginTransport {
 
     private fun stopRemoteProcess(context: Context) {
         try {
-            context.stopService(Intent(context, RemoteTorService::class.java))
+            val component = ComponentName(context.packageName, context.packageName + ".RemoteTorService")
+            context.stopService(Intent().setComponent(component))
         } catch (_: Exception) {
         }
         val manager = context.getSystemService(ActivityManager::class.java)
