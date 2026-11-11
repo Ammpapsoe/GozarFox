@@ -341,6 +341,10 @@ AGPL-3.0-or-later</string>
     <string name="login_wait_hint">فرآیند اتصال ممکن است تا ۱ دقیقه طول بکشد. لطفاً صبر کنید.</string>
     <string name="login_stop">توقف</string>
     <string name="login_stopping">در حال توقف اتصال امن و پاک‌سازی…</string>
+    <string name="login_logs">گزارش</string>
+    <string name="login_logs_title">گزارش اتصال Tor</string>
+    <string name="login_logs_empty">هنوز رویدادی برای اتصال Tor ثبت نشده است.</string>
+    <string name="login_logs_clear">پاک کردن</string>
     <string name="login_tor_direct">Tor مستقیم</string>
     <string name="login_tor_obfs4">Bridge نوع obfs4</string>
     <string name="login_tor_webtunnel">Bridge نوع WebTunnel</string>

@@ -1,6 +1,8 @@
 package com.gozar
 
+import android.app.ActivityManager
 import android.content.Context
+import android.os.Process
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
@@ -66,6 +68,7 @@ class FoxTorInstrumentedTest {
                 assertTrue(FoxTorRuntime.isActive())
                 assertNull(FoxNet.loginSocksPort())
                 Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 2_000) }
+                if (attempt == 0) killBoundTorProcess(app)
                 FoxTorRuntime.finish(app)
                 assertStopped(app, port, attempt)
             }
@@ -95,6 +98,19 @@ class FoxTorInstrumentedTest {
             FoxTorRuntime.automaticProvider = originalAutomatic
             FoxBridgeStore.manual = ""
         }
+    }
+
+    private fun killBoundTorProcess(app: Context) {
+        val manager = app.getSystemService(ActivityManager::class.java)
+        val process = manager.runningAppProcesses.orEmpty().singleOrNull {
+            it.processName == app.packageName + ":tor"
+        } ?: throw AssertionError("Bound TorService process was not visible")
+        Process.killProcess(process.pid)
+        val deadline = System.nanoTime() + 15_000_000_000L
+        while (FoxTorRuntime.orbotStatus != org.torproject.jni.TorService.STATUS_OFF && System.nanoTime() < deadline) {
+            Thread.sleep(100)
+        }
+        assertEquals(org.torproject.jni.TorService.STATUS_OFF, FoxTorRuntime.orbotStatus)
     }
 
     private fun assertStopped(app: Context, port: Int, attempt: Int) {

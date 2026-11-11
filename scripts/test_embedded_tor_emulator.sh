@@ -20,8 +20,13 @@ if adb shell setenforce 0; then
 else
   printf '%s\n' '::warning::Root is active but this emulator image refused permissive SELinux; continuing native validation'
 fi
-app_apk=app/build/outputs/apk/debug/app-x86_64-debug.apk
-test_apk=app/build/outputs/apk/androidTest/debug/app-x86_64-debug-androidTest.apk
+abi="${GOZAR_TOR_ABI:-x86_64}"
+case "$abi" in
+  x86|x86_64) ;;
+  *) printf '%s\n' '::error::Unsupported Tor emulator ABI'; exit 1 ;;
+esac
+app_apk="app/build/outputs/apk/debug/app-$abi-debug.apk"
+test_apk="app/build/outputs/apk/androidTest/debug/app-$abi-debug-androidTest.apk"
 test -s "$app_apk"
 test -s "$test_apk"
 printf '%s\n' '::notice::STATE=NATIVE_APK_LAYOUT_OK'

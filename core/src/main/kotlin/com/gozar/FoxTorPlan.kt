@@ -72,6 +72,24 @@ object FoxTorPlan {
         return "SETCONF ClientTransportPlugin=\"$transport socks5 127.0.0.1:$transportPort\" UseBridges=1 Bridge=\"$line\""
     }
 
+    fun controlConfiguration(mode: Mode, bridge: String? = null, transportPort: Int): List<String> {
+        if (mode == Mode.DIRECT) return listOf("UseBridges 0")
+        require(transportPort in 1..65535) { "invalid transport port" }
+        val line = when (mode) {
+            Mode.OBFS4, Mode.WEBTUNNEL -> FoxBridge.parse(bridge.orEmpty())?.takeIf { it.mode == mode }?.line
+            Mode.SNOWFLAKE -> SNOWFLAKE_BRIDGE
+            Mode.MEEK -> MEEK_BRIDGE
+            Mode.DIRECT -> null
+        } ?: throw IllegalArgumentException("invalid bridge")
+        require(line.none { it == '\n' || it == '\r' || it == '"' || it == '\\' })
+        val transport = transportName(mode) ?: throw IllegalArgumentException("invalid transport")
+        return listOf(
+            "ClientTransportPlugin $transport socks5 127.0.0.1:$transportPort",
+            "UseBridges 1",
+            "Bridge $line"
+        )
+    }
+
     fun activate(): String = "SETCONF DisableNetwork=0"
 
     fun circuitDeadline(progress: Int, nowMs: Long, current: Long?): Long? = when {

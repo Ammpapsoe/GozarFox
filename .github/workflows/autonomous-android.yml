@@ -77,21 +77,35 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;28.0.13004108"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
+      - name: Build IPtProxy 5.8.0 for all Android ABIs
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.13004108
+        run: bash tools/build-iptproxy-android.sh app/libs/IPtProxy-5.8.0-android.aar
       - uses: gradle/actions/setup-gradle@v4
       - name: Assemble ABI-split debug APKs
         run: bash ./gradlew :app:assembleDebug --no-daemon --stacktrace
       - name: Verify embedded native libraries and package boundaries
         run: |
           set -euo pipefail
-          test ! -e app/build/outputs/apk/debug/app-universal-debug.apk
-          test ! -e app/build/outputs/apk/debug/app-x86-debug.apk
-          for abi in arm64-v8a armeabi-v7a x86_64; do
+          for abi in universal arm64-v8a armeabi-v7a x86 x86_64; do
             apk="app/build/outputs/apk/debug/app-$abi-debug.apk"
             test -s "$apk"
-            unzip -Z1 "$apk" | grep -Fx "lib/$abi/libtor.so" >/dev/null
-            unzip -Z1 "$apk" | grep -Fx "lib/$abi/libgojni.so" >/dev/null
-            test "$(unzip -Z1 "$apk" | awk -F/ '/^lib\// {print $2}' | sort -u)" = "$abi"
+            if [ "$abi" = universal ]; then
+              for nested in arm64-v8a armeabi-v7a x86 x86_64; do
+                unzip -Z1 "$apk" | grep -Fx "lib/$nested/libtor.so" >/dev/null
+                unzip -Z1 "$apk" | grep -Fx "lib/$nested/libgojni.so" >/dev/null
+              done
+              test "$(unzip -Z1 "$apk" | awk -F/ '/^lib\// {print $2}' | sort -u | tr '\n' ' ')" = "arm64-v8a armeabi-v7a x86 x86_64 "
+            else
+              unzip -Z1 "$apk" | grep -Fx "lib/$abi/libtor.so" >/dev/null
+              unzip -Z1 "$apk" | grep -Fx "lib/$abi/libgojni.so" >/dev/null
+              test "$(unzip -Z1 "$apk" | awk -F/ '/^lib\// {print $2}' | sort -u)" = "$abi"
+            fi
             du -h "$apk"
           done
       - name: Upload tested debug artifacts

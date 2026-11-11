@@ -31,7 +31,15 @@ jobs:
       - name: Install SDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;28.0.13004108"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
+      - name: Build IPtProxy 5.8.0 for all Android ABIs
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.13004108
+        run: bash tools/build-iptproxy-android.sh app/libs/IPtProxy-5.8.0-android.aar
       - uses: gradle/actions/setup-gradle@v4
       - name: Test Android security, tunnel and interface
         run: bash ./gradlew :core:test :app:testDebugUnitTest --no-daemon
@@ -82,6 +90,7 @@ jobs:
           for f in app/build/outputs/apk/release/*.apk; do
             b=$(basename "$f" .apk)
             case "$b" in
+              *universal*) abi=universal ;;
               *arm64-v8a*) abi=arm64-v8a ;;
               *armeabi-v7a*) abi=armeabi-v7a ;;
               *x86_64*) abi=x86_64 ;;
@@ -105,14 +114,27 @@ jobs:
           python3 - <<'PY'
           import pathlib
           import zipfile
-          for path in pathlib.Path('out').glob('*.apk'):
+          paths = list(pathlib.Path('out').glob('*.apk'))
+          expected = {'universal', 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'}
+          actual = {path.stem.rsplit('_', 1)[-1] for path in paths}
+          if actual != expected:
+              raise SystemExit(f'Unexpected Android APK set: {sorted(actual)}')
+          for path in paths:
               size = path.stat().st_size
-              if size >= 25 * 1024 * 1024:
-                  raise SystemExit(f'{path.name} exceeds the 25 MiB budget: {size}')
+              abi = path.stem.rsplit('_', 1)[-1]
+              limit = 64 if abi == 'universal' else 25
+              if size >= limit * 1024 * 1024:
+                  raise SystemExit(f'{path.name} exceeds the {limit} MiB budget: {size}')
               with zipfile.ZipFile(path) as apk:
                   native = [entry for entry in apk.infolist() if entry.filename.endswith('.so')]
                   if not native or any(entry.compress_type != zipfile.ZIP_DEFLATED for entry in native):
                       raise SystemExit(f'{path.name} contains an uncompressed native library')
+                  abis = {entry.filename.split('/')[1] for entry in native}
+                  if abi == 'universal':
+                      if abis != expected:
+                          raise SystemExit(f'{path.name} has incompatible native ABIs: {sorted(abis)}')
+                  elif abis != {abi}:
+                      raise SystemExit(f'{path.name} has incompatible native ABIs: {sorted(abis)}')
               print(f'{path.name}: {size} bytes; native libraries compressed')
           PY
       - uses: actions/upload-artifact@v4
@@ -552,8 +574,8 @@ jobs:
             echo '::error::Autonomous Android compile, unit-tests, and artifact evidence is incomplete'
             exit 1
           fi
-      - name: Require same-commit root and real-account evidence for Stable
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+      - name: Require same-commit root, x86 and real-account evidence
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -562,11 +584,11 @@ jobs:
           ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '.workflow_runs[] | select(.name == "Tor Device Validation" and .event == "workflow_dispatch" and .conclusion == "success") | .id')
           found=false
           for id in $ids; do
-            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select((.name == "native" or .name == "account") and .conclusion == "success")] | length')
-            if [ "$count" -eq 2 ]; then found=true; break; fi
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select((.name == "native" or .name == "native-x86" or .name == "account") and .conclusion == "success")] | length')
+            if [ "$count" -eq 3 ]; then found=true; break; fi
           done
           if [ "$found" != true ]; then
-            echo '::error::Stable requires successful root native and real login/signup tests for this exact commit'
+            echo '::error::Release requires successful root native, x86 native and real login/signup tests for this exact commit'
             exit 1
           fi
       - uses: actions/download-artifact@v4
@@ -615,7 +637,7 @@ jobs:
           DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
         run: |
           set -e
-          for f in "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
+          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
             test -s "collected/$f" || { echo "::error::Missing release file: $f"; exit 1; }
           done
       - name: Import signing key
@@ -678,6 +700,19 @@ jobs:
           fi
           GOZAR_RELEASE_KEY="$key" bash tools/sign-desktop-manifest.sh "$DESKTOP_VERSION" collected "Gozar desktop $DESKTOP_VERSION"
           for f in update.json update.json.sig desktop-update.json desktop-update.json.sig; do test -s "collected/$f"; done
+      - name: Create and sign the complete release checksum manifest
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -e
+          cd collected
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS' ! -name 'SHA256SUMS.sig' -printf '%f\n' | LC_ALL=C sort | xargs sha256sum > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 69
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output SHA256SUMS.sig SHA256SUMS
+          mkdir -m 700 "$RUNNER_TEMP/checksum-keyring"
+          gpg --homedir "$RUNNER_TEMP/checksum-keyring" --batch --import gozar-public-key.asc
+          gpg --homedir "$RUNNER_TEMP/checksum-keyring" --batch --verify SHA256SUMS.sig SHA256SUMS
+          sha256sum -c SHA256SUMS
       - name: Notes
         env:
           GOZAR_ALLOW_DRAFT_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release && '1' || '0' }}
@@ -692,6 +727,8 @@ jobs:
             collected/update.json.sig
             collected/desktop-update.json
             collected/desktop-update.json.sig
+            collected/SHA256SUMS
+            collected/SHA256SUMS.sig
             collected/gozar-public-key.asc
           if-no-files-found: error
       - name: Create release draft
@@ -715,7 +752,8 @@ jobs:
         run: |
           set -e
           assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
-          for f in "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg; do
+          test "$(printf '%s\n' "$assets" | wc -l)" -eq 71
+          for f in "Gozar_${ANDROID_VERSION}_universal.apk" "Gozar_${ANDROID_VERSION}_arm64-v8a.apk" "Gozar_${ANDROID_VERSION}_armeabi-v7a.apk" "Gozar_${ANDROID_VERSION}_x86.apk" "Gozar_${ANDROID_VERSION}_x86_64.apk" Gozar-Windows-x64-Setup.exe Gozar-Windows-x64.zip Gozar-Linux-amd64.deb Gozar-Linux-amd64.tar.xz Gozar-macOS-ARM.tar.xz Gozar-macOS-Intel.tar.xz Gozar-Core-Linux-amd64.tar.xz Gozar-Core-Linux-arm64.tar.xz Gozar-Core-Windows-x64.zip Gozar-Core-Windows-arm64.zip Gozar-Core-macOS-Intel.tar.xz Gozar-Core-macOS-ARM.tar.xz "Gozar-${DESKTOP_VERSION}-x86_64.AppImage" "Gozar-${DESKTOP_VERSION}-x86_64.flatpak" "Gozar-${DESKTOP_VERSION}-x86_64.pkg.tar.zst" "Gozar_${DESKTOP_VERSION}_amd64.snap" Gozar-Fedora-x86_64.rpm Gozar-RHEL-x86_64.rpm Gozar-OpenWrt-mips_24kc.ipk Gozar-OpenWrt-mipsel_24kc.ipk Gozar-OpenWrt-armv7.ipk Gozar-OpenWrt-aarch64.ipk LuCI-Gozar-all.ipk Gozar-RaspberryPi-arm64.tar.xz Gozar-RaspberryPi-armv7.tar.xz Gozar-FreeBSD-amd64.pkg Gozar-FreeBSD-arm64.pkg SHA256SUMS; do
             printf '%s\n' "$assets" | grep -Fx "$f" >/dev/null
             printf '%s\n' "$assets" | grep -Fx "$f.sig" >/dev/null
           done

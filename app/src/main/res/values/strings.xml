@@ -341,6 +341,10 @@ AGPL-3.0-or-later</string>
     <string name="login_wait_hint">The connection process may take up to 1 minute. Please wait.</string>
     <string name="login_stop">Stop</string>
     <string name="login_stopping">Stopping the secure connection…</string>
+    <string name="login_logs">Logs</string>
+    <string name="login_logs_title">Tor connection log</string>
+    <string name="login_logs_empty">No Tor connection events yet.</string>
+    <string name="login_logs_clear">Clear</string>
     <string name="login_tor_direct">Direct Tor</string>
     <string name="login_tor_obfs4">obfs4 Bridge</string>
     <string name="login_tor_webtunnel">WebTunnel Bridge</string>

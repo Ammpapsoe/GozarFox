@@ -21,7 +21,7 @@ class FoxAccountInstrumentedTest {
         app = ApplicationProvider.getApplicationContext()
         FoxLink.stop()
         FoxStore.clear(app)
-        Fox.cancelLogin(app)
+        Fox.signOut(app)
         FoxTorRuntime.clean(app)
     }
 
@@ -30,7 +30,7 @@ class FoxAccountInstrumentedTest {
         FoxLink.stop()
         FoxVpnService.stop(app)
         FoxStore.clear(app)
-        Fox.cancelLogin(app)
+        Fox.signOut(app)
         FoxTorRuntime.clean(app)
     }
 
@@ -38,14 +38,25 @@ class FoxAccountInstrumentedTest {
     fun realLoginTwiceAndOpenDirectTunnel() {
         val email = argument("email")
         val password = argument("password")
+        Fox.signIn(app, email, password)
+        val stopDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30)
+        while (!Fox.busy && System.nanoTime() < stopDeadline) Thread.sleep(50)
+        assertTrue("Cancelled login never started", Fox.busy)
+        Thread.sleep(500)
+        Fox.stopLogin(app)
+        Fox.stopLogin(app)
+        awaitIdle("STOP")
+        assertFalse(FoxTorRuntime.isActive())
+        assertFalse(Fox.signedIn(app))
         repeat(2) { attempt ->
             Fox.signIn(app, email, password)
             completeAuthentication("", "LOGIN")
             assertTrue("Login attempt ${attempt + 1} did not persist an authenticated account", Fox.signedIn(app))
             assertPassAndOpenTunnel("LOGIN", attempt + 1)
             FoxLink.stop()
-            FoxStore.clear(app)
-            Fox.cancelLogin(app)
+            Fox.signOut(app)
+            Fox.signOut(app)
+            assertFalse(FoxTorRuntime.isActive())
             assertFalse(Fox.signedIn(app))
         }
     }

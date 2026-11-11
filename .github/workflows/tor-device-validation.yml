@@ -33,7 +33,15 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;28.0.13004108"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.0'
+          cache: false
+      - name: Build IPtProxy 5.8.0 for all Android ABIs
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/28.0.13004108
+        run: bash tools/build-iptproxy-android.sh app/libs/IPtProxy-5.8.0-android.aar
       - uses: gradle/actions/setup-gradle@v4
       - name: Build application and native test APKs
         run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
@@ -42,18 +50,16 @@ jobs:
           set -euo pipefail
           staged="$RUNNER_TEMP/tor-validation/apk"
           mkdir -p "$staged/debug" "$staged/androidTest/debug"
-          cp app/build/outputs/apk/debug/app-x86_64-debug.apk "$staged/debug/app-x86_64-debug.apk"
-          test_apk=$(find app/build/outputs/apk/androidTest -type f -name 'app-x86_64-debug-androidTest.apk' -print -quit)
-          if [ -z "$test_apk" ]; then
-            test_apk=$(find app/build/outputs/apk/androidTest -type f -name '*x86_64*androidTest*.apk' -print -quit)
-          fi
-          if [ -z "$test_apk" ]; then
-            mapfile -t candidates < <(find app/build/outputs/apk/androidTest -type f -name '*.apk' | sort)
-            if [ "${#candidates[@]}" -eq 1 ]; then test_apk="${candidates[0]}"; fi
-          fi
-          test -n "$test_apk"
-          test -s "$test_apk"
-          cp "$test_apk" "$staged/androidTest/debug/app-x86_64-debug-androidTest.apk"
+          for abi in x86_64 x86; do
+            cp "app/build/outputs/apk/debug/app-$abi-debug.apk" "$staged/debug/app-$abi-debug.apk"
+            test_apk=$(find app/build/outputs/apk/androidTest -type f -name "app-$abi-debug-androidTest.apk" -print -quit)
+            if [ -z "$test_apk" ]; then
+              test_apk=$(find app/build/outputs/apk/androidTest -type f -name "*$abi*androidTest*.apk" -print -quit)
+            fi
+            test -n "$test_apk"
+            test -s "$test_apk"
+            cp "$test_apk" "$staged/androidTest/debug/app-$abi-debug-androidTest.apk"
+          done
           echo '::notice::STATE=VALIDATION_APK_STAGING_OK'
       - uses: actions/upload-artifact@v4
         with:
@@ -83,6 +89,8 @@ jobs:
           if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
       - name: Run two native Tor lifecycles with root and permissive test SELinux
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOZAR_TOR_ABI: x86_64
         with:
           api-level: 29
           arch: x86_64
@@ -102,9 +110,51 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
+  native-x86:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tor-validation-apks
+          path: app/build/outputs
+      - name: Configure emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
+      - name: Validate the x86 IPtProxy and repeated native Tor lifecycle
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GOZAR_TOR_ABI: x86
+        with:
+          api-level: 29
+          arch: x86
+          target: google_apis
+          disable-animations: true
+          emulator-boot-timeout: 900
+          emulator-options: -no-snapshot-save -noaudio -no-window -gpu swiftshader_indirect
+          script: bash scripts/test_embedded_tor_emulator.sh
+      - name: Upload sanitized x86 native diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tor-native-x86-diagnostics
+          path: |
+            ${{ runner.temp }}/embedded-tor-instrumentation.txt
+            ${{ runner.temp }}/embedded-tor-native-failure.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
   account:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.authorize }}
-    needs: native
+    needs: [native, native-x86]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

@@ -24,6 +24,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
@@ -56,6 +57,12 @@ class LoginActivityTest {
         val method = LoginActivity::class.java.getDeclaredMethod("render")
         method.isAccessible = true
         method.invoke(activity)
+    }
+
+    private fun awaitIdle() {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (Fox.busy && System.nanoTime() < deadline) Thread.sleep(10)
+        assertFalse(Fox.busy)
     }
 
     @Test
@@ -213,7 +220,7 @@ class LoginActivityTest {
 
     @Test
     fun bridgeHelpShowsTheOfficialTelegramBot() {
-        activity.findViewById<View>(R.id.loginBridgeHelp).performClick()
+        activity.findViewById<View>(com.google.android.material.R.id.text_input_end_icon).performClick()
         val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
         assertNotNull(dialog)
         assertTrue(dialog.isShowing)
@@ -221,6 +228,94 @@ class LoginActivityTest {
         assertTrue(message.contains("@GetBridgesBot"))
         assertTrue(message.contains(activity.getString(R.string.login_bridge)))
         dialog.dismiss()
+    }
+
+    @Test
+    fun exactReportedObfs4BridgeIsAcceptedByLoginAndKeptOnlyInRam() {
+        val reported = "obfs4 217.182.93.225:62782 D4FC51091A3D23F098354F660F2D5B17B2F3432C cert=UDjYbRlpv/GEc19L1dPssudaWQE83uxgUKxtUDQ7COumf1ERpup7+mcOvshJdO4Luh/Udw iat-mode=0"
+        val original = Fox.loginTransport
+        var received: String? = null
+        Fox.loginTransport = object : FoxLoginTransport {
+            override fun run(context: Context, body: () -> Unit) {
+                received = FoxBridgeStore.manualCandidate()?.line
+            }
+        }
+        try {
+            activity.findViewById<EditText>(R.id.loginMail).setText("test@example.invalid")
+            activity.findViewById<EditText>(R.id.loginSecret).setText("sample-password")
+            activity.findViewById<EditText>(R.id.loginBridge).setText("  " + reported.replace(" ", "\t") + "  ")
+            activity.findViewById<MaterialButton>(R.id.loginPrimary).performClick()
+            awaitIdle()
+            assertEquals(reported, received)
+            assertEquals(reported, FoxBridgeStore.manualCandidate()?.line)
+            assertTrue(activity.findViewById<TextView>(R.id.loginError).text.toString() != activity.getString(R.string.login_bridge_invalid))
+            assertTrue(activity.getSharedPreferences("fox", Context.MODE_PRIVATE).all.none { (key, value) ->
+                key.contains("bridge", true) || value == reported
+            })
+        } finally {
+            Fox.loginTransport = original
+            Fox.cancelLogin(activity)
+        }
+    }
+
+    @Test
+    fun logViewerIsAvailableAndDoesNotExposeBridgeMaterial() {
+        val reported = "obfs4 217.182.93.225:62782 D4FC51091A3D23F098354F660F2D5B17B2F3432C cert=UDjYbRlpv/GEc19L1dPssudaWQE83uxgUKxtUDQ7COumf1ERpup7+mcOvshJdO4Luh/Udw iat-mode=0"
+        FoxTorLog.clear()
+        FoxTorLog.record("ATTEMPT_FAILED", reported)
+        activity.findViewById<MaterialButton>(R.id.loginLogs).performClick()
+        val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
+        assertNotNull(dialog)
+        assertTrue(dialog.isShowing)
+        val texts = mutableListOf<String>()
+        fun collect(view: android.view.View) {
+            if (view is TextView) texts += view.text.toString()
+            if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
+        }
+        collect(dialog.window.decorView)
+        val rendered = texts.joinToString("\n")
+        assertTrue(rendered.contains("[bridge redacted]"))
+        assertFalse(rendered.contains("217.182.93.225"))
+        assertFalse(rendered.contains("D4FC51091A3D23F098354F660F2D5B17B2F3432C"))
+        assertFalse(rendered.contains("UDjYbRlpv"))
+        dialog.dismiss()
+        FoxTorLog.clear()
+    }
+
+    @Test
+    fun repeatedStopAndLogoutAlwaysReleaseOwnedTransport() {
+        val original = Fox.loginTransport
+        var stops = 0
+        Fox.loginTransport = object : FoxLoginTransport {
+            override fun run(context: Context, body: () -> Unit) = body()
+            override fun isActive(): Boolean = false
+            override fun stop(context: Context) {
+                stops++
+            }
+        }
+        try {
+            Fox.stopLogin(activity)
+            Fox.stopLogin(activity)
+            Fox.signOut(activity)
+            Fox.signOut(activity)
+            assertEquals(4, stops)
+            assertFalse(Fox.signedIn(activity))
+            assertFalse(Fox.needsStep())
+        } finally {
+            Fox.loginTransport = original
+        }
+    }
+
+    @Test
+    fun materialLoginRetainsFirefoxArtworkAndSeparateLargeStop() {
+        assertNotNull(activity.findViewById<View>(R.id.loginFox))
+        Fox.busy = true
+        render()
+        val primary = activity.findViewById<MaterialButton>(R.id.loginPrimary)
+        val stop = activity.findViewById<MaterialButton>(R.id.loginStop)
+        assertEquals(View.VISIBLE, stop.visibility)
+        assertTrue(stop.layoutParams.height > primary.layoutParams.height * 0.9)
+        assertSame(primary.parent.parent, stop.parent)
     }
 
     @Test
