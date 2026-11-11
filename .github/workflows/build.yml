@@ -114,12 +114,18 @@ jobs:
           import zipfile
           paths = list(pathlib.Path('out').glob('*.apk'))
           expected = {'universal', 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'}
-          actual = {path.stem.rsplit('_', 1)[-1] for path in paths}
+          version = next(line.split("'")[1] for line in pathlib.Path('app/build.gradle').read_text().splitlines() if 'versionName' in line)
+          prefix = f'Gozar_{version}_'
+          def apk_abi(path):
+              if not path.stem.startswith(prefix):
+                  raise SystemExit(f'Unexpected APK name: {path.name}')
+              return path.stem[len(prefix):]
+          actual = {apk_abi(path) for path in paths}
           if actual != expected:
               raise SystemExit(f'Unexpected Android APK set: {sorted(actual)}')
           for path in paths:
               size = path.stat().st_size
-              abi = path.stem.rsplit('_', 1)[-1]
+              abi = apk_abi(path)
               limit = 64 if abi == 'universal' else 25
               if size >= limit * 1024 * 1024:
                   raise SystemExit(f'{path.name} exceeds the {limit} MiB budget: {size}')
