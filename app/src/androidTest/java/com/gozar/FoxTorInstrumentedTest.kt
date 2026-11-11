@@ -86,7 +86,7 @@ class FoxTorInstrumentedTest {
             assertEquals(established, modes.size)
             FoxTorRuntime.finish(app)
             assertStopped(app, port, 2)
-            assertEquals(FoxTorPlan.order + FoxTorPlan.order + listOf(FoxTorPlan.Mode.MEEK), modes)
+            assertEquals(FoxTorPlan.order + FoxTorPlan.order + FoxTorPlan.order, modes)
         } finally {
             FoxTorRuntime.stop(app)
             FoxTorRuntime.attemptFactory = originalFactory
