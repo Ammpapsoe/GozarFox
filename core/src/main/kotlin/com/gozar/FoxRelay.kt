@@ -20,10 +20,9 @@ object FoxRelay {
         "/v1/guardian/pass" -> method == "GET" || method == "HEAD"
         "/v1/guardian/activate" -> method == "POST"
         "/v1/mozilla/servers" -> method == "GET"
-        "/v1/mozilla/account/create", "/v1/mozilla/account/login", "/v1/mozilla/token",
-        "/v1/mozilla/oauth/token", "/v1/mozilla/recovery-email/verify-code",
+        "/v1/mozilla/token", "/v1/mozilla/oauth/token", "/v1/mozilla/recovery-email/verify-code",
         "/v1/mozilla/recovery-email/resend-code", "/v1/mozilla/session/verify-code" -> method == "POST"
-        "/v1/mozilla/recovery-email/status" -> method == "GET"
+        "/v1/mozilla/recovery-email/status", "/v1/mozilla/profile" -> method == "GET"
         else -> false
     }
 
@@ -39,8 +38,6 @@ object FoxRelay {
                     else -> null
                 }
                 target.host.equals("oauth.accounts.firefox.com", true) -> when (target.path) {
-                    "/v1/account/create" -> "/v1/mozilla/account/create"
-                    "/v1/account/login" -> "/v1/mozilla/account/login"
                     "/v1/token" -> "/v1/mozilla/token"
                     "/v1/oauth/token" -> "/v1/mozilla/oauth/token"
                     "/v1/recovery_email/status" -> "/v1/mozilla/recovery-email/status"
@@ -49,6 +46,7 @@ object FoxRelay {
                     "/v1/session/verify_code" -> "/v1/mozilla/session/verify-code"
                     else -> null
                 }
+                target.host.equals("profile.accounts.firefox.com", true) && target.path == "/v1/profile" -> "/v1/mozilla/profile"
                 target.host.equals("firefox.settings.services.mozilla.com", true) &&
                     target.path == "/v1/buckets/main/collections/vpn-serverlist/records" -> "/v1/mozilla/servers"
                 else -> null

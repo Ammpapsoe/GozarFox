@@ -80,13 +80,14 @@ object FoxNet {
         method: String = "GET",
         body: String? = null,
         headers: Map<String, String> = emptyMap(),
-        timeout: Int = 25000
+        timeout: Int = 25000,
+        useRelay: Boolean = true
     ): FoxReply {
         val port = controlPort.get()
         if (port != null && !controlAllowed(url, method)) {
             throw java.io.IOException("Control tunnel destination is not permitted")
         }
-        if (port == null && FoxRelay.relayPath(url, method) != null) {
+        if (useRelay && port == null && FoxRelay.relayPath(url, method) != null) {
             try {
                 return FoxRelay.forward(url, method, body, headers, timeout)
             } catch (_: IOException) {

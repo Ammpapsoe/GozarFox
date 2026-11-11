@@ -8,6 +8,9 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : BaseActivity() {
+    companion object {
+        const val AUTO_CONNECT = "com.gozar.AUTO_CONNECT"
+    }
 
     private lateinit var fox: FoxFragment
     private lateinit var settings: SettingsFragment

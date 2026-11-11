@@ -2,11 +2,10 @@ const ROUTES = Object.freeze({
   'GET:/v1/guardian/pass': 'https://vpn.mozilla.org/api/v1/fpn/token',
   'POST:/v1/guardian/activate': 'https://vpn.mozilla.org/api/v1/fpn/activate',
   'GET:/v1/mozilla/servers': 'https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records',
-  'POST:/v1/mozilla/account/create': 'https://oauth.accounts.firefox.com/v1/account/create',
-  'POST:/v1/mozilla/account/login': 'https://oauth.accounts.firefox.com/v1/account/login',
   'POST:/v1/mozilla/token': 'https://oauth.accounts.firefox.com/v1/token',
   'POST:/v1/mozilla/oauth/token': 'https://oauth.accounts.firefox.com/v1/oauth/token',
   'GET:/v1/mozilla/recovery-email/status': 'https://oauth.accounts.firefox.com/v1/recovery_email/status',
+  'GET:/v1/mozilla/profile': 'https://profile.accounts.firefox.com/v1/profile',
   'POST:/v1/mozilla/recovery-email/verify-code': 'https://oauth.accounts.firefox.com/v1/recovery_email/verify_code',
   'POST:/v1/mozilla/recovery-email/resend-code': 'https://oauth.accounts.firefox.com/v1/recovery_email/resend_code',
   'POST:/v1/mozilla/session/verify-code': 'https://oauth.accounts.firefox.com/v1/session/verify_code'

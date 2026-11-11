@@ -60,6 +60,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".MozillaAuthActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".UpdateRecoveryActivity"
             android:exported="false" />
 

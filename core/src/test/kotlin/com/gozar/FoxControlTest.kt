@@ -178,25 +178,6 @@ class FoxControlTest {
         }
     }
 
-    @Test fun syntheticSignupUsesOAuthAccountOrigin() {
-        LocalProxy { head, body, _ ->
-            assertTrue(head.startsWith("POST /v1/account/create "))
-            assertTrue(body.contains("\"email\":\"person@example.invalid\""))
-            Answer(200, "{\"uid\":\"synthetic\",\"sessionToken\":\"synthetic\",\"verified\":false}")
-        }.use { proxy ->
-            useDefaultProxy(proxy.port)
-            val previous = FoxRelayDiscovery.installForTest(emptyList())
-            try {
-                assertTrue(FoxApi.register("person@example.invalid", "synthetic-password").needsCode)
-            } finally {
-                FoxRelayDiscovery.installForTest(previous)
-            }
-            assertEquals(1, proxy.connects.size)
-            assertTrue(proxy.connects.single().startsWith("CONNECT oauth.accounts.firefox.com:443 "))
-            assertTrue(proxy.problems.isEmpty())
-        }
-    }
-
     @Test fun relay451UsesTheNextVerifiedRelayWithoutFallingBackDirectly() {
         val endpoints = listOf(
             "https://gozar-guardian-a.gozarfox7.workers.dev",

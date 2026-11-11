@@ -71,7 +71,7 @@ class LoginActivityTest {
         render()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginMailBox).visibility)
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("", primary.text.toString())
@@ -108,7 +108,7 @@ class LoginActivityTest {
         confirm.setText("sample-password")
         Fox.busy = true
         render()
-        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginConfirmBox).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginConfirmBox).visibility)
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("sample-password", confirm.text.toString())

@@ -328,7 +328,7 @@ AGPL-3.0-or-later</string>
     <string name="login_retry_action">تلاش دوباره برای ورود</string>
     <string name="login_continue">ادامه</string>
     <string name="login_confirm_action">تأیید</string>
-    <string name="login_fill">ایمیل و رمز عبور را وارد کنید.</string>
+    <string name="login_fill">برای ادامه‌ی امن در صفحه‌ی موزیلا، ایمیل را وارد کنید.</string>
     <string name="login_mismatch">دو رمز عبور یکسان نیستند.</string>
     <string name="login_working">در حال انجام…</string>
     <string name="login_no_browser">مرورگری برای صفحه حساب فایرفاکس پیدا نشد.</string>

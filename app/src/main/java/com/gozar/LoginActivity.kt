@@ -69,6 +69,18 @@ class LoginActivity : BaseActivity() {
             }
         }
     }
+    private val mozillaAuth = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val code = result.data?.getStringExtra(MozillaAuthActivity.EXTRA_CODE).orEmpty()
+            val verifier = result.data?.getStringExtra(MozillaAuthActivity.EXTRA_VERIFIER).orEmpty()
+            if (code.isNotEmpty() && verifier.isNotEmpty()) {
+                Fox.completeOAuth(this, code, verifier, mail.text?.toString()?.trim().orEmpty())
+            }
+        } else {
+            show(result.data?.getStringExtra(MozillaAuthActivity.EXTRA_ERROR) ?: getString(R.string.cancel))
+        }
+        render()
+    }
     private var create = false
     private val listener: () -> Unit = { render() }
 
@@ -229,16 +241,15 @@ class LoginActivity : BaseActivity() {
             return
         }
         val address = mail.text?.toString()?.trim().orEmpty()
-        val password = secret.text?.toString().orEmpty()
-        if (address.isEmpty() || password.isEmpty()) {
+        if (!Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
             show(getString(R.string.login_fill))
             return
         }
-        if (create && confirm.text?.toString().orEmpty() != password) {
-            show(getString(R.string.login_mismatch))
-            return
-        }
-        if (create) Fox.signUp(this, address, password) else Fox.signIn(this, address, password)
+        secret.text?.clear()
+        confirm.text?.clear()
+        mozillaAuth.launch(Intent(this, MozillaAuthActivity::class.java)
+            .putExtra(MozillaAuthActivity.EXTRA_CREATE, create)
+            .putExtra(MozillaAuthActivity.EXTRA_EMAIL, address))
         render()
     }
 
@@ -248,7 +259,7 @@ class LoginActivity : BaseActivity() {
         if (signed && !Fox.busy && completed) {
             secret.text?.clear()
             confirm.text?.clear()
-            if (!adding) startActivity(Intent(this, MainActivity::class.java))
+            if (!adding) startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.AUTO_CONNECT, true))
             finish()
             return
         }
@@ -256,8 +267,8 @@ class LoginActivity : BaseActivity() {
         val link = Fox.isLinkStep()
         val retry = Fox.canRetryLogin()
         mailBox.visibility = if (step) View.GONE else View.VISIBLE
-        secretBox.visibility = if (step) View.GONE else View.VISIBLE
-        confirmBox.visibility = if (create && !step) View.VISIBLE else View.GONE
+        secretBox.visibility = View.GONE
+        confirmBox.visibility = View.GONE
         codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
         forgot.visibility = if (step) View.GONE else View.VISIBLE
         forgot.text = getString(if (create) R.string.login_create_browser else R.string.login_forgot)

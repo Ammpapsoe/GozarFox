@@ -7,6 +7,8 @@ class FoxError(message: String, val errno: Int = 0, val status: Int = 0) : Excep
 
 class FoxSession(val uid: String, val token: String, val needsCode: Boolean, val byLink: Boolean = false)
 
+class FoxProfile(val uid: String, val email: String)
+
 class FoxTokens(val access: String, val refresh: String, val expiresIn: Int)
 
 class FoxPass(val token: String, val limit: Long, val remaining: Long, val reset: String)
@@ -54,52 +56,33 @@ object FoxApi {
     private fun authHeader(token: String, method: String, url: java.net.URL, body: String): String =
         FoxCrypto.hawk(method, url, FoxCrypto.hawkId(token), FoxCrypto.hawkKey(token), body)
 
-    fun register(email: String, password: String): FoxSession {
+    fun oauthCode(code: String, verifier: String): FoxTokens {
         val body = JSONObject()
-            .put("email", email)
-            .put("authPW", FoxCrypto.hex(FoxCrypto.authPw(email, password)))
-            .put("service", "sync")
-            .put("verificationMethod", "email-otp")
+            .put("client_id", FoxNet.CLIENT_ID)
+            .put("grant_type", "authorization_code")
+            .put("code", code)
+            .put("code_verifier", verifier)
+            .put("redirect_uri", FoxOAuth.CALLBACK)
+            .put("access_type", "offline")
             .toString()
-        val reply = FoxNet.call(FoxNet.AUTH + "/account/create", "POST", body)
+        var reply = FoxNet.call(FoxNet.AUTH + "/oauth/token", "POST", body)
+        if (reply.code == 406) reply = FoxNet.call(FoxNet.AUTH + "/oauth/token", "POST", body, useRelay = false)
         val data = json(reply)
-        val verified = data.optBoolean("verified", data.optBoolean("emailVerified", false))
-        return FoxSession(data.optString("uid"), data.optString("sessionToken"), !verified, false)
+        val access = data.optString("access_token")
+        val refresh = data.optString("refresh_token")
+        if (access.isEmpty() || refresh.isEmpty()) throw FoxError("Mozilla returned incomplete OAuth tokens")
+        return FoxTokens(access, refresh, data.optInt("expires_in", 0))
     }
 
-    fun signIn(email: String, password: String): FoxSession {
-        val authPw = FoxCrypto.hex(FoxCrypto.authPw(email, password))
-        val first = attemptSignIn(email, password, authPw, "", "")
-        if (first.code == 400) {
-            val json = try {
-                JSONObject(first.body)
-            } catch (_: Exception) {
-                null
-            }
-            if (json != null && json.optInt("errno", 0) == 107) {
-                val twoFactor = attemptSignIn(email, password, authPw, "email-2fa", "")
-                return readSignIn(twoFactor)
-            }
-        }
-        return readSignIn(first)
-    }
-
-    private fun attemptSignIn(
-        email: String,
-        password: String,
-        authPw: String,
-        method: String,
-        original: String
-    ): FoxReply {
-        val body = JSONObject()
-            .put("email", email)
-            .put("authPW", authPw)
-            .apply {
-                if (method.isNotEmpty()) put("verificationMethod", method)
-                if (original.isNotEmpty()) put("originalLoginEmail", original)
-            }
-            .toString()
-        return FoxNet.call(FoxNet.AUTH + "/account/login", "POST", body)
+    fun profile(access: String): FoxProfile {
+        val headers = mapOf("Authorization" to "Bearer $access")
+        var reply = FoxNet.call("https://profile.accounts.firefox.com/v1/profile", "GET", null, headers)
+        if (reply.code == 406) reply = FoxNet.call("https://profile.accounts.firefox.com/v1/profile", "GET", null, headers, useRelay = false)
+        val data = json(reply)
+        val uid = data.optString("uid")
+        val email = data.optString("email")
+        if (uid.isEmpty() || email.isEmpty()) throw FoxError("Mozilla returned an incomplete account profile")
+        return FoxProfile(uid, email)
     }
 
     internal fun readSignIn(reply: FoxReply): FoxSession {

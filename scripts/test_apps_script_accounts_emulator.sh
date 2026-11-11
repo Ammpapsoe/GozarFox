@@ -43,5 +43,5 @@ print('\n'.join(lines[-50:]) if lines else 'Account instrumentation did not repo
 PY
   return 1
 }
-run_test realLoginReceivesPassThroughAppsScript "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" 'STATE=LOGIN_PASS_OK'
-run_test realSignupReceivesCodeThroughAppsScript "$GOZAR_SIGNUP_EMAIL" "$GOZAR_SIGNUP_PASSWORD" 'STATE=SIGNUP_CODE_REQUIRED'
+run_test realLoginReceivesPassThroughWebView "$GOZAR_LOGIN_EMAIL" "$GOZAR_LOGIN_PASSWORD" 'STATE=TUNNEL_STARTED'
+run_test realSignupReceivesCodeThroughWebView "$GOZAR_SIGNUP_EMAIL" "$GOZAR_SIGNUP_PASSWORD" 'STATE=SIGNUP_CODE_REQUIRED'

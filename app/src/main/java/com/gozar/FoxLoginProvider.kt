@@ -13,8 +13,8 @@ internal interface FoxLoginProvider {
 }
 
 internal object MozillaLoginProvider : FoxLoginProvider {
-    override fun register(email: String, password: String): FoxSession = FoxApi.register(email, password)
-    override fun signIn(email: String, password: String): FoxSession = FoxApi.signIn(email, password)
+    override fun register(email: String, password: String): FoxSession = throw FoxError("Mozilla WebView sign-up is required")
+    override fun signIn(email: String, password: String): FoxSession = throw FoxError("Mozilla WebView sign-in is required")
     override fun emailVerified(sessionToken: String): Boolean = FoxApi.emailVerified(sessionToken)
     override fun verifyEmail(sessionToken: String, uid: String, code: String) = FoxApi.verifyEmail(sessionToken, uid, code)
     override fun resendSignupCode(sessionToken: String) = FoxApi.resendSignupCode(sessionToken)

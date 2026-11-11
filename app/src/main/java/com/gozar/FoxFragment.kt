@@ -112,6 +112,11 @@ class FoxFragment : Fragment() {
         Fox.load(requireContext())
         Fox.loadServers(requireContext())
         render()
+        val host = activity
+        if (host?.intent?.getBooleanExtra(MainActivity.AUTO_CONNECT, false) == true) {
+            host.intent.removeExtra(MainActivity.AUTO_CONNECT)
+            view.post { if (isAdded) requestVpnPermission() }
+        }
     }
 
     override fun onDestroyView() {

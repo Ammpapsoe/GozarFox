@@ -409,6 +409,21 @@ object Fox {
         }
     }
 
+    fun completeOAuth(c: Context, code: String, verifier: String, mailHint: String) {
+        prepareFreshLogin(c)
+        authWork(c, R.string.fox_stage_signin) { epoch ->
+            currentAuth(epoch) { }
+            say(c, R.string.fox_stage_pass)
+            val tokens = FoxApi.oauthCode(code, verifier)
+            val profile = FoxApi.profile(tokens.access)
+            val pass = FoxApi.pass(tokens.access)
+            currentAuth(epoch) {
+                FoxStore.saveAccount(c, profile.email.ifEmpty { mailHint }, profile.uid, tokens, pass)
+                clearPendingLocked()
+            }
+        }
+    }
+
     private fun finish(c: Context, sessionToken: String, uid: String, mail: String, epoch: Long) {
         currentAuth(epoch) { }
         say(c, R.string.fox_stage_pass)
