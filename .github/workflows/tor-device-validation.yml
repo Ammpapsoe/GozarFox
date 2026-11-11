@@ -58,6 +58,9 @@ jobs:
             if [ -z "$test_apk" ]; then
               test_apk=$(find app/build/outputs/apk/androidTest -type f -name 'app-universal-debug-androidTest.apk' -print -quit)
             fi
+            if [ -z "$test_apk" ]; then
+              test_apk=$(find app/build/outputs/apk/androidTest -type f -name 'app-debug-androidTest.apk' -print -quit)
+            fi
             test -n "$test_apk"
             test -s "$test_apk"
             cp "$test_apk" "$staged/androidTest/debug/app-$abi-debug-androidTest.apk"
