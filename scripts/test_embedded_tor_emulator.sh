@@ -30,13 +30,30 @@ printf '%s\n' '::notice::STATE=NATIVE_APP_APK_INSTALLED'
 adb install -r "$test_apk"
 adb shell pm list instrumentation | grep -F 'instrumentation:com.gozar.test/androidx.test.runner.AndroidJUnitRunner' >/dev/null
 printf '%s\n' '::notice::STATE=NATIVE_APKS_INSTALLED'
+raw="${RUNNER_TEMP:-/tmp}/embedded-tor-instrumentation.raw.txt"
 result="${RUNNER_TEMP:-/tmp}/embedded-tor-instrumentation.txt"
 set +e
-adb shell am instrument -w -r -e class com.gozar.FoxTorInstrumentedTest com.gozar.test/androidx.test.runner.AndroidJUnitRunner | tee "$result"
-status=${PIPESTATUS[0]}
+adb shell am instrument -w -r -e class com.gozar.FoxTorInstrumentedTest com.gozar.test/androidx.test.runner.AndroidJUnitRunner >"$raw" 2>&1
+status=$?
 set -e
+python3 - "$raw" "$result" <<'PY'
+import re
+import sys
+with open(sys.argv[1], errors='replace') as source, open(sys.argv[2], 'w') as output:
+    for raw in source:
+        line = raw.rstrip('\r\n')
+        line = re.sub(r'(?i)(obfs4|webtunnel)\s+\S+.*', '[bridge redacted]', line)
+        line = re.sub(r'(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])', '[ip]', line)
+        line = re.sub(r'(?i)(cert=)[A-Za-z0-9+/=]+', r'\1[redacted]', line)
+        line = re.sub(r'(?i)(url=)\S+', r'\1[redacted]', line)
+        line = re.sub(r'(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])', '[fingerprint]', line)
+        output.write(line + '\n')
+PY
+cat "$result"
+rm -f "$raw"
 if [ "$status" -eq 0 ] && grep -E 'OK \(1 test\)' "$result" >/dev/null; then
   printf '%s\n' '::notice::STATE=NATIVE_TOR_TWO_CYCLES_OK'
+  adb logcat -c || true
   exit 0
 fi
 python3 - "$result" <<'PY'

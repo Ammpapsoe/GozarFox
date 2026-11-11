@@ -183,7 +183,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 }
                 if (line[3] == '-') continue
                 if (line.startsWith("250 ")) return lines.joinToString("\n")
-                if (line.firstOrNull() == '5') throw FoxError("Tor control rejected configuration")
+                if (line.firstOrNull() == '5') throw FoxError("Tor control rejected configuration: " + line.take(3))
                 throw FoxError("Unexpected Tor control reply")
             }
         }
@@ -253,7 +253,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             if (!bound) throw FoxError("Android refused to bind isolated TorService")
             val bindBudget = minOf(15_000L, TimeUnit.NANOSECONDS.toMillis(budget - (System.nanoTime() - started)).coerceAtLeast(1L))
             if (!ready.await(bindBudget, TimeUnit.MILLISECONDS)) throw FoxError("Isolated TorService binding timed out")
-            diagnosticStage = "bootstrap"
+            diagnosticStage = "control"
             val deadline = started + budget
             while (System.nanoTime() < deadline) {
                 if (remoteDisconnected) throw FoxError("Isolated Tor process stopped during bootstrap")
@@ -303,7 +303,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 socket.soTimeout = 1_000
                 RemoteControl(socket).also {
                     it.command("AUTHENTICATE")
+                    diagnosticStage = "activate-network"
                     it.command(FoxTorPlan.activate(mode, bridge))
+                    diagnosticStage = "bootstrap"
                 }
             } catch (error: Exception) {
                 try {

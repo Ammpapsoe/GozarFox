@@ -71,7 +71,7 @@ class FoxTorInstrumentedTest {
                         assertTrue(port in 1..65535)
                     }
                 } catch (error: FoxError) {
-                    throw AssertionError("attempt=$attempt transport-failures=" + failures.joinToString("|") + "; " + error.javaClass.simpleName)
+                    throw AssertionError("attempt=$attempt transport-failures=" + failures.joinToString("|") + "; " + error.message)
                 }
                 assertEquals(FoxTorPlan.Mode.MEEK, modes.last())
                 assertNull(FoxNet.loginSocksPort())
