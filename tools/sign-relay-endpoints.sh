@@ -13,10 +13,13 @@ fi
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 { printf 'GOZAR-RELAY-ENDPOINTS-V1\n'; cat "$LIST"; } > "$WORK/message"
+printf '%s\n' 'SIGN_STAGE=KEY_VERIFIED'
 openssl pkeyutl -sign -rawin -inkey "$KEY" -in "$WORK/message" -out "$WORK/signature"
 [ "$(wc -c < "$WORK/signature")" -eq 64 ]
+printf '%s\n' 'SIGN_STAGE=SIGNED'
 openssl pkey -in "$KEY" -pubout > "$WORK/public.pem"
 openssl pkeyutl -verify -rawin -pubin -inkey "$WORK/public.pem" -in "$WORK/message" -sigfile "$WORK/signature" >/dev/null
+printf '%s\n' 'SIGN_STAGE=PEM_VERIFIED'
 od -An -tx1 "$WORK/signature" | tr -d ' \n' > "$WORK/signature.hex"
 printf '\n' >> "$WORK/signature.hex"
 mv "$WORK/signature.hex" "$OUT"
