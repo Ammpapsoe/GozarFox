@@ -212,6 +212,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
         @Volatile private var closing = false
         @Volatile private var diagnosticStage = "created"
         @Volatile private var lastProgress = -1
+        @Volatile private var lastBootstrapSummary = ""
         override var port: Int = 0
             private set
 
@@ -278,6 +279,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
                     throw FoxError("Bridge connection was rejected")
                 }
                 val progress = FoxTorPlan.bootstrapProgress(reply)
+                lastBootstrapSummary = FoxTorPlan.bootstrapSummary(reply)
                 if (progress >= 0) {
                     lastProgress = progress
                     report(app, R.string.login_tor_bootstrap, modeLabel(app, mode), progress)
@@ -343,6 +345,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             val details = mutableListOf<String>()
             details += "stage=$diagnosticStage"
             if (lastProgress >= 0) details += "bootstrap=$lastProgress%"
+            if (lastBootstrapSummary.isNotBlank()) details += "state=$lastBootstrapSummary"
             if (remoteDisconnected) details += "process=disconnected"
             return details.joinToString(";")
         }
