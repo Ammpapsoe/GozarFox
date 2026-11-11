@@ -341,6 +341,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             val details = mutableListOf<String>()
             details += "stage=$diagnosticStage"
             details += "orbot=${orbot.mCurrentStatus}"
+            details += "controller=${orbot.diagnostics()}"
             details += "network=$networkEnabled;transport=$transportConfigured"
             if (lastProgress >= 0) details += "bootstrap=$lastProgress%"
             if (lastBootstrapSummary.isNotBlank()) details += "state=$lastBootstrapSummary"

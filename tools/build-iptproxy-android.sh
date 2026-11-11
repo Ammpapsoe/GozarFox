@@ -22,19 +22,45 @@ export GOPRIVATE=gitlab.torproject.org
 cd "$work/source/IPtProxy.go"
 go run "golang.org/x/mobile/cmd/gomobile@$gomobile_version" init
 go run "golang.org/x/mobile/cmd/gomobile@$gomobile_version" bind -target=android/arm64,android/arm,android/amd64,android/386 -ldflags='-s -w -checklinkname=0' -o "$work/IPtProxy.aar" -androidapi=24 -tags=netcgo -trimpath
-python3 - "$work/IPtProxy.aar" <<'PY'
+mkdir -p "$(dirname "$output")"
+app_dir=$(cd "$(dirname "$output")/.." && pwd)
+jni_output="$app_dir/build/generated/iptproxy/jniLibs"
+rm -rf "$jni_output"
+mkdir -p "$jni_output"
+python3 - "$work/IPtProxy.aar" "$output" "$jni_output" <<'PY'
+import os
+import struct
 import sys
 import zipfile
-with zipfile.ZipFile(sys.argv[1]) as aar:
-    abis = sorted({entry.filename.split('/')[1] for entry in aar.infolist() if entry.filename.startswith('jni/') and entry.filename.endswith('/libgojni.so')})
-    expected = ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64']
-    if abis != expected:
-        raise SystemExit(f'Unexpected IPtProxy ABIs: {abis}')
-    for abi in expected:
-        if not aar.getinfo(f'jni/{abi}/libgojni.so').file_size:
-            raise SystemExit(f'Empty IPtProxy native library: {abi}')
+source_path, output_path, jni_output = sys.argv[1:]
+expected = {
+    'arm64-v8a': (2, 183),
+    'armeabi-v7a': (1, 40),
+    'x86': (1, 3),
+    'x86_64': (2, 62),
+}
+with zipfile.ZipFile(source_path) as source:
+    names = {entry.filename for entry in source.infolist()}
+    for abi, (elf_class, machine) in expected.items():
+        name = f'jni/{abi}/libgojni.so'
+        if name not in names:
+            raise SystemExit(f'Missing IPtProxy native library: {abi}')
+        data = source.read(name)
+        if len(data) < 20 or data[:4] != b'\x7fELF':
+            raise SystemExit(f'Invalid IPtProxy ELF library: {abi}')
+        if data[4] != elf_class or struct.unpack_from('<H', data, 18)[0] != machine:
+            raise SystemExit(f'Wrong IPtProxy ELF architecture: {abi}')
+        destination = os.path.join(jni_output, abi, 'libgojni.so')
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        with open(destination, 'wb') as output:
+            output.write(data)
+        os.chmod(destination, 0o755)
+    temporary = output_path + '.tmp'
+    with zipfile.ZipFile(temporary, 'w') as output:
+        for entry in source.infolist():
+            if not entry.filename.startswith('jni/'):
+                output.writestr(entry, source.read(entry))
+    os.replace(temporary, output_path)
 PY
-mkdir -p "$(dirname "$output")"
-cp "$work/IPtProxy.aar" "$output"
 test -s "$output"
 printf 'IPtProxy 5.8.0 source %s built with all four Android ABIs\n' "$source_commit"

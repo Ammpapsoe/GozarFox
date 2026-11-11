@@ -88,6 +88,12 @@ android {
         }
     }
 
+    sourceSets {
+        main {
+            jniLibs.srcDir("$buildDir/generated/iptproxy/jniLibs")
+        }
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false

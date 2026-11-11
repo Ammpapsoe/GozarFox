@@ -29,10 +29,15 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
     @Volatile var remoteDisconnected = false
     private var torServiceConnection: ServiceConnection? = null
     @Volatile private var controlSocket: LocalSocket? = null
+    @Volatile private var connectionStage = "idle"
+
+    fun diagnostics(): String = connectionStage
 
     @Synchronized
     fun startTorService() {
         if (!torStartRequested.compareAndSet(false, true)) return
+        connectionStage = "bind-requested"
+        FoxTorLog.record("ORBOT_BIND_REQUESTED")
         PrintWriter(FileWriter(TorService.getDefaultsTorrc(context), false)).use { defaults ->
             defaults.println("DNSPort 0")
             defaults.println("TransPort 0")
@@ -43,6 +48,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
         listener(TorService.STATUS_STARTING)
         val connection = object : ServiceConnection {
             override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
+                connectionStage = "service-connected"
+                FoxTorLog.record("ORBOT_SERVICE_CONNECTED")
                 try {
                     connectControlSocket()
                     if (!torStartRequested.get() || conn == null) return
@@ -50,7 +57,9 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
                     if (!torStartRequested.get()) return
                     initControlConnection()
                     conn?.setEvents(listOf(TorControlCommands.EVENT_STATUS_CLIENT))
-                } catch (_: Exception) {
+                } catch (error: Exception) {
+                    connectionStage = "connection-error:" + error.javaClass.simpleName
+                    FoxTorLog.record("ORBOT_CONNECTION_ERROR", error.javaClass.simpleName)
                     remoteDisconnected = true
                     mCurrentStatus = TorService.STATUS_OFF
                     torStartRequested.set(false)
@@ -60,6 +69,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
             }
 
             override fun onServiceDisconnected(componentName: ComponentName) {
+                connectionStage = "service-disconnected"
+                FoxTorLog.record("ORBOT_SERVICE_DISCONNECTED")
                 remoteDisconnected = true
                 mCurrentStatus = TorService.STATUS_OFF
                 torStartRequested.set(false)
@@ -68,6 +79,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
             }
 
             override fun onBindingDied(componentName: ComponentName) {
+                connectionStage = "binding-died"
+                FoxTorLog.record("ORBOT_BINDING_DIED")
                 remoteDisconnected = true
                 if (torServiceConnection === this) {
                     if (shouldUnbindTorService) {
@@ -90,15 +103,19 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
             context.bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE)
         }
         if (!shouldUnbindTorService) {
+            connectionStage = "bind-failed"
+            FoxTorLog.record("ORBOT_BIND_FAILED")
             torServiceConnection = null
             clearControl()
             torStartRequested.set(false)
             mCurrentStatus = TorService.STATUS_OFF
             throw IOException("bindService failed")
         }
+        connectionStage = "bound-awaiting-service"
     }
 
     private fun connectControlSocket() {
+        connectionStage = "control-connecting"
         val socketFile = File(File(context.getDir("TorService", Context.MODE_PRIVATE), "data"), "ControlSocket")
         while (conn == null) {
             if (!torStartRequested.get()) return
@@ -110,6 +127,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
                 control.launchThread(true)
                 control.authenticate(ByteArray(0))
                 conn = control
+                connectionStage = "control-connected"
+                FoxTorLog.record("ORBOT_CONTROL_CONNECTED")
             } catch (_: IOException) {
                 try {
                     candidate.close()
@@ -130,6 +149,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
             if (split > 0) socksPort = value.substring(split + 1).replace("\"", "").toInt()
         }
         mCurrentStatus = TorService.STATUS_ON
+        connectionStage = "control-ready"
+        FoxTorLog.record("ORBOT_CONTROL_READY")
         listener(TorService.STATUS_ON)
     }
 
@@ -145,6 +166,7 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
     }
 
     fun stopTor() {
+        connectionStage = "stopping"
         conn?.let { control ->
             try {
                 control.shutdownTor(TorControlCommands.SIGNAL_SHUTDOWN)
@@ -163,6 +185,8 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
         torStartRequested.set(false)
         socksPort = -1
         mCurrentStatus = TorService.STATUS_OFF
+        connectionStage = "stopped"
+        FoxTorLog.record("ORBOT_CONTROLLER_STOPPED")
         listener(TorService.STATUS_OFF)
     }
 

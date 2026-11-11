@@ -127,7 +127,13 @@ jobs:
                   native = [entry for entry in apk.infolist() if entry.filename.endswith('.so')]
                   if not native or any(entry.compress_type != zipfile.ZIP_DEFLATED for entry in native):
                       raise SystemExit(f'{path.name} contains an uncompressed native library')
+                  names = {entry.filename for entry in native}
                   abis = {entry.filename.split('/')[1] for entry in native}
+                  required_abis = expected if abi == 'universal' else {abi}
+                  for nested in required_abis:
+                      for library in ('libgojni.so', 'libtor.so'):
+                          if f'lib/{nested}/{library}' not in names:
+                              raise SystemExit(f'{path.name} is missing lib/{nested}/{library}')
                   if abi == 'universal':
                       if abis != expected:
                           raise SystemExit(f'{path.name} has incompatible native ABIs: {sorted(abis)}')
