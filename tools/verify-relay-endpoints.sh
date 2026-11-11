@@ -11,5 +11,5 @@ xxd -r -p "$SIGNATURE" > "$WORK/signature"
 [ "$(wc -c < "$WORK/signature")" -eq 64 ]
 { printf 'GOZAR-RELAY-ENDPOINTS-V1\n'; cat "$LIST"; } > "$WORK/message"
 printf '%s\n' 'VERIFY_STAGE=DER_READY'
-openssl pkeyutl -verify -rawin -pubin -inform DER -inkey "$WORK/public.der" -in "$WORK/message" -sigfile "$WORK/signature" >/dev/null
+openssl pkeyutl -verify -rawin -pubin -keyform DER -inkey "$WORK/public.der" -in "$WORK/message" -sigfile "$WORK/signature" >/dev/null
 printf '%s\n' 'VERIFY_STAGE=VERIFIED'
