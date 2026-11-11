@@ -51,7 +51,7 @@ func TestDesktopReleaseProducerMatchesVerifier(t *testing.T) {
 		}
 	}
 	cmd := exec.Command("bash", fixtureScript, "1.10.4", dir, "release notes")
-	cmd.Env = append(os.Environ(), "GOZAR_RELEASE_KEY="+key, "GOZAR_RELEASE_TAG=v1.11.1")
+	cmd.Env = append(os.Environ(), "GOZAR_RELEASE_KEY="+key, "GOZAR_RELEASE_TAG=v1.11.1", "GOZAR_RELEASE_REPOSITORY=Ammpapsoe/GozarFox")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("sign fixture: %v: %s", err, out)
 	}
