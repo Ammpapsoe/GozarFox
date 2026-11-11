@@ -41,8 +41,8 @@ class FoxAccountInstrumentedTest {
         while (System.currentTimeMillis() < deadline && !Fox.signedIn(context)) {
             val state = evaluate(auth)
             val marker = when {
-                state.contains("EMAIL_SUBMITTED") -> "EMAIL_SUBMITTED"
-                state.contains("PASSWORD_SUBMITTED") -> "PASSWORD_SUBMITTED"
+                state.contains("EMAIL_") -> state.removePrefix("\"").removeSuffix("\"").take(100)
+                state.contains("PASSWORD_") -> state.removePrefix("\"").removeSuffix("\"").take(100)
                 state.contains("CODE_REQUIRED") -> "CODE_REQUIRED"
                 state.contains("CAPTCHA_REQUIRED") -> "CAPTCHA_REQUIRED"
                 state.contains("MOZILLA_ERROR") -> "MOZILLA_ERROR"
@@ -62,6 +62,7 @@ class FoxAccountInstrumentedTest {
                 return
             }
             if (state.contains("CAPTCHA_REQUIRED")) throw AssertionError("MOZILLA_CAPTCHA_REQUIRED")
+            if (state.contains("NO_SUBMIT") || state.contains("SUBMIT_DISABLED")) throw AssertionError("MOZILLA_SUBMIT_UNAVAILABLE")
             if (state.contains("MOZILLA_ERROR")) throw AssertionError("MOZILLA_WEBVIEW_ERROR")
             if (Fox.message.isNotEmpty() && !Fox.busy && Fox.message != "code") throw AssertionError("ACCOUNT_FLOW_FAILED")
             Thread.sleep(750)
@@ -100,16 +101,25 @@ class FoxAccountInstrumentedTest {
                 e.dispatchEvent(new Event('change', {bubbles:true}));
               };
               const submit = e => {
-                const form = e.closest('form') || document;
-                const button = [...form.querySelectorAll('button[type=submit]')].find(visible) ||
-                  [...form.querySelectorAll('button')].find(visible);
-                if (button) setTimeout(() => button.click(), 100);
+                const form = e.closest('form');
+                const root = form || document;
+                const button = [...root.querySelectorAll('button[type=submit]')].find(visible) ||
+                  [...root.querySelectorAll('button')].find(visible);
+                if (button) {
+                  if (button.disabled || button.getAttribute('aria-disabled') === 'true') return 'SUBMIT_DISABLED';
+                  setTimeout(() => button.click(), 100);
+                  return 'SUBMIT_CLICKED';
+                }
+                if (form) {
+                  setTimeout(() => form.requestSubmit(), 100);
+                  return 'SUBMIT_REQUESTED';
+                }
+                return 'NO_SUBMIT';
               };
               const passwords = [...document.querySelectorAll('input[type=password]')].filter(visible);
               if (passwords.length) {
                 passwords.forEach(e => fill(e, ${JSONObject.quote(argument("password"))}));
-                submit(passwords[0]);
-                return 'PASSWORD_SUBMITTED';
+                return 'PASSWORD_' + submit(passwords[0]);
               }
               const code = [...document.querySelectorAll('input[name=code],input[inputmode=numeric],input[autocomplete=one-time-code]')].find(visible);
               if (code) return 'CODE_REQUIRED';
@@ -119,8 +129,7 @@ class FoxAccountInstrumentedTest {
                   e.inputMode !== 'numeric' && e.autocomplete !== 'one-time-code');
               if (email) {
                 fill(email, ${JSONObject.quote(argument("email"))});
-                submit(email);
-                return 'EMAIL_SUBMITTED';
+                return 'EMAIL_' + submit(email);
               }
               const frame = [...document.querySelectorAll('iframe')].find(e => visible(e) && /captcha|challenge/i.test(e.src + ' ' + e.title));
               if (frame) return 'CAPTCHA_REQUIRED';
