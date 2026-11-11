@@ -43,6 +43,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build application and native test APKs
         run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - name: Trace native library packaging
+        run: find app/src/main/jniLibs app/build/intermediates -type f -name 'libgojni.so' -printf '%p %s bytes\n' | sort
       - name: Prepare deterministic APK artifact layout
         run: |
           set -euo pipefail
