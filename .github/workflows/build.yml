@@ -135,13 +135,14 @@ jobs:
                       raise SystemExit(f'{path.name} contains an uncompressed native library')
                   names = {entry.filename for entry in native}
                   abis = {entry.filename.split('/')[1] for entry in native}
-                  required_abis = expected if abi == 'universal' else {abi}
+                  native_abis = expected - {'universal'}
+                  required_abis = native_abis if abi == 'universal' else {abi}
                   for nested in required_abis:
                       for library in ('libgojni.so', 'libtor.so'):
                           if f'lib/{nested}/{library}' not in names:
                               raise SystemExit(f'{path.name} is missing lib/{nested}/{library}')
                   if abi == 'universal':
-                      if abis != expected:
+                      if abis != native_abis:
                           raise SystemExit(f'{path.name} has incompatible native ABIs: {sorted(abis)}')
                   elif abis != {abi}:
                       raise SystemExit(f'{path.name} has incompatible native ABIs: {sorted(abis)}')
