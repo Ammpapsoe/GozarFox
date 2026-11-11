@@ -116,6 +116,10 @@ class FoxAccountInstrumentedTest {
                 }
                 return 'NO_SUBMIT';
               };
+              const text = document.body ? document.body.innerText : '';
+              const captchaInput = [...document.querySelectorAll('#capInput,input[name=answer]')].find(visible);
+              const frame = [...document.querySelectorAll('iframe')].find(e => visible(e) && /captcha|challenge/i.test(e.src + ' ' + e.title));
+              if (captchaInput || frame || /characters seen in the image|audio captcha/i.test(text)) return 'CAPTCHA_REQUIRED';
               const passwords = [...document.querySelectorAll('input[type=password]')].filter(visible);
               if (passwords.length) {
                 passwords.forEach(e => fill(e, ${JSONObject.quote(argument("password"))}));
@@ -131,9 +135,6 @@ class FoxAccountInstrumentedTest {
                 fill(email, ${JSONObject.quote(argument("email"))});
                 return 'EMAIL_' + submit(email);
               }
-              const frame = [...document.querySelectorAll('iframe')].find(e => visible(e) && /captcha|challenge/i.test(e.src + ' ' + e.title));
-              if (frame) return 'CAPTCHA_REQUIRED';
-              const text = document.body ? document.body.innerText : '';
               if (/not supported|try again later|unexpected error|something went wrong|invalid or expired|blocked/i.test(text)) return 'MOZILLA_ERROR';
               return 'WAIT_INPUTS_' + document.querySelectorAll('input').length + '_PATH_' + location.pathname;
             })();
