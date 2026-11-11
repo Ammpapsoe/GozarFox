@@ -293,7 +293,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 }
                 if (progress == 100) {
                     val socks = orbot.socksPort.takeIf { it in 1..65535 } ?: control.getInfo("net/listeners/socks").let { listeners ->
-                        Regex(":(\d{1,5})").findAll(listeners).lastOrNull()?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        Regex(":(\\d{1,5})").findAll(listeners).lastOrNull()?.groupValues?.get(1)?.toIntOrNull() ?: 0
                     }
                     if (socks in 1..65535) {
                         port = socks
