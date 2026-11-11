@@ -49,6 +49,11 @@ with open(sys.argv[1], errors='replace') as source:
         line = raw.strip()
         if not line or not pattern.search(line):
             continue
+        line = re.sub(r'(?i)(obfs4|webtunnel)\s+\S+.*', '[bridge redacted]', line)
+        line = re.sub(r'(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])', '[ip]', line)
+        line = re.sub(r'(?i)(cert=)[A-Za-z0-9+/=]+', r'\1[redacted]', line)
+        line = re.sub(r'(?i)(url=)\S+', r'\1[redacted]', line)
+        line = re.sub(r'(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])', '[fingerprint]', line)
         line = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
         print('::error::' + line[:900])
         count += 1
@@ -57,16 +62,19 @@ with open(sys.argv[1], errors='replace') as source:
 if count == 0:
     print('::error::Embedded Tor instrumentation did not report its required single passing test')
 PY
-adb logcat -d -v threadtime -t 3000 > "${RUNNER_TEMP:-/tmp}/embedded-tor-logcat-raw.txt" || true
-python3 - "${RUNNER_TEMP:-/tmp}/embedded-tor-logcat-raw.txt" "${RUNNER_TEMP:-/tmp}/embedded-tor-native-failure.txt" <<'PY'
+adb logcat -d -v threadtime -t 3000 2>/dev/null | python3 - "${RUNNER_TEMP:-/tmp}/embedded-tor-native-failure.txt" <<'PY'
 import re
 import sys
 pattern = re.compile(r'(AndroidRuntime|FATAL|Fatal signal|UnsatisfiedLinkError|dlopen|SIGSEGV|SIGABRT|TorService|org\.torproject|IPtProxy|GoLog|Go log|gozar|DEBUG|crash_dump|backtrace|libtor|Abort message|terminating|signal \d+)', re.I)
-with open(sys.argv[1], errors='replace') as source:
-    lines = [line.strip() for line in source if pattern.search(line)]
+lines = [line.strip() for line in sys.stdin if pattern.search(line)]
 lines = lines[-240:]
-with open(sys.argv[2], 'w') as output:
+with open(sys.argv[1], 'w') as output:
     for line in lines:
+        line = re.sub(r'(?i)(obfs4|webtunnel)\s+\S+.*', '[bridge redacted]', line)
+        line = re.sub(r'(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])', '[ip]', line)
+        line = re.sub(r'(?i)(cert=)[A-Za-z0-9+/=]+', r'\1[redacted]', line)
+        line = re.sub(r'(?i)(url=)\S+', r'\1[redacted]', line)
+        line = re.sub(r'(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])', '[fingerprint]', line)
         output.write(line + '\n')
         clean = line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
         print('::error::' + clean[:900])

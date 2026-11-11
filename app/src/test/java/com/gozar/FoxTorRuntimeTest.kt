@@ -5,6 +5,7 @@ import android.content.Context
 import java.io.IOException
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -19,20 +20,27 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class FoxTorRuntimeTest {
-    private lateinit var context: Context
-    private lateinit var originalFactory: (Context, FoxTorPlan.Mode) -> FoxTorAttempt
-    private lateinit var originalReachability: (Int) -> Unit
-    private lateinit var originalStatusCallback: (String) -> Unit
-    private val created = mutableListOf<FoxTorPlan.Mode>()
-    private val closed = mutableListOf<FoxTorPlan.Mode>()
+    private data class Plan(val mode: FoxTorPlan.Mode, val bridge: String?, val budget: Long)
 
-    private inner class FakeAttempt(private val mode: FoxTorPlan.Mode, private val socksPort: Int) : FoxTorAttempt {
+    private lateinit var context: Context
+    private lateinit var originalFactory: (Context, FoxTorPlan.Mode, String?, Long) -> FoxTorAttempt
+    private lateinit var originalReachability: (Int, Int) -> Unit
+    private lateinit var originalStatusCallback: (String) -> Unit
+    private lateinit var originalManual: () -> FoxBridge.Candidate?
+    private lateinit var originalAutomatic: (Context) -> List<FoxBridge.Candidate>
+    private val created = mutableListOf<Plan>()
+    private val closed = mutableListOf<FoxTorPlan.Mode>()
+    private val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+    private val webtunnel = "webtunnel 1.1.1.1:443 ${"B".repeat(40)} url=https://bridge.example.com/a1B2 ver=0.0.1"
+
+    private inner class FakeAttempt(private val mode: FoxTorPlan.Mode, private val socksPort: Int, private val failing: Set<FoxTorPlan.Mode>) : FoxTorAttempt {
         override val port: Int = socksPort
         override fun start(): Int {
-            if (mode == FoxTorPlan.Mode.DIRECT) throw IOException("synthetic direct failure")
+            if (mode in failing) throw IOException("synthetic private address 8.8.8.8 must not escape")
             return port
         }
 
+        override fun diagnostics(): String = "stage=bootstrap"
         override fun close() {
             closed += mode
         }
@@ -41,76 +49,74 @@ class FoxTorRuntimeTest {
     @Before
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        originalFactory = FoxTorRuntime.attemptFactory
+        originalReachability = FoxTorRuntime.reachability
         originalStatusCallback = FoxTorRuntime.statusCallback
+        originalManual = FoxTorRuntime.manualProvider
+        originalAutomatic = FoxTorRuntime.automaticProvider
         created.clear()
         closed.clear()
+        FoxBridgeStore.manual = ""
         FoxTorRuntime.statusCallback = { }
-        FoxTorRuntime.attemptFactory = { _, mode ->
-            created += mode
-            FakeAttempt(mode, 19000 + mode.ordinal)
-        }
-        FoxTorRuntime.reachability = { }
+        FoxTorRuntime.manualProvider = { null }
+        FoxTorRuntime.automaticProvider = { emptyList() }
+        FoxTorRuntime.reachability = { _, timeout -> assertTrue(timeout > 0) }
     }
 
     @After
     fun tearDown() {
-        FoxTorRuntime.attemptFactory = { app, mode -> throw IllegalStateException("native backend was not restored") }
-        FoxTorRuntime.reachability = { }
+        FoxTorRuntime.attemptFactory = originalFactory
+        FoxTorRuntime.reachability = originalReachability
         FoxTorRuntime.statusCallback = originalStatusCallback
+        FoxTorRuntime.manualProvider = originalManual
+        FoxTorRuntime.automaticProvider = originalAutomatic
+        FoxBridgeStore.manual = ""
+    }
+
+    private fun factory(failing: Set<FoxTorPlan.Mode> = emptySet()) {
+        FoxTorRuntime.attemptFactory = { _, mode, bridge, budget ->
+            created += Plan(mode, bridge, budget)
+            FakeAttempt(mode, 19000 + created.size, failing)
+        }
     }
 
     @Test
-    fun directSuccessRunsBodyOnceAndStopsBeforeReturning() {
-        FoxTorRuntime.attemptFactory = { _, mode ->
-            created += mode
-            object : FoxTorAttempt {
-                override val port: Int = 19050
-                override fun start(): Int = port
-                override fun close() {
-                    closed += mode
-                }
-            }
-        }
+    fun manualSuccessRunsBodyOnceWithoutDownloadingFeed() {
+        factory()
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
+        FoxTorRuntime.automaticProvider = { throw AssertionError("feed must not be downloaded") }
         var calls = 0
         FoxTorRuntime.run(context) {
             calls++
-            assertEquals(19050, FoxNet.loginSocksPort())
+            assertTrue(FoxNet.loginSocksPort() != null)
             assertTrue(closed.isEmpty())
         }
         assertEquals(1, calls)
-        assertEquals(listOf(FoxTorPlan.Mode.DIRECT), created)
-        assertEquals(listOf(FoxTorPlan.Mode.DIRECT), closed)
+        assertEquals(listOf(FoxTorPlan.Mode.OBFS4), created.map { it.mode })
+        assertEquals(obfs4, created.single().bridge)
+        assertEquals(15_000L, created.single().budget)
+        assertEquals(created.map { it.mode }, closed)
         assertNull(FoxNet.loginSocksPort())
     }
 
     @Test
-    fun failedDirectAndUnreachableSnowflakeEscalateToMeek() {
-        FoxTorRuntime.reachability = { port ->
-            if (port == 19001) throw IOException("synthetic probe failure")
-        }
+    fun failedManualAndObfs4RotateToWebTunnel() {
+        factory(setOf(FoxTorPlan.Mode.OBFS4))
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
+        FoxTorRuntime.automaticProvider = { listOfNotNull(FoxBridge.parse(obfs4), FoxBridge.parse(webtunnel)) }
         var calls = 0
-        FoxTorRuntime.run(context) {
-            calls++
-            assertEquals(19002, FoxNet.loginSocksPort())
-        }
+        FoxTorRuntime.run(context) { calls++ }
         assertEquals(1, calls)
-        assertEquals(FoxTorPlan.order, created)
-        assertEquals(FoxTorPlan.order, closed)
+        assertEquals(listOf(FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.WEBTUNNEL), created.map { it.mode })
+        assertEquals(created.map { it.mode }, closed)
+        assertTrue(FoxBridgeStore.manual.isEmpty())
         assertNull(FoxNet.loginSocksPort())
     }
 
     @Test
     fun accountFailureDoesNotRetryCredentialsOnAnotherTransport() {
-        FoxTorRuntime.attemptFactory = { _, mode ->
-            created += mode
-            object : FoxTorAttempt {
-                override val port: Int = 19050
-                override fun start(): Int = port
-                override fun close() {
-                    closed += mode
-                }
-            }
-        }
+        factory()
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
         val failure = FoxError("synthetic account rejection")
         try {
             FoxTorRuntime.run(context) { throw failure }
@@ -118,22 +124,17 @@ class FoxTorRuntimeTest {
         } catch (error: FoxError) {
             assertSame(failure, error)
         }
-        assertEquals(listOf(FoxTorPlan.Mode.DIRECT), created)
-        assertEquals(listOf(FoxTorPlan.Mode.DIRECT), closed)
+        assertEquals(1, created.size)
+        assertEquals(created.map { it.mode }, closed)
         assertNull(FoxNet.loginSocksPort())
     }
 
     @Test
-    fun exhaustedTransportsFailClosedAndCloseEveryAttempt() {
-        FoxTorRuntime.attemptFactory = { _, mode ->
-            created += mode
-            object : FoxTorAttempt {
-                override val port: Int = 0
-                override fun start(): Int = throw IOException("synthetic transport failure")
-                override fun diagnostics(): String = "Last bootstrap: 17% synthetic stall"
-                override fun close() {
-                    closed += mode
-                }
+    fun exhaustedRotationStopsAtTenAndFallbacksWithoutLeakingBridgeData() {
+        factory(FoxTorPlan.order.toSet())
+        FoxTorRuntime.automaticProvider = {
+            (1..12).map { index ->
+                FoxBridge.parse(obfs4.replace("8.8.8.8", "8.8.8.$index").replace("A".repeat(40), index.toString(16).padStart(40, '0')))!!
             }
         }
         var calls = 0
@@ -143,14 +144,29 @@ class FoxTorRuntimeTest {
         } catch (error: FoxError) {
             val detail = error.message.orEmpty()
             assertTrue(detail.startsWith("Secure connection could not be established"))
-            assertTrue(detail.contains("DIRECT: IOException: synthetic transport failure"))
-            assertTrue(detail.contains("SNOWFLAKE: IOException: synthetic transport failure"))
-            assertTrue(detail.contains("MEEK: IOException: synthetic transport failure"))
-            assertTrue(detail.contains("Last bootstrap: 17% synthetic stall"))
+            assertTrue(detail.contains("OBFS4"))
+            assertTrue(detail.contains("SNOWFLAKE"))
+            assertTrue(detail.contains("MEEK"))
+            assertFalse(detail.contains("8.8.8."))
+            assertFalse(detail.contains("synthetic private address"))
         }
         assertEquals(0, calls)
-        assertEquals(FoxTorPlan.order, created)
-        assertEquals(FoxTorPlan.order, closed)
+        assertEquals(12, created.size)
+        assertEquals(10, created.count { it.mode == FoxTorPlan.Mode.OBFS4 })
+        assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE, FoxTorPlan.Mode.MEEK), created.takeLast(2).map { it.mode })
+        assertTrue(created.all { it.budget in 1..90_000L })
+        assertEquals(created.map { it.mode }, closed)
         assertNull(FoxNet.loginSocksPort())
+    }
+
+    @Test
+    fun unavailableFeedFallsBackToSnowflake() {
+        factory(setOf(FoxTorPlan.Mode.MEEK))
+        FoxTorRuntime.automaticProvider = { throw IOException("feed unavailable") }
+        var calls = 0
+        FoxTorRuntime.run(context) { calls++ }
+        assertEquals(1, calls)
+        assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE, FoxTorPlan.Mode.MEEK), created.map { it.mode })
+        assertEquals(created.map { it.mode }, closed)
     }
 }

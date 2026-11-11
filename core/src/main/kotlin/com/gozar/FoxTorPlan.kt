@@ -3,6 +3,8 @@ package com.gozar
 object FoxTorPlan {
     enum class Mode {
         DIRECT,
+        OBFS4,
+        WEBTUNNEL,
         SNOWFLAKE,
         MEEK
     }
@@ -14,19 +16,23 @@ object FoxTorPlan {
     private const val SNOWFLAKE_BRIDGE = "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=$SNOWFLAKE_BROKER fronts=$SNOWFLAKE_FRONTS ice=$SNOWFLAKE_ICE utls-imitate=hellorandomizedalpn"
     private const val MEEK_BRIDGE = "meek_lite 192.0.2.20:80 url=https://1603026938.rsc.cdn77.org front=www.phpmyadmin.net utls=HelloRandomizedALPN"
 
-    val order = listOf(Mode.DIRECT, Mode.SNOWFLAKE, Mode.MEEK)
+    val order = listOf(Mode.OBFS4, Mode.WEBTUNNEL, Mode.SNOWFLAKE, Mode.MEEK)
 
     fun transportName(mode: Mode): String? = when (mode) {
         Mode.DIRECT -> null
+        Mode.OBFS4 -> "obfs4"
+        Mode.WEBTUNNEL -> "webtunnel"
         Mode.SNOWFLAKE -> "snowflake"
         Mode.MEEK -> "meek_lite"
     }
 
-    fun timeoutMs(mode: Mode): Long = 90_000L
+    fun timeoutMs(mode: Mode): Long = when (mode) {
+        Mode.OBFS4, Mode.WEBTUNNEL -> 15_000L
+        else -> 90_000L
+    }
 
-    fun torrc(mode: Mode, transportPort: Int, logPath: String? = null): String {
+    fun torrc(mode: Mode, transportPort: Int): String {
         require(mode == Mode.DIRECT || transportPort in 1..65535) { "invalid transport port" }
-        require(logPath == null || (logPath.isNotBlank() && logPath.none { it == '\n' || it == '\r' || it == ' ' })) { "invalid Tor log path" }
         val lines = mutableListOf(
             "ClientOnly 1",
             "SocksPort 127.0.0.1:auto IsolateDestAddr",
@@ -38,22 +44,36 @@ object FoxTorPlan {
             "NATDPort 0",
             "ControlPort 0",
             "AvoidDiskWrites 1",
-            "SafeLogging 1"
+            "SafeLogging 1",
+            "DisableNetwork 1"
         )
-        if (logPath != null) lines += "Log notice file $logPath"
         val transport = transportName(mode)
         if (transport != null) {
             lines += "UseBridges 1"
             lines += "ClientTransportPlugin $transport socks5 127.0.0.1:$transportPort"
-            lines += "Bridge " + when (mode) {
-                Mode.SNOWFLAKE -> SNOWFLAKE_BRIDGE
-                Mode.MEEK -> MEEK_BRIDGE
-                Mode.DIRECT -> ""
-            }
         } else {
             lines += "UseBridges 0"
         }
         return lines.joinToString("\n", postfix = "\n")
+    }
+
+    fun activate(mode: Mode, bridge: String? = null): String {
+        if (mode == Mode.DIRECT) return "SETCONF DisableNetwork=0"
+        val line = when (mode) {
+            Mode.OBFS4, Mode.WEBTUNNEL -> FoxBridge.parse(bridge.orEmpty())?.takeIf { it.mode == mode }?.line
+            Mode.SNOWFLAKE -> SNOWFLAKE_BRIDGE
+            Mode.MEEK -> MEEK_BRIDGE
+            Mode.DIRECT -> null
+        } ?: throw IllegalArgumentException("invalid bridge")
+        require(line.none { it == '\n' || it == '\r' || it == '"' || it == '\\' })
+        return "SETCONF UseBridges=1 Bridge=\"$line\" DisableNetwork=0"
+    }
+
+    fun fastFailure(reply: String?): Boolean {
+        if (reply == null) return false
+        val normalized = reply.uppercase()
+        return Regex("REASON=(?:CONNREFUSED|CONNRESET)(?:\\s|$)").containsMatchIn(normalized) ||
+            Regex("SUMMARY=\"[^\"]*(?:CONNECTION REFUSED|CONNECTION RESET)[^\"]*\"").containsMatchIn(normalized)
     }
 
     fun bootstrapProgress(reply: String?): Int {

@@ -36,6 +36,7 @@ class LoginActivityTest {
         Fox.busy = false
         Fox.message = ""
         Fox.stage = ""
+        FoxBridgeStore.clear()
         controller = Robolectric.buildActivity(LoginActivity::class.java).setup()
         activity = controller.get()
         FoxStore.clear(activity)
@@ -46,6 +47,7 @@ class LoginActivityTest {
         Fox.busy = false
         Fox.message = ""
         Fox.stage = ""
+        FoxBridgeStore.clear()
         FoxStore.clear(activity)
         controller.pause().stop().destroy()
     }
@@ -82,7 +84,7 @@ class LoginActivityTest {
         assertSame(primary.parent, progress.parent)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loginError).visibility)
         for (id in intArrayOf(R.id.loginPrimary, R.id.loginMail, R.id.loginSecret, R.id.loginConfirm,
-            R.id.loginCode, R.id.loginReveal, R.id.loginForgot, R.id.loginSwitch, R.id.loginLanguage)) {
+            R.id.loginCode, R.id.loginBridge, R.id.loginBridgeHelp, R.id.loginReveal, R.id.loginForgot, R.id.loginSwitch, R.id.loginLanguage)) {
             assertFalse("control $id must be disabled", activity.findViewById<View>(id).isEnabled)
         }
 
@@ -95,7 +97,7 @@ class LoginActivityTest {
         assertEquals(activity.getString(R.string.login_action), primary.text.toString())
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginError).visibility)
         for (id in intArrayOf(R.id.loginPrimary, R.id.loginMail, R.id.loginSecret, R.id.loginConfirm,
-            R.id.loginCode, R.id.loginReveal, R.id.loginForgot, R.id.loginSwitch, R.id.loginLanguage)) {
+            R.id.loginCode, R.id.loginBridge, R.id.loginBridgeHelp, R.id.loginReveal, R.id.loginForgot, R.id.loginSwitch, R.id.loginLanguage)) {
             assertTrue("control $id must be enabled", activity.findViewById<View>(id).isEnabled)
         }
     }
@@ -165,5 +167,41 @@ class LoginActivityTest {
         render()
         assertEquals("", secret.text.toString())
         assertTrue(activity.isFinishing)
+    }
+
+    @Test
+    fun manualBridgeIsNotSavedInViewStateOrPreferences() {
+        val bridge = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+        activity.findViewById<EditText>(R.id.loginBridge).setText(bridge)
+        val state = Bundle()
+        controller.saveInstanceState(state).pause().stop().destroy()
+        controller = Robolectric.buildActivity(LoginActivity::class.java)
+            .create(state).start().restoreInstanceState(state).resume().visible()
+        activity = controller.get()
+        assertEquals("", activity.findViewById<EditText>(R.id.loginBridge).text.toString())
+        assertTrue(activity.getSharedPreferences("fox", Context.MODE_PRIVATE).all.isEmpty())
+    }
+
+    @Test
+    fun bridgeHelpShowsTheOfficialTelegramBot() {
+        activity.findViewById<View>(R.id.loginBridgeHelp).performClick()
+        val dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog()
+        assertNotNull(dialog)
+        assertTrue(dialog.isShowing)
+        val message = dialog.findViewById<TextView>(android.R.id.message)?.text?.toString().orEmpty()
+        assertTrue(message.contains("@GetBridgesBot"))
+        assertTrue(message.contains(activity.getString(R.string.login_bridge)))
+        dialog.dismiss()
+    }
+
+    @Test
+    fun injectedBridgeIsRejectedBeforeAuthenticationStarts() {
+        activity.findViewById<EditText>(R.id.loginMail).setText("test@example.invalid")
+        activity.findViewById<EditText>(R.id.loginSecret).setText("sample-password")
+        activity.findViewById<EditText>(R.id.loginBridge).setText("obfs4 127.0.0.1:443 invalid\nSocksPort 0.0.0.0:9050")
+        activity.findViewById<MaterialButton>(R.id.loginPrimary).performClick()
+        assertFalse(Fox.busy)
+        assertEquals(activity.getString(R.string.login_bridge_invalid), activity.findViewById<TextView>(R.id.loginError).text.toString())
+        assertTrue(FoxBridgeStore.manual.isEmpty())
     }
 }

@@ -330,9 +330,17 @@ AGPL-3.0-or-later</string>
     <string name="login_confirm_action">Confirm</string>
     <string name="login_fill">Enter your email and password.</string>
     <string name="login_mismatch">The two passwords do not match.</string>
+    <string name="login_bridge">Bridge</string>
+    <string name="login_bridge_hint">Manual obfs4 Bridge (optional)</string>
+    <string name="login_bridge_help">Bridge help</string>
+    <string name="login_bridge_help_text">You can get an obfs4 Bridge from the official Telegram bot @GetBridgesBot and paste it here to use your own Bridge. If this field is empty, the app automatically uses the project’s signed Bridge list (JSON).</string>
+    <string name="login_bridge_open_bot">Open Telegram bot</string>
+    <string name="login_bridge_invalid">Enter one complete, valid public obfs4 Bridge line, or leave the field empty.</string>
     <string name="login_working">Working…</string>
     <string name="login_secure_connecting">Establishing a secure connection…</string>
     <string name="login_tor_direct">Direct Tor</string>
+    <string name="login_tor_obfs4">obfs4 Bridge</string>
+    <string name="login_tor_webtunnel">WebTunnel Bridge</string>
     <string name="login_tor_snowflake">Snowflake</string>
     <string name="login_tor_meek">Meek</string>
     <string name="login_tor_starting">Starting %1$s…</string>

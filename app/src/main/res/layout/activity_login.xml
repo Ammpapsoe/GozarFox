@@ -161,6 +161,38 @@
                         android:maxLines="1" />
                 </LinearLayout>
 
+                <LinearLayout
+                    android:id="@+id/loginBridgeBox"
+                    style="@style/Gozar.Login.Well"
+                    android:layout_marginTop="12dp">
+
+                    <ImageView
+                        style="@style/Gozar.Login.Well.Icon"
+                        android:contentDescription="@string/login_bridge"
+                        android:src="@drawable/ic_alt_route" />
+
+                    <EditText
+                        android:id="@+id/loginBridge"
+                        style="@style/Gozar.Login.Well.Input"
+                        android:hint="@string/login_bridge_hint"
+                        android:imeOptions="actionDone"
+                        android:importantForAutofill="no"
+                        android:inputType="textVisiblePassword|textNoSuggestions"
+                        android:maxLength="2048"
+                        android:maxLines="1"
+                        android:saveEnabled="false" />
+
+                    <ImageButton
+                        android:id="@+id/loginBridgeHelp"
+                        android:layout_width="44dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/login_bridge_help"
+                        android:padding="12dp"
+                        android:src="@drawable/ic_help"
+                        android:tint="@color/login_accent" />
+                </LinearLayout>
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/loginForgot"
                     style="@style/Gozar.Login.Link"

@@ -34,7 +34,7 @@ class FoxAccountInstrumentedTest {
         FoxTorRuntime.clean(app)
     }
 
-    @Test(timeout = 1_200_000)
+    @Test(timeout = 1_800_000)
     fun realLoginTwiceAndOpenDirectTunnel() {
         val email = argument("email")
         val password = argument("password")
@@ -50,7 +50,7 @@ class FoxAccountInstrumentedTest {
         }
     }
 
-    @Test(timeout = 900_000)
+    @Test(timeout = 1_200_000)
     fun realSignupReceivesCodeAndOpensTunnel() {
         val email = argument("email")
         val password = argument("password")
@@ -88,7 +88,7 @@ class FoxAccountInstrumentedTest {
     }
 
     private fun awaitIdle(label: String) {
-        val deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(7)
+        val deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(10)
         while (Fox.busy && System.nanoTime() < deadline) Thread.sleep(250)
         if (Fox.busy) throw AssertionError(label + "_TIMED_OUT_WAITING_FOR_ACCOUNT_FLOW")
     }

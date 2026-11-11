@@ -39,13 +39,15 @@ internal interface FoxTorAttempt {
 
 internal object FoxTorRuntime : FoxLoginTransport {
     private val lock = Any()
-    @Volatile internal var attemptFactory: (Context, FoxTorPlan.Mode) -> FoxTorAttempt = { app, mode -> AndroidAttempt(app, mode) }
-    @Volatile internal var reachability: (Int) -> Unit = { port ->
+    @Volatile internal var attemptFactory: (Context, FoxTorPlan.Mode, String?, Long) -> FoxTorAttempt = { app, mode, bridge, budget -> AndroidAttempt(app, mode, bridge, budget) }
+    @Volatile internal var reachability: (Int, Int) -> Unit = { port, timeout ->
         FoxNet.throughLoginSocks(port) {
-            FoxNet.call(FoxNet.SERVERS, "GET", timeout = 20_000)
+            FoxNet.call(FoxNet.SERVERS, "GET", timeout = timeout)
         }
     }
     @Volatile internal var statusCallback: (String) -> Unit = { Fox.updateLoginStage(it) }
+    @Volatile internal var manualProvider: () -> FoxBridge.Candidate? = { FoxBridgeStore.manualCandidate() }
+    @Volatile internal var automaticProvider: (Context) -> List<FoxBridge.Candidate> = { app -> FoxBridgeStore.automatic(app) }
     private var sharedController: Controller? = null
 
     private fun transportController(state: File): Controller = sharedController
@@ -56,15 +58,27 @@ internal object FoxTorRuntime : FoxLoginTransport {
         clean(app)
         var active: FoxTorAttempt? = null
         val failures = mutableListOf<String>()
-        for (mode in FoxTorPlan.order) {
-            val candidate = attemptFactory(app, mode)
+        val rotationStarted = System.nanoTime()
+        fun rotationRemaining(): Long = TimeUnit.NANOSECONDS.toMillis(
+            TimeUnit.SECONDS.toNanos(150) - (System.nanoTime() - rotationStarted)
+        ).coerceAtLeast(0L)
+
+        fun tryTransport(mode: FoxTorPlan.Mode, bridge: String?, budget: Long = FoxTorPlan.timeoutMs(mode)): Boolean {
+            val allowed = minOf(FoxTorPlan.timeoutMs(mode), budget)
+            if (allowed <= 0) return false
+            val candidate = attemptFactory(app, mode, bridge, allowed)
             try {
                 report(app, R.string.login_tor_starting, modeLabel(app, mode))
+                val started = System.nanoTime()
                 candidate.start()
+                val remaining = TimeUnit.NANOSECONDS.toMillis(
+                    TimeUnit.MILLISECONDS.toNanos(allowed) - (System.nanoTime() - started)
+                ).toInt()
+                if (remaining <= 0) throw FoxError("Transport time budget exhausted")
                 report(app, R.string.login_tor_checking)
-                reachability(candidate.port)
+                reachability(candidate.port, remaining)
                 active = candidate
-                break
+                return true
             } catch (error: InterruptedException) {
                 candidate.close()
                 Thread.currentThread().interrupt()
@@ -72,20 +86,58 @@ internal object FoxTorRuntime : FoxLoginTransport {
             } catch (error: Exception) {
                 val detail = failureDetail(error, candidate)
                 failures += mode.name + ": " + detail
-                Log.w("GozarTor", mode.name + " failed\n" + detail)
+                Log.w("GozarTor", mode.name + " failed: " + detail)
                 candidate.close()
+                return false
             }
         }
-        val attempt = active ?: throw FoxError("Secure connection could not be established\n" + failures.joinToString("\n"))
+
+        val manual = try {
+            manualProvider()
+        } catch (error: Exception) {
+            failures += "MANUAL: " + error.javaClass.simpleName
+            null
+        }
+        if (manual?.mode == FoxTorPlan.Mode.OBFS4) tryTransport(manual.mode, manual.line, rotationRemaining())
+        if (active == null) FoxBridgeStore.manual = ""
+
+        if (active == null) {
+            val automatic = try {
+                automaticProvider(app)
+            } catch (error: Exception) {
+                failures += "FEED: " + error.javaClass.simpleName
+                emptyList()
+            }
+            val seen = HashSet<String>()
+            var count = 0
+            for (candidate in automatic) {
+                if (count >= FoxBridge.MAX_AUTOMATIC || active != null || rotationRemaining() <= 0) break
+                if (candidate.mode !in setOf(FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.WEBTUNNEL)) continue
+                val valid = FoxBridge.parse(candidate.line)?.takeIf { it.mode == candidate.mode } ?: continue
+                if (!seen.add(valid.line)) continue
+                count++
+                if (tryTransport(valid.mode, valid.line, rotationRemaining())) break
+            }
+        }
+
+        if (active == null) {
+            for (mode in listOf(FoxTorPlan.Mode.SNOWFLAKE, FoxTorPlan.Mode.MEEK)) {
+                if (tryTransport(mode, null)) break
+            }
+        }
+
+        val activeAttempt = active ?: throw FoxError("Secure connection could not be established\n" + failures.joinToString("\n"))
         try {
-            FoxNet.throughLoginSocks(attempt.port, body)
+            FoxNet.throughLoginSocks(activeAttempt.port, body)
         } finally {
-            attempt.close()
+            activeAttempt.close()
         }
     }
 
     private fun modeLabel(context: Context, mode: FoxTorPlan.Mode): String = context.getString(when (mode) {
         FoxTorPlan.Mode.DIRECT -> R.string.login_tor_direct
+        FoxTorPlan.Mode.OBFS4 -> R.string.login_tor_obfs4
+        FoxTorPlan.Mode.WEBTUNNEL -> R.string.login_tor_webtunnel
         FoxTorPlan.Mode.SNOWFLAKE -> R.string.login_tor_snowflake
         FoxTorPlan.Mode.MEEK -> R.string.login_tor_meek
     })
@@ -95,21 +147,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
     }
 
     private fun failureDetail(error: Exception, candidate: FoxTorAttempt): String {
-        val summary = buildString {
-            append(error.javaClass.simpleName)
-            error.message?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
-            val cause = error.cause
-            if (cause != null && cause.message != error.message) {
-                append("; cause=").append(cause.javaClass.simpleName)
-                cause.message?.let { append(": ").append(it) }
-            }
-        }
         val native = candidate.diagnostics()
-        return cleanDiagnostic(if (native.isBlank()) summary else summary + "\n" + native).take(3_200)
+        return listOf(error.javaClass.simpleName, native).filter { it.isNotBlank() }.joinToString("; ").take(640)
     }
-
-    private fun cleanDiagnostic(text: String): String = text.replace('\r', ' ').replace('\t', ' ')
-        .lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
 
     fun clean(context: Context) {
         File(context.cacheDir, "gozar-login-transport").deleteRecursively()
@@ -143,8 +183,8 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 }
                 if (line[3] == '-') continue
                 if (line.startsWith("250 ")) return lines.joinToString("\n")
-                if (line.firstOrNull() == '5') throw FoxError("Tor control error: " + line.take(240))
-                throw FoxError("Unexpected Tor control reply: " + line.take(240))
+                if (line.firstOrNull() == '5') throw FoxError("Tor control rejected configuration")
+                throw FoxError("Unexpected Tor control reply")
             }
         }
 
@@ -156,37 +196,40 @@ internal object FoxTorRuntime : FoxLoginTransport {
         }
     }
 
-    private class AndroidAttempt(private val app: Context, private val mode: FoxTorPlan.Mode) : FoxTorAttempt {
+    private class AndroidAttempt(
+        private val app: Context,
+        private val mode: FoxTorPlan.Mode,
+        private val bridge: String?,
+        private val budgetMs: Long
+    ) : FoxTorAttempt {
         private val ready = CountDownLatch(1)
         private var controller: Controller? = null
         private var transport: String? = null
         private var connection: ServiceConnection? = null
         private var control: RemoteControl? = null
         private var bound = false
-        private var logFile: File? = null
         @Volatile private var remoteDisconnected = false
         @Volatile private var closing = false
         @Volatile private var diagnosticStage = "created"
         @Volatile private var lastProgress = -1
-        @Volatile private var lastSummary = ""
         override var port: Int = 0
             private set
 
         override fun start(): Int {
+            val started = System.nanoTime()
+            val budget = TimeUnit.MILLISECONDS.toNanos(budgetMs)
             diagnosticStage = "prepare-state"
             stopRemoteTor()
             clean(app)
             val state = File(app.cacheDir, "gozar-login-transport")
-            if (!state.mkdirs() && !state.isDirectory) throw FoxError("Cannot create Tor diagnostic directory")
-            val diagnosticLog = File(state, "tor.log")
-            logFile = diagnosticLog
+            if (!state.mkdirs() && !state.isDirectory) throw FoxError("Cannot create Tor state directory")
             transport = FoxTorPlan.transportName(mode)
             val transportPort = startTransport(state)
             val torrc = TorService.getTorrc(app)
             val directory = torrc.parentFile ?: throw FoxError("Tor configuration directory is unavailable")
             if (!directory.mkdirs() && !directory.isDirectory) throw FoxError("Cannot recreate Tor configuration directory")
             diagnosticStage = "write-torrc"
-            torrc.writeText(FoxTorPlan.torrc(mode, transportPort, diagnosticLog.absolutePath))
+            torrc.writeText(FoxTorPlan.torrc(mode, transportPort))
             diagnosticStage = "bind-remote-service"
             val connected = object : ServiceConnection {
                 override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -208,16 +251,17 @@ internal object FoxTorRuntime : FoxLoginTransport {
             connection = connected
             bound = app.bindService(Intent(app, RemoteTorService::class.java), connected, Context.BIND_AUTO_CREATE)
             if (!bound) throw FoxError("Android refused to bind isolated TorService")
-            if (!ready.await(15, TimeUnit.SECONDS)) throw FoxError("Isolated TorService binding timed out after 15 seconds")
+            val bindBudget = minOf(15_000L, TimeUnit.NANOSECONDS.toMillis(budget - (System.nanoTime() - started)).coerceAtLeast(1L))
+            if (!ready.await(bindBudget, TimeUnit.MILLISECONDS)) throw FoxError("Isolated TorService binding timed out")
             diagnosticStage = "bootstrap"
-            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FoxTorPlan.timeoutMs(mode))
+            val deadline = started + budget
             while (System.nanoTime() < deadline) {
-                if (remoteDisconnected) throw FoxError("Isolated Tor process stopped at bootstrap $lastProgress%: $lastSummary")
+                if (remoteDisconnected) throw FoxError("Isolated Tor process stopped during bootstrap")
                 if (control == null) {
                     try {
                         control = openControl()
                     } catch (_: Exception) {
-                        Thread.sleep(250)
+                        Thread.sleep(100)
                         continue
                     }
                 }
@@ -226,14 +270,16 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 } catch (error: Exception) {
                     control?.close()
                     control = null
-                    if (remoteDisconnected) throw FoxError("Isolated Tor process stopped at bootstrap $lastProgress%: $lastSummary")
-                    Thread.sleep(250)
+                    if (remoteDisconnected) throw FoxError("Isolated Tor process stopped during bootstrap")
+                    Thread.sleep(100)
                     continue
+                }
+                if (mode in setOf(FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.WEBTUNNEL) && FoxTorPlan.fastFailure(reply)) {
+                    throw FoxError("Bridge connection was rejected")
                 }
                 val progress = FoxTorPlan.bootstrapProgress(reply)
                 if (progress >= 0) {
                     lastProgress = progress
-                    lastSummary = FoxTorPlan.bootstrapSummary(reply)
                     report(app, R.string.login_tor_bootstrap, modeLabel(app, mode), progress)
                 }
                 if (progress == 100) {
@@ -244,10 +290,9 @@ internal object FoxTorRuntime : FoxLoginTransport {
                         return socks
                     }
                 }
-                Thread.sleep(300)
+                Thread.sleep(100)
             }
-            val progress = if (lastProgress < 0) "unknown" else lastProgress.toString()
-            throw FoxError("${mode.name} Tor bootstrap timed out after 90 seconds at $progress%: $lastSummary")
+            throw FoxError("Tor bootstrap time budget exhausted")
         }
 
         private fun openControl(): RemoteControl {
@@ -255,8 +300,11 @@ internal object FoxTorRuntime : FoxLoginTransport {
             val socket = LocalSocket()
             return try {
                 socket.connect(LocalSocketAddress(socketFile.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
-                socket.soTimeout = 5_000
-                RemoteControl(socket).also { it.command("AUTHENTICATE") }
+                socket.soTimeout = 1_000
+                RemoteControl(socket).also {
+                    it.command("AUTHENTICATE")
+                    it.command(FoxTorPlan.activate(mode, bridge))
+                }
             } catch (error: Exception) {
                 try {
                     socket.close()
@@ -285,20 +333,16 @@ internal object FoxTorRuntime : FoxLoginTransport {
             native.start(name, "")
             diagnosticStage = "read-$name-port"
             val localPort = native.port(name).toInt()
-            if (localPort !in 1..65535) throw FoxError("$name returned invalid local port $localPort")
+            if (localPort !in 1..65535) throw FoxError("Invalid local transport port")
             return localPort
         }
 
         override fun diagnostics(): String {
             val details = mutableListOf<String>()
-            details += "Last native stage: $diagnosticStage"
-            if (lastProgress >= 0 || lastSummary.isNotBlank()) details += "Last bootstrap: $lastProgress% $lastSummary"
-            if (remoteDisconnected) details += "Isolated Tor process disconnected"
-            logFile?.takeIf { it.isFile }?.let { file ->
-                val tail = file.readLines().takeLast(18).joinToString("\n")
-                if (tail.isNotBlank()) details += "Tor log tail:\n$tail"
-            }
-            return details.joinToString("\n").take(2_600)
+            details += "stage=$diagnosticStage"
+            if (lastProgress >= 0) details += "bootstrap=$lastProgress%"
+            if (remoteDisconnected) details += "process=disconnected"
+            return details.joinToString(";")
         }
 
         override fun close() {
@@ -306,8 +350,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
             diagnosticStage = "shutdown"
             try {
                 control?.command("SIGNAL SHUTDOWN")
-            } catch (error: Exception) {
-                Log.w("GozarTor", "Tor shutdown signal failed: " + error.javaClass.simpleName)
+            } catch (_: Exception) {
             }
             control?.close()
             control = null
@@ -316,8 +359,7 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 if (bound) {
                     try {
                         app.unbindService(connected)
-                    } catch (error: Exception) {
-                        Log.w("GozarTor", "Tor unbind failed: " + error.javaClass.simpleName)
+                    } catch (_: Exception) {
                     }
                 }
             }
@@ -327,14 +369,12 @@ internal object FoxTorRuntime : FoxLoginTransport {
             transport?.let { name ->
                 try {
                     controller?.stop(name)
-                } catch (error: Exception) {
-                    Log.w("GozarTor", "$name stop failed: " + error.javaClass.simpleName)
+                } catch (_: Exception) {
                 }
             }
             controller = null
             transport = null
             clean(app)
-            logFile = null
         }
 
         private fun stopRemoteTor() {
@@ -352,7 +392,6 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 if (attempt == 0 || attempt == 20) Process.killProcess(remote.pid)
                 Thread.sleep(100)
             }
-            Log.w("GozarTor", "Isolated Tor process did not exit after shutdown")
         }
 
         private fun waitForPortClose(observedPort: Int) {
@@ -370,7 +409,6 @@ internal object FoxTorRuntime : FoxLoginTransport {
                     return
                 }
             }
-            Log.w("GozarTor", "Tor SOCKS port $observedPort remained open after shutdown")
         }
     }
 }

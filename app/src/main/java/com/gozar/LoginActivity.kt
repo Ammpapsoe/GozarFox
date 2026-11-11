@@ -44,6 +44,9 @@ class LoginActivity : BaseActivity() {
     private lateinit var secret: EditText
     private lateinit var confirm: EditText
     private lateinit var codeInput: EditText
+    private lateinit var bridgeBox: View
+    private lateinit var bridge: EditText
+    private lateinit var bridgeHelp: ImageView
     private lateinit var reveal: ImageView
     private var shown = false
     private lateinit var primary: MaterialButton
@@ -101,6 +104,18 @@ class LoginActivity : BaseActivity() {
         secret = findViewById(R.id.loginSecret)
         confirm = findViewById(R.id.loginConfirm)
         codeInput = findViewById(R.id.loginCode)
+        bridgeBox = findViewById(R.id.loginBridgeBox)
+        bridge = findViewById(R.id.loginBridge)
+        bridgeHelp = findViewById(R.id.loginBridgeHelp)
+        bridge.setText(FoxBridgeStore.manual)
+        bridgeHelp.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.login_bridge_help)
+                .setMessage(R.string.login_bridge_help_text)
+                .setNeutralButton(R.string.login_bridge_open_bot) { _, _ -> web("https://t.me/GetBridgesBot") }
+                .setPositiveButton(R.string.ok, null)
+                .show()
+        }
         primary = findViewById(R.id.loginPrimary)
         forgot = findViewById(R.id.loginForgot)
         switchButton = findViewById(R.id.loginSwitch)
@@ -239,6 +254,13 @@ class LoginActivity : BaseActivity() {
             show(getString(R.string.login_mismatch))
             return
         }
+        val rawBridge = bridge.text?.toString().orEmpty().trim()
+        val manualBridge = if (rawBridge.isEmpty()) null else FoxBridge.manual(rawBridge)
+        if (rawBridge.isNotEmpty() && manualBridge == null) {
+            show(getString(R.string.login_bridge_invalid))
+            return
+        }
+        FoxBridgeStore.manual = manualBridge?.line.orEmpty()
         if (create) Fox.signUp(this, address, password) else Fox.signIn(this, address, password)
         render()
     }
@@ -247,6 +269,8 @@ class LoginActivity : BaseActivity() {
         val signed = Fox.signedIn(this)
         val completed = !adding || FoxStore.authRevision(this) != initialRevision
         if (signed && !Fox.busy && completed) {
+            FoxBridgeStore.clear()
+            bridge.text?.clear()
             secret.text?.clear()
             confirm.text?.clear()
             if (!adding) startActivity(Intent(this, MainActivity::class.java))
@@ -260,6 +284,7 @@ class LoginActivity : BaseActivity() {
         secretBox.visibility = if (step) View.GONE else View.VISIBLE
         confirmBox.visibility = if (create && !step) View.VISIBLE else View.GONE
         codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
+        bridgeBox.visibility = if (step) View.GONE else View.VISIBLE
         forgot.visibility = if (step) View.GONE else View.VISIBLE
         forgot.text = getString(if (create) R.string.login_create_browser else R.string.login_forgot)
         switchButton.visibility = if (step) View.GONE else View.VISIBLE
@@ -298,6 +323,8 @@ class LoginActivity : BaseActivity() {
         secret.isEnabled = !busy
         confirm.isEnabled = !busy
         codeInput.isEnabled = !busy
+        bridge.isEnabled = !busy
+        bridgeHelp.isEnabled = !busy
         reveal.isEnabled = !busy
         forgot.isEnabled = !busy
         switchButton.isEnabled = !busy

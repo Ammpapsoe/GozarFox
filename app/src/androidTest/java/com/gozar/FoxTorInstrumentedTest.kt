@@ -22,37 +22,44 @@ class FoxTorInstrumentedTest {
         val app = ApplicationProvider.getApplicationContext<Context>()
         val originalFactory = FoxTorRuntime.attemptFactory
         val originalReachability = FoxTorRuntime.reachability
+        val originalManual = FoxTorRuntime.manualProvider
+        val originalAutomatic = FoxTorRuntime.automaticProvider
         val modes = mutableListOf<FoxTorPlan.Mode>()
         val failures = mutableListOf<String>()
-        var current = FoxTorPlan.Mode.DIRECT
+        var current = FoxTorPlan.Mode.OBFS4
         var port = 0
+        val obfs4 = "obfs4 8.8.8.8:443 ${"A".repeat(40)} cert=${"A".repeat(86)} iat-mode=0"
+        val webtunnel = "webtunnel 1.1.1.1:443 ${"B".repeat(40)} url=https://bridge.example.com/a1B2 ver=0.0.1"
         try {
-            FoxTorRuntime.attemptFactory = { context, mode ->
+            FoxBridgeStore.manual = ""
+            FoxTorRuntime.manualProvider = { null }
+            FoxTorRuntime.automaticProvider = { listOfNotNull(FoxBridge.parse(obfs4), FoxBridge.parse(webtunnel)) }
+            FoxTorRuntime.attemptFactory = { context, mode, bridge, budget ->
                 current = mode
                 modes += mode
-                val attempt = originalFactory(context, mode)
+                val attempt = originalFactory(context, mode, bridge, budget)
                 object : FoxTorAttempt {
                     override val port: Int get() = attempt.port
                     override fun start(): Int {
                         try {
                             return attempt.start()
                         } catch (error: Exception) {
-                            failures += mode.name + ":" + error.javaClass.simpleName + ":" + (error.message ?: "").take(180)
+                            failures += mode.name + ":" + error.javaClass.simpleName
                             throw error
                         }
                     }
                     override fun close() = attempt.close()
                 }
             }
-            FoxTorRuntime.reachability = { socksPort ->
+            FoxTorRuntime.reachability = { socksPort, timeout ->
                 if (current != FoxTorPlan.Mode.MEEK) {
-                    failures += current.name + ":synthetic escalation"
+                    failures += current.name + ":synthetic-escalation"
                     throw IOException("synthetic escalation")
                 }
                 try {
-                    originalReachability(socksPort)
+                    originalReachability(socksPort, timeout)
                 } catch (error: Exception) {
-                    failures += current.name + "_PROBE:" + error.javaClass.simpleName + ":" + (error.message ?: "").take(180)
+                    failures += current.name + "_PROBE:" + error.javaClass.simpleName
                     throw error
                 }
             }
@@ -64,7 +71,7 @@ class FoxTorInstrumentedTest {
                         assertTrue(port in 1..65535)
                     }
                 } catch (error: FoxError) {
-                    throw AssertionError("attempt=$attempt transport failures=" + failures.joinToString("|") + "\n" + error.message)
+                    throw AssertionError("attempt=$attempt transport-failures=" + failures.joinToString("|") + "; " + error.javaClass.simpleName)
                 }
                 assertEquals(FoxTorPlan.Mode.MEEK, modes.last())
                 assertNull(FoxNet.loginSocksPort())
@@ -75,11 +82,15 @@ class FoxTorInstrumentedTest {
                 }
                 assertFalse(File(app.cacheDir, "gozar-login-transport").exists())
                 assertFalse(File(app.filesDir.parentFile, "app_TorService").exists())
+                assertFalse(File(app.cacheDir, "gozar-login-transport/tor.log").exists())
             }
             assertEquals(FoxTorPlan.order + FoxTorPlan.order, modes)
         } finally {
             FoxTorRuntime.attemptFactory = originalFactory
             FoxTorRuntime.reachability = originalReachability
+            FoxTorRuntime.manualProvider = originalManual
+            FoxTorRuntime.automaticProvider = originalAutomatic
+            FoxBridgeStore.manual = ""
         }
     }
 }

@@ -422,6 +422,7 @@ object Fox {
             // Store publication and logout are ordered by the same lock.
             FoxStore.saveAccount(c, mail, uid, tokens, pass)
             clearPendingLocked()
+            FoxBridgeStore.clear()
         }
     }
 
@@ -591,6 +592,7 @@ object Fox {
             authEpoch++
             clearPendingLocked()
         }
+        FoxBridgeStore.clear()
         notifyUi()
     }
 
@@ -627,6 +629,7 @@ object Fox {
                 authEpoch++
                 clearPendingLocked()
                 FoxStore.clear(c)
+                FoxBridgeStore.clear()
             }
         } finally {
             FoxVpnService.stop(c)

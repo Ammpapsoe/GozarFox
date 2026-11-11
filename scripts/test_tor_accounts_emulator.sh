@@ -52,6 +52,11 @@ for key in ("GOZAR_LOGIN_EMAIL", "GOZAR_LOGIN_PASSWORD", "GOZAR_SIGNUP_EMAIL", "
  if value: text=text.replace(value, "[redacted]")
 text=re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[email]", text)
 text=re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+", r"\1[redacted]", text)
+text=re.sub(r"(?i)(obfs4|webtunnel)\s+\S+.*", "[bridge redacted]", text)
+text=re.sub(r"(?<![0-9])(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9])", "[ip]", text)
+text=re.sub(r"(?i)(cert=)[A-Za-z0-9+/=]+", r"\1[redacted]", text)
+text=re.sub(r"(?i)(url=)\S+", r"\1[redacted]", text)
+text=re.sub(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{40}(?![0-9A-Fa-f])", "[fingerprint]", text)
 print(text)'
 }
 annotate_errors() {
