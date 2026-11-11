@@ -307,6 +307,8 @@ internal object FoxTorRuntime : FoxLoginTransport {
                     it.command("AUTHENTICATE")
                     diagnosticStage = "activate-network"
                     it.command(FoxTorPlan.activate(mode, bridge))
+                    it.command("SETCONF DisableNetwork=0")
+                    it.command("SIGNAL ACTIVE")
                     diagnosticStage = "bootstrap"
                 }
             } catch (error: Exception) {
