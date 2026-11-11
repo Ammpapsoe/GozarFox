@@ -48,6 +48,7 @@ class FoxTorInstrumentedTest {
                             throw error
                         }
                     }
+                    override fun diagnostics(): String = attempt.diagnostics()
                     override fun close() = attempt.close()
                 }
             }
