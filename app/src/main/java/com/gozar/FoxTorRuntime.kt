@@ -62,7 +62,12 @@ internal object FoxTorRuntime : FoxLoginTransport {
                 return@synchronized
             }
             retained = null
-            existing.close()
+            try {
+                existing.close()
+            } catch (error: Exception) {
+                FoxTorLog.record("ORBOT_CLOSE_ERROR", error.javaClass.simpleName)
+            }
+            throw FoxError("TorService disconnected. Retry with a fresh connection")
         }
         FoxTorLog.record("LOGIN_TRANSPORT_START")
         val failures = mutableListOf<String>()

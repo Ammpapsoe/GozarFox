@@ -241,6 +241,7 @@ class FoxTorRuntimeTest {
         }
         assertFalse(FoxTorRuntime.isActive())
         assertEquals(1, closed.size)
+        assertEquals(1, created.size)
         alive = true
         FoxTorRuntime.run(context) { }
         assertEquals(2, created.size)
