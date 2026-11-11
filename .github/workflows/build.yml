@@ -185,8 +185,9 @@ jobs:
       - name: Linux build dependencies
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          sudo find /etc/apt -type f -exec sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' {} +
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update -qq
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
       - name: Inspect Go code
         working-directory: go-desktop
         shell: bash
@@ -507,8 +508,9 @@ jobs:
       - name: Install packaging tools
         run: |
           set -e
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends rpm zstd squashfs-tools patchelf fakeroot libarchive-tools elfutils flatpak flatpak-builder
+          sudo find /etc/apt -type f -exec sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' {} +
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y --no-install-recommends rpm zstd squashfs-tools patchelf fakeroot libarchive-tools elfutils flatpak flatpak-builder
       - name: Unpack the Linux bundle
         run: |
           set -e

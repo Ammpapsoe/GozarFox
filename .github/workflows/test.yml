@@ -181,8 +181,9 @@ jobs:
           cache: true
       - name: Install Linux UI dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          sudo find /etc/apt -type f -exec sed -i 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' {} +
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 update -qq
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=3 -o Acquire::http::Timeout=20 install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
       - name: Analyze and test desktop UI
         working-directory: desktop_flutter
         run: |
