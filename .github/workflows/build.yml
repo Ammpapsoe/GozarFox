@@ -572,7 +572,7 @@ jobs:
             echo '::error::Autonomous Android compile, unit-tests, and artifact evidence is incomplete'
             exit 1
           fi
-      - name: Require same-commit root, x86 and real-account evidence
+      - name: Require same-commit root and real-account evidence for Stable
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

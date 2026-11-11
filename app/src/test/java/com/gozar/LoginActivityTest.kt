@@ -272,7 +272,7 @@ class LoginActivityTest {
             if (view is TextView) texts += view.text.toString()
             if (view is ViewGroup) for (index in 0 until view.childCount) collect(view.getChildAt(index))
         }
-        collect(dialog.window.decorView)
+        collect(dialog.window!!.decorView)
         val rendered = texts.joinToString("\n")
         assertTrue(rendered.contains("[bridge redacted]"))
         assertFalse(rendered.contains("217.182.93.225"))
