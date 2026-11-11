@@ -21,7 +21,7 @@ class FoxReply(
 object FoxNet {
 
     const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
-    const val CLIENT_ID = "5882386c6d801776"
+    const val CLIENT_ID = "e6eb0d1e856335fc"
     const val SCOPE = "profile https://identity.mozilla.com/apps/vpn"
     // Use the OAuth account origin for the supported account/session endpoints.
     const val AUTH = "https://oauth.accounts.firefox.com/v1"

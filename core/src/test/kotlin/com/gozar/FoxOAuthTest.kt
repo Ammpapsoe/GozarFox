@@ -14,7 +14,7 @@ class FoxOAuthTest {
     @Test fun requestUsesPkceOfflineAccessAndExactCallback() {
         val request = FoxOAuth.request(false, "person@example.invalid")
         val parameters = parameters(request.url)
-        assertEquals("5882386c6d801776", parameters["client_id"])
+        assertEquals("e6eb0d1e856335fc", parameters["client_id"])
         assertEquals("code", parameters["response_type"])
         assertEquals("offline", parameters["access_type"])
         assertEquals("signin", parameters["action"])
