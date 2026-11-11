@@ -67,6 +67,15 @@
                     android:textAppearance="@style/TextAppearance.Gozar.BodyMedium"
                     android:textColor="@color/login_text_dim" />
 
+                <TextView
+                    android:id="@+id/loginWaitHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/login_wait_hint"
+                    android:textAppearance="@style/TextAppearance.Gozar.BodySmall"
+                    android:textColor="@color/login_text_dim" />
+
                 <LinearLayout
                     android:id="@+id/loginMailBox"
                     style="@style/Gozar.Login.Well"
@@ -222,6 +231,13 @@
                         app:indicatorSize="24dp"
                         app:trackThickness="3dp" />
                 </FrameLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/loginStop"
+                    style="@style/Gozar.Login.Switch"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/login_stop"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/loginError"

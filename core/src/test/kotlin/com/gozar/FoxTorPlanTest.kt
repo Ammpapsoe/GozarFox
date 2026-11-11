@@ -75,6 +75,15 @@ class FoxTorPlanTest {
     }
 
     @Test
+    fun lateCircuitCreationGetsOneFixedThirtySecondDeadline() {
+        assertNull(FoxTorPlan.circuitDeadline(74, 1_000, null))
+        val deadline = FoxTorPlan.circuitDeadline(75, 1_000, null)
+        assertEquals(31_000L, deadline)
+        assertEquals(deadline, FoxTorPlan.circuitDeadline(90, 15_000, deadline))
+        assertEquals(deadline, FoxTorPlan.circuitDeadline(95, 29_000, deadline))
+    }
+
+    @Test
     fun explicitRefusalAndResetFailFastWithoutCuttingOffProgress() {
         assertTrue(FoxTorPlan.fastFailure("PROGRESS=0 REASON=CONNREFUSED SUMMARY=\"Failed\""))
         assertTrue(FoxTorPlan.fastFailure("PROGRESS=0 SUMMARY=\"Connection reset by peer\""))

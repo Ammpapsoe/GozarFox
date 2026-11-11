@@ -3,6 +3,9 @@ package com.gozar
 import android.app.Application
 import android.content.Context
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,6 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
@@ -49,6 +53,7 @@ class FoxTorRuntimeTest {
     @Before
     fun setUp() {
         context = RuntimeEnvironment.getApplication()
+        FoxTorRuntime.stop(context)
         originalFactory = FoxTorRuntime.attemptFactory
         originalReachability = FoxTorRuntime.reachability
         originalStatusCallback = FoxTorRuntime.statusCallback
@@ -65,6 +70,7 @@ class FoxTorRuntimeTest {
 
     @After
     fun tearDown() {
+        FoxTorRuntime.stop(context)
         FoxTorRuntime.attemptFactory = originalFactory
         FoxTorRuntime.reachability = originalReachability
         FoxTorRuntime.statusCallback = originalStatusCallback
@@ -81,7 +87,7 @@ class FoxTorRuntimeTest {
     }
 
     @Test
-    fun manualSuccessRunsBodyOnceWithoutDownloadingFeed() {
+    fun manualSuccessRetainsTunnelUntilFinish() {
         factory()
         FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
         FoxTorRuntime.automaticProvider = { throw AssertionError("feed must not be downloaded") }
@@ -95,12 +101,16 @@ class FoxTorRuntimeTest {
         assertEquals(listOf(FoxTorPlan.Mode.OBFS4), created.map { it.mode })
         assertEquals(obfs4, created.single().bridge)
         assertEquals(15_000L, created.single().budget)
-        assertEquals(created.map { it.mode }, closed)
+        assertTrue(closed.isEmpty())
+        assertTrue(FoxTorRuntime.isActive())
         assertNull(FoxNet.loginSocksPort())
+        FoxTorRuntime.finish(context)
+        assertEquals(created.map { it.mode }, closed)
+        assertFalse(FoxTorRuntime.isActive())
     }
 
     @Test
-    fun failedManualAndObfs4RotateToWebTunnel() {
+    fun failedManualAndObfs4RotateToWebTunnelBeforeCircuitStage() {
         factory(setOf(FoxTorPlan.Mode.OBFS4))
         FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
         FoxTorRuntime.automaticProvider = { listOfNotNull(FoxBridge.parse(obfs4), FoxBridge.parse(webtunnel)) }
@@ -108,13 +118,15 @@ class FoxTorRuntimeTest {
         FoxTorRuntime.run(context) { calls++ }
         assertEquals(1, calls)
         assertEquals(listOf(FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.WEBTUNNEL), created.map { it.mode })
-        assertEquals(created.map { it.mode }, closed)
+        assertEquals(listOf(FoxTorPlan.Mode.OBFS4, FoxTorPlan.Mode.OBFS4), closed)
         assertTrue(FoxBridgeStore.manual.isEmpty())
+        FoxTorRuntime.finish(context)
+        assertEquals(created.map { it.mode }, closed)
         assertNull(FoxNet.loginSocksPort())
     }
 
     @Test
-    fun accountFailureDoesNotRetryCredentialsOnAnotherTransport() {
+    fun accountFailureKeepsTunnelAndNeverRetriesOnAnotherTransport() {
         factory()
         FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
         val failure = FoxError("synthetic account rejection")
@@ -125,8 +137,38 @@ class FoxTorRuntimeTest {
             assertSame(failure, error)
         }
         assertEquals(1, created.size)
+        assertTrue(closed.isEmpty())
+        assertTrue(FoxTorRuntime.isActive())
+        var retries = 0
+        FoxTorRuntime.run(context) { retries++ }
+        assertEquals(1, retries)
+        assertEquals(1, created.size)
+        FoxTorRuntime.finish(context)
         assertEquals(created.map { it.mode }, closed)
         assertNull(FoxNet.loginSocksPort())
+    }
+
+    @Test
+    fun mozillaFailureAfterBootstrapKeepsSameTunnelForRetry() {
+        factory()
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
+        FoxTorRuntime.reachability = { _, _ -> throw IOException("synthetic Mozilla timeout") }
+        try {
+            FoxTorRuntime.run(context) { fail("body must wait for reachability") }
+            fail("Mozilla failure was hidden")
+        } catch (error: FoxError) {
+            assertTrue(error.message.orEmpty().contains("same tunnel"))
+        }
+        assertEquals(1, created.size)
+        assertTrue(closed.isEmpty())
+        assertTrue(FoxTorRuntime.isActive())
+        FoxTorRuntime.reachability = { _, _ -> }
+        var calls = 0
+        FoxTorRuntime.run(context) { calls++ }
+        assertEquals(1, calls)
+        assertEquals(1, created.size)
+        FoxTorRuntime.finish(context)
+        assertEquals(created.map { it.mode }, closed)
     }
 
     @Test
@@ -156,17 +198,57 @@ class FoxTorRuntimeTest {
         assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE, FoxTorPlan.Mode.MEEK), created.takeLast(2).map { it.mode })
         assertTrue(created.all { it.budget in 1..90_000L })
         assertEquals(created.map { it.mode }, closed)
+        assertFalse(FoxTorRuntime.isActive())
         assertNull(FoxNet.loginSocksPort())
     }
 
     @Test
-    fun unavailableFeedFallsBackToSnowflake() {
+    fun unavailableFeedFallsBackToSnowflakeAndRetainsIt() {
         factory(setOf(FoxTorPlan.Mode.MEEK))
         FoxTorRuntime.automaticProvider = { throw IOException("feed unavailable") }
         var calls = 0
         FoxTorRuntime.run(context) { calls++ }
         assertEquals(1, calls)
         assertEquals(listOf(FoxTorPlan.Mode.SNOWFLAKE), created.map { it.mode })
+        assertTrue(closed.isEmpty())
+        FoxTorRuntime.finish(context)
         assertEquals(created.map { it.mode }, closed)
+    }
+
+    @Test
+    fun stopInterruptsBootstrapAndCompletesCleanupBeforeReturning() {
+        val entered = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val error = AtomicReference<Throwable?>()
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
+        FoxTorRuntime.attemptFactory = { _, mode, bridge, budget ->
+            created += Plan(mode, bridge, budget)
+            object : FoxTorAttempt {
+                override val port: Int = 19000
+                override fun start(): Int {
+                    entered.countDown()
+                    check(released.await(5, TimeUnit.SECONDS))
+                    throw IOException("synthetic bootstrap stopped")
+                }
+                override fun close() {
+                    closed += mode
+                    released.countDown()
+                }
+            }
+        }
+        val worker = thread {
+            try {
+                FoxTorRuntime.run(context) { }
+            } catch (failure: Throwable) {
+                error.set(failure)
+            }
+        }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        FoxTorRuntime.stop(context)
+        worker.join(5_000)
+        assertFalse(worker.isAlive)
+        assertTrue(error.get() is FoxError)
+        assertEquals(created.map { it.mode }, closed)
+        assertFalse(FoxTorRuntime.isActive())
     }
 }

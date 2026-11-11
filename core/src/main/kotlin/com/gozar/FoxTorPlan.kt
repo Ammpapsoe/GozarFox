@@ -12,6 +12,7 @@ object FoxTorPlan {
     const val SNOWFLAKE_BROKER = "https://1098762253.rsc.cdn77.org/"
     const val SNOWFLAKE_FRONTS = "app.datapacket.com,www.datapacket.com"
     const val SNOWFLAKE_ICE = "stun:stun.epygi.com:3478,stun:stun.uls.co.za:3478,stun:stun.voipgate.com:3478,stun:stun.mixvoip.com:3478,stun:stun.telnyx.com:3478,stun:stun.hot-chilli.net:3478,stun:stun.fitauto.ru:3478,stun:stun.m-online.net:3478"
+    const val CIRCUIT_GRACE_MS = 30_000L
 
     private const val SNOWFLAKE_BRIDGE = "snowflake 192.0.2.3:80 2B280B23E1107BB62ABFC40DDCC8824814F80A72 fingerprint=2B280B23E1107BB62ABFC40DDCC8824814F80A72 url=$SNOWFLAKE_BROKER fronts=$SNOWFLAKE_FRONTS ice=$SNOWFLAKE_ICE utls-imitate=hellorandomizedalpn"
     private const val MEEK_BRIDGE = "meek_lite 192.0.2.20:80 url=https://1603026938.rsc.cdn77.org front=www.phpmyadmin.net utls=HelloRandomizedALPN"
@@ -72,6 +73,12 @@ object FoxTorPlan {
     }
 
     fun activate(): String = "SETCONF DisableNetwork=0"
+
+    fun circuitDeadline(progress: Int, nowMs: Long, current: Long?): Long? = when {
+        current != null -> current
+        progress >= 75 -> nowMs + CIRCUIT_GRACE_MS
+        else -> null
+    }
 
     fun fastFailure(reply: String?): Boolean {
         if (reply == null) return false

@@ -67,7 +67,12 @@
             android:name=".RemoteTorService"
             android:exported="false"
             android:process=":tor"
-            android:stopWithTask="false" />
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="embedded Tor login transport" />
+        </service>
 
         <service
             android:name=".FoxVpnService"

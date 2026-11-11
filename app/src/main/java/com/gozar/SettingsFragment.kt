@@ -625,7 +625,7 @@ class SettingsFragment : Fragment() {
             withDisconnected {
                 sheet.dismiss()
                 FoxVpnService.stop(context)
-                Fox.cancelLogin()
+                Fox.cancelLogin(requireContext())
                 startActivity(Intent(context, LoginActivity::class.java).putExtra(LoginActivity.ADD_ACCOUNT, true))
             }
         }).show(FoxStore.accounts(context))

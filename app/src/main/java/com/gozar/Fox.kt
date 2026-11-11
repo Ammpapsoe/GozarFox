@@ -178,6 +178,7 @@ object Fox {
                 try {
                     currentAuth(epoch) { }
                     loginTransport.run(c.applicationContext) { body(epoch) }
+                    if (signedIn(c.applicationContext)) loginTransport.finish(c.applicationContext)
                 } catch (_: LoginCancelled) {
                     // Logout or cancellation revoked this job's authority to
                     // publish state. Already-started network requests may finish.
@@ -313,7 +314,6 @@ object Fox {
             stage = ""
             lastFailureDiagnostic = ""
         }
-        FoxTorRuntime.clean(c.applicationContext)
         notifyUi()
     }
 
@@ -586,13 +586,27 @@ object Fox {
         message = ""
     }
 
-    fun cancelLogin() {
+    fun canStopLogin(): Boolean = authInFlight || needsStep() || loginTransport.isActive()
+
+    fun stopLogin(c: Context) {
+        synchronized(authLock) {
+            authEpoch++
+            clearPendingLocked()
+        }
+        FoxBridgeStore.clear()
+        stage = c.getString(R.string.login_stopping)
+        loginTransport.stop(c.applicationContext)
+        notifyUi()
+    }
+
+    fun cancelLogin(c: Context? = null) {
         synchronized(authLock) {
             if (busy || authInFlight) return
             authEpoch++
             clearPendingLocked()
         }
         FoxBridgeStore.clear()
+        if (c != null) loginTransport.stop(c.applicationContext)
         notifyUi()
     }
 
@@ -603,6 +617,7 @@ object Fox {
             authEpoch
         }
         try {
+            loginTransport.stop(c.applicationContext)
             FoxVpnService.stop(c)
             val switched = synchronized(authLock) {
                 if (epoch != authEpoch || !FoxStore.switchAccount(c, id)) false
@@ -632,6 +647,7 @@ object Fox {
                 FoxBridgeStore.clear()
             }
         } finally {
+            loginTransport.stop(c.applicationContext)
             FoxVpnService.stop(c)
         }
         load(c)

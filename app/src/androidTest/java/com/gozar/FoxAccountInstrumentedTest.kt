@@ -21,7 +21,7 @@ class FoxAccountInstrumentedTest {
         app = ApplicationProvider.getApplicationContext()
         FoxLink.stop()
         FoxStore.clear(app)
-        Fox.cancelLogin()
+        Fox.cancelLogin(app)
         FoxTorRuntime.clean(app)
     }
 
@@ -30,7 +30,7 @@ class FoxAccountInstrumentedTest {
         FoxLink.stop()
         FoxVpnService.stop(app)
         FoxStore.clear(app)
-        Fox.cancelLogin()
+        Fox.cancelLogin(app)
         FoxTorRuntime.clean(app)
     }
 
@@ -45,7 +45,7 @@ class FoxAccountInstrumentedTest {
             assertPassAndOpenTunnel("LOGIN", attempt + 1)
             FoxLink.stop()
             FoxStore.clear(app)
-            Fox.cancelLogin()
+            Fox.cancelLogin(app)
             assertFalse(Fox.signedIn(app))
         }
     }

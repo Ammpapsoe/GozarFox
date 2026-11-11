@@ -219,7 +219,7 @@ object FoxApi {
     fun existingPass(access: String): FoxPass = pass(access, false)
 
     private fun pass(access: String, allowActivate: Boolean): FoxPass {
-        var reply = FoxNet.call(
+        var reply = FoxNet.callWithRetry(
             FoxNet.GUARDIAN + "/api/v1/fpn/token",
             "GET",
             null,
@@ -227,7 +227,7 @@ object FoxApi {
         )
         if (reply.code == 403 && allowActivate) {
             activate(access)
-            reply = FoxNet.call(
+            reply = FoxNet.callWithRetry(
                 FoxNet.GUARDIAN + "/api/v1/fpn/token",
                 "GET",
                 null,

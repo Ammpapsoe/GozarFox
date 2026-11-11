@@ -1,5 +1,6 @@
 package com.gozar
 
+import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
@@ -158,6 +159,36 @@ object FoxNet {
             }
         }
         return reply
+    }
+
+    fun callWithRetry(
+        url: String,
+        method: String = "GET",
+        body: String? = null,
+        headers: Map<String, String> = emptyMap(),
+        timeout: Int = 25000,
+        attempts: Int = 3
+    ): FoxReply {
+        require((method == "GET" || method == "HEAD") && attempts in 1..3)
+        var last: IOException? = null
+        repeat(attempts) { attempt ->
+            val reply = try {
+                call(url, method, body, headers, timeout)
+            } catch (error: IOException) {
+                last = error
+                null
+            }
+            if (reply != null && (reply.code !in setOf(408, 425, 429, 500, 502, 503, 504) || attempt + 1 == attempts)) return reply
+            if (attempt + 1 < attempts) {
+                try {
+                    Thread.sleep(250L * (attempt + 1))
+                } catch (error: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IOException("HTTP retry interrupted", error)
+                }
+            }
+        }
+        throw last ?: FoxError("Mozilla request failed after retries")
     }
 
     private fun once(

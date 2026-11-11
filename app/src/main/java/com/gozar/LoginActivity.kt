@@ -50,6 +50,7 @@ class LoginActivity : BaseActivity() {
     private lateinit var reveal: ImageView
     private var shown = false
     private lateinit var primary: MaterialButton
+    private lateinit var stop: MaterialButton
     private lateinit var forgot: MaterialButton
     private lateinit var switchButton: MaterialButton
     private lateinit var languageButton: MaterialButton
@@ -117,6 +118,7 @@ class LoginActivity : BaseActivity() {
                 .show()
         }
         primary = findViewById(R.id.loginPrimary)
+        stop = findViewById(R.id.loginStop)
         forgot = findViewById(R.id.loginForgot)
         switchButton = findViewById(R.id.loginSwitch)
         progress = findViewById(R.id.loginProgress)
@@ -139,6 +141,7 @@ class LoginActivity : BaseActivity() {
         }
 
         primary.setOnClickListener { act() }
+        stop.setOnClickListener { Fox.stopLogin(this) }
         forgot.setOnClickListener { web(if (create) CREATE_PAGE else RESET_PAGE) }
         switchButton.setOnClickListener {
             create = !create
@@ -192,7 +195,7 @@ class LoginActivity : BaseActivity() {
             toast(R.string.account_wait)
             return
         }
-        Fox.cancelLogin()
+        Fox.cancelLogin(this)
         super.onBackPressed()
     }
 
@@ -318,6 +321,7 @@ class LoginActivity : BaseActivity() {
         primary.contentDescription = if (busy) busyStage else null
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         primary.isEnabled = !busy
+        stop.visibility = if (busy || Fox.canStopLogin()) View.VISIBLE else View.GONE
         languageButton.isEnabled = !busy
         mail.isEnabled = !busy
         secret.isEnabled = !busy

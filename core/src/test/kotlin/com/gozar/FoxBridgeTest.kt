@@ -35,6 +35,20 @@ class FoxBridgeTest {
     }
 
     @Test
+    fun reportedStandardObfs4CertificatesAndWrappedWhitespaceAreAccepted() {
+        val samples = listOf(
+            "obfs4 217.182.93.225:62782 D4FC51091A3D23F098354F660F2D5B17B2F3432C cert=UDjYbRlpv/GEc19L1dPssudaWQE83uxgUKxtUDQ7COumf1ERpup7+mcOvshJdO4Luh/Udw iat-mode=0",
+            "obfs4 54.37.130.137:64989 F49BD145F36A405F1774542E4C276DBE90D4FC37 cert=m1r9Jlm/otc44ofvWggOuIM+s8iSdSd+cBZytcFk7xjZ/fDAQ6Is8jf322ezGVyaLBreOw iat-mode=0"
+        )
+        for (sample in samples) {
+            assertEquals(sample, FoxBridge.manual(sample)?.line)
+            assertEquals(sample, FoxBridge.manual(sample.replace(" ", "\r\n"))?.line)
+        }
+        assertNull(FoxBridge.manual(samples.joinToString("\n")))
+        assertNull(FoxBridge.manual(samples[0] + "\u0001"))
+    }
+
+    @Test
     fun webtunnelRejectsUnsafeEndpointsAndUrls() {
         assertEquals(webtunnel, FoxBridge.parse(webtunnel)?.line)
         assertNull(FoxBridge.parse(webtunnel.replace("1.1.1.1", "127.0.0.1")))

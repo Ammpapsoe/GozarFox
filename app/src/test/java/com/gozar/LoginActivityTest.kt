@@ -81,6 +81,9 @@ class LoginActivityTest {
         assertEquals("Direct Tor · Tor bootstrap 42%", activity.findViewById<TextView>(R.id.loginSubtitle).text.toString())
         assertEquals("Direct Tor · Tor bootstrap 42%", primary.contentDescription.toString())
         assertEquals(View.VISIBLE, progress.visibility)
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginStop).visibility)
+        assertTrue(activity.findViewById<View>(R.id.loginStop).isEnabled)
+        assertEquals(activity.getString(R.string.login_wait_hint), activity.findViewById<TextView>(R.id.loginWaitHint).text.toString())
         assertSame(primary.parent, progress.parent)
         assertEquals(View.GONE, activity.findViewById<View>(R.id.loginError).visibility)
         for (id in intArrayOf(R.id.loginPrimary, R.id.loginMail, R.id.loginSecret, R.id.loginConfirm,
@@ -167,6 +170,30 @@ class LoginActivityTest {
         render()
         assertEquals("", secret.text.toString())
         assertTrue(activity.isFinishing)
+    }
+
+    @Test
+    fun stopButtonCancelsAuthenticationAndStopsOwnedTransport() {
+        val original = Fox.loginTransport
+        var stopped = false
+        Fox.loginTransport = object : FoxLoginTransport {
+            override fun run(context: Context, body: () -> Unit) = body()
+            override fun isActive(): Boolean = true
+            override fun stop(context: Context) {
+                stopped = true
+            }
+        }
+        try {
+            Fox.busy = true
+            render()
+            activity.findViewById<MaterialButton>(R.id.loginStop).performClick()
+            assertTrue(stopped)
+            assertFalse(Fox.needsStep())
+            assertFalse(Fox.canRetryLogin())
+        } finally {
+            Fox.loginTransport = original
+            Fox.busy = false
+        }
     }
 
     @Test

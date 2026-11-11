@@ -17,7 +17,7 @@ object FoxBridge {
 
     fun parse(raw: String): Candidate? {
         val text = raw.trim()
-        if (text.isEmpty() || text.length > 2_048 || text.any { it.code < 0x20 || it.code == 0x7f }) return null
+        if (text.isEmpty() || text.length > 2_048 || text.any { (it.code < 0x20 && it !in "\t\r\n") || it.code == 0x7f }) return null
         val parts = text.split(Regex("\\s+"))
         return when (parts.firstOrNull()) {
             "obfs4" -> obfs4(parts)
