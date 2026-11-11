@@ -48,11 +48,15 @@ jobs:
           set -euo pipefail
           staged="$RUNNER_TEMP/tor-validation/apk"
           mkdir -p "$staged/debug" "$staged/androidTest/debug"
+          find app/build/outputs/apk -type f -name '*.apk' -print | sort
           for abi in x86_64 x86; do
             cp "app/build/outputs/apk/debug/app-$abi-debug.apk" "$staged/debug/app-$abi-debug.apk"
             test_apk=$(find app/build/outputs/apk/androidTest -type f -name "app-$abi-debug-androidTest.apk" -print -quit)
             if [ -z "$test_apk" ]; then
               test_apk=$(find app/build/outputs/apk/androidTest -type f -name "*$abi*androidTest*.apk" -print -quit)
+            fi
+            if [ -z "$test_apk" ]; then
+              test_apk=$(find app/build/outputs/apk/androidTest -type f -name 'app-universal-debug-androidTest.apk' -print -quit)
             fi
             test -n "$test_apk"
             test -s "$test_apk"

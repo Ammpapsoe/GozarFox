@@ -220,7 +220,7 @@ class LoginActivityTest {
 
     @Test
     fun bridgeHelpShowsTheOfficialTelegramBot() {
-        activity.findViewById<View>(com.google.android.material.R.id.text_input_end_icon).performClick()
+        activity.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.loginBridgeHelp).endIconView.performClick()
         val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog()
         assertNotNull(dialog)
         assertTrue(dialog.isShowing)

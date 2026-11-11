@@ -216,6 +216,39 @@ class FoxTorRuntimeTest {
     }
 
     @Test
+    fun deadRetainedBindingIsClosedAndNeverReused() {
+        var alive = true
+        FoxTorRuntime.manualProvider = { FoxBridge.parse(obfs4) }
+        FoxTorRuntime.attemptFactory = { _, mode, bridge, budget ->
+            created += Plan(mode, bridge, budget)
+            object : FoxTorAttempt {
+                override val port: Int = 19000 + created.size
+                override fun start(): Int = port
+                override fun isAlive(): Boolean = alive
+                override fun close() {
+                    closed += mode
+                }
+            }
+        }
+        FoxTorRuntime.run(context) { }
+        assertTrue(FoxTorRuntime.isActive())
+        alive = false
+        try {
+            FoxTorRuntime.run(context) { throw IOException("synthetic dead binding") }
+            fail("dead binding was reused")
+        } catch (error: FoxError) {
+            assertTrue(error.message.orEmpty().contains("fresh connection"))
+        }
+        assertFalse(FoxTorRuntime.isActive())
+        assertEquals(1, closed.size)
+        alive = true
+        FoxTorRuntime.run(context) { }
+        assertEquals(2, created.size)
+        FoxTorRuntime.finish(context)
+        assertEquals(2, closed.size)
+    }
+
+    @Test
     fun stopInterruptsBootstrapAndCompletesCleanupBeforeReturning() {
         val entered = CountDownLatch(1)
         val released = CountDownLatch(1)

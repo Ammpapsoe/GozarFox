@@ -90,7 +90,7 @@ class AccountUiTest {
         val activity = controller.get()
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginSavedAccounts).visibility)
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginSystemAccounts).visibility)
-        activity.findViewById<View>(R.id.loginSystemAccounts).performClick()
+        activity.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.loginSystemAccounts).endIconView.performClick()
         val launched = shadowOf(activity).nextStartedActivityForResult ?: error("system picker was not launched")
         assertNotNull(launched.intent.component)
         assertEquals("android", launched.intent.component?.packageName)
