@@ -20,6 +20,9 @@ trap 'rm -rf "$WORK"' EXIT
 python3 - "$VERSION" "$TAG" "$ARTIFACT_DIR" "$NOTES" "$WORK/desktop-update.json" <<'PY'
 import hashlib, json, os, re, sys, time
 version, tag, directory, notes, output = sys.argv[1:]
+repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "bardia049b-stack/Gozar")
+if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+    raise SystemExit("invalid release repository")
 if not re.fullmatch(r"[0-9]{1,4}(\.[0-9]{1,4}){2}(-rc\.[0-9]{1,3})?", version):
     raise SystemExit("invalid desktop version")
 if not re.fullmatch(r"v[0-9]{1,4}(\.[0-9]{1,4}){1,3}(-rc\.[0-9]{1,3}|-desktop)?", tag):
@@ -55,7 +58,7 @@ for ident, os_name, arch, kind, name in entries:
         raise SystemExit(f"missing desktop artifact: {name}")
     artifacts.append({"id": ident, "os": os_name, "arch": arch, "kind": kind,
         "name": name, "sha256": digest.hexdigest(), "size": size,
-        "url": f"https://github.com/bardia049b-stack/Gozar/releases/download/{tag}/{name}"})
+        "url": f"https://github.com/{repository}/releases/download/{tag}/{name}"})
 manifest = {"version": version, "release_tag": tag, "issued_at": int(time.time()),
     "notes": notes, "artifacts": artifacts}
 raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

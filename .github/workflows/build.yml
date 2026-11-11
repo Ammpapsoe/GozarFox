@@ -641,6 +641,7 @@ jobs:
       - name: Sign Android and desktop update manifests
         env:
           GOZAR_UPDATE_KEY: ${{ secrets.GOZAR_UPDATE_KEY }}
+          GOZAR_RELEASE_REPOSITORY: ${{ github.repository }}
           ANDROID_VERSION: ${{ steps.version.outputs.android }}
           DESKTOP_VERSION: ${{ steps.version.outputs.desktop }}
           GOZAR_RELEASE_TAG: ${{ steps.version.outputs.tag }}

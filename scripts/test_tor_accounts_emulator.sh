@@ -73,6 +73,7 @@ run_account_test() {
   local status=$?
   set -e
   if [ "$status" -eq 0 ] && grep -E 'OK \(1 test\)' "$result" >/dev/null; then
+    if grep -F 'STATE=SIGNUP_CODE_DELIVERY_OK' "$result" >/dev/null; then marker='STATE=SIGNUP_CODE_DELIVERY_OK'; fi
     printf '::notice::%s\n' "$marker"
     return 0
   fi

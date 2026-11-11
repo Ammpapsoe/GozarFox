@@ -111,6 +111,14 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertNotEqual(0, self.sign().returncode)
         self.assertEqual(raw, (self.apkdir / "update.json").read_bytes())
 
+    def test_manifest_uses_the_current_release_repository(self):
+        self.env["GOZAR_RELEASE_REPOSITORY"] = "Ammpapsoe/GozarFox"
+        result = self.sign()
+        self.assertEqual(0, result.returncode, result.stderr)
+        manifest = json.loads((self.apkdir / "update.json").read_text(encoding="utf-8"))
+        expected = "https://github.com/Ammpapsoe/GozarFox/releases/download/v1.11.1/"
+        self.assertTrue(all(item["url"].startswith(expected) for item in manifest["artifacts"]))
+
     def test_desktop_suffixed_tag_points_to_the_actual_release(self):
         self.env["GOZAR_RELEASE_TAG"] = "v1.11.1-desktop"
         result = self.sign()

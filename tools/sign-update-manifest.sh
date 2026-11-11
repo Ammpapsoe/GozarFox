@@ -29,6 +29,9 @@ trap 'rm -rf "$WORK"' EXIT
 python3 - "$VERSION" "$CHANNEL_MIN" "$APK_DIR" "$NOTES" "$TAG" "$WORK/update.json" <<'PY'
 import hashlib, json, os, re, sys, time
 version, channel_min, apk_dir, notes, tag, output = sys.argv[1:]
+repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "bardia049b-stack/Gozar")
+if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+    raise SystemExit("invalid release repository")
 pattern = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,16})?$")
 def valid(value):
     return pattern.fullmatch(value) and ("-" not in value or all(value.split("-", 1)[1].split(".")))
@@ -50,7 +53,7 @@ for name in sorted(os.listdir(apk_dir)):
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
     artifacts.append({"name": name, "sha256": digest.hexdigest(), "size": size,
-        "url": f"https://github.com/bardia049b-stack/Gozar/releases/download/{tag}/{name}"})
+        "url": f"https://github.com/{repository}/releases/download/{tag}/{name}"})
 if not artifacts:
     raise SystemExit(f"no APK files found in {apk_dir}")
 manifest = {"version": version, "channel_min": channel_min, "rollback": False,

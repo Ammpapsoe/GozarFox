@@ -56,6 +56,11 @@ class FoxAccountInstrumentedTest {
         val password = argument("password")
         val code = InstrumentationRegistry.getArguments().getString("code").orEmpty()
         Fox.signUp(app, email, password)
+        awaitIdle("SIGNUP")
+        if (code.isEmpty() && Fox.needsCode()) {
+            println("STATE=SIGNUP_CODE_DELIVERY_OK")
+            return
+        }
         completeAuthentication(code, "SIGNUP")
         assertTrue(Fox.signedIn(app))
         assertPassAndOpenTunnel("SIGNUP", 1)
