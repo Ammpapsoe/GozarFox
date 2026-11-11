@@ -24,7 +24,7 @@ go run "golang.org/x/mobile/cmd/gomobile@$gomobile_version" init
 go run "golang.org/x/mobile/cmd/gomobile@$gomobile_version" bind -target=android/arm64,android/arm,android/amd64,android/386 -ldflags='-s -w -checklinkname=0' -o "$work/IPtProxy.aar" -androidapi=24 -tags=netcgo -trimpath
 mkdir -p "$(dirname "$output")"
 app_dir=$(cd "$(dirname "$output")/.." && pwd)
-jni_output="$app_dir/build/generated/iptproxy/jniLibs"
+jni_output="$app_dir/src/main/jniLibs"
 rm -rf "$jni_output"
 mkdir -p "$jni_output"
 python3 - "$work/IPtProxy.aar" "$output" "$jni_output" <<'PY'

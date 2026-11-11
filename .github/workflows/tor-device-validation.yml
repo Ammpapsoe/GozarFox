@@ -51,6 +51,8 @@ jobs:
           find app/build/outputs/apk -type f -name '*.apk' -print | sort
           for abi in x86_64 x86; do
             apk="app/build/outputs/apk/debug/app-$abi-debug.apk"
+            printf 'Native libraries for %s:\n' "$abi"
+            unzip -Z1 "$apk" | grep '^lib/' || true
             unzip -Z1 "$apk" | grep -Fx "lib/$abi/libgojni.so" >/dev/null
             unzip -Z1 "$apk" | grep -Fx "lib/$abi/libtor.so" >/dev/null
             cp "$apk" "$staged/debug/app-$abi-debug.apk"

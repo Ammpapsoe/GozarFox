@@ -1,8 +1,10 @@
 package com.gozar
 
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
@@ -15,6 +17,7 @@ import java.io.PrintWriter
 import java.util.StringTokenizer
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.core.content.ContextCompat
 import net.freehaven.tor.control.TorControlCommands
 import net.freehaven.tor.control.TorControlConnection
 import org.torproject.jni.TorService
@@ -30,6 +33,7 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
     private var torServiceConnection: ServiceConnection? = null
     @Volatile private var controlSocket: LocalSocket? = null
     @Volatile private var connectionStage = "idle"
+    private var statusReceiver: BroadcastReceiver? = null
 
     fun diagnostics(): String = connectionStage
 
@@ -46,6 +50,7 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
         remoteDisconnected = false
         mCurrentStatus = TorService.STATUS_STARTING
         listener(TorService.STATUS_STARTING)
+        registerStatusReceiver()
         val connection = object : ServiceConnection {
             override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
                 connectionStage = "service-connected"
@@ -112,6 +117,43 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
             throw IOException("bindService failed")
         }
         connectionStage = "bound-awaiting-service"
+    }
+
+    private fun registerStatusReceiver() {
+        if (statusReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    TorService.ACTION_STATUS -> {
+                        val status = intent.getStringExtra(TorService.EXTRA_STATUS) ?: return
+                        mCurrentStatus = status
+                        if (status == TorService.STATUS_OFF && torStartRequested.get()) {
+                            connectionStage = "service-off"
+                            remoteDisconnected = true
+                            torStartRequested.set(false)
+                            clearControl()
+                        }
+                        listener(status)
+                    }
+                    TorService.ACTION_ERROR -> {
+                        val detail = FoxTorLog.sanitize(intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()).take(160)
+                        connectionStage = "service-error" + if (detail.isEmpty()) "" else ":" + detail
+                        FoxTorLog.record("ORBOT_SERVICE_ERROR", detail)
+                        remoteDisconnected = true
+                        torStartRequested.set(false)
+                        mCurrentStatus = TorService.STATUS_OFF
+                        clearControl()
+                        listener(TorService.STATUS_OFF)
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(TorService.ACTION_STATUS)
+            addAction(TorService.ACTION_ERROR)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        statusReceiver = receiver
     }
 
     private fun connectControlSocket() {
@@ -182,6 +224,13 @@ internal class OrbotTorController(context: Context, private val listener: (Strin
         }
         clearControl()
         torServiceConnection = null
+        statusReceiver?.let { receiver ->
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (_: Exception) {
+            }
+        }
+        statusReceiver = null
         torStartRequested.set(false)
         socksPort = -1
         mCurrentStatus = TorService.STATUS_OFF
