@@ -573,6 +573,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          android=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
+          channel=$(python3 scripts/release_channel.py "docs/release-notes/$android.md")
+          if [ "$channel" != stable ]; then
+            echo 'Prerelease: WebView account automation is not claimed; physical-device validation is required'
+            exit 0
+          fi
           sha=$(git rev-parse HEAD)
           ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '.workflow_runs[] | select(.name == "Apps Script Account Validation" and .event == "workflow_dispatch" and .conclusion == "success") | .id')
           found=false
