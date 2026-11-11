@@ -175,7 +175,6 @@ internal object FoxTorRuntime : FoxLoginTransport {
         } catch (_: Exception) {
         }
         val native = sharedController
-        sharedController = null
         for (mode in FoxTorPlan.order) {
             val name = FoxTorPlan.transportName(mode) ?: continue
             try {

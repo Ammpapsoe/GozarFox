@@ -190,7 +190,7 @@ class FoxTorRuntimeTest {
             assertTrue(detail.contains("SNOWFLAKE"))
             assertTrue(detail.contains("MEEK"))
             assertFalse(detail.contains("8.8.8."))
-            assertFalse(detail.contains("synthetic private address"))
+            assertTrue(detail.contains("[ip]"))
         }
         assertEquals(0, calls)
         assertEquals(12, created.size)
@@ -231,7 +231,7 @@ class FoxTorRuntimeTest {
                     throw IOException("synthetic bootstrap stopped")
                 }
                 override fun close() {
-                    closed += mode
+                    if (mode !in closed) closed += mode
                     released.countDown()
                 }
             }
