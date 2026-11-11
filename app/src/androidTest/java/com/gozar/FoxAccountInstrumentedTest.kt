@@ -37,8 +37,22 @@ class FoxAccountInstrumentedTest {
         val auth = instrumentation.waitForMonitorWithTimeout(monitor, 20_000) as? MozillaAuthActivity
             ?: throw AssertionError("WEBVIEW_DID_NOT_OPEN")
         val deadline = System.currentTimeMillis() + 150_000
+        var previousState = ""
         while (System.currentTimeMillis() < deadline && !Fox.signedIn(context)) {
             val state = evaluate(auth)
+            val marker = when {
+                state.contains("EMAIL_SUBMITTED") -> "EMAIL_SUBMITTED"
+                state.contains("PASSWORD_SUBMITTED") -> "PASSWORD_SUBMITTED"
+                state.contains("CODE_REQUIRED") -> "CODE_REQUIRED"
+                state.contains("CAPTCHA_REQUIRED") -> "CAPTCHA_REQUIRED"
+                state.contains("MOZILLA_ERROR") -> "MOZILLA_ERROR"
+                state.contains("WAIT") -> "WAIT"
+                else -> "EMPTY"
+            }
+            if (marker != previousState) {
+                println("WEBVIEW_STATE=$marker")
+                previousState = marker
+            }
             if (state.contains("CODE_REQUIRED")) {
                 if (!create) throw AssertionError("LOGIN_CODE_REQUIRED")
                 println("STATE=SIGNUP_CODE_REQUIRED")
@@ -46,6 +60,7 @@ class FoxAccountInstrumentedTest {
                 return
             }
             if (state.contains("CAPTCHA_REQUIRED")) throw AssertionError("MOZILLA_CAPTCHA_REQUIRED")
+            if (state.contains("MOZILLA_ERROR")) throw AssertionError("MOZILLA_WEBVIEW_ERROR")
             if (Fox.message.isNotEmpty() && !Fox.busy && Fox.message != "code") throw AssertionError("ACCOUNT_FLOW_FAILED")
             Thread.sleep(750)
         }
@@ -93,7 +108,7 @@ class FoxAccountInstrumentedTest {
                 submit(passwords[0]);
                 return 'PASSWORD_SUBMITTED';
               }
-              const email = [...document.querySelectorAll('input[type=email],input[name=email]')].find(visible);
+              const email = [...document.querySelectorAll('input[type=email],input[name=email],input[name=login],input[autocomplete=username],#email')].find(visible);
               if (email) {
                 fill(email, ${JSONObject.quote(argument("email"))});
                 submit(email);
@@ -103,6 +118,8 @@ class FoxAccountInstrumentedTest {
               if (code) return 'CODE_REQUIRED';
               const frame = [...document.querySelectorAll('iframe')].find(e => visible(e) && /captcha|challenge/i.test(e.src + ' ' + e.title));
               if (frame) return 'CAPTCHA_REQUIRED';
+              const text = document.body ? document.body.innerText : '';
+              if (/not supported|try again later|unexpected error|something went wrong|invalid or expired|blocked/i.test(text)) return 'MOZILLA_ERROR';
               return 'WAIT';
             })();
         """.trimIndent()
