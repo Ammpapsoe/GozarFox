@@ -55,7 +55,7 @@ class FoxAccountInstrumentedTest {
         val device = UiDevice.getInstance(instrumentation)
         repeat(20) {
             val allow = listOf("OK", "Allow", "Continue").firstNotNullOfOrNull { label ->
-                device.findObject(By.text(label))?.takeIf { it.exists() }
+                device.findObject(By.text(label))
             }
             if (allow != null) {
                 allow.click()
