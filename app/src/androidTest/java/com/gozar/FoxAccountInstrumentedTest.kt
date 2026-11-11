@@ -46,16 +46,18 @@ class FoxAccountInstrumentedTest {
                 state.contains("CODE_REQUIRED") -> "CODE_REQUIRED"
                 state.contains("CAPTCHA_REQUIRED") -> "CAPTCHA_REQUIRED"
                 state.contains("MOZILLA_ERROR") -> "MOZILLA_ERROR"
+                state.contains("WAIT_INPUTS_") -> state.removePrefix("\"").removeSuffix("\"").take(100)
                 state.contains("WAIT") -> "WAIT"
                 else -> "EMPTY"
             }
             if (marker != previousState) {
-                println("WEBVIEW_STATE=$marker")
+                report("WEBVIEW_STATE=$marker")
                 previousState = marker
             }
+            if (auth.isFinishing && !Fox.busy) throw AssertionError("WEBVIEW_CLOSED_BEFORE_ACCOUNT_COMPLETION")
             if (state.contains("CODE_REQUIRED")) {
                 if (!create) throw AssertionError("LOGIN_CODE_REQUIRED")
-                println("STATE=SIGNUP_CODE_REQUIRED")
+                report("STATE=SIGNUP_CODE_REQUIRED")
                 scenario.close()
                 return
             }
@@ -82,8 +84,8 @@ class FoxAccountInstrumentedTest {
         val tunnelDeadline = System.currentTimeMillis() + 30_000
         while (!FoxVpnService.isAlive() && System.currentTimeMillis() < tunnelDeadline) Thread.sleep(250)
         assertTrue("TUNNEL_DID_NOT_START", FoxVpnService.isAlive())
-        println("STATE=LOGIN_PASS_OK")
-        println("STATE=TUNNEL_STARTED")
+        report("STATE=LOGIN_PASS_OK")
+        report("STATE=TUNNEL_STARTED")
         scenario.close()
     }
 
@@ -120,7 +122,7 @@ class FoxAccountInstrumentedTest {
               if (frame) return 'CAPTCHA_REQUIRED';
               const text = document.body ? document.body.innerText : '';
               if (/not supported|try again later|unexpected error|something went wrong|invalid or expired|blocked/i.test(text)) return 'MOZILLA_ERROR';
-              return 'WAIT';
+              return 'WAIT_INPUTS_' + document.querySelectorAll('input').length + '_PATH_' + location.pathname;
             })();
         """.trimIndent()
         val latch = CountDownLatch(1)
@@ -133,6 +135,11 @@ class FoxAccountInstrumentedTest {
         }
         latch.await(5, TimeUnit.SECONDS)
         return state
+    }
+
+    private fun report(marker: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.sendStatus(0, android.os.Bundle().apply { putString("STATE", marker) })
     }
 
     private fun argument(name: String): String {
