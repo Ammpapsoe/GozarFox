@@ -6,8 +6,11 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.View
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebStorage
 import android.webkit.WebView
@@ -92,6 +95,15 @@ class MozillaAuthActivity : BaseActivity() {
                 if (!completed) progress.visibility = View.GONE
             }
         }
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                val level = consoleMessage.messageLevel().name
+                val message = safeConsole(consoleMessage.message())
+                val source = safeConsole(consoleMessage.sourceId())
+                Log.d("MozillaWebView", "$level $message ($source:${consoleMessage.lineNumber()})")
+                return true
+            }
+        }
         if (restoring) {
             webView.loadUrl(target)
         } else {
@@ -120,6 +132,14 @@ class MozillaAuthActivity : BaseActivity() {
         }
         super.onDestroy()
     }
+
+    private fun safeConsole(raw: String?): String = raw.orEmpty()
+        .replace(Regex("https?://\\S+"), "[url]")
+        .replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "[email]")
+        .replace(Regex("(?i)(bearer\\s+)[A-Za-z0-9._~+/-]+"), "$1[redacted]")
+        .replace(Regex("(?i)(\"?(?:access_token|refresh_token|code|state|code_verifier|password|authorization)\"?\\s*[:=]\\s*\"?)[A-Za-z0-9._~+/-]+"), "$1[redacted]")
+        .replace(Regex("\\b\\d{6}\\b"), "[code]")
+        .take(2048)
 
     private fun capture(raw: String): Boolean {
         if (completed || !isCallback(raw)) return false

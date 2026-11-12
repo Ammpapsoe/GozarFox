@@ -1,0 +1,82 @@
+name: ARM64 Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Prerelease tag
+        required: true
+        type: string
+        default: v1.12.2
+
+permissions:
+  contents: write
+
+jobs:
+  arm64:
+    if: ${{ inputs.tag == 'v1.12.2' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      XIAOMI_APP_ID: ${{ secrets.XIAOMI_APP_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Import Android signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Build signed ARM64 package
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+          bash ./gradlew :app:assembleArm64-v8aRelease --no-daemon --stacktrace
+          version=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
+          test "$version" = "1.12.2"
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk "out/Gozar_${version}_arm64-v8a.apk"
+      - name: Verify package identity and contents
+        run: |
+          set -e
+          apk=out/Gozar_1.12.2_arm64-v8a.apk
+          test -s "$apk"
+          info=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk")
+          printf '%s\n' "$info" | grep -Fx 'Number of signers: 1' >/dev/null
+          actual=$(printf '%s\n' "$info" | awk '/Signer #1 certificate SHA-256 digest:/ {print $NF}')
+          test "$actual" = "800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3"
+          sha256sum "$apk"
+      - name: Publish only the ARM64 prerelease asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          tag='${{ inputs.tag }}'
+          apk='out/Gozar_1.12.2_arm64-v8a.apk'
+          gh release edit "$tag" --title 'v1.12.2' --notes 'User-Agent اصلاح شد، Session fix، Console logger اضافه شد.' --prerelease --latest=false
+          gh release upload "$tag" "$apk" --clobber
+          release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.id')
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq '.assets[] | [.id,.name] | @tsv' > "$RUNNER_TEMP/assets"
+          while IFS=$'\t' read -r id name; do
+            if [ "$name" != 'Gozar_1.12.2_arm64-v8a.apk' ]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" >/dev/null
+            fi
+          done < "$RUNNER_TEMP/assets"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq '.assets | length')" -eq 1
