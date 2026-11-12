@@ -21,7 +21,8 @@ object FoxOAuth {
             "code_challenge_method" to "S256",
             "user_agent" to FoxNet.UA,
             "utm_medium" to "vpn-client",
-            "utm_source" to "android-customtab-flow"
+            "utm_source" to "android-customtab-flow",
+            "iap" to "true"
         )
         if (loginHint.isNotBlank()) parameters["email"] = loginHint.trim()
         val query = parameters.entries.joinToString("&") { encode(it.key) + "=" + encode(it.value) }
