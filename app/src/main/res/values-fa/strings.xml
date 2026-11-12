@@ -473,4 +473,5 @@ AGPL-3.0-or-later</string>
     <string name="mozilla_logs_empty">هنوز رویداد ناوبری ثبت نشده است</string>
     <string name="mozilla_logs_copy">کپی</string>
     <string name="mozilla_logs_copied">لاگ‌های امن ناوبری کپی شدند</string>
+    <string name="mozilla_custom_tab_status">ورود به Mozilla را در مرورگر ادامه دهید. پس از تایید، به‌صورت خودکار به گذر بازمی‌گردید.</string>
 </resources>

@@ -61,7 +61,18 @@
 
         <activity
             android:name=".MozillaAuthActivity"
-            android:exported="false" />
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="mozilla-vpn"
+                    android:host="login"
+                    android:path="/success" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".UpdateRecoveryActivity"

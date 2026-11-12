@@ -12,11 +12,26 @@ object FoxOAuth {
     private val random = SecureRandom()
 
     data class Request(val url: String, val verifier: String, val state: String)
+    data class BrowserRequest(val url: String, val verifier: String)
+
+    fun customTabRequest(loginHint: String = ""): BrowserRequest {
+        val verifier = token()
+        val parameters = linkedMapOf(
+            "code_challenge" to challenge(verifier),
+            "code_challenge_method" to "S256",
+            "user_agent" to FoxNet.UA,
+            "utm_medium" to "vpn-client",
+            "utm_source" to "android-customtab-flow"
+        )
+        if (loginHint.isNotBlank()) parameters["email"] = loginHint.trim()
+        val query = parameters.entries.joinToString("&") { encode(it.key) + "=" + encode(it.value) }
+        return BrowserRequest("https://vpn.mozilla.org/api/v2/vpn/login/android?$query", verifier)
+    }
 
     fun request(create: Boolean, loginHint: String = ""): Request {
         val verifier = token()
         val state = token()
-        val challenge = encode(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+        val challenge = challenge(verifier)
         val parameters = linkedMapOf(
             "client_id" to FoxNet.CLIENT_ID,
             "scope" to FoxNet.SCOPE,
@@ -54,6 +69,26 @@ object FoxOAuth {
             null
         }
     }
+
+    fun guardianCallbackCode(raw: String): String? = try {
+        val uri = URI(raw)
+        if (uri.scheme != "mozilla-vpn" || uri.host != "login" || uri.path != "/success" ||
+            uri.port != -1 || uri.userInfo != null || uri.fragment != null
+        ) return null
+        val values = HashMap<String, String>()
+        for (part in uri.rawQuery.orEmpty().split('&')) {
+            if (part.isEmpty()) continue
+            val name = decode(part.substringBefore('='))
+            if (values.put(name, decode(part.substringAfter('=', ""))) != null) return null
+        }
+        val code = values["code"] ?: return null
+        code.takeIf { it.length in 8..512 && it.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' } }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun challenge(verifier: String): String =
+        encode(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
 
     private fun token(): String = encode(ByteArray(32).also { random.nextBytes(it) })
 
