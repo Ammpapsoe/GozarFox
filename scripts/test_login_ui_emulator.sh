@@ -41,6 +41,21 @@ adb logcat -c > /dev/null 2>&1 || true
 status=0
 adb shell am instrument -w -r -e class "$CLASS" "$TEST_PKG/$RUNNER" > "$out/instrument.log" 2>&1 || status=$?
 
+# The emulator image restarts Play services once shortly after boot, and
+# Android kills every process holding a binder into the dying one. If that
+# external cascade - and only that - is what ended the run, give the screens
+# one more chance; any other crash stays a failure.
+if ! grep -qE 'OK \(1 test\)' "$out/instrument.log"; then
+  cp "$out/instrument.log" "$out/instrument-first-attempt.log"
+  if adb logcat -d -v time 2>/dev/null | grep -q "depends on provider .* in dying proc"; then
+    echo '::warning::An unrelated system process died and Android cascaded the kill into the app; retrying the instrumentation once'
+    sleep 20
+    adb logcat -c > /dev/null 2>&1 || true
+    status=0
+    adb shell am instrument -w -r -e class "$CLASS" "$TEST_PKG/$RUNNER" > "$out/instrument.log" 2>&1 || status=$?
+  fi
+fi
+
 # MozillaDiagnostics.record logs every navigation fact under this tag; the
 # instrumented test prints its own trail to stdout, which lands in System.out.
 adb logcat -d -s MozillaWebView:D System.out:I > "$out/diagnostics.log" 2>&1 || true

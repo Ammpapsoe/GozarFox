@@ -111,6 +111,25 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- emoji2 ships a startup initializer that fetches "Noto Color Emoji
+             Compat" from Play services' fonts provider at launch. That leaves
+             the process holding a binder to com.google.android.gms.persistent,
+             and Android kills every dependent process when that one dies -
+             which it does whenever Play services restarts, taking a live VPN
+             tunnel down with it for a font the system can render on its own.
+             Removing the initializer drops the dependency; emoji fall back to
+             the platform's own glyphs, which is what CountryFlagView already
+             assumes. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
+
     </application>
 
 </manifest>
