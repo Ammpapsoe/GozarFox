@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Sign-in is Mozilla's page inside a frame we draw. Everything chrome-coloured
+    here — the header, the spinner, the success card, the error line — is ours,
+    so the user always knows which part of the screen is Gozar and which part is
+    accounts.firefox.com.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/webRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/login_bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/webHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/login_bg"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="10dp">
+
+        <ImageView
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/login_fox" />
+
+        <TextView
+            android:id="@+id/webHeaderTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/vazirmatn_semibold"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="@string/app_name"
+            android:textColor="@color/login_text"
+            android:textSize="17sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/webBack"
+            style="@style/Gozar.Login.Link"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/login_card_line" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <WebView
+            android:id="@+id/webSignInPage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/login_bg" />
+
+        <!-- Native overlay: shown while Mozilla's page loads and while the
+             session token is being exchanged. It covers the WebView so the
+             user never stares at a blank or half-drawn page. -->
+        <LinearLayout
+            android:id="@+id/webLoading"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/login_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <ProgressBar
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:indeterminate="true"
+                android:indeterminateTint="@color/login_accent" />
+
+            <TextView
+                android:id="@+id/webLoadingText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:fontFamily="@font/vazirmatn_medium"
+                android:gravity="center"
+                android:text="@string/web_connecting"
+                android:textColor="@color/login_text_dim"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <!-- Native success card, drawn over the WebView once the pass is in
+             hand. The page itself is never used to announce success. -->
+        <LinearLayout
+            android:id="@+id/webDone"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/login_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="28dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/logo" />
+
+            <TextView
+                android:id="@+id/webDoneTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:fontFamily="@font/vazirmatn_bold"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:text="@string/web_success_title"
+                android:textColor="@color/login_text"
+                android:textSize="20sp" />
+
+            <TextView
+                android:id="@+id/webDoneBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:fontFamily="@font/vazirmatn_regular"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:text="@string/web_success_body"
+                android:textColor="@color/login_text_dim"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/webConnect"
+                style="@style/Gozar.Login.Primary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:text="@string/web_connect" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/webError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/login_bg"
+        android:fontFamily="@font/vazirmatn_medium"
+        android:gravity="center"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="18dp"
+        android:textColor="@color/login_accent"
+        android:textSize="14sp"
+        android:visibility="gone" />
+</LinearLayout>

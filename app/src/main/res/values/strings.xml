@@ -313,7 +313,7 @@ AGPL-3.0-or-later</string>
     <string name="login_email">Email</string>
     <string name="login_password">Password</string>
     <string name="login_confirm">Repeat password</string>
-    <string name="login_action">Log in</string>
+    <string name="login_action">Sign in with a Firefox account</string>
     <string name="login_create_action">Sign up</string>
     <string name="login_or">or continue with</string>
     <string name="login_google">Google</string>
@@ -328,7 +328,7 @@ AGPL-3.0-or-later</string>
     <string name="login_retry_action">Retry sign-in</string>
     <string name="login_continue">Continue</string>
     <string name="login_confirm_action">Confirm</string>
-    <string name="login_fill">Enter your email to continue securely to Mozilla.</string>
+    <string name="login_fill">That email address doesn't look right. Leave it empty to sign in on Mozilla's own page.</string>
     <string name="login_mismatch">The two passwords do not match.</string>
     <string name="login_working">Working…</string>
     <string name="login_no_browser">No browser found for the Firefox account page.</string>
@@ -473,5 +473,13 @@ AGPL-3.0-or-later</string>
     <string name="mozilla_logs_empty">No navigation events yet</string>
     <string name="mozilla_logs_copy">Copy</string>
     <string name="mozilla_logs_copied">Safe navigation logs copied</string>
-    <string name="mozilla_custom_tab_status">Continue Mozilla authentication in the browser. You will return to Gozar automatically.</string>
+    <string name="web_connecting">Connecting…</string>
+    <string name="web_stage_tokens">Receiving your pass…</string>
+    <string name="web_success_title">You are connected to 50 GB of free traffic</string>
+    <string name="web_success_body">Your Firefox account is linked to Gozar. The monthly allowance renews on its own.</string>
+    <string name="web_connect">Connect</string>
+    <string name="web_blocked">Connection failed. Please turn on the VPN once and try again.</string>
+    <string name="web_verify_in_page">Enter the confirmation code on this page. Gozar continues on its own afterwards.</string>
+    <string name="web_page_failed">Mozilla\'s sign-in page could not be loaded.</string>
+    <string name="web_engine_missing">This device\'s WebView is too old for a secure sign-in. Update Android System WebView and try again.</string>
 </resources>

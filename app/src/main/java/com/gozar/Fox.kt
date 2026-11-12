@@ -19,7 +19,6 @@ object Fox {
     private class ProbeEntry(val sample: FoxPathSample, val at: Long)
 
     private val probes = ConcurrentHashMap<String, ProbeEntry>()
-    private val refreshLock = Any()
     private val operations = FoxBusyCounter()
     private val authLock = Any()
     private var authInFlight = false
@@ -410,23 +409,19 @@ object Fox {
         }
     }
 
-    fun completeOAuth(c: Context, code: String, verifier: String, mailHint: String) {
+    /**
+     * Completes a sign-in that Mozilla's own page already performed.
+     *
+     * The WebView took the address, the password and any confirmation code, so
+     * nothing is asked of the user here: the session token it produced is
+     * exchanged for OAuth tokens, the proxy pass is fetched, and the account is
+     * stored. The token is never returned to the caller and never put in an
+     * Intent — it goes straight from [FoxWebChannel] into this job.
+     */
+    fun webSignIn(c: Context, email: String, uid: String, sessionToken: String) {
         prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signin) { epoch ->
-            currentAuth(epoch) { }
-            FoxDiagnostics.event("OAUTH stage=oauth-token-request")
-            val tokens = FoxApi.oauthCode(code, verifier)
-            FoxDiagnostics.event("OAUTH stage=oauth-token-response")
-            FoxDiagnostics.event("OAUTH stage=profile")
-            val profile = FoxApi.profile(tokens.access)
-            say(c, R.string.fox_stage_pass)
-            FoxDiagnostics.event("FPN stage=token-request")
-            val pass = FoxApi.pass(tokens.access)
-            FoxDiagnostics.event("FPN stage=token-response")
-            currentAuth(epoch) {
-                FoxStore.saveAccount(c, profile.email.ifEmpty { mailHint }, profile.uid, tokens, pass)
-                clearPendingLocked()
-            }
+            finish(c.applicationContext, sessionToken, uid, email, epoch)
         }
     }
 
@@ -551,15 +546,43 @@ object Fox {
 
     fun hasDelays(): Boolean = servers.any { delayOf(it) >= 0 }
 
-    fun validAccess(c: Context): FoxAccess = synchronized(refreshLock) {
-        val current = FoxStore.credentials(c)
-        if (current.id.isEmpty() || current.refresh.isEmpty()) throw FoxError("Sign in again")
-        if (current.access.isNotEmpty() && current.expiresAt - 120_000L > System.currentTimeMillis()) {
-            return@synchronized FoxAccess(current.access, current.id, current.revision)
+    /**
+     * Credentials live in [FoxStore], sealed by [SecretBox]. The vault adapter
+     * keeps the refresh policy free of Android types so it can be tested on a
+     * JVM, and holds only an application context — never an Activity.
+     */
+    private class StoreVault : FoxTokenManager.Vault {
+        @Volatile var context: Context? = null
+
+        private fun context(): Context = context ?: throw FoxError("Sign in again")
+
+        override fun read(): FoxTokenManager.Entry? {
+            val stored = FoxStore.credentials(context())
+            if (stored.id.isEmpty()) return null
+            return FoxTokenManager.Entry(
+                stored.id, stored.revision, stored.access, stored.refresh, stored.expiresAt
+            )
         }
-        val fresh = FoxApi.refresh(current.refresh)
-        if (!FoxStore.saveAccess(c, fresh, current.id, current.revision)) throw FoxError("Account changed")
-        FoxAccess(fresh.access, current.id, current.revision)
+
+        override fun write(previous: FoxTokenManager.Entry, tokens: FoxTokens): Boolean =
+            FoxStore.saveAccess(context(), tokens, previous.label, previous.revision)
+
+        override fun forget(previous: FoxTokenManager.Entry) {
+            FoxStore.clear(context())
+        }
+    }
+
+    private val vault = StoreVault()
+
+    // One instance for the whole process: the lock inside it is what stops the
+    // tunnel and the UI from refreshing the same rotating token twice.
+    private val tokenManager = FoxTokenManager(vault) { refresh -> FoxApi.refresh(refresh) }
+
+    fun validAccess(c: Context): FoxAccess {
+        // Always the application context, so holding it cannot leak a screen.
+        vault.context = c.applicationContext
+        val grant = tokenManager.grant()
+        return FoxAccess(grant.access, grant.label, grant.revision)
     }
 
     fun selectedLocation(c: Context): FoxLocation? {

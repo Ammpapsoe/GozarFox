@@ -4,6 +4,12 @@ on:
   push:
     branches: ['mission/autonomous-v1']
   workflow_dispatch:
+    inputs:
+      login_ui:
+        description: Boot an emulator and capture the sign-in screens
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -100,3 +106,65 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+  # Screen evidence for the sign-in flow. It runs only after the APK job, so an
+  # emulator is never booted for a commit that does not compile. No credentials
+  # are used and none are needed: what this proves is that our own screens
+  # render and that the image's WebView supports the two WebMessage features the
+  # credential path depends on. Mozilla's own answers from a CI address are
+  # usually refused at the edge, and this job makes no claim about them.
+  login-ui:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.login_ui }}
+    needs: artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      # API 34 rather than the 29 the upgrade scenarios use: a 2019 WebView
+      # predates the message listener and document-start injection entirely,
+      # and would only prove that the feature gate refuses correctly.
+      - name: Build the app and instrumentation APKs
+        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --stacktrace
+      - name: Configure emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo udevadm settle
+          if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; ls -l /dev/kvm; fi
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo 'GOZAR_DISABLE_KVM=false' >> "$GITHUB_ENV"
+          else
+            echo '::warning::KVM is unavailable; using slower software emulation'
+            echo 'GOZAR_DISABLE_KVM=true' >> "$GITHUB_ENV"
+          fi
+      - name: Capture the sign-in screens on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          disable-linux-hw-accel: ${{ env.GOZAR_DISABLE_KVM }}
+          emulator-boot-timeout: 1800
+          emulator-options: -no-snapshot-save -noaudio -no-window -gpu swiftshader_indirect
+          script: bash scripts/test_login_ui_emulator.sh
+      - name: Upload sign-in evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: login-ui-evidence
+          path: ${{ runner.temp }}/login-ui-evidence/
+          if-no-files-found: warn
+          retention-days: 14

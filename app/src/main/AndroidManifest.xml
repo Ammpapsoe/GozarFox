@@ -59,20 +59,16 @@
             android:name=".LoginActivity"
             android:exported="false" />
 
+        <!--
+            Sign-in runs in a WebView we own. It is not exported and declares no
+            intent filter: nothing outside the app may open it, and no https URL
+            can be routed into it. The credential leaves the page through a
+            WebMessageListener bound to https://accounts.firefox.com only.
+        -->
         <activity
-            android:name=".MozillaAuthActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="vpn.mozilla.org"
-                    android:path="/oauth/success" />
-            </intent-filter>
-        </activity>
+            android:name=".MozillaWebViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode" />
 
         <activity
             android:name=".UpdateRecoveryActivity"

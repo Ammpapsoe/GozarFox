@@ -71,14 +71,10 @@ class LoginActivity : BaseActivity() {
         }
     }
     private val mozillaAuth = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val code = result.data?.getStringExtra(MozillaAuthActivity.EXTRA_CODE).orEmpty()
-            val verifier = result.data?.getStringExtra(MozillaAuthActivity.EXTRA_VERIFIER).orEmpty()
-            if (code.isNotEmpty() && verifier.isNotEmpty()) {
-                Fox.completeOAuth(this, code, verifier, mail.text?.toString()?.trim().orEmpty())
-            }
-        } else {
-            show(result.data?.getStringExtra(MozillaAuthActivity.EXTRA_ERROR) ?: getString(R.string.cancel))
+        // The credential never travels through an Intent. The WebView hands it
+        // straight to Fox, so a result only has to say whether it worked.
+        if (result.resultCode != Activity.RESULT_OK) {
+            show(result.data?.getStringExtra(MozillaWebViewActivity.EXTRA_ERROR) ?: getString(R.string.cancel))
         }
         render()
     }
@@ -244,15 +240,18 @@ class LoginActivity : BaseActivity() {
             return
         }
         val address = mail.text?.toString()?.trim().orEmpty()
-        if (!Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+        // Mozilla's own page collects the address and the password, so an empty
+        // field here is fine and is the normal way in. A malformed one is not:
+        // it would only prefill the page with something nobody can sign in to.
+        if (address.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
             show(getString(R.string.login_fill))
             return
         }
         secret.text?.clear()
         confirm.text?.clear()
-        mozillaAuth.launch(Intent(this, MozillaAuthActivity::class.java)
-            .putExtra(MozillaAuthActivity.EXTRA_CREATE, create)
-            .putExtra(MozillaAuthActivity.EXTRA_EMAIL, address))
+        mozillaAuth.launch(Intent(this, MozillaWebViewActivity::class.java)
+            .putExtra(MozillaWebViewActivity.EXTRA_CREATE, create)
+            .putExtra(MozillaWebViewActivity.EXTRA_EMAIL, address))
         render()
     }
 

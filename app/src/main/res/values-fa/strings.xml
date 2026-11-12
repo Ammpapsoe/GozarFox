@@ -313,7 +313,7 @@ AGPL-3.0-or-later</string>
     <string name="login_email">ایمیل</string>
     <string name="login_password">رمز عبور</string>
     <string name="login_confirm">تکرار رمز عبور</string>
-    <string name="login_action">ورود</string>
+    <string name="login_action">ورود با حساب فایرفاکس</string>
     <string name="login_create_action">ثبت‌نام</string>
     <string name="login_or">یا ادامه با</string>
     <string name="login_google">گوگل</string>
@@ -328,7 +328,7 @@ AGPL-3.0-or-later</string>
     <string name="login_retry_action">تلاش دوباره برای ورود</string>
     <string name="login_continue">ادامه</string>
     <string name="login_confirm_action">تأیید</string>
-    <string name="login_fill">برای ادامه‌ی امن در صفحه‌ی موزیلا، ایمیل را وارد کنید.</string>
+    <string name="login_fill">این نشانی ایمیل درست به نظر نمی‌رسد. آن را خالی بگذارید تا در صفحه‌ی خود موزیلا وارد شوید.</string>
     <string name="login_mismatch">دو رمز عبور یکسان نیستند.</string>
     <string name="login_working">در حال انجام…</string>
     <string name="login_no_browser">مرورگری برای صفحه حساب فایرفاکس پیدا نشد.</string>
@@ -473,5 +473,13 @@ AGPL-3.0-or-later</string>
     <string name="mozilla_logs_empty">هنوز رویداد ناوبری ثبت نشده است</string>
     <string name="mozilla_logs_copy">کپی</string>
     <string name="mozilla_logs_copied">لاگ‌های امن ناوبری کپی شدند</string>
-    <string name="mozilla_custom_tab_status">ورود به Mozilla را در مرورگر ادامه دهید. پس از تایید، به‌صورت خودکار به گذر بازمی‌گردید.</string>
+    <string name="web_connecting">در حال اتصال…</string>
+    <string name="web_stage_tokens">در حال دریافت گذر شما…</string>
+    <string name="web_success_title">به ۵۰ گیگ ترافیک رایگان وصل شدید</string>
+    <string name="web_success_body">حساب فایرفاکس شما به گذر پیوند خورد. سهمیه‌ی ماهانه به‌صورت خودکار تمدید می‌شود.</string>
+    <string name="web_connect">اتصال</string>
+    <string name="web_blocked">اتصال برقرار نشد. لطفاً یک بار VPN روشن کنید و دوباره تلاش کنید.</string>
+    <string name="web_verify_in_page">کد تأیید را در همین صفحه وارد کنید. گذر پس از آن خودش ادامه می‌دهد.</string>
+    <string name="web_page_failed">صفحه‌ی ورود موزیلا باز نشد.</string>
+    <string name="web_engine_missing">WebView این دستگاه برای ورود امن بیش از حد قدیمی است. Android System WebView را به‌روزرسانی کنید و دوباره تلاش کنید.</string>
 </resources>

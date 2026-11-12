@@ -21,8 +21,26 @@ class FoxReply(
 
 object FoxNet {
 
-    const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    const val CLIENT_ID = "e6eb0d1e856335fc"
+    // Chrome 157 is the Stable desktop channel as of November 2026. Keep this
+    // pinned to a released major: a canary number is an obvious bot
+    // fingerprint, and a stale one is just as easy for an edge to spot.
+    const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36"
+
+    /**
+     * Mozilla's public in-browser client. FxA registers its redirect URI as
+     * `urn:ietf:wg:oauth:2.0:oob:oauth-redirect-webchannel`, so a code for this
+     * client is delivered only through the page's own WebChannel and never to
+     * an app.
+     *
+     * Do not replace this with Mozilla VPN's client id. That one is
+     * *confidential*, and FxA refuses both PKCE and a direct `fxa-credentials`
+     * grant for a confidential client (`notPublicClient`, errno 109,
+     * `keys: ["client_secret"]`) — which is why the old Custom Tab flow showed
+     * "Something went wrong. Please close this tab and try again." on every
+     * single attempt and never returned a code. An app cannot keep a client
+     * secret, so no confidential client can ever work from here.
+     */
+    const val CLIENT_ID = "5882386c6d801776"
     const val SCOPE = "profile https://identity.mozilla.com/apps/vpn"
     // Use the OAuth account origin for the supported account/session endpoints.
     const val AUTH = "https://oauth.accounts.firefox.com/v1"
@@ -88,11 +106,16 @@ object FoxNet {
         if (port != null && !controlAllowed(url, method)) {
             throw java.io.IOException("Control tunnel destination is not permitted")
         }
-        FoxTrace.request(url, method, body, headers.keys.any { it.equals("Authorization", true) })
+        // Mozilla's edge answers a bare 406 to anything that does not look
+        // like a browser. Fold the browser header profile in once here so the
+        // relay, the direct attempt, the TLS 1.2 retry and every challenge
+        // retry all send exactly the same shape.
+        val wire = FoxHeaders.merge(url, headers)
+        FoxTrace.request(url, method, body, wire.keys.any { it.equals("Authorization", true) })
         var relayFailed = false
         if (useRelay && port == null && FoxRelay.relayPath(url, method) != null) {
             try {
-                val relayed = FoxRelay.forward(url, method, body, headers, timeout)
+                val relayed = FoxRelay.forward(url, method, body, wire, timeout)
                 if (relayed.code != 406) return relayed
                 relayFailed = true
             } catch (error: IOException) {
@@ -101,12 +124,12 @@ object FoxNet {
             }
         }
         try {
-            var reply = once(url, method, body, headers, timeout)
+            var reply = once(url, method, body, wire, timeout)
             reply.route = if (relayFailed) "direct-fallback" else "direct"
             trace(url, method, reply)
             if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
                 // Normal system trust and hostname verification remain enabled.
-                reply = once(url, method, body, headers, timeout, tls12 = true)
+                reply = once(url, method, body, wire, timeout, tls12 = true)
                 reply.route = if (relayFailed) "direct-fallback-tls12" else "direct-tls12"
                 trace(url, method, reply)
             }
@@ -123,11 +146,11 @@ object FoxNet {
                 }
                 val solved = FoxShield.solve(jar, origin)
                 if (!solved) break
-                reply = once(url, method, body, headers, timeout)
+                reply = once(url, method, body, wire, timeout)
                 reply.route = "direct-challenge-$round"
                 trace(url, method, reply)
                 if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
-                    reply = once(url, method, body, headers, timeout, tls12 = true)
+                    reply = once(url, method, body, wire, timeout, tls12 = true)
                     reply.route = "direct-challenge-$round-tls12"
                     trace(url, method, reply)
                 }

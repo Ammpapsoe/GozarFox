@@ -7,8 +7,6 @@ class FoxError(message: String, val errno: Int = 0, val status: Int = 0) : Excep
 
 class FoxSession(val uid: String, val token: String, val needsCode: Boolean, val byLink: Boolean = false)
 
-class FoxProfile(val uid: String, val email: String)
-
 class FoxTokens(val access: String, val refresh: String, val expiresIn: Int)
 
 class FoxPass(val token: String, val limit: Long, val remaining: Long, val reset: String)
@@ -55,33 +53,6 @@ object FoxApi {
 
     private fun authHeader(token: String, method: String, url: java.net.URL, body: String): String =
         FoxCrypto.hawk(method, url, FoxCrypto.hawkId(token), FoxCrypto.hawkKey(token), body)
-
-    fun oauthCode(code: String, verifier: String): FoxTokens {
-        val body = JSONObject()
-            .put("client_id", FoxNet.CLIENT_ID)
-            .put("grant_type", "authorization_code")
-            .put("code", code)
-            .put("redirect_uri", FoxOAuth.CALLBACK)
-            .toString()
-        var reply = FoxNet.call(FoxNet.AUTH + "/oauth/token", "POST", body)
-        if (reply.code == 406) reply = FoxNet.call(FoxNet.AUTH + "/oauth/token", "POST", body, useRelay = false)
-        val data = json(reply)
-        val access = data.optString("access_token")
-        val refresh = data.optString("refresh_token")
-        if (access.isEmpty() || refresh.isEmpty()) throw FoxError("Mozilla returned incomplete OAuth tokens")
-        return FoxTokens(access, refresh, data.optInt("expires_in", 0))
-    }
-
-    fun profile(access: String): FoxProfile {
-        val headers = mapOf("Authorization" to "Bearer $access")
-        var reply = FoxNet.call("https://profile.accounts.firefox.com/v1/profile", "GET", null, headers)
-        if (reply.code == 406) reply = FoxNet.call("https://profile.accounts.firefox.com/v1/profile", "GET", null, headers, useRelay = false)
-        val data = json(reply)
-        val uid = data.optString("uid")
-        val email = data.optString("email")
-        if (uid.isEmpty() || email.isEmpty()) throw FoxError("Mozilla returned an incomplete account profile")
-        return FoxProfile(uid, email)
-    }
 
     internal fun readSignIn(reply: FoxReply): FoxSession {
         val data = json(reply)
@@ -199,24 +170,42 @@ object FoxApi {
     // Renewal must never activate an entitlement implicitly.
     fun existingPass(access: String): FoxPass = pass(access, false)
 
+    /**
+     * Asks the FPN endpoint for the proxy pass.
+     *
+     * Mozilla's edge answers 451 for a region it will not serve, and it does so
+     * from the routing layer rather than from the application. Repeating the
+     * request with a doubled leading slash reaches the same handler through a
+     * different cache key, which is enough to get past an edge that has already
+     * decided the first request was out of region. It is tried once, never in a
+     * loop, and never while the control tunnel is active — inside the tunnel
+     * the source address is the exit node's and a retry would only add latency.
+     */
+    private fun fpn(path: String, method: String, access: String): FoxReply {
+        val auth = mapOf("Authorization" to "Bearer $access")
+        val body = if (method == "POST") "{}" else null
+        val reply = if (method == "GET" || method == "HEAD") {
+            FoxNet.callWithRetry(FoxNet.FPN + path, method, null, auth)
+        } else {
+            FoxNet.call(FoxNet.FPN + path, method, body, auth)
+        }
+        if (reply.code != 451 || FoxNet.controlScoped()) return reply
+        FoxDiagnostics.event("FPN stage=region-blocked path=$path status=451 retry=alternate-path")
+        return if (method == "GET" || method == "HEAD") {
+            FoxNet.callWithRetry(FoxNet.FPN + "/$path", method, null, auth)
+        } else {
+            FoxNet.call(FoxNet.FPN + "/$path", method, body, auth)
+        }
+    }
+
     private fun pass(access: String, allowActivate: Boolean): FoxPass {
         FoxDiagnostics.event("FPN stage=token-request endpoint=/api/v1/fpn/token method=GET authorization=Bearer")
-        var reply = FoxNet.callWithRetry(
-            FoxNet.FPN + "/api/v1/fpn/token",
-            "GET",
-            null,
-            mapOf("Authorization" to "Bearer $access")
-        )
+        var reply = fpn("/api/v1/fpn/token", "GET", access)
         if (reply.code == 403 && allowActivate) {
             FoxDiagnostics.event("FPN stage=activation-required status=403")
             activate(access)
             FoxDiagnostics.event("FPN stage=retry-after-activation")
-            reply = FoxNet.callWithRetry(
-                FoxNet.FPN + "/api/v1/fpn/token",
-                "GET",
-                null,
-                mapOf("Authorization" to "Bearer $access")
-            )
+            reply = fpn("/api/v1/fpn/token", "GET", access)
         }
         FoxDiagnostics.event("FPN stage=token-response status=${reply.code}")
         return readPass(reply)
@@ -240,24 +229,14 @@ object FoxApi {
 
     private fun activate(access: String) {
         try {
-            val reply = FoxNet.call(
-                FoxNet.FPN + "/api/v1/fpn/activate",
-                "POST",
-                "{}",
-                mapOf("Authorization" to "Bearer $access")
-            )
+            val reply = fpn("/api/v1/fpn/activate", "POST", access)
             FoxDiagnostics.event("FPN stage=activation-response status=${reply.code}")
         } catch (_: Exception) {
         }
     }
 
     fun quota(access: String): FoxPass? {
-        var reply = FoxNet.call(
-            FoxNet.FPN + "/api/v1/fpn/token",
-            "HEAD",
-            null,
-            mapOf("Authorization" to "Bearer $access")
-        )
+        val reply = fpn("/api/v1/fpn/token", "HEAD", access)
         if (reply.code != 200) return null
         return quota(reply)
     }
