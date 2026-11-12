@@ -1,0 +1,64 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs: {}
+
+permissions:
+  contents: read
+
+# One signed arm64 APK, nothing else: the fast loop for device testing.
+# The full multi-platform release stays in build.yml, on tags.
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Decode the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -e
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 is missing"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+      - name: Build the signed release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify the signing identity
+        run: |
+          set -e
+          expected=800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3
+          apk=app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          test -s "$apk"
+          info=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk")
+          echo "$info" | grep -qi "$expected" || {
+            echo "::error::signing identity does not match v1.11.5"
+            echo "$info"
+            exit 1
+          }
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gozar-android-arm64
+          path: app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          if-no-files-found: error
+          retention-days: 14

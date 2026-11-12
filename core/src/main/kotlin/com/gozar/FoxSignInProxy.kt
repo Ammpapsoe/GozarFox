@@ -51,6 +51,9 @@ class FoxSignInProxy(
         )
 
         const val DEFAULT_DIAL_BUDGET_MS: Long = 30_000L
+
+        /** How long the independent resolvers may take before the race goes on without them. */
+        const val RESOLVER_BUDGET_MS: Long = 4_000L
         const val DEFAULT_HANDSHAKE_READ_MS: Int = 30_000
 
         /** How many bytes of the SNI name stay in the first fragment. */
@@ -78,7 +81,9 @@ class FoxSignInProxy(
         server?.let { return it.localPort }
         val bound = ServerSocket()
         bound.reuseAddress = true
-        bound.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0))
+        // IPv4 loopback, named: the override rule says 127.0.0.1, so the
+        // listener must not depend on which loopback the platform prefers.
+        bound.bind(InetSocketAddress("127.0.0.1", 0))
         server = bound
         stopped.set(false)
         thread("accept") { acceptLoop(bound) }
@@ -131,6 +136,7 @@ class FoxSignInProxy(
                 return
             }
             val (host, targetPort) = request
+            trace("#$id connect $host:$targetPort")
             if (targetPort != tlsPort) {
                 trace("#$id refused port=$targetPort")
                 answer(client, 403)
@@ -194,16 +200,20 @@ class FoxSignInProxy(
      * answered in time, which the caller reports as 504.
      */
     internal fun dial(host: String, targetPort: Int, id: Int): Socket? {
-        val addresses = try {
-            InetAddress.getAllByName(host)
+        val system = try {
+            InetAddress.getAllByName(host).toList()
         } catch (unknown: IOException) {
             trace("#$id name-unresolved host=$host")
-            return null
+            emptyList()
         }
+        val extra = resolveIndependently(host, id)
+        val addresses = (system + extra).distinctBy { it.hostAddress }
         if (addresses.isEmpty()) return null
+        trace("#$id racing ${addresses.size} address(es) for $host")
         val deadline = System.currentTimeMillis() + dialBudgetMs
         val winner = AtomicReference<Socket?>()
         val latch = java.util.concurrent.CountDownLatch(1)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(addresses.size)
         val racers = addresses.map { address ->
             thread("dial-$id-${address.hostAddress}") {
                 val left = (deadline - System.currentTimeMillis()).coerceAtLeast(1)
@@ -216,11 +226,17 @@ class FoxSignInProxy(
                     } else {
                         attempt.close()
                     }
-                } catch (_: IOException) {
+                } catch (failed: IOException) {
+                    // A refused or unreachable address is an answer too: say
+                    // so, and when every address has answered without a
+                    // winner the wait ends now instead of at the budget.
+                    trace("#$id dial-failed ${address.hostAddress} ${failed.javaClass.simpleName}")
                     try {
                         attempt.close()
                     } catch (_: IOException) {
                     }
+                } finally {
+                    if (remaining.decrementAndGet() == 0) latch.countDown()
                 }
             }
         }
@@ -229,6 +245,130 @@ class FoxSignInProxy(
             if (racer.isAlive) racer.interrupt()
         }
         return winner.get()
+    }
+
+    /**
+     * Asks public resolvers over plain DNS, in parallel with everything
+     * else, because the system resolver is exactly what a filtering network
+     * poisons first. Every failure here is silent in effect: the union with
+     * the system answers is what gets raced, and a resolver that cannot be
+     * reached simply adds nothing.
+     */
+    internal fun resolveIndependently(host: String, id: Int): List<InetAddress> {
+        // An IP literal needs no resolver, poisoned or otherwise.
+        if (host.isEmpty() || host.all { it.isDigit() || it == '.' }) return emptyList()
+        val servers = listOf("1.1.1.1", "8.8.8.8")
+        val found = java.util.Collections.synchronizedList(mutableListOf<InetAddress>())
+        val done = java.util.concurrent.CountDownLatch(servers.size * 2)
+        for (server in servers) {
+            thread("dns-udp-$id-$server") {
+                try {
+                    found.addAll(parseAnswers(queryUdp(server, buildQuery(host))))
+                } catch (_: Exception) {
+                } finally {
+                    done.countDown()
+                }
+            }
+            thread("dns-tcp-$id-$server") {
+                try {
+                    found.addAll(parseAnswers(queryTcp(server, buildQuery(host))))
+                } catch (_: Exception) {
+                } finally {
+                    done.countDown()
+                }
+            }
+        }
+        done.await(RESOLVER_BUDGET_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        if (found.isNotEmpty()) trace("#$id independent-resolver ${found.map { it.hostAddress }}")
+        return found.toList()
+    }
+
+    /** A minimal A-record query: one question, recursion desired. */
+    internal fun buildQuery(host: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        out.write(byteArrayOf(0x4f, 0x2a, 0x01, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+        for (label in host.split('.')) {
+            val bytes = label.toByteArray(Charsets.US_ASCII)
+            out.write(bytes.size)
+            out.write(bytes)
+        }
+        out.write(0)
+        out.write(byteArrayOf(0, 1, 0, 1))
+        return out.toByteArray()
+    }
+
+    /** The A answers of a response, ignoring everything else. */
+    internal fun parseAnswers(message: ByteArray): List<InetAddress> {
+        if (message.size < 12) return emptyList()
+        val questions = ((message[4].toInt() and 0xff) shl 8) or (message[5].toInt() and 0xff)
+        val answers = ((message[6].toInt() and 0xff) shl 8) or (message[7].toInt() and 0xff)
+        var at = 12
+        repeat(questions) {
+            at = skipName(message, at)
+            at += 4
+        }
+        val found = mutableListOf<InetAddress>()
+        repeat(answers) {
+            if (at >= message.size) return found
+            at = skipName(message, at)
+            if (at + 10 > message.size) return found
+            val type = ((message[at].toInt() and 0xff) shl 8) or (message[at + 1].toInt() and 0xff)
+            val length = ((message[at + 8].toInt() and 0xff) shl 8) or (message[at + 9].toInt() and 0xff)
+            at += 10
+            if (at + length > message.size) return found
+            if (type == 1 && length == 4) {
+                found.add(InetAddress.getByAddress(message.copyOfRange(at, at + 4)))
+            }
+            at += length
+        }
+        return found
+    }
+
+    private fun skipName(message: ByteArray, from: Int): Int {
+        var at = from
+        while (at < message.size) {
+            val length = message[at].toInt() and 0xff
+            if (length == 0) return at + 1
+            if (length and 0xc0 == 0xc0) return at + 2
+            at += length + 1
+        }
+        return message.size
+    }
+
+    private fun queryUdp(server: String, query: ByteArray): ByteArray {
+        java.net.DatagramSocket().use { socket ->
+            socket.soTimeout = RESOLVER_BUDGET_MS.toInt()
+            val target = InetSocketAddress(server, 53)
+            socket.send(java.net.DatagramPacket(query, query.size, target))
+            val back = ByteArray(4096)
+            val packet = java.net.DatagramPacket(back, back.size)
+            socket.receive(packet)
+            return back.copyOf(packet.length)
+        }
+    }
+
+    private fun queryTcp(server: String, query: ByteArray): ByteArray {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(server, 53), RESOLVER_BUDGET_MS.toInt())
+            socket.soTimeout = RESOLVER_BUDGET_MS.toInt()
+            val out = socket.getOutputStream()
+            out.write(byteArrayOf((query.size shr 8).toByte(), (query.size and 0xff).toByte()))
+            out.write(query)
+            out.flush()
+            val input = socket.getInputStream()
+            val high = input.read()
+            val low = input.read()
+            if (high < 0 || low < 0) return ByteArray(0)
+            val length = (high shl 8) or low
+            val back = ByteArray(length)
+            var filled = 0
+            while (filled < length) {
+                val read = input.read(back, filled, length - filled)
+                if (read < 0) break
+                filled += read
+            }
+            return back.copyOf(filled)
+        }
     }
 
     /**
