@@ -73,10 +73,10 @@ jobs:
           gh release edit "$tag" --title 'v1.12.2' --notes 'User-Agent اصلاح شد، Session fix، Console logger اضافه شد.' --prerelease --latest=false
           gh release upload "$tag" "$apk" --clobber
           release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.id')
-          gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq '.assets[] | [.id,.name] | @tsv' > "$RUNNER_TEMP/assets"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq '.[] | [.id,.name] | @tsv' > "$RUNNER_TEMP/assets"
           while IFS=$'\t' read -r id name; do
             if [ "$name" != 'Gozar_1.12.2_arm64-v8a.apk' ]; then
               gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id" >/dev/null
             fi
           done < "$RUNNER_TEMP/assets"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq '.assets | length')" -eq 1
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$release/assets?per_page=100" --jq 'length')" -eq 1
