@@ -107,14 +107,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Screen evidence for the sign-in flow. It runs only after the APK job, so an
-  # emulator is never booted for a commit that does not compile. No credentials
-  # are used and none are needed: what this proves is that our own screens
-  # render and that the image's WebView supports the two WebMessage features the
-  # credential path depends on. Mozilla's own answers from a CI address are
-  # usually refused at the edge, and this job makes no claim about them.
+  # Screen evidence for the sign-in flow. Manual only: it runs after the APK
+  # job when dispatched, so an emulator is never booted for a commit that does
+  # not compile, and push runs stay fast. No credentials are used and none are
+  # needed: what this proves is that our own screens render and that the
+  # image's WebView supports the two WebMessage features the credential path
+  # depends on. Mozilla's own answers from a CI address are usually refused at
+  # the edge, and this job makes no claim about them.
   login-ui:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.login_ui }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.login_ui }}
     needs: artifact
     runs-on: ubuntu-24.04
     timeout-minutes: 60
