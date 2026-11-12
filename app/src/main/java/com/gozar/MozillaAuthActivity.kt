@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
@@ -42,7 +43,8 @@ class MozillaAuthActivity : BaseActivity() {
         error = findViewById(R.id.mozillaError)
         verifier = savedInstanceState?.getString(STATE_VERIFIER).orEmpty()
         expectedState = savedInstanceState?.getString(STATE_EXPECTED).orEmpty()
-        val target = if (verifier.isNotEmpty() && expectedState.isNotEmpty()) {
+        val restoring = verifier.isNotEmpty() && expectedState.isNotEmpty()
+        val target = if (restoring) {
             savedInstanceState?.getString(STATE_URL).orEmpty()
         } else {
             val request = FoxOAuth.request(
@@ -90,7 +92,18 @@ class MozillaAuthActivity : BaseActivity() {
                 if (!completed) progress.visibility = View.GONE
             }
         }
-        webView.loadUrl(target)
+        if (restoring) {
+            webView.loadUrl(target)
+        } else {
+            progress.visibility = View.VISIBLE
+            webView.clearCache(true)
+            webView.clearHistory()
+            webView.clearFormData()
+            WebStorage.getInstance().deleteAllData()
+            CookieManager.getInstance().removeAllCookies {
+                if (!completed && !isFinishing && !isDestroyed) webView.loadUrl(target)
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

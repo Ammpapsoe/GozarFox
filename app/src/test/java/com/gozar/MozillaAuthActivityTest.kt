@@ -7,6 +7,8 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -18,6 +20,29 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
 class MozillaAuthActivityTest {
+    @Test
+    fun freshAttemptRemovesStaleCookies() {
+        val cookies = CookieManager.getInstance()
+        cookies.setCookie("https://accounts.firefox.com", "stale=session")
+        val controller = Robolectric.buildActivity(MozillaAuthActivity::class.java).setup()
+        assertNull(cookies.getCookie("https://accounts.firefox.com"))
+        controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun recreationPreservesCurrentSessionCookies() {
+        val cookies = CookieManager.getInstance()
+        val first = Robolectric.buildActivity(MozillaAuthActivity::class.java).setup()
+        val state = android.os.Bundle()
+        first.saveInstanceState(state)
+        first.pause().stop().destroy()
+        cookies.setCookie("https://accounts.firefox.com", "current=session")
+        val restored = Robolectric.buildActivity(MozillaAuthActivity::class.java).setup(state)
+        assertFalse(restored.get().isFinishing)
+        assertNotNull(cookies.getCookie("https://accounts.firefox.com"))
+        restored.pause().stop().destroy()
+    }
+
     @Test
     fun webViewUsesFirefoxCookiesAndValidatedOAuthCallback() {
         val intent = Intent(Intent.ACTION_VIEW).putExtra(MozillaAuthActivity.EXTRA_CREATE, false)
