@@ -161,7 +161,7 @@ class FoxSignInProxyTest {
         message.write(byteArrayOf(0x4f, 0x2a, 0x81.toByte(), 0x80.toByte(), 0, 1, 0, 1, 0, 0, 0, 0))
         message.write(question)
         message.write(byteArrayOf(0xc0.toByte(), 0x0c, 0, 1, 0, 1, 0, 0, 1, 0, 0, 4))
-        message.write(byteArrayOf(93, 184, 216, 34))
+        message.write(byteArrayOf(93, 184.toByte(), 216.toByte(), 34))
         val answers = proxy.parseAnswers(message.toByteArray())
         assertEquals(1, answers.size)
         assertEquals("93.184.216.34", answers[0].hostAddress)
