@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class FoxSignInProxy(
     private val allowed: Set<String> = SIGN_IN_HOSTS,
+    private val tlsPort: Int = 443,
     private val dialBudgetMs: Long = DEFAULT_DIAL_BUDGET_MS,
     private val handshakeReadMs: Int = DEFAULT_HANDSHAKE_READ_MS,
     private val trace: (String) -> Unit = {}
@@ -130,7 +131,7 @@ class FoxSignInProxy(
                 return
             }
             val (host, targetPort) = request
-            if (targetPort != 443) {
+            if (targetPort != tlsPort) {
                 trace("#$id refused port=$targetPort")
                 answer(client, 403)
                 return

@@ -30,7 +30,7 @@ class FoxSignInProxyTest {
     @Test
     fun tunnelsAnAllowedHostAndReassemblesTheSplitHello() {
         val fake = ServerSocket(0)
-        val proxy = FoxSignInProxy(allowed = setOf("localhost"))
+        val proxy = FoxSignInProxy(allowed = setOf("localhost"), tlsPort = fake.localPort)
         val port = proxy.start()
         try {
             val client = clientTo(port)
