@@ -12,6 +12,7 @@ class FoxReply(
     val code: Int, val body: String, val headers: Map<String, String>,
     val setCookies: List<String> = emptyList()
 ) {
+    internal var route: String = "direct"
     fun header(name: String): String? {
         for ((k, v) in headers) if (k.equals(name, true)) return v
         return null
@@ -87,36 +88,55 @@ object FoxNet {
         if (port != null && !controlAllowed(url, method)) {
             throw java.io.IOException("Control tunnel destination is not permitted")
         }
+        FoxTrace.request(url, method, body, headers.keys.any { it.equals("Authorization", true) })
+        var relayFailed = false
         if (useRelay && port == null && FoxRelay.relayPath(url, method) != null) {
             try {
-                return FoxRelay.forward(url, method, body, headers, timeout)
-            } catch (_: IOException) {
+                val relayed = FoxRelay.forward(url, method, body, headers, timeout)
+                if (relayed.code != 406) return relayed
+                relayFailed = true
+            } catch (error: IOException) {
+                relayFailed = true
+                traceFailure(url, method, "apps-script", error)
             }
         }
-        var reply = once(url, method, body, headers, timeout)
-        if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
-            // Normal system trust and hostname verification remain enabled.
-            reply = once(url, method, body, headers, timeout, tls12 = true)
-        }
-        var round = 0
-        // The challenge solver can use direct sockets and is never invoked by
-        // an explicitly tunnel-scoped request.
-        while (port == null && reply.code == 406 && round < 4) {
-            round++
-            val origin = try {
-                val parsed = URL(url)
-                parsed.protocol + "://" + parsed.host
-            } catch (_: Exception) {
-                "https://accounts.firefox.com"
-            }
-            val solved = FoxShield.solve(jar, origin)
-            if (!solved) break
-            reply = once(url, method, body, headers, timeout)
+        try {
+            var reply = once(url, method, body, headers, timeout)
+            reply.route = if (relayFailed) "direct-fallback" else "direct"
+            trace(url, method, reply)
             if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
+                // Normal system trust and hostname verification remain enabled.
                 reply = once(url, method, body, headers, timeout, tls12 = true)
+                reply.route = if (relayFailed) "direct-fallback-tls12" else "direct-tls12"
+                trace(url, method, reply)
             }
+            var round = 0
+            // The challenge solver can use direct sockets and is never invoked by
+            // an explicitly tunnel-scoped request.
+            while (port == null && reply.code == 406 && round < 4) {
+                round++
+                val origin = try {
+                    val parsed = URL(url)
+                    parsed.protocol + "://" + parsed.host
+                } catch (_: Exception) {
+                    "https://accounts.firefox.com"
+                }
+                val solved = FoxShield.solve(jar, origin)
+                if (!solved) break
+                reply = once(url, method, body, headers, timeout)
+                reply.route = "direct-challenge-$round"
+                trace(url, method, reply)
+                if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
+                    reply = once(url, method, body, headers, timeout, tls12 = true)
+                    reply.route = "direct-challenge-$round-tls12"
+                    trace(url, method, reply)
+                }
+            }
+            return reply
+        } catch (error: IOException) {
+            traceFailure(url, method, if (relayFailed) "direct-fallback" else "direct", error)
+            throw error
         }
-        return reply
     }
 
     fun callWithRetry(
@@ -147,6 +167,14 @@ object FoxNet {
             }
         }
         throw last ?: FoxError("Mozilla request failed after retries")
+    }
+
+    private fun trace(url: String, method: String, reply: FoxReply) {
+        FoxTrace.response(url, method, reply.route, reply.code, reply.body)
+    }
+
+    private fun traceFailure(url: String, method: String, route: String, error: IOException) {
+        FoxDiagnostics.event("HTTP ${FoxTrace.endpoint(url)} method=$method route=$route transport=${error.javaClass.simpleName}")
     }
 
     private fun once(

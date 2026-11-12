@@ -36,6 +36,7 @@ class App : Application() {
         UpdateChecker.schedule(this)
         UpdateChecker.check(this)
         FoxRelayStore.initialize(this)
+        FoxDiagnostics.sink = MozillaDiagnostics::record
     }
 
     /** Respect the system battery-saver setting without penalizing normal use. */

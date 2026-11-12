@@ -67,6 +67,8 @@ object FoxRelay {
             if (!FoxRelayDiscovery.isGoogle(endpoint) && path !in setOf("/v1/guardian/pass", "/v1/guardian/activate", "/v1/mozilla/servers")) continue
             try {
                 val reply = request(endpoint, path, method, access, body, authorization, timeout)
+                reply.route = relayRoute(endpoint)
+                FoxTrace.response(url, method, reply.route, reply.code, reply.body)
                 if (!retry(reply.code)) return reply
                 lastReply = reply
             } catch (error: Exception) {
@@ -93,8 +95,28 @@ object FoxRelay {
         throw lastFailure ?: IOException("no verified relay is configured")
     }
 
-    fun once(endpoint: String, path: String, method: String, access: String? = null, body: String? = null): FoxReply =
-        request(endpoint, path, method, access, body, access?.let { "Bearer $it" }, 20000)
+    fun once(endpoint: String, path: String, method: String, access: String? = null, body: String? = null): FoxReply {
+        val reply = request(endpoint, path, method, access, body, access?.let { "Bearer $it" }, 20000)
+        reply.route = relayRoute(endpoint)
+        FoxTrace.response(upstream(path), method, reply.route, reply.code, reply.body)
+        return reply
+    }
+
+    private fun relayRoute(endpoint: String): String = if (FoxRelayDiscovery.isGoogle(endpoint)) "apps-script" else "verified-relay"
+
+    private fun upstream(path: String): String = when (path) {
+        "/v1/guardian/pass" -> FoxNet.GUARDIAN + "/api/v1/fpn/token"
+        "/v1/guardian/activate" -> FoxNet.GUARDIAN + "/api/v1/fpn/activate"
+        "/v1/mozilla/servers" -> FoxNet.SERVERS
+        "/v1/mozilla/token" -> FoxNet.AUTH + "/token"
+        "/v1/mozilla/oauth/token" -> FoxNet.AUTH + "/oauth/token"
+        "/v1/mozilla/profile" -> "https://profile.accounts.firefox.com/v1/profile"
+        "/v1/mozilla/recovery-email/status" -> FoxNet.AUTH + "/recovery_email/status"
+        "/v1/mozilla/recovery-email/verify-code" -> FoxNet.AUTH + "/recovery_email/verify_code"
+        "/v1/mozilla/recovery-email/resend-code" -> FoxNet.AUTH + "/recovery_email/resend_code"
+        "/v1/mozilla/session/verify-code" -> FoxNet.AUTH + "/session/verify_code"
+        else -> "invalid-endpoint"
+    }
 
     private fun request(
         endpoint: String,

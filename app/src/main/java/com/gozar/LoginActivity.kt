@@ -52,6 +52,7 @@ class LoginActivity : BaseActivity() {
     private lateinit var languageButton: MaterialButton
     private lateinit var progress: CircularProgressIndicator
     private lateinit var error: TextView
+    private lateinit var logs: MaterialButton
     private lateinit var systemAccounts: View
     private lateinit var savedAccounts: MaterialButton
     private lateinit var cancelAdd: MaterialButton
@@ -118,6 +119,7 @@ class LoginActivity : BaseActivity() {
         switchButton = findViewById(R.id.loginSwitch)
         progress = findViewById(R.id.loginProgress)
         error = findViewById(R.id.loginError)
+        logs = findViewById(R.id.loginLogs)
         reveal = findViewById(R.id.loginReveal)
         systemAccounts = findViewById(R.id.loginSystemAccounts)
         savedAccounts = findViewById(R.id.loginSavedAccounts)
@@ -135,6 +137,7 @@ class LoginActivity : BaseActivity() {
         }
 
         primary.setOnClickListener { act() }
+        logs.setOnClickListener { MozillaDiagnostics.show(this) }
         forgot.setOnClickListener { web(if (create) CREATE_PAGE else RESET_PAGE) }
         switchButton.setOnClickListener {
             create = !create
@@ -312,6 +315,7 @@ class LoginActivity : BaseActivity() {
         systemAccounts.isEnabled = !busy
         savedAccounts.isEnabled = !busy
         cancelAdd.isEnabled = !busy
+        logs.visibility = if (MozillaDiagnostics.hasEvents()) View.VISIBLE else View.GONE
 
         val trouble = !busy && Fox.message.isNotEmpty() &&
             Fox.message != "code" && Fox.message != "link" &&

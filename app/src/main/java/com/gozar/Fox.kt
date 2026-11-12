@@ -136,6 +136,7 @@ object Fox {
                 } finally {
                     try {
                         failure?.let { text ->
+                            FoxDiagnostics.event("AUTH failure $diagnostic stage=${stage.take(160)}")
                             lastFailureDiagnostic = diagnostic + "; stage=" + stage.take(160)
                             synchronized(authLock) {
                                 if (failureEpoch == null || failureEpoch == authEpoch) message = text
@@ -413,10 +414,14 @@ object Fox {
         prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signin) { epoch ->
             currentAuth(epoch) { }
-            say(c, R.string.fox_stage_pass)
+            FoxDiagnostics.event("OAUTH stage=token-exchange")
             val tokens = FoxApi.oauthCode(code, verifier)
+            FoxDiagnostics.event("OAUTH stage=profile")
             val profile = FoxApi.profile(tokens.access)
+            say(c, R.string.fox_stage_pass)
+            FoxDiagnostics.event("OAUTH stage=guardian-pass")
             val pass = FoxApi.pass(tokens.access)
+            FoxDiagnostics.event("OAUTH stage=account-save")
             currentAuth(epoch) {
                 FoxStore.saveAccount(c, profile.email.ifEmpty { mailHint }, profile.uid, tokens, pass)
                 clearPendingLocked()

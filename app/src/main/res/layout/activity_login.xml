@@ -201,7 +201,11 @@
                     android:textColor="@color/login_accent"
                     android:visibility="gone" />
 
-
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/loginLogs"
+                    style="@style/Gozar.Login.Switch"
+                    android:text="@string/mozilla_logs"
+                    android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/loginSwitch"

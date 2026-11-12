@@ -1,20 +1,13 @@
 package com.gozar
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 
 class MozillaAuthActivity : BaseActivity() {
@@ -33,8 +26,6 @@ class MozillaAuthActivity : BaseActivity() {
     private lateinit var verifier: String
     private var target = ""
     private var launched = false
-    private val safeLogLock = Any()
-    private val safeLogs = mutableListOf<String>()
     private var completed = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,7 +33,8 @@ class MozillaAuthActivity : BaseActivity() {
         setContentView(R.layout.activity_mozilla_auth)
         progress = findViewById(R.id.mozillaProgress)
         error = findViewById(R.id.mozillaError)
-        findViewById<ExtendedFloatingActionButton>(R.id.mozillaLogs).setOnClickListener { showLogs() }
+        findViewById<ExtendedFloatingActionButton>(R.id.mozillaLogs).setOnClickListener { MozillaDiagnostics.show(this) }
+        if (savedInstanceState == null && intent.data == null) MozillaDiagnostics.clear()
         verifier = savedInstanceState?.getString(STATE_VERIFIER).orEmpty()
         target = savedInstanceState?.getString(STATE_URL).orEmpty()
         val restoring = verifier.isNotEmpty() && target.isNotEmpty()
@@ -124,31 +116,7 @@ class MozillaAuthActivity : BaseActivity() {
     }
 
     private fun recordSafeLog(event: String) {
-        synchronized(safeLogLock) { safeLogs.add(event) }
-        Log.d("MozillaWebView", event)
-    }
-
-    private fun showLogs() {
-        val snapshot = synchronized(safeLogLock) { safeLogs.joinToString("\n") }
-        val padding = (16 * resources.displayMetrics.density).toInt()
-        val text = TextView(this).apply {
-            text = snapshot.ifEmpty { getString(R.string.mozilla_logs_empty) }
-            typeface = Typeface.MONOSPACE
-            textSize = 12f
-            setPadding(padding, padding, padding, padding)
-            setTextIsSelectable(true)
-        }
-        val scroll = ScrollView(this).apply { addView(text) }
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.mozilla_logs)
-            .setView(scroll)
-            .setPositiveButton(R.string.mozilla_logs_copy) { _, _ ->
-                val clipboard = getSystemService(ClipboardManager::class.java)
-                clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.mozilla_logs), snapshot))
-                Toast.makeText(this, R.string.mozilla_logs_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(android.R.string.ok, null)
-            .show()
+        MozillaDiagnostics.record(event)
     }
 
     private fun navigationLabel(raw: String): String = try {
