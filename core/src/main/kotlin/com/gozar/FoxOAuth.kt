@@ -70,21 +70,23 @@ object FoxOAuth {
         }
     }
 
-    fun guardianCallbackCode(raw: String): String? = try {
-        val uri = URI(raw)
-        if (uri.scheme != "mozilla-vpn" || uri.host != "login" || uri.path != "/success" ||
-            uri.port != -1 || uri.userInfo != null || uri.fragment != null
-        ) return null
-        val values = HashMap<String, String>()
-        for (part in uri.rawQuery.orEmpty().split('&')) {
-            if (part.isEmpty()) continue
-            val name = decode(part.substringBefore('='))
-            if (values.put(name, decode(part.substringAfter('=', ""))) != null) return null
+    fun guardianCallbackCode(raw: String): String? {
+        return try {
+            val uri = URI(raw)
+            if (uri.scheme != "mozilla-vpn" || uri.host != "login" || uri.path != "/success" ||
+                uri.port != -1 || uri.userInfo != null || uri.fragment != null
+            ) return null
+            val values = HashMap<String, String>()
+            for (part in uri.rawQuery.orEmpty().split('&')) {
+                if (part.isEmpty()) continue
+                val name = decode(part.substringBefore('='))
+                if (values.put(name, decode(part.substringAfter('=', ""))) != null) return null
+            }
+            val code = values["code"] ?: return null
+            code.takeIf { it.length in 8..512 && it.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' } }
+        } catch (_: Exception) {
+            null
         }
-        val code = values["code"] ?: return null
-        code.takeIf { it.length in 8..512 && it.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' } }
-    } catch (_: Exception) {
-        null
     }
 
     private fun challenge(verifier: String): String =
