@@ -68,23 +68,25 @@
             android:layout_height="match_parent"
             android:background="@color/login_bg" />
 
-        <!-- Native overlay: shown while Mozilla's page loads and while the
-             session token is being exchanged. It covers the WebView so the
-             user never stares at a blank or half-drawn page. -->
+        <!-- A thin bar, not a curtain: while it is up the page below stays
+             visible and touchable, and the page budget lifts it after thirty
+             seconds even if the network never answers. -->
         <LinearLayout
             android:id="@+id/webLoading"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/login_bg"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:padding="24dp">
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:background="#CC141414"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="8dp">
 
             <ProgressBar
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
                 android:indeterminate="true"
                 android:indeterminateTint="@color/login_accent" />
 
@@ -92,12 +94,11 @@
                 android:id="@+id/webLoadingText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginStart="12dp"
                 android:fontFamily="@font/vazirmatn_medium"
-                android:gravity="center"
                 android:text="@string/web_connecting"
                 android:textColor="@color/login_text_dim"
-                android:textSize="15sp" />
+                android:textSize="13sp" />
         </LinearLayout>
 
         <!-- Native success card, drawn over the WebView once the pass is in
@@ -167,5 +168,17 @@
         android:paddingBottom="18dp"
         android:textColor="@color/login_accent"
         android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- Shown with the timeout message: the person, not the spinner,
+         decides when the page gets another chance. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/webRetry"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="18dp"
+        android:text="@string/web_retry"
         android:visibility="gone" />
 </LinearLayout>

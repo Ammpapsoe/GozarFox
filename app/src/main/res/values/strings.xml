@@ -482,4 +482,6 @@ AGPL-3.0-or-later</string>
     <string name="web_verify_in_page">Enter the confirmation code on this page. Gozar continues on its own afterwards.</string>
     <string name="web_page_failed">Mozilla\'s sign-in page could not be loaded.</string>
     <string name="web_engine_missing">This device\'s WebView is too old for a secure sign-in. Update Android System WebView and try again.</string>
+    <string name="web_timeout">The connection could not be established. Check the network and try again.</string>
+    <string name="web_retry">Try again</string>
 </resources>

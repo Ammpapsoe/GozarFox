@@ -7,6 +7,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -21,6 +24,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.ProxyConfig
+import androidx.webkit.ProxyController
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebSettingsCompat
@@ -59,6 +64,17 @@ class MozillaWebViewActivity : BaseActivity() {
         // `fxaccounts:login` announcement carrying the session token.
         private const val INTEGRATION = "fx_desktop_v3"
         private const val SERVICE = "sync"
+
+        // The page and its channel expect a Firefox. A Chrome or WebView
+        // agent makes parts of the desktop-v3 flow guess, so the view speaks
+        // as Firefox for Android does.
+        private const val FIREFOX_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Gecko/145.0 Firefox/145.0"
+
+        // How long the thin bar may stay up before the screen admits the
+        // network is not answering and offers a retry.
+        private const val PAGE_BUDGET_MS = 30_000L
     }
 
     private lateinit var web: WebView
@@ -69,6 +85,13 @@ class MozillaWebViewActivity : BaseActivity() {
     private lateinit var error: TextView
     private lateinit var connect: MaterialButton
     private lateinit var back: MaterialButton
+    private lateinit var retry: MaterialButton
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var proxy: FoxSignInProxy? = null
+    private var proxyApplied = false
+    private var budgetExpired = false
+    private val giveUp = Runnable { onLoadingTimeout() }
 
     private var started = false
     private var pageReady = false
@@ -128,14 +151,79 @@ class MozillaWebViewActivity : BaseActivity() {
         harden(web.settings)
         install()
         web.webViewClient = client()
+        retry = findViewById(R.id.webRetry)
+        retry.setOnClickListener { reload() }
 
         val email = intent.getStringExtra(EXTRA_EMAIL).orEmpty().trim()
         val create = intent.getBooleanExtra(EXTRA_CREATE, false)
-        MozillaDiagnostics.record("WEBVIEW stage=load create=$create prefill=${email.isNotEmpty()}")
-        web.loadUrl(pageUrl(email, create))
+        openProxyThen {
+            MozillaDiagnostics.record("WEBVIEW stage=load create=$create prefill=${email.isNotEmpty()}")
+            Log.d("GozarWebView", "loadUrl ${pageUrl(email, create)}")
+            web.loadUrl(pageUrl(email, create))
+        }
         Fox.watch(foxWatcher)
         started = true
         render()
+    }
+
+    /**
+     * Gives the sign-in view its own loopback proxy before the first request
+     * leaves, so the page dials with the race, the split hello and the bounds
+     * that a bare WebView does not have. When the proxy or the override is
+     * unavailable the view simply loads direct: a worse path is still a path.
+     */
+    private fun openProxyThen(load: () -> Unit) {
+        val made = FoxSignInProxy(trace = { line -> Log.d("GozarProxy", line) })
+        proxy = made
+        val port = try {
+            made.start()
+        } catch (broken: Exception) {
+            Log.d("GozarProxy", "start failed ${broken.javaClass.simpleName}")
+            load()
+            return
+        }
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
+            Log.d("GozarProxy", "override unsupported; the view dials direct")
+            load()
+            return
+        }
+        val main = java.util.concurrent.Executor { handler.post(it) }
+        ProxyController.getInstance().setProxyOverride(
+            ProxyConfig.Builder().addProxyRule("127.0.0.1:$port").build(),
+            main
+        ) {
+            proxyApplied = true
+            Log.d("GozarProxy", "override applied to 127.0.0.1:$port")
+            load()
+        }
+    }
+
+    private fun reload() {
+        retry.visibility = View.GONE
+        error.visibility = View.GONE
+        Log.d("GozarWebView", "retry requested")
+        web.reload()
+    }
+
+    private fun armPageBudget() {
+        budgetExpired = false
+        handler.removeCallbacks(giveUp)
+        handler.postDelayed(giveUp, PAGE_BUDGET_MS)
+    }
+
+    private fun disarmPageBudget() = handler.removeCallbacks(giveUp)
+
+    /**
+     * Thirty seconds without a finished page is an answer of its own: lift
+     * the bar, name the failure, and hand the person a button.
+     */
+    private fun onLoadingTimeout() {
+        if (completed || handedOver || pageReady || isFinishing) return
+        budgetExpired = true
+        Log.d("GozarWebView", "page budget expired after ${PAGE_BUDGET_MS}ms")
+        show(null)
+        say(getString(R.string.web_timeout))
+        retry.visibility = View.VISIBLE
     }
 
     /**
@@ -168,23 +256,11 @@ class MozillaWebViewActivity : BaseActivity() {
         settings.mediaPlaybackRequiresUserGesture = true
         settings.setSaveFormData(false)
         settings.setSavePassword(false)
-        settings.userAgentString = honestAgent(settings.userAgentString)
+        settings.userAgentString = FIREFOX_AGENT
 
         // The sign-in needs first-party cookies for its own CSRF state; a
         // third party embedded in the page gets none.
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false)
-    }
-
-    /**
-     * The WebView's own user agent with the two markers removed that announce
-     * "embedded WebView": the `; wv` flag and the `Version/4.0` token that
-     * Chrome on Android never sends. The Chrome build number stays whatever is
-     * really installed, so unlike a hard-coded string it cannot go stale and
-     * turn into a fingerprint of its own.
-     */
-    private fun honestAgent(agent: String?): String? {
-        val real = agent?.takeIf { it.contains("Chrome/") } ?: return null
-        return real.replace("; wv)", ")").replace("Version/4.0 ", "")
     }
 
     /**
@@ -237,7 +313,7 @@ class MozillaWebViewActivity : BaseActivity() {
             return
         }
         if (!handedOver) {
-            if (pageReady) show(null) else show(loading)
+            if (pageReady || budgetExpired) show(null) else show(loading)
             return
         }
         if (Fox.busy) {
@@ -271,15 +347,23 @@ class MozillaWebViewActivity : BaseActivity() {
     private fun client() = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             pageReady = false
+            Log.d("GozarWebView", "onPageStarted $url")
             if (!handedOver) {
                 loadingText.setText(R.string.web_connecting)
                 show(loading)
+                armPageBudget()
             }
         }
 
         override fun onPageFinished(view: WebView, url: String) {
             pageReady = true
+            Log.d("GozarWebView", "onPageFinished $url")
+            disarmPageBudget()
             if (!handedOver) render()
+        }
+
+        override fun onProgressChanged(view: WebView, newProgress: Int) {
+            Log.d("GozarWebView", "onProgressChanged $newProgress")
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -288,6 +372,7 @@ class MozillaWebViewActivity : BaseActivity() {
             if (!request.isForMainFrame) return false
             val target = request.url ?: return false
             if (target.scheme == "https" && target.host.equals(PAGE_HOST, true)) return false
+            Log.d("GozarWebView", "shouldOverrideUrlLoading -> elsewhere $target")
             openElsewhere(target)
             return true
         }
@@ -299,6 +384,7 @@ class MozillaWebViewActivity : BaseActivity() {
         ) {
             if (!request.isForMainFrame) return
             val status = response.statusCode
+            Log.d("GozarWebView", "onReceivedHttpError $status ${request.url}")
             MozillaDiagnostics.record("WEBVIEW http=$status")
             if (status == 406 || status == 451) say(getString(R.string.web_blocked))
         }
@@ -309,6 +395,7 @@ class MozillaWebViewActivity : BaseActivity() {
             failure: WebResourceError
         ) {
             if (!request.isForMainFrame) return
+            Log.d("GozarWebView", "onReceivedError ${failure.errorCode} ${failure.description} ${request.url}")
             MozillaDiagnostics.record("WEBVIEW error=${failure.errorCode}")
             if (!handedOver) say(getString(R.string.web_page_failed))
         }
@@ -366,22 +453,42 @@ class MozillaWebViewActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        disarmPageBudget()
         if (started) Fox.unwatch(foxWatcher)
         script?.remove()
         script = null
-        // The WebView held a signed-in Mozilla session. Dropping it means the
-        // next sign-in starts clean, which is what a shared device needs.
         try {
-            CookieManager.getInstance().removeAllCookies(null)
-        } catch (_: Exception) {
-        }
-        if (::web.isInitialized) {
-            web.stopLoading()
-            web.loadUrl("about:blank")
-            web.clearHistory()
-            (web.parent as? ViewGroup)?.removeView(web)
-            web.removeAllViews()
-            web.destroy()
+            // The WebView held a signed-in Mozilla session. Dropping it means
+            // the next sign-in starts clean, which is what a shared device
+            // needs.
+            try {
+                CookieManager.getInstance().removeAllCookies(null)
+            } catch (_: Exception) {
+            }
+            if (::web.isInitialized) {
+                web.stopLoading()
+                web.loadUrl("about:blank")
+                web.clearHistory()
+                (web.parent as? ViewGroup)?.removeView(web)
+                web.removeAllViews()
+                web.destroy()
+            }
+        } finally {
+            // The proxy owns a loopback port. Leaking it would make the next
+            // sign-in impossible, so it closes whatever else happens here.
+            try {
+                proxy?.stop()
+            } catch (gone: Exception) {
+                Log.d("GozarProxy", "stop failed ${gone.javaClass.simpleName}")
+            }
+            proxy = null
+            if (proxyApplied) {
+                val main = java.util.concurrent.Executor { handler.post(it) }
+                ProxyController.getInstance().clearProxyOverride(main) {
+                    Log.d("GozarProxy", "override cleared")
+                }
+            }
+            proxyApplied = false
         }
         super.onDestroy()
     }

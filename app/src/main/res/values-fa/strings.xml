@@ -482,4 +482,6 @@ AGPL-3.0-or-later</string>
     <string name="web_verify_in_page">کد تأیید را در همین صفحه وارد کنید. گذر پس از آن خودش ادامه می‌دهد.</string>
     <string name="web_page_failed">صفحه‌ی ورود موزیلا باز نشد.</string>
     <string name="web_engine_missing">WebView این دستگاه برای ورود امن بیش از حد قدیمی است. Android System WebView را به‌روزرسانی کنید و دوباره تلاش کنید.</string>
+    <string name="web_timeout">اتصال برقرار نشد. شبکه را بررسی کنید و دوباره تلاش کنید.</string>
+    <string name="web_retry">تلاش مجدد</string>
 </resources>
