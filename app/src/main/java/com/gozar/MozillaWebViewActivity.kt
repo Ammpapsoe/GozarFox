@@ -17,6 +17,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -70,8 +71,7 @@ class MozillaWebViewActivity : BaseActivity() {
         // agent makes parts of the desktop-v3 flow guess, so the view speaks
         // as Firefox for Android does.
         private const val FIREFOX_AGENT =
-            "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Gecko/145.0 Firefox/145.0"
+            "Mozilla/5.0 (Android 13; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
 
         // How long the thin bar may stay up before the screen admits the
         // network is not answering and offers a retry.
@@ -157,6 +157,17 @@ class MozillaWebViewActivity : BaseActivity() {
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 Log.d("GozarWebView", "onProgressChanged $newProgress")
+            }
+
+            // The challenge page talks through the console when its own
+            // assets fail; without this its only voice is a silent spinner.
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                Log.d(
+                    "GozarWebView",
+                    "console ${consoleMessage.messageLevel()} " +
+                        "${consoleMessage.message()} @${consoleMessage.lineNumber()}"
+                )
+                return true
             }
         }
         retry = findViewById(R.id.webRetry)
@@ -352,6 +363,23 @@ class MozillaWebViewActivity : BaseActivity() {
         show(null)
     }
 
+    /**
+     * Fastly's client challenge keeps the page's own origin and title, so a
+     * finished load says nothing by itself; the title does. Naming it in the
+     * log is what turns "silent spinner" into a diagnosis.
+     */
+    private fun noteChallengeIfPresent(url: String) {
+        val target = Uri.parse(url)
+        if (!target.host.equals(PAGE_HOST, true)) return
+        web.evaluateJavascript("(function(){return document.title||''})()") { raw ->
+            val title = raw.trim('"')
+            if (title == "Client Challenge") {
+                Log.d("GozarWebView", "CHALLENGE DETECTED url=$url")
+                MozillaDiagnostics.record("WEBVIEW stage=edge-challenge")
+            }
+        }
+    }
+
     private fun client() = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             pageReady = false
@@ -368,6 +396,7 @@ class MozillaWebViewActivity : BaseActivity() {
             Log.d("GozarWebView", "onPageFinished $url")
             disarmPageBudget()
             if (!handedOver) render()
+            noteChallengeIfPresent(url)
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
