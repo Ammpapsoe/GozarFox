@@ -45,6 +45,13 @@ adb shell am instrument -w -r -e class "$CLASS" "$TEST_PKG/$RUNNER" > "$out/inst
 # instrumented test prints its own trail to stdout, which lands in System.out.
 adb logcat -d -s MozillaWebView:D System.out:I > "$out/diagnostics.log" 2>&1 || true
 
+# Everything, and the crash buffer on its own. A filtered logcat is useless
+# exactly when it matters most: if the process died, the reason is in
+# AndroidRuntime and in the crash buffer, not in our own tags.
+adb logcat -d -v time > "$out/full-logcat.txt" 2>&1 || true
+adb logcat -d -b crash -v time > "$out/crash-logcat.txt" 2>&1 || true
+adb shell dumpsys activity activities 2>/dev/null | grep -iA3 "gozar" > "$out/activity-stack.txt" || true
+
 adb shell ls -l "/sdcard/Android/data/$PKG/files/screens" > "$out/screens-listing.txt" 2>&1 || true
 adb pull "/sdcard/Android/data/$PKG/files/screens/." "$out/screens" > "$out/pull.log" 2>&1 || true
 
@@ -54,6 +61,13 @@ adb pull /sdcard/window.xml "$out/window.xml" > /dev/null 2>&1 || true
 
 grep -E '^GOZAR_UI|INSTRUMENTATION_(STATUS|CODE|RESULT)|OK \(|FAILURES|shortMsg|Error' \
   "$out/instrument.log" | tail -60 || true
+
+if grep -qE "FATAL EXCEPTION|Process crashed" "$out/instrument.log" "$out/crash-logcat.txt" 2>/dev/null; then
+  echo "----- crash buffer -----"
+  cat "$out/crash-logcat.txt" 2>/dev/null | tail -80 || true
+  echo "----- fatal exceptions from the main log -----"
+  grep -A 40 "FATAL EXCEPTION" "$out/full-logcat.txt" 2>/dev/null | head -80 || true
+fi
 
 if [ "$status" -ne 0 ] || ! grep -qE 'OK \(1 test\)' "$out/instrument.log"; then
   echo '::error::Login UI instrumentation did not report a passing run'

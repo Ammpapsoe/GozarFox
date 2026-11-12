@@ -84,14 +84,27 @@ class LoginScreensInstrumentedTest {
         }
         try {
             for ((label, settle) in shots) {
-                Thread.sleep(settle)
-                screenshot("$name-$label")
-                scenario.onActivity { current ->
-                    note("$name-$label finishing=${current.isFinishing} destroyed=${current.isDestroyed}")
+                // Every shot stands on its own: one failure must not cost the
+                // rest, because a crash later is exactly what the earlier
+                // frames would have described.
+                try {
+                    Thread.sleep(settle)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                }
+                try {
+                    screenshot("$name-$label")
+                } catch (error: Throwable) {
+                    note("$name-$label capture-failed ${error.javaClass.simpleName}")
+                }
+                try {
+                    scenario.onActivity { current ->
+                        note("$name-$label finishing=${current.isFinishing} destroyed=${current.isDestroyed}")
+                    }
+                } catch (error: Throwable) {
+                    note("$name-$label state-unavailable ${error.javaClass.simpleName}")
                 }
             }
-        } catch (error: Throwable) {
-            note("$name interrupted ${error.javaClass.simpleName}")
         } finally {
             try {
                 scenario.close()
