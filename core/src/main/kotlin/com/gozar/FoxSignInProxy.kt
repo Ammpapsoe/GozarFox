@@ -221,7 +221,7 @@ class FoxSignInProxy(
                     } catch (_: IOException) {
                     }
                 }
-            })
+            }
         }
         latch.await(dialBudgetMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         racers.forEach { racer ->
