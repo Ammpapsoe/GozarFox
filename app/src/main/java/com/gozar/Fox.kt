@@ -576,7 +576,9 @@ object Fox {
 
     // One instance for the whole process: the lock inside it is what stops the
     // tunnel and the UI from refreshing the same rotating token twice.
-    private val tokenManager = FoxTokenManager(vault) { refresh -> FoxApi.refresh(refresh) }
+    // The exchange is passed positionally: a trailing lambda would bind to the
+    // last parameter, which is the skew, not the refresh call.
+    private val tokenManager = FoxTokenManager(vault, { refresh -> FoxApi.refresh(refresh) })
 
     fun validAccess(c: Context): FoxAccess {
         // Always the application context, so holding it cannot leak a screen.
