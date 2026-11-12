@@ -136,7 +136,7 @@ class FoxSignInProxyTest {
         val proxy = FoxSignInProxy()
         val hello = byteArrayOf(0x16, 3, 3, 0, 60) + "accounts.firefox.com".toByteArray() + ByteArray(30) { 1 }
         val at = proxy.splitPoint(hello, "accounts.firefox.com")
-        val nameStart = hello.toList().indexOf("a".code.toByte())
+        val nameStart = hello.toList().indexOf('a'.code.toByte())
         assertTrue("split at $at must fall inside the name starting at $nameStart", at in (nameStart + 1) until hello.size)
         assertTrue(at < nameStart + "accounts.firefox.com".length)
     }
