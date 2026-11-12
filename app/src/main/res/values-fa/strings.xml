@@ -469,4 +469,8 @@ AGPL-3.0-or-later</string>
     <string name="warp_ready">UDP از طریق WARP و موزیلا متصل است</string>
     <string name="warp_unavailable">WARP در دسترس نیست؛ UDP مسدود است و بررسی تکرار می‌شود</string>
     <string name="warp_save_failed">ذخیرهٔ تنظیم WARP ممکن نشد</string>
+    <string name="mozilla_logs">Logs</string>
+    <string name="mozilla_logs_empty">هنوز رویداد ناوبری ثبت نشده است</string>
+    <string name="mozilla_logs_copy">کپی</string>
+    <string name="mozilla_logs_copied">لاگ‌های امن ناوبری کپی شدند</string>
 </resources>

@@ -27,4 +27,13 @@
         android:padding="20dp"
         android:textColor="@color/login_accent"
         android:visibility="gone" />
+
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/mozillaLogs"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="@string/mozilla_logs"
+        android:text="@string/mozilla_logs" />
 </FrameLayout>

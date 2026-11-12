@@ -2,8 +2,11 @@ package com.gozar
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -12,11 +15,16 @@ import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 
 class MozillaAuthActivity : BaseActivity() {
     companion object {
@@ -35,6 +43,8 @@ class MozillaAuthActivity : BaseActivity() {
     private lateinit var error: TextView
     private lateinit var verifier: String
     private lateinit var expectedState: String
+    private val safeLogLock = Any()
+    private val safeLogs = mutableListOf<String>()
     private var completed = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -44,6 +54,7 @@ class MozillaAuthActivity : BaseActivity() {
         webView = findViewById(R.id.mozillaWebView)
         progress = findViewById(R.id.mozillaProgress)
         error = findViewById(R.id.mozillaError)
+        findViewById<ExtendedFloatingActionButton>(R.id.mozillaLogs).setOnClickListener { showLogs() }
         verifier = savedInstanceState?.getString(STATE_VERIFIER).orEmpty()
         expectedState = savedInstanceState?.getString(STATE_EXPECTED).orEmpty()
         val restoring = verifier.isNotEmpty() && expectedState.isNotEmpty()
@@ -81,17 +92,32 @@ class MozillaAuthActivity : BaseActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val raw = request.url.toString()
+                recordNavigation("override", raw)
                 if (capture(raw)) return true
                 return request.url.scheme != "https"
             }
 
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                if (request.isForMainFrame) recordNavigation("main-resource", request.url.toString())
+                return super.shouldInterceptRequest(view, request)
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                recordNavigation("history", url)
+                if (capture(url)) return
+                super.doUpdateVisitedHistory(view, url, isReload)
+            }
+
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                recordNavigation("started", url)
                 if (capture(url)) return
                 progress.visibility = View.VISIBLE
                 error.visibility = View.GONE
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                recordNavigation("finished", url)
+                if (capture(url)) return
                 if (!completed) progress.visibility = View.GONE
             }
         }
@@ -133,6 +159,53 @@ class MozillaAuthActivity : BaseActivity() {
         super.onDestroy()
     }
 
+    private fun recordNavigation(kind: String, raw: String) {
+        recordSafeLog("NAV $kind ${navigationLabel(raw)}")
+    }
+
+    private fun recordSafeLog(event: String) {
+        synchronized(safeLogLock) { safeLogs.add(event) }
+        Log.d("MozillaWebView", event)
+    }
+
+    private fun showLogs() {
+        val snapshot = synchronized(safeLogLock) { safeLogs.joinToString("\n") }
+        val padding = (16 * resources.displayMetrics.density).toInt()
+        val text = TextView(this).apply {
+            text = snapshot.ifEmpty { getString(R.string.mozilla_logs_empty) }
+            typeface = Typeface.MONOSPACE
+            textSize = 12f
+            setPadding(padding, padding, padding, padding)
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply { addView(text) }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.mozilla_logs)
+            .setView(scroll)
+            .setPositiveButton(R.string.mozilla_logs_copy) { _, _ ->
+                val clipboard = getSystemService(ClipboardManager::class.java)
+                clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.mozilla_logs), snapshot))
+                Toast.makeText(this, R.string.mozilla_logs_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun navigationLabel(raw: String): String = try {
+        val uri = Uri.parse(raw)
+        val parameters = uri.queryParameterNames.sorted().joinToString(",")
+        val scheme = uri.scheme.orEmpty()
+        val host = uri.host.orEmpty()
+        val destination = if (scheme.isNotEmpty() && host.isNotEmpty()) {
+            "$scheme://$host${uri.path.orEmpty()}"
+        } else {
+            scheme
+        }
+        "$destination params=[$parameters]"
+    } catch (_: Exception) {
+        "[invalid-url]"
+    }
+
     private fun safeConsole(raw: String?): String = raw.orEmpty()
         .replace(Regex("https?://\\S+"), "[url]")
         .replace(Regex("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"), "[email]")
@@ -145,8 +218,10 @@ class MozillaAuthActivity : BaseActivity() {
         if (completed || !isCallback(raw)) return false
         val code = FoxOAuth.callbackCode(raw, expectedState)
         if (code == null) {
+            recordSafeLog("OAUTH callback rejected")
             finishWithError("Mozilla returned an invalid or expired authentication response")
         } else {
+            recordSafeLog("OAUTH callback accepted")
             completed = true
             webView.stopLoading()
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_CODE, code).putExtra(EXTRA_VERIFIER, verifier))
