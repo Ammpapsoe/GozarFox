@@ -17,6 +17,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -151,6 +152,13 @@ class MozillaWebViewActivity : BaseActivity() {
         harden(web.settings)
         install()
         web.webViewClient = client()
+        // Progress lives on the chrome client, not the view client; it is the
+        // only place a device log can show how far a stalled page got.
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                Log.d("GozarWebView", "onProgressChanged $newProgress")
+            }
+        }
         retry = findViewById(R.id.webRetry)
         retry.setOnClickListener { reload() }
 
@@ -360,10 +368,6 @@ class MozillaWebViewActivity : BaseActivity() {
             Log.d("GozarWebView", "onPageFinished $url")
             disarmPageBudget()
             if (!handedOver) render()
-        }
-
-        override fun onProgressChanged(view: WebView, newProgress: Int) {
-            Log.d("GozarWebView", "onProgressChanged $newProgress")
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
