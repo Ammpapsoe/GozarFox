@@ -328,7 +328,7 @@ AGPL-3.0-or-later</string>
     <string name="login_retry_action">Retry sign-in</string>
     <string name="login_continue">Continue</string>
     <string name="login_confirm_action">Confirm</string>
-    <string name="login_fill">That email address doesn't look right. Leave it empty to sign in on Mozilla's own page.</string>
+    <string name="login_fill">That email address does not look right. Leave it empty to sign in on the Mozilla page.</string>
     <string name="login_mismatch">The two passwords do not match.</string>
     <string name="login_working">Working…</string>
     <string name="login_no_browser">No browser found for the Firefox account page.</string>
