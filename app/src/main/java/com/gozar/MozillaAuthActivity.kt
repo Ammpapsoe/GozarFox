@@ -40,8 +40,9 @@ class MozillaAuthActivity : BaseActivity() {
         verifier = savedInstanceState?.getString(STATE_VERIFIER).orEmpty()
         state = savedInstanceState?.getString(STATE_STATE).orEmpty()
         target = savedInstanceState?.getString(STATE_URL).orEmpty()
+        val callback = intent.data?.toString()
         val restoring = state.isNotEmpty() && target.isNotEmpty()
-        if (restoring && intent.data != null) {
+        if (restoring && callback != null) {
             recordNavigation("deep-link", callback)
             capture(callback)
             return
@@ -53,7 +54,6 @@ class MozillaAuthActivity : BaseActivity() {
             target = request.url
         }
         recordNavigation("authorization", target)
-        val callback = intent.data?.toString()
         if (callback != null) {
             recordNavigation("deep-link", callback)
             capture(callback)
