@@ -141,7 +141,7 @@ class MozillaAuthActivity : BaseActivity() {
             recordSafeLog("OAUTH callback rejected")
             finishWithError("Mozilla returned an invalid or expired authentication response")
         } else {
-            recordSafeLog("OAUTH callback accepted")
+            recordSafeLog("OAUTH callback accepted ${FoxOAuth.guardianCodeMetadata(code)}")
             completed = true
             setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_CODE, code).putExtra(EXTRA_VERIFIER, verifier))
             finish()

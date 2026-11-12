@@ -90,6 +90,15 @@ object FoxOAuth {
         }
     }
 
+    fun guardianCodeMetadata(code: String): String {
+        val alphabet = when {
+            code.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' } -> "hex"
+            code.all { it.isLetterOrDigit() || it == '-' || it == '_' } -> "base64url"
+            else -> "other"
+        }
+        return "codeLength=${code.length} codeAlphabet=$alphabet decoding=single-url-decode"
+    }
+
     private fun challenge(verifier: String): String =
         encode(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
 
