@@ -414,22 +414,15 @@ object Fox {
         prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signin) { epoch ->
             currentAuth(epoch) { }
-            FoxDiagnostics.event("OAUTH stage=guardian-login-verify")
-            val login = FoxApi.guardianVerify(code, verifier)
-            val fxaAccess = login.fxaAccess
-            val credentialKind = if (fxaAccess.isNotEmpty()) "fxa-access" else "guardian-session-diagnostic"
-            FoxDiagnostics.event("OAUTH stage=profile credential=$credentialKind")
-            val profile = if (fxaAccess.isNotEmpty()) FoxApi.profile(fxaAccess) else login.profile
+            FoxDiagnostics.event("OAUTH stage=oauth-token-request")
+            val tokens = FoxApi.oauthCode(code, verifier)
+            FoxDiagnostics.event("OAUTH stage=oauth-token-response")
+            FoxDiagnostics.event("OAUTH stage=profile")
+            val profile = FoxApi.profile(tokens.access)
             say(c, R.string.fox_stage_pass)
-            FoxDiagnostics.event("PASS stage=token-request credential=$credentialKind persistence=disabled-until-fxa-validation")
-            val pass = if (fxaAccess.isNotEmpty()) FoxApi.pass(fxaAccess) else FoxApi.existingPass(login.guardianToken)
-            FoxDiagnostics.event("PASS stage=token-response credential=$credentialKind result=accepted")
-            if (fxaAccess.isEmpty() || login.fxaRefresh.isEmpty()) {
-                FoxDiagnostics.event("OAUTH stage=account-save-skipped reason=missing-fxa-refresh")
-                throw FoxError("Guardian authentication and Pass succeeded, but no complete FxA credential was returned; account was not saved")
-            }
-            FoxDiagnostics.event("OAUTH stage=account-save credential=fxa-only")
-            val tokens = FoxTokens(fxaAccess, login.fxaRefresh, login.fxaExpiresIn)
+            FoxDiagnostics.event("FPN stage=token-request")
+            val pass = FoxApi.pass(tokens.access)
+            FoxDiagnostics.event("FPN stage=token-response")
             currentAuth(epoch) {
                 FoxStore.saveAccount(c, profile.email.ifEmpty { mailHint }, profile.uid, tokens, pass)
                 clearPendingLocked()

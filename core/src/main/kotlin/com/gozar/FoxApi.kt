@@ -11,14 +11,6 @@ class FoxProfile(val uid: String, val email: String)
 
 class FoxTokens(val access: String, val refresh: String, val expiresIn: Int)
 
-class FoxGuardianLogin(
-    val guardianToken: String,
-    val profile: FoxProfile,
-    val fxaAccess: String,
-    val fxaRefresh: String,
-    val fxaExpiresIn: Int
-)
-
 class FoxPass(val token: String, val limit: Long, val remaining: Long, val reset: String)
 
 class FoxLocation(
@@ -78,27 +70,6 @@ object FoxApi {
         val refresh = data.optString("refresh_token")
         if (access.isEmpty() || refresh.isEmpty()) throw FoxError("Mozilla returned incomplete OAuth tokens")
         return FoxTokens(access, refresh, data.optInt("expires_in", 0))
-    }
-
-    fun guardianVerify(code: String, verifier: String): FoxGuardianLogin {
-        val payload = JSONObject()
-            .put("code", code)
-            .put("code_verifier", verifier)
-            .toString()
-        val endpoint = FoxNet.GUARDIAN + "/api/v2/vpn/login/verify"
-        FoxDiagnostics.event("GUARDIAN stage=login-verify contract=guardian-pkce")
-        val data = json(FoxNet.call(endpoint, "POST", payload, useRelay = false))
-        val guardianToken = data.optString("token")
-        val user = data.optJSONObject("user") ?: JSONObject()
-        val identity = user.optJSONObject("fxa_profile_json") ?: JSONObject()
-        val uid = user.optString("fxa_uid").ifEmpty { user.optString("uid") }.ifEmpty { identity.optString("uid") }
-        val email = user.optString("email").ifEmpty { identity.optString("email") }
-        val fxaAccess = user.optString("fxa_access_token").ifEmpty { data.optString("fxa_access_token") }
-        val fxaRefresh = user.optString("fxa_refresh_token").ifEmpty { data.optString("fxa_refresh_token") }
-        val userFields = user.keys().asSequence().toList().sorted().joinToString(",")
-        FoxDiagnostics.event("GUARDIAN verify userFields=[$userFields] fxaAccessPresent=${fxaAccess.isNotEmpty()} fxaRefreshPresent=${fxaRefresh.isNotEmpty()}")
-        if (guardianToken.isEmpty() || email.isEmpty()) throw FoxError("Guardian returned an incomplete login response")
-        return FoxGuardianLogin(guardianToken, FoxProfile(uid, email), fxaAccess, fxaRefresh, data.optInt("expires_in", 3600))
     }
 
     fun profile(access: String): FoxProfile {
@@ -229,59 +200,26 @@ object FoxApi {
     fun existingPass(access: String): FoxPass = pass(access, false)
 
     private fun pass(access: String, allowActivate: Boolean): FoxPass {
-        FoxDiagnostics.event("PASS stage=begin allowActivate=$allowActivate")
+        FoxDiagnostics.event("FPN stage=token-request endpoint=/api/v1/fpn/token method=GET authorization=Bearer")
         var reply = FoxNet.callWithRetry(
-            FoxNet.GUARDIAN + "/api/v1/fpn/token",
+            FoxNet.FPN + "/api/v1/fpn/token",
             "GET",
             null,
             mapOf("Authorization" to "Bearer $access")
         )
         if (reply.code == 403 && allowActivate) {
-            FoxDiagnostics.event("PASS stage=activation-required status=403")
+            FoxDiagnostics.event("FPN stage=activation-required status=403")
             activate(access)
-            FoxDiagnostics.event("PASS stage=retry-after-activation")
+            FoxDiagnostics.event("FPN stage=retry-after-activation")
             reply = FoxNet.callWithRetry(
-                FoxNet.GUARDIAN + "/api/v1/fpn/token",
+                FoxNet.FPN + "/api/v1/fpn/token",
                 "GET",
                 null,
                 mapOf("Authorization" to "Bearer $access")
             )
         }
-        if (reply.code == 451 && !FoxNet.controlScoped()) {
-            FoxDiagnostics.event("PASS stage=relay-after-451")
-            return relayPass(access, allowActivate)
-        }
-        FoxDiagnostics.event("PASS stage=read-response status=${reply.code}")
+        FoxDiagnostics.event("FPN stage=token-response status=${reply.code}")
         return readPass(reply)
-    }
-
-    private fun relayPass(access: String, allowActivate: Boolean): FoxPass {
-        var lastReply: FoxReply? = null
-        var lastFailure: Exception? = null
-        for (endpoint in FoxRelayDiscovery.relays()) {
-            val reply = try {
-                var candidate = FoxRelay.once(endpoint, "/v1/guardian/pass", "GET", access)
-                if (candidate.code == 403 && allowActivate) {
-                    val activation = FoxRelay.once(endpoint, "/v1/guardian/activate", "POST", access, "{}")
-                    if (FoxRelay.retry(activation.code)) {
-                        lastReply = activation
-                        continue
-                    }
-                    candidate = FoxRelay.once(endpoint, "/v1/guardian/pass", "GET", access)
-                }
-                candidate
-            } catch (error: Exception) {
-                lastFailure = error
-                null
-            } ?: continue
-            if (FoxRelay.retry(reply.code)) {
-                lastReply = reply
-                continue
-            }
-            return readPass(reply)
-        }
-        lastReply?.let { throw failure(it) }
-        throw lastFailure ?: FoxError("no verified relay is available", status = 451)
     }
 
     private fun readPass(reply: FoxReply): FoxPass {
@@ -303,24 +241,23 @@ object FoxApi {
     private fun activate(access: String) {
         try {
             val reply = FoxNet.call(
-                FoxNet.GUARDIAN + "/api/v1/fpn/activate",
+                FoxNet.FPN + "/api/v1/fpn/activate",
                 "POST",
                 "{}",
                 mapOf("Authorization" to "Bearer $access")
             )
-            FoxDiagnostics.event("PASS stage=activation-response status=${reply.code}")
+            FoxDiagnostics.event("FPN stage=activation-response status=${reply.code}")
         } catch (_: Exception) {
         }
     }
 
     fun quota(access: String): FoxPass? {
         var reply = FoxNet.call(
-            FoxNet.GUARDIAN + "/api/v1/fpn/token",
+            FoxNet.FPN + "/api/v1/fpn/token",
             "HEAD",
             null,
             mapOf("Authorization" to "Bearer $access")
         )
-        if (reply.code == 451 && !FoxNet.controlScoped()) reply = FoxRelay.call("/v1/guardian/pass", "HEAD", access)
         if (reply.code != 200) return null
         return quota(reply)
     }

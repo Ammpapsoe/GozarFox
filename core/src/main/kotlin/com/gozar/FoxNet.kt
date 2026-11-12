@@ -28,7 +28,7 @@ object FoxNet {
     const val AUTH = "https://oauth.accounts.firefox.com/v1"
     const val ACCOUNT_AUTH = "https://api.accounts.firefox.com/v1"
     const val TOKEN_REFRESH = "https://oauth.accounts.firefox.com/v1/token"
-    const val GUARDIAN = "https://vpn.mozilla.org"
+    const val FPN = "https://vpn.mozilla.org"
     const val SERVERS = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"
 
     private val jar = FoxJar()

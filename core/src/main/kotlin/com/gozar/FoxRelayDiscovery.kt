@@ -13,9 +13,7 @@ object FoxRelayDiscovery {
     private const val DOCUMENT_URL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/mission/autonomous-v1/packaging/relay-endpoints.json"
     private const val SIGNATURE_URL = "$DOCUMENT_URL.sig"
     private val defaults = listOf(
-        "https://script.google.com/macros/s/AKfycbwMXiE-wFBEaC_ZpZOode1yvgPG1xIHsrty-sM4czaFz6ZBabAWuCd9udiPW4PLH2GR/exec",
-        "https://gozar-guardian-a.gozarfox7.workers.dev",
-        "https://gozar-guardian-b.gozarfox7.workers.dev"
+        "https://script.google.com/macros/s/AKfycbwMXiE-wFBEaC_ZpZOode1yvgPG1xIHsrty-sM4czaFz6ZBabAWuCd9udiPW4PLH2GR/exec"
     )
     private val refreshLock = Any()
     @Volatile private var active = defaults

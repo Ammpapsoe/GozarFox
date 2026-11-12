@@ -71,34 +71,6 @@ object FoxOAuth {
         }
     }
 
-    fun guardianCallbackCode(raw: String): String? {
-        return try {
-            val uri = URI(raw)
-            if (uri.scheme != "mozilla-vpn" || uri.host != "login" || uri.path != "/success" ||
-                uri.port != -1 || uri.userInfo != null || uri.fragment != null
-            ) return null
-            val values = HashMap<String, String>()
-            for (part in uri.rawQuery.orEmpty().split('&')) {
-                if (part.isEmpty()) continue
-                val name = decode(part.substringBefore('='))
-                if (values.put(name, decode(part.substringAfter('=', ""))) != null) return null
-            }
-            val code = values["code"] ?: return null
-            code.takeIf { it.length in 8..512 && it.all { char -> char.isLetterOrDigit() || char == '-' || char == '_' } }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    fun guardianCodeMetadata(code: String): String {
-        val alphabet = when {
-            code.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' } -> "hex"
-            code.all { it.isLetterOrDigit() || it == '-' || it == '_' } -> "base64url"
-            else -> "other"
-        }
-        return "codeLength=${code.length} codeAlphabet=$alphabet decoding=single-url-decode"
-    }
-
     private fun challenge(verifier: String): String =
         encode(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
 

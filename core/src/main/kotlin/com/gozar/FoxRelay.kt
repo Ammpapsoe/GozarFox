@@ -17,8 +17,6 @@ object FoxRelay {
     fun retry(status: Int): Boolean = status == 408 || status == 425 || status == 429 || status == 451 || status in 500..599
 
     fun allowed(path: String, method: String): Boolean = when (path) {
-        "/v1/guardian/pass" -> method == "GET" || method == "HEAD"
-        "/v1/guardian/activate" -> method == "POST"
         "/v1/mozilla/servers" -> method == "GET"
         "/v1/mozilla/token", "/v1/mozilla/oauth/token", "/v1/mozilla/recovery-email/verify-code",
         "/v1/mozilla/recovery-email/resend-code", "/v1/mozilla/session/verify-code" -> method == "POST"
@@ -32,11 +30,7 @@ object FoxRelay {
             null
         } else {
             val path = when {
-                target.host.equals("vpn.mozilla.org", true) -> when (target.path) {
-                    "/api/v1/fpn/token" -> "/v1/guardian/pass"
-                    "/api/v1/fpn/activate" -> "/v1/guardian/activate"
-                    else -> null
-                }
+                target.host.equals("vpn.mozilla.org", true) -> null
                 target.host.equals("oauth.accounts.firefox.com", true) -> when (target.path) {
                     "/v1/token" -> "/v1/mozilla/token"
                     "/v1/oauth/token" -> "/v1/mozilla/oauth/token"
@@ -64,7 +58,7 @@ object FoxRelay {
         var lastReply: FoxReply? = null
         var lastFailure: Exception? = null
         for (endpoint in FoxRelayDiscovery.relays()) {
-            if (!FoxRelayDiscovery.isGoogle(endpoint) && path !in setOf("/v1/guardian/pass", "/v1/guardian/activate", "/v1/mozilla/servers")) continue
+            if (!FoxRelayDiscovery.isGoogle(endpoint) && path != "/v1/mozilla/servers") continue
             try {
                 val reply = request(endpoint, path, method, access, body, authorization, timeout)
                 reply.route = relayRoute(endpoint)
@@ -105,8 +99,6 @@ object FoxRelay {
     private fun relayRoute(endpoint: String): String = if (FoxRelayDiscovery.isGoogle(endpoint)) "apps-script" else "verified-relay"
 
     private fun upstream(path: String): String = when (path) {
-        "/v1/guardian/pass" -> FoxNet.GUARDIAN + "/api/v1/fpn/token"
-        "/v1/guardian/activate" -> FoxNet.GUARDIAN + "/api/v1/fpn/activate"
         "/v1/mozilla/servers" -> FoxNet.SERVERS
         "/v1/mozilla/token" -> FoxNet.AUTH + "/token"
         "/v1/mozilla/oauth/token" -> FoxNet.AUTH + "/oauth/token"

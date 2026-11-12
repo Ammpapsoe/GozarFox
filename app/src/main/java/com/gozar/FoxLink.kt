@@ -134,7 +134,7 @@ object FoxLink {
                     }
                 } ?: return@thread
                 // Reuse the active account's encrypted, unexpired pass first;
-                // this avoids a second direct Guardian call after switching networks.
+                // this avoids a second direct FPN call after switching networks.
                 val bootstrap = FoxStore.bootstrap(app, 90_000L)
                 var pass = if (bootstrap != null) bootstrap.pass else {
                     val access = Fox.validAccess(app)
