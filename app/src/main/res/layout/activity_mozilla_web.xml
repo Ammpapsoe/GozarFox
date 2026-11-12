@@ -181,4 +181,17 @@
         android:layout_marginBottom="18dp"
         android:text="@string/web_retry"
         android:visibility="gone" />
+
+    <!-- The escape hatch: when the edge challenge cannot be solved here,
+         the person is never left staring at a spinner — Chrome finishes the
+         sign-in outside this frame. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/webOpenChrome"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="18dp"
+        android:text="@string/web_open_chrome"
+        android:visibility="gone" />
 </LinearLayout>

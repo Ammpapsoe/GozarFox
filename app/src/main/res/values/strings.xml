@@ -484,4 +484,7 @@ AGPL-3.0-or-later</string>
     <string name="web_engine_missing">This device\'s WebView is too old for a secure sign-in. Update Android System WebView and try again.</string>
     <string name="web_timeout">The connection could not be established. Check the network and try again.</string>
     <string name="web_retry">Try again</string>
+    <string name="web_challenge_waiting">Mozilla is verifying your browser. Please wait…</string>
+    <string name="web_challenge_failed">Mozilla can\'t verify your browser. Please use Chrome instead.</string>
+    <string name="web_open_chrome">Open in Chrome</string>
 </resources>

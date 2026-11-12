@@ -12,13 +12,13 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -76,6 +76,12 @@ class MozillaWebViewActivity : BaseActivity() {
         // How long the thin bar may stay up before the screen admits the
         // network is not answering and offers a retry.
         private const val PAGE_BUDGET_MS = 30_000L
+
+        // The solver gets a minute end to end; after that the screen stops
+        // promising a verification that is not coming and offers Chrome.
+        private const val CHALLENGE_DEADLINE_MS = 60_000L
+
+        private const val CHROME_PACKAGE = "com.android.chrome"
     }
 
     private lateinit var web: WebView
@@ -87,6 +93,7 @@ class MozillaWebViewActivity : BaseActivity() {
     private lateinit var connect: MaterialButton
     private lateinit var back: MaterialButton
     private lateinit var retry: MaterialButton
+    private lateinit var openChrome: MaterialButton
 
     private val handler = Handler(Looper.getMainLooper())
     private var proxy: FoxSignInProxy? = null
@@ -96,6 +103,11 @@ class MozillaWebViewActivity : BaseActivity() {
 
     private var started = false
     private var pageReady = false
+    private var challengeActive = false
+    private var challengeAttempted = false
+    private var challengeUrl: String? = null
+    private var solverThread: Thread? = null
+    private val challengeGiveUp = Runnable { onChallengeDeadline() }
     private var handedOver = false
     private var completed = false
     private var script: ScriptHandler? = null
@@ -172,6 +184,8 @@ class MozillaWebViewActivity : BaseActivity() {
         }
         retry = findViewById(R.id.webRetry)
         retry.setOnClickListener { reload() }
+        openChrome = findViewById(R.id.webOpenChrome)
+        openChrome.setOnClickListener { openInChrome() }
 
         val email = intent.getStringExtra(EXTRA_EMAIL).orEmpty().trim()
         val create = intent.getBooleanExtra(EXTRA_CREATE, false)
@@ -332,7 +346,13 @@ class MozillaWebViewActivity : BaseActivity() {
             return
         }
         if (!handedOver) {
-            if (pageReady || budgetExpired) show(null) else show(loading)
+            if (challengeActive) {
+                show(loading)
+            } else if (pageReady || budgetExpired) {
+                show(null)
+            } else {
+                show(loading)
+            }
             return
         }
         if (Fox.busy) {
@@ -364,18 +384,154 @@ class MozillaWebViewActivity : BaseActivity() {
     }
 
     /**
-     * Fastly's client challenge keeps the page's own origin and title, so a
-     * finished load says nothing by itself; the title does. Naming it in the
-     * log is what turns "silent spinner" into a diagnosis.
+     * Fastly's client challenge keeps the page's own origin, so a finished
+     * load says nothing by itself; the title does. Naming it in the log is
+     * what turns "silent spinner" into a diagnosis — and the solver starts
+     * from here, once per page, never in a loop.
      */
     private fun noteChallengeIfPresent(url: String) {
         val target = Uri.parse(url)
         if (!target.host.equals(PAGE_HOST, true)) return
         web.evaluateJavascript("(function(){return document.title||''})()") { raw ->
             val title = raw.trim('"')
-            if (title == "Client Challenge") {
-                Log.d("GozarWebView", "CHALLENGE DETECTED url=$url")
-                MozillaDiagnostics.record("WEBVIEW stage=edge-challenge")
+            if (title != "Client Challenge") return@evaluateJavascript
+            Log.d("GozarWebView", "CHALLENGE DETECTED url=$url")
+            MozillaDiagnostics.record("WEBVIEW stage=edge-challenge")
+            if (challengeAttempted || completed || handedOver || isFinishing) return@evaluateJavascript
+            startChallengeSolver(url)
+        }
+    }
+
+    /**
+     * One attempt, on a worker thread, with its own deadline. The thin bar
+     * stays up with the waiting message while the solver talks to the edge;
+     * whatever it brings back is applied or admitted on the main thread.
+     */
+    private fun startChallengeSolver(url: String) {
+        challengeAttempted = true
+        challengeActive = true
+        challengeUrl = url
+        disarmPageBudget()
+        retry.visibility = View.GONE
+        openChrome.visibility = View.GONE
+        error.visibility = View.GONE
+        loadingText.setText(R.string.web_challenge_waiting)
+        show(loading)
+        handler.postDelayed(challengeGiveUp, CHALLENGE_DEADLINE_MS)
+
+        val proxyPort = runCatching { proxy?.port ?: 0 }.getOrDefault(0)
+        solverThread = Thread {
+            val outcome = runCatching {
+                val transport = if (proxyApplied && proxyPort > 0) {
+                    // Same loopback tunnel as the WebView, so the cookie the
+                    // edge issues is bound to the exit this page will use.
+                    FastlyChallengeSolver.JdkTransport("127.0.0.1", proxyPort)
+                } else {
+                    FastlyChallengeSolver.JdkTransport()
+                }
+                FastlyChallengeSolver(
+                    http = transport,
+                    userAgent = FIREFOX_AGENT,
+                    trace = { line -> Log.d("GozarWebView", "solver $line") },
+                ).solve(url)
+            }.getOrElse { crash ->
+                Log.d("GozarWebView", "solver crashed ${crash.javaClass.simpleName}")
+                FastlyChallengeSolver.Outcome.Failed("solver-crash")
+            }
+            handler.post { onSolverOutcome(outcome) }
+        }.also {
+            it.name = "fastly-solver"
+            it.start()
+        }
+    }
+
+    private fun onSolverOutcome(outcome: FastlyChallengeSolver.Outcome) {
+        solverThread = null
+        if (isFinishing || isDestroyed) return
+        handler.removeCallbacks(challengeGiveUp)
+        challengeActive = false
+        when (outcome) {
+            is FastlyChallengeSolver.Outcome.Success -> {
+                Log.d("GozarWebView", "solver success cookies=${outcome.cookies.size}")
+                MozillaDiagnostics.record(
+                    "WEBVIEW stage=challenge-solved cookies=${outcome.cookies.size}"
+                )
+                injectChallengeCookies(outcome.setCookieHeaders)
+                reloadAfterSolver()
+            }
+            is FastlyChallengeSolver.Outcome.NotChallenged -> {
+                // The page turned out to be the real one; stand the bar down.
+                Log.d("GozarWebView", "solver saw no challenge")
+                loadingText.setText(R.string.web_connecting)
+                render()
+            }
+            is FastlyChallengeSolver.Outcome.Blocked ->
+                onChallengeUnresolved("blocked:" + outcome.reason)
+            is FastlyChallengeSolver.Outcome.Failed ->
+                onChallengeUnresolved("failed:" + outcome.reason)
+        }
+    }
+
+    /**
+     * CookieManager accepts a full Set-Cookie line, attributes included, so
+     * the edge's own scoping survives the hand-off into the WebView.
+     */
+    private fun injectChallengeCookies(setCookieHeaders: List<String>) {
+        val manager = CookieManager.getInstance()
+        for (line in setCookieHeaders) {
+            try {
+                manager.setCookie("https://$PAGE_HOST", line)
+            } catch (rejected: Exception) {
+                Log.d("GozarWebView", "cookie rejected ${rejected.javaClass.simpleName}")
+            }
+        }
+        manager.flush()
+    }
+
+    private fun reloadAfterSolver() {
+        val url = challengeUrl ?: return onChallengeUnresolved("failed:no-url")
+        pageReady = false
+        budgetExpired = false
+        loadingText.setText(R.string.web_connecting)
+        show(loading)
+        armPageBudget()
+        Log.d("GozarWebView", "reloading with challenge cookies")
+        web.loadUrl(url)
+    }
+
+    private fun onChallengeDeadline() {
+        if (completed || handedOver || isFinishing || !challengeActive) return
+        Log.d("GozarWebView", "challenge deadline passed after ${CHALLENGE_DEADLINE_MS}ms")
+        challengeActive = false
+        onChallengeUnresolved("deadline")
+    }
+
+    /**
+     * The promise of verification is withdrawn out loud: the bar comes down,
+     * the message says what happened, and Chrome is one tap away. The person
+     * is never left alone with a spinner.
+     */
+    private fun onChallengeUnresolved(reason: String) {
+        handler.removeCallbacks(challengeGiveUp)
+        challengeActive = false
+        Log.d("GozarWebView", "challenge unresolved reason=$reason")
+        MozillaDiagnostics.record("WEBVIEW stage=challenge-unresolved reason=$reason")
+        show(null)
+        say(getString(R.string.web_challenge_failed))
+        openChrome.visibility = View.VISIBLE
+    }
+
+    private fun openInChrome() {
+        val url = challengeUrl ?: PAGE
+        Log.d("GozarWebView", "opening in Chrome")
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        try {
+            startActivity(Intent(view).setPackage(CHROME_PACKAGE))
+        } catch (_: android.content.ActivityNotFoundException) {
+            try {
+                startActivity(view)
+            } catch (_: android.content.ActivityNotFoundException) {
+                say(getString(R.string.web_challenge_failed))
             }
         }
     }
@@ -487,6 +643,8 @@ class MozillaWebViewActivity : BaseActivity() {
 
     override fun onDestroy() {
         disarmPageBudget()
+        handler.removeCallbacks(challengeGiveUp)
+        solverThread = null
         if (started) Fox.unwatch(foxWatcher)
         script?.remove()
         script = null
