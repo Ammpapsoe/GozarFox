@@ -12,21 +12,27 @@ object FoxOAuth {
     private val random = SecureRandom()
 
     data class Request(val url: String, val verifier: String, val state: String)
-    data class BrowserRequest(val url: String, val verifier: String)
+    data class BrowserRequest(val url: String, val verifier: String, val state: String)
 
     fun customTabRequest(loginHint: String = ""): BrowserRequest {
         val verifier = token()
+        val state = token()
+        val challenge = challenge(verifier)
         val parameters = linkedMapOf(
-            "code_challenge" to challenge(verifier),
+            "client_id" to FoxNet.CLIENT_ID,
+            "scope" to FoxNet.SCOPE,
+            "response_type" to "code",
+            "redirect_uri" to CALLBACK,
+            "code_challenge" to challenge,
             "code_challenge_method" to "S256",
-            "user_agent" to FoxNet.UA,
-            "utm_medium" to "vpn-client",
-            "utm_source" to "android-customtab-flow",
+            "state" to state,
+            "access_type" to "offline",
+            "action" to "signin",
             "iap" to "true"
         )
-        if (loginHint.isNotBlank()) parameters["email"] = loginHint.trim()
+        if (loginHint.isNotBlank()) parameters["login_hint"] = loginHint.trim()
         val query = parameters.entries.joinToString("&") { encode(it.key) + "=" + encode(it.value) }
-        return BrowserRequest("https://vpn.mozilla.org/api/v2/vpn/login/android?$query", verifier)
+        return BrowserRequest("$AUTHORIZATION?$query", verifier, state)
     }
 
     fun request(create: Boolean, loginHint: String = ""): Request {

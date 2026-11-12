@@ -68,9 +68,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="mozilla-vpn"
-                    android:host="login"
-                    android:path="/success" />
+                    android:scheme="https"
+                    android:host="vpn.mozilla.org"
+                    android:path="/oauth/success" />
             </intent-filter>
         </activity>
 

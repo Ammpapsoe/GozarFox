@@ -19,11 +19,13 @@ class MozillaAuthActivity : BaseActivity() {
         const val EXTRA_ERROR = "com.gozar.MOZILLA_ERROR"
         private const val STATE_URL = "mozilla_url"
         private const val STATE_VERIFIER = "mozilla_verifier"
+        private const val STATE_STATE = "mozilla_state"
     }
 
     private lateinit var progress: ProgressBar
     private lateinit var error: TextView
     private lateinit var verifier: String
+    private lateinit var state: String
     private var target = ""
     private var launched = false
     private var completed = false
@@ -36,16 +38,18 @@ class MozillaAuthActivity : BaseActivity() {
         findViewById<ExtendedFloatingActionButton>(R.id.mozillaLogs).setOnClickListener { MozillaDiagnostics.show(this) }
         if (savedInstanceState == null && intent.data == null) MozillaDiagnostics.clear()
         verifier = savedInstanceState?.getString(STATE_VERIFIER).orEmpty()
+        state = savedInstanceState?.getString(STATE_STATE).orEmpty()
         target = savedInstanceState?.getString(STATE_URL).orEmpty()
-        val restoring = verifier.isNotEmpty() && target.isNotEmpty()
-        if (!restoring && intent.data != null) {
-            recordSafeLog("OAUTH callback rejected")
-            finishWithError("Mozilla authentication session could not be restored")
+        val restoring = state.isNotEmpty() && target.isNotEmpty()
+        if (restoring && intent.data != null) {
+            recordNavigation("deep-link", callback)
+            capture(callback)
             return
         }
         if (!restoring) {
             val request = FoxOAuth.customTabRequest(intent.getStringExtra(EXTRA_EMAIL).orEmpty())
             verifier = request.verifier
+            state = request.state
             target = request.url
         }
         recordNavigation("authorization", target)
@@ -82,6 +86,7 @@ class MozillaAuthActivity : BaseActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_URL, target)
         outState.putString(STATE_VERIFIER, verifier)
+        outState.putString(STATE_STATE, state)
         super.onSaveInstanceState(outState)
     }
 
@@ -136,7 +141,7 @@ class MozillaAuthActivity : BaseActivity() {
 
     private fun capture(raw: String): Boolean {
         if (completed) return true
-        val code = FoxOAuth.callbackCode(raw, verifier)
+        val code = FoxOAuth.callbackCode(raw, state)
         if (code == null) {
             recordSafeLog("OAUTH callback rejected")
             finishWithError("Mozilla returned an invalid or expired authentication response")
