@@ -13,7 +13,7 @@ import org.junit.Test
  * checked here without a device. Every wait in these tests is a fraction
  * of a second: the production 30 s budget is injected, not assumed.
  */
-class FoxSignInProxyTest {
+class SignInTunnelTest {
 
     private fun clientTo(port: Int): Socket =
         Socket().apply { connect(InetSocketAddress("127.0.0.1", port), 5_000) }
@@ -30,7 +30,7 @@ class FoxSignInProxyTest {
     @Test
     fun tunnelsAnAllowedHostAndReassemblesTheSplitHello() {
         val fake = ServerSocket(0)
-        val proxy = FoxSignInProxy(allowed = setOf("localhost"), tlsPort = fake.localPort)
+        val proxy = SignInTunnel(allowed = setOf("localhost"), tlsPort = fake.localPort)
         val port = proxy.start()
         try {
             val client = clientTo(port)
@@ -76,7 +76,7 @@ class FoxSignInProxyTest {
 
     @Test
     fun blocksAHostOutsideTheAllowlist() {
-        val proxy = FoxSignInProxy(allowed = setOf("localhost"))
+        val proxy = SignInTunnel(allowed = setOf("localhost"))
         val port = proxy.start()
         try {
             val client = clientTo(port)
@@ -91,7 +91,7 @@ class FoxSignInProxyTest {
 
     @Test
     fun boundsTheHandshakeWaitWhenTheClientSendsNothing() {
-        val proxy = FoxSignInProxy(allowed = setOf("localhost"), handshakeReadMs = 300)
+        val proxy = SignInTunnel(allowed = setOf("localhost"), handshakeReadMs = 300)
         val port = proxy.start()
         try {
             val client = clientTo(port)
@@ -110,7 +110,7 @@ class FoxSignInProxyTest {
     fun boundsTheDialWhenNoAddressAnswers() {
         // 10.255.255.1 is TEST-NET-adjacent private space: connects hang on
         // ordinary networks, which is exactly the shape of a blackhole.
-        val proxy = FoxSignInProxy(
+        val proxy = SignInTunnel(
             allowed = setOf("10.255.255.1"),
             dialBudgetMs = 400,
             handshakeReadMs = 5_000
@@ -133,7 +133,7 @@ class FoxSignInProxyTest {
 
     @Test
     fun splitsInsideTheServerNameWhenOneIsPresent() {
-        val proxy = FoxSignInProxy()
+        val proxy = SignInTunnel()
         val hello = byteArrayOf(0x16, 3, 3, 0, 60) + "accounts.firefox.com".toByteArray() + ByteArray(30) { 1 }
         val at = proxy.splitPoint(hello, "accounts.firefox.com")
         val nameStart = hello.toList().indexOf('a'.code.toByte())
@@ -143,7 +143,7 @@ class FoxSignInProxyTest {
 
     @Test
     fun stopIsIdempotentAndFreesThePort() {
-        val proxy = FoxSignInProxy()
+        val proxy = SignInTunnel()
         val port = proxy.start()
         assertTrue(port > 0)
         proxy.stop()
@@ -154,7 +154,7 @@ class FoxSignInProxyTest {
 
     @Test
     fun parsesTheAAnswersOfADnsResponse() {
-        val proxy = FoxSignInProxy()
+        val proxy = SignInTunnel()
         val query = proxy.buildQuery("accounts.firefox.com")
         val question = query.copyOfRange(12, query.size)
         val message = java.io.ByteArrayOutputStream()
@@ -174,7 +174,7 @@ class FoxSignInProxyTest {
      */
     @Test
     fun allowlistAcceptsSignInDomainsPartnersAndRefusesEverythingElse() {
-        val proxy = FoxSignInProxy() // defaults; never started, permits only
+        val proxy = SignInTunnel() // defaults; never started, permits only
 
         // Inside the sign-in domains, any depth.
         assertTrue(proxy.permits("accounts.firefox.com"))

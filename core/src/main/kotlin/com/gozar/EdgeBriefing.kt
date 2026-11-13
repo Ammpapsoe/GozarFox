@@ -16,7 +16,7 @@ import org.json.JSONObject
  *
  * Written from the wire format; no other implementation was copied.
  */
-object ChallengeScriptReader {
+object EdgeBriefing {
 
     /** What the script briefs the browser to do. */
     data class Briefing(
@@ -25,7 +25,7 @@ object ChallengeScriptReader {
         val marker: String,
     )
 
-    fun read(script: String, expectedMarker: String): Briefing? {
+    fun extract(script: String, expectedMarker: String): Briefing? {
         var cursor = 0
         var best: Briefing? = null
         while (true) {

@@ -43,7 +43,7 @@ class LoginScreensInstrumentedTest {
             // whatever the screen settled into once the network answered.
             capture(
                 "03-webview",
-                MozillaWebViewActivity::class.java,
+                BrowserFlowActivity::class.java,
                 listOf("loading" to 4_000L, "settled" to 40_000L)
             )
         } finally {

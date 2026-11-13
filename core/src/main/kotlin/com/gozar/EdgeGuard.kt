@@ -19,7 +19,7 @@ import org.json.JSONObject
  *
  * The exchange, in one breath: ask for the page; when the interstitial
  * answers, take its marker; fetch the challenge script; read its briefing
- * (see [ChallengeScriptReader]); answer each task (see [ProofOfWork] for the
+ * (see [EdgeBriefing]); answer each task (see [ProofSolver] for the
  * work proof); deliver the answers; repeat for as many rounds as the edge
  * issues; then prove the earned pass actually opens the page before handing
  * the cookies over.
@@ -37,7 +37,7 @@ import org.json.JSONObject
  * A protocol-level implementation written for this codebase; naming and
  * structure are our own.
  */
-class EdgeVerifier(
+class EdgeGuard(
     private val wire: Wire = JdkWire(),
     private val agent: String = ANDROID_FIREFOX_AGENT,
     private val stepTimeoutMs: Int = 10_000,
@@ -104,7 +104,7 @@ class EdgeVerifier(
         calledOff = true
     }
 
-    fun run(targetUrl: String): Verdict {
+    fun resolve(targetUrl: String): Verdict {
         val attempt = "edge-" + UUID.randomUUID().toString().take(8)
         val deadline = clock() + budgetMs
         val pouch = CookiePouch()
@@ -135,7 +135,7 @@ class EdgeVerifier(
 
             if (stopped()) return Verdict.GaveUp(CALLED_OFF)
             notify(Stage.READING_BRIEFING)
-            val briefing = ChallengeScriptReader.read(scriptReply.text(), marker)
+            val briefing = EdgeBriefing.extract(scriptReply.text(), marker)
                 ?: return Verdict.GaveUp("briefing-unreadable")
             trace("$attempt briefing read tasks=${briefing.tasks.size}")
 
@@ -227,7 +227,7 @@ class EdgeVerifier(
         return when (kind) {
             WORK_TASK -> {
                 val base = data.optString("base")
-                val suffix = ProofOfWork.findSuffix(
+                val suffix = ProofSolver.findPowSuffix(
                     base,
                     data.optString("hash"),
                     keepGoing = { !stopped() },

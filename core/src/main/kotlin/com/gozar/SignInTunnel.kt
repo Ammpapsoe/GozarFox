@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Pure JVM on purpose - the same race and bounds are exercised by unit
  * tests without a device.
  */
-class FoxSignInProxy(
+class SignInTunnel(
     private val allowed: Set<String> = SIGN_IN_HOSTS,
     private val allowedDomains: Set<String> = SIGN_IN_DOMAINS,
     private val partnerHosts: Set<String> = SIGN_IN_PARTNER_HOSTS,
@@ -520,7 +520,7 @@ class FoxSignInProxy(
     }
 
     private fun thread(name: String, body: () -> Unit): Thread {
-        val worker = Thread(body, "FoxSignInProxy-$name")
+        val worker = Thread(body, "SignInTunnel-$name")
         worker.isDaemon = true
         worker.start()
         return worker

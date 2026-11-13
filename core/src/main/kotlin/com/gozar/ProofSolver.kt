@@ -14,7 +14,7 @@ import java.security.MessageDigest
  *
  * Written from the protocol itself; no other implementation was copied.
  */
-object ProofOfWork {
+object ProofSolver {
 
     private const val CHARACTERS =
         "abcdefghijklmnopqrstuvwxyz" +
@@ -29,7 +29,7 @@ object ProofOfWork {
      * [keepGoing] is polled inside the loop so a caller can cancel mid-search
      * without waiting for the 3844th digest.
      */
-    fun findSuffix(
+    fun findPowSuffix(
         base: String,
         targetHex: String,
         keepGoing: () -> Boolean = { true },

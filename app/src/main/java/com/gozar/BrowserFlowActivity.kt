@@ -50,7 +50,7 @@ import java.net.URLEncoder
  * grant, and the credential is deliberately never returned through an Intent:
  * this screen tells its caller only whether it worked.
  */
-class MozillaWebViewActivity : BaseActivity() {
+class BrowserFlowActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_EMAIL = "email"
@@ -100,7 +100,7 @@ class MozillaWebViewActivity : BaseActivity() {
     private lateinit var openChrome: MaterialButton
 
     private val handler = Handler(Looper.getMainLooper())
-    private var proxy: FoxSignInProxy? = null
+    private var proxy: SignInTunnel? = null
     private var proxyApplied = false
     private var budgetExpired = false
     private val giveUp = Runnable { onLoadingTimeout() }
@@ -113,7 +113,7 @@ class MozillaWebViewActivity : BaseActivity() {
     private var verifierThread: Thread? = null
 
     @Volatile
-    private var activeVerifier: EdgeVerifier? = null
+    private var activeVerifier: EdgeGuard? = null
     private val challengeGiveUp = Runnable { onChallengeDeadline() }
     private val challengePatience = Runnable { onChallengeSlow() }
     private var handedOver = false
@@ -138,7 +138,7 @@ class MozillaWebViewActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_mozilla_web)
+        setContentView(R.layout.activity_browser_flow)
         web = findViewById(R.id.webSignInPage)
         header = findViewById(R.id.webHeader)
         loading = findViewById(R.id.webLoading)
@@ -214,7 +214,7 @@ class MozillaWebViewActivity : BaseActivity() {
      * unavailable the view simply loads direct: a worse path is still a path.
      */
     private fun openProxyThen(load: () -> Unit) {
-        val made = FoxSignInProxy(trace = { line -> Log.d("GozarProxy", line) })
+        val made = SignInTunnel(trace = { line -> Log.d("GozarProxy", line) })
         proxy = made
         val port = try {
             made.start()
@@ -430,13 +430,13 @@ class MozillaWebViewActivity : BaseActivity() {
         handler.postDelayed(challengePatience, CHALLENGE_PATIENCE_MS)
 
         val proxyPort = runCatching { proxy?.port ?: 0 }.getOrDefault(0)
-        val verifier = EdgeVerifier(
+        val verifier = EdgeGuard(
             // Same loopback tunnel as the WebView when one is up, so the pass
             // the edge issues is bound to the exit this page will use.
             wire = if (proxyApplied && proxyPort > 0) {
-                EdgeVerifier.JdkWire("127.0.0.1", proxyPort)
+                EdgeGuard.JdkWire("127.0.0.1", proxyPort)
             } else {
-                EdgeVerifier.JdkWire()
+                EdgeGuard.JdkWire()
             },
             agent = FIREFOX_AGENT,
             notify = { stage -> handler.post { onVerifierStage(stage) } },
@@ -444,9 +444,9 @@ class MozillaWebViewActivity : BaseActivity() {
         )
         activeVerifier = verifier
         verifierThread = Thread {
-            val verdict = runCatching { verifier.run(url) }.getOrElse { crash ->
+            val verdict = runCatching { verifier.resolve(url) }.getOrElse { crash ->
                 Log.d("GozarWebView", "verifier crashed ${crash.javaClass.simpleName}")
-                EdgeVerifier.Verdict.GaveUp("verifier-crash")
+                EdgeGuard.Verdict.GaveUp("verifier-crash")
             }
             handler.post { onVerifierVerdict(verdict) }
         }.also {
@@ -456,16 +456,16 @@ class MozillaWebViewActivity : BaseActivity() {
     }
 
     /** Stage narration with an honest, stage-mapped percentage. */
-    private fun onVerifierStage(stage: EdgeVerifier.Stage) {
+    private fun onVerifierStage(stage: EdgeGuard.Stage) {
         if (!challengeActive || isFinishing) return
         val template = when (stage) {
-            EdgeVerifier.Stage.PROBING,
-            EdgeVerifier.Stage.FETCHING_SCRIPT,
-            EdgeVerifier.Stage.READING_BRIEFING -> R.string.web_stage_probe
-            EdgeVerifier.Stage.SOLVING,
-            EdgeVerifier.Stage.DELIVERING -> R.string.web_stage_solve
-            EdgeVerifier.Stage.CONFIRMING,
-            EdgeVerifier.Stage.CLEARED -> R.string.web_stage_cookie
+            EdgeGuard.Stage.PROBING,
+            EdgeGuard.Stage.FETCHING_SCRIPT,
+            EdgeGuard.Stage.READING_BRIEFING -> R.string.web_stage_probe
+            EdgeGuard.Stage.SOLVING,
+            EdgeGuard.Stage.DELIVERING -> R.string.web_stage_solve
+            EdgeGuard.Stage.CONFIRMING,
+            EdgeGuard.Stage.CLEARED -> R.string.web_stage_cookie
         }
         loadingText.text = getString(template, stage.percent)
     }
@@ -475,7 +475,7 @@ class MozillaWebViewActivity : BaseActivity() {
         loadingText.setText(R.string.web_challenge_patience)
     }
 
-    private fun onVerifierVerdict(verdict: EdgeVerifier.Verdict) {
+    private fun onVerifierVerdict(verdict: EdgeGuard.Verdict) {
         verifierThread = null
         activeVerifier = null
         if (isFinishing || isDestroyed) return
@@ -483,7 +483,7 @@ class MozillaWebViewActivity : BaseActivity() {
         handler.removeCallbacks(challengePatience)
         challengeActive = false
         when (verdict) {
-            is EdgeVerifier.Verdict.Cleared -> {
+            is EdgeGuard.Verdict.Cleared -> {
                 Log.d("GozarWebView", "edge cleared cookies=${verdict.cookies.size}")
                 MozillaDiagnostics.record(
                     "WEBVIEW stage=edge-cleared cookies=${verdict.cookies.size}"
@@ -491,15 +491,15 @@ class MozillaWebViewActivity : BaseActivity() {
                 injectChallengeCookies(verdict.setCookieLines)
                 reloadAfterVerifier()
             }
-            is EdgeVerifier.Verdict.NoChallenge -> {
+            is EdgeGuard.Verdict.NoChallenge -> {
                 // The page turned out to be the real one; stand the bar down.
                 Log.d("GozarWebView", "verifier saw no challenge")
                 loadingText.setText(R.string.web_connecting)
                 render()
             }
-            is EdgeVerifier.Verdict.NeedsHuman ->
+            is EdgeGuard.Verdict.NeedsHuman ->
                 onChallengeUnresolved("human:" + verdict.why)
-            is EdgeVerifier.Verdict.GaveUp ->
+            is EdgeGuard.Verdict.GaveUp ->
                 onChallengeUnresolved("gave-up:" + verdict.why)
         }
     }

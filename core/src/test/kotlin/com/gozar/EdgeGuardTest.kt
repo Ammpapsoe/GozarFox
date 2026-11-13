@@ -8,12 +8,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Drives [EdgeVerifier] against a scripted edge: canned replies in order,
+ * Drives [EdgeGuard] against a scripted edge: canned replies in order,
  * every request recorded. The fixtures mirror the live accounts.firefox.com
  * exchange (interstitial page, init briefing inside script.js, fst-post-back
  * receipts that bless or re-issue).
  */
-class EdgeVerifierTest {
+class EdgeGuardTest {
 
     private val target = "https://accounts.firefox.com/?context=fx_desktop_v3&service=sync&action=email"
     private val origin = "https://accounts.firefox.com"
@@ -45,15 +45,15 @@ class EdgeVerifierTest {
     private class FakeEdge(
         private val replies: List<Pair<Int, String>>,
         private val headers: List<Map<String, List<String>>> = emptyList(),
-    ) : EdgeVerifier.Wire {
-        val requests = mutableListOf<EdgeVerifier.Wire.Request>()
+    ) : EdgeGuard.Wire {
+        val requests = mutableListOf<EdgeGuard.Wire.Request>()
 
-        override fun exchange(request: EdgeVerifier.Wire.Request): EdgeVerifier.Wire.Reply {
+        override fun exchange(request: EdgeGuard.Wire.Request): EdgeGuard.Wire.Reply {
             requests += request
             val index = requests.size - 1
             assertTrue("edge ran out of scripted replies", index < replies.size)
             val (status, body) = replies[index]
-            return EdgeVerifier.Wire.Reply(
+            return EdgeGuard.Wire.Reply(
                 status,
                 headers.getOrElse(index) { emptyMap() },
                 body.toByteArray(Charsets.UTF_8),
@@ -62,12 +62,12 @@ class EdgeVerifierTest {
     }
 
     private fun verifierFor(
-        edge: EdgeVerifier.Wire,
+        edge: EdgeGuard.Wire,
         trace: (String) -> Unit = {},
-        notify: (EdgeVerifier.Stage) -> Unit = {},
+        notify: (EdgeGuard.Stage) -> Unit = {},
         clock: () -> Long = System::currentTimeMillis,
         budgetMs: Long = 60_000L,
-    ) = EdgeVerifier(
+    ) = EdgeGuard(
         wire = edge,
         clock = clock,
         budgetMs = budgetMs,
@@ -95,10 +95,10 @@ class EdgeVerifierTest {
             ),
         )
 
-        val verdict = verifierFor(edge).run(target)
+        val verdict = verifierFor(edge).resolve(target)
 
-        assertTrue(verdict is EdgeVerifier.Verdict.Cleared)
-        val cleared = verdict as EdgeVerifier.Verdict.Cleared
+        assertTrue(verdict is EdgeGuard.Verdict.Cleared)
+        val cleared = verdict as EdgeGuard.Verdict.Cleared
         assertEquals("earned-value", cleared.cookies["fs-ch-ck"])
         assertEquals(listOf(passLine), cleared.setCookieLines)
 
@@ -139,7 +139,7 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        verifierFor(edge).run(target)
+        verifierFor(edge).resolve(target)
         val sent = JSONObject(String(edge.requests[2].body!!, Charsets.UTF_8))
             .getJSONArray("data").getJSONObject(0)
         assertTrue(sent.get("expires") is Number)
@@ -166,8 +166,8 @@ class EdgeVerifierTest {
                     emptyMap(),
                 ),
             )
-            val verdict = verifierFor(edge).run(target)
-            assertTrue(verdict is EdgeVerifier.Verdict.Cleared)
+            val verdict = verifierFor(edge).resolve(target)
+            assertTrue(verdict is EdgeGuard.Verdict.Cleared)
             val sent = JSONObject(String(edge.requests[2].body!!, Charsets.UTF_8))
                 .getJSONArray("data").getJSONObject(0)
             assertEquals("", sent.getString("expires"))
@@ -192,8 +192,8 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        val verdict = verifierFor(edge).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.Cleared)
+        val verdict = verifierFor(edge).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.Cleared)
         val second = JSONObject(String(edge.requests[3].body!!, Charsets.UTF_8))
         assertEquals("tok-2", second.getString("token"))
         assertEquals("cD", second.getJSONArray("data").getJSONObject(0).getString("answer"))
@@ -217,9 +217,9 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        val verdict = verifierFor(edge).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("pass-not-honored", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifierFor(edge).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("pass-not-honored", (verdict as EdgeGuard.Verdict.GaveUp).why)
     }
 
     @Test
@@ -230,9 +230,9 @@ class EdgeVerifierTest {
             200 to script("""init([${powTask("b", "aB")}], "t", "$marker")"""),
         )
         repeat(8) { replies += 200 to keepGoing }
-        val verdict = verifierFor(FakeEdge(replies)).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("rounds-used-up", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifierFor(FakeEdge(replies)).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("rounds-used-up", (verdict as EdgeGuard.Verdict.GaveUp).why)
     }
 
     @Test
@@ -250,9 +250,9 @@ class EdgeVerifierTest {
                 mapOf("Fastly-Trace-ID" to listOf("TRACE-abc-123")),
             ),
         )
-        val verdict = verifierFor(edge, trace = { lines += it }).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("delivery-refused-400", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifierFor(edge, trace = { lines += it }).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("delivery-refused-400", (verdict as EdgeGuard.Verdict.GaveUp).why)
         val traced = lines.joinToString("\n")
         assertTrue(traced.contains("http=400"))
         assertTrue(traced.contains("fastly-trace=TRACE-abc-123"))
@@ -269,9 +269,9 @@ class EdgeVerifierTest {
                 200 to script("""init([$captcha], "t", "$marker")"""),
             ),
         )
-        val verdict = verifierFor(edge).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.NeedsHuman)
-        assertEquals("captcha", (verdict as EdgeVerifier.Verdict.NeedsHuman).why)
+        val verdict = verifierFor(edge).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.NeedsHuman)
+        assertEquals("captcha", (verdict as EdgeGuard.Verdict.NeedsHuman).why)
     }
 
     @Test
@@ -294,8 +294,8 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        val verdict = verifierFor(edge).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.Cleared)
+        val verdict = verifierFor(edge).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.Cleared)
         val patRequest = edge.requests[2]
         assertEquals("POST", patRequest.method)
         assertTrue(patRequest.url.startsWith("$origin$marker/pat?token="))
@@ -308,23 +308,23 @@ class EdgeVerifierTest {
     @Test
     fun `no interstitial means no challenge`() {
         val edge = FakeEdge(listOf(200 to realPage()))
-        assertEquals(EdgeVerifier.Verdict.NoChallenge, verifierFor(edge).run(target))
+        assertEquals(EdgeGuard.Verdict.NoChallenge, verifierFor(edge).resolve(target))
         assertEquals(1, edge.requests.size)
     }
 
     @Test
     fun `refused script is a clean verdict`() {
         val edge = FakeEdge(listOf(200 to interstitial(), 400 to ""))
-        val verdict = verifierFor(edge).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("script-refused-400", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifierFor(edge).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("script-refused-400", (verdict as EdgeGuard.Verdict.GaveUp).why)
     }
 
     @Test
     fun `unreadable briefing is a clean verdict`() {
         val edge = FakeEdge(listOf(200 to interstitial(), 200 to "var nothing = 1;"))
-        val verdict = verifierFor(edge).run(target)
-        assertEquals("briefing-unreadable", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifierFor(edge).resolve(target)
+        assertEquals("briefing-unreadable", (verdict as EdgeGuard.Verdict.GaveUp).why)
     }
 
     // ------------------------------------------------- hygiene and bounds
@@ -345,7 +345,7 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        verifierFor(edge).run(target)
+        verifierFor(edge).resolve(target)
         assertNull(edge.requests[0].headers["Cookie"])
         assertEquals("first=1", edge.requests[1].headers["Cookie"])
         assertTrue(edge.requests[3].headers["Cookie"]!!.contains("fs-ch-ck=v"))
@@ -368,7 +368,7 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        verifierFor(edge, trace = { lines += it }).run(target)
+        verifierFor(edge, trace = { lines += it }).resolve(target)
         val traced = lines.joinToString("\n")
         assertTrue(traced.isNotEmpty())
         assertTrue(!traced.contains("secret-tok"))
@@ -388,9 +388,9 @@ class EdgeVerifierTest {
             edge,
             clock = { now += 10_000L; now },
             budgetMs = 1_000L,
-        ).run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("out-of-time", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        ).resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("out-of-time", (verdict as EdgeGuard.Verdict.GaveUp).why)
     }
 
     @Test
@@ -403,16 +403,16 @@ class EdgeVerifierTest {
         )
         val verifier = verifierFor(edge)
         verifier.cancel()
-        val verdict = verifier.run(target)
-        assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
-        assertEquals("called-off", (verdict as EdgeVerifier.Verdict.GaveUp).why)
+        val verdict = verifier.resolve(target)
+        assertTrue(verdict is EdgeGuard.Verdict.GaveUp)
+        assertEquals("called-off", (verdict as EdgeGuard.Verdict.GaveUp).why)
         // Cancelled before the script was ever fetched.
         assertEquals(1, edge.requests.size)
     }
 
     @Test
     fun `stage narration climbs to one hundred`() {
-        val stages = mutableListOf<EdgeVerifier.Stage>()
+        val stages = mutableListOf<EdgeGuard.Stage>()
         val edge = FakeEdge(
             listOf(
                 200 to interstitial(),
@@ -427,9 +427,9 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        verifierFor(edge, notify = { stages += it }).run(target)
-        assertEquals(EdgeVerifier.Stage.PROBING, stages.first())
-        assertEquals(EdgeVerifier.Stage.CLEARED, stages.last())
+        verifierFor(edge, notify = { stages += it }).resolve(target)
+        assertEquals(EdgeGuard.Stage.PROBING, stages.first())
+        assertEquals(EdgeGuard.Stage.CLEARED, stages.last())
         val percents = stages.map { it.percent }
         assertEquals(percents.sorted(), percents)
         assertTrue(percents.contains(60))
@@ -437,10 +437,10 @@ class EdgeVerifierTest {
 
     @Test
     fun `interstitial detection needs both markers`() {
-        assertTrue(EdgeVerifier.isInterstitial("x /_fs-ch-ab Client Challenge y"))
-        assertTrue(!EdgeVerifier.isInterstitial("just Client Challenge"))
-        assertTrue(!EdgeVerifier.isInterstitial("just /_fs-ch-ab"))
-        assertEquals("/_fs-ch-ab12", EdgeVerifier.markerOf("a/_fs-ch-ab12/b"))
-        assertNull(EdgeVerifier.markerOf("no marker here"))
+        assertTrue(EdgeGuard.isInterstitial("x /_fs-ch-ab Client Challenge y"))
+        assertTrue(!EdgeGuard.isInterstitial("just Client Challenge"))
+        assertTrue(!EdgeGuard.isInterstitial("just /_fs-ch-ab"))
+        assertEquals("/_fs-ch-ab12", EdgeGuard.markerOf("a/_fs-ch-ab12/b"))
+        assertNull(EdgeGuard.markerOf("no marker here"))
     }
 }

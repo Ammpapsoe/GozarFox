@@ -74,7 +74,7 @@ class LoginActivity : BaseActivity() {
         // The credential never travels through an Intent. The WebView hands it
         // straight to Fox, so a result only has to say whether it worked.
         if (result.resultCode != Activity.RESULT_OK) {
-            show(result.data?.getStringExtra(MozillaWebViewActivity.EXTRA_ERROR) ?: getString(R.string.cancel))
+            show(result.data?.getStringExtra(BrowserFlowActivity.EXTRA_ERROR) ?: getString(R.string.cancel))
         }
         render()
     }
@@ -249,9 +249,9 @@ class LoginActivity : BaseActivity() {
         }
         secret.text?.clear()
         confirm.text?.clear()
-        mozillaAuth.launch(Intent(this, MozillaWebViewActivity::class.java)
-            .putExtra(MozillaWebViewActivity.EXTRA_CREATE, create)
-            .putExtra(MozillaWebViewActivity.EXTRA_EMAIL, address))
+        mozillaAuth.launch(Intent(this, BrowserFlowActivity::class.java)
+            .putExtra(BrowserFlowActivity.EXTRA_CREATE, create)
+            .putExtra(BrowserFlowActivity.EXTRA_EMAIL, address))
         render()
     }
 

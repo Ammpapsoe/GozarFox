@@ -28,13 +28,13 @@ class FoxAccountInstrumentedTest {
     private fun complete(create: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        val monitor = instrumentation.addMonitor(MozillaWebViewActivity::class.java.name, null, false)
+        val monitor = instrumentation.addMonitor(BrowserFlowActivity::class.java.name, null, false)
         val scenario = androidx.test.core.app.ActivityScenario.launch(LoginActivity::class.java)
         scenario.onActivity { activity ->
             activity.findViewById<android.widget.EditText>(R.id.loginMail).setText(argument("email"))
             activity.findViewById<android.widget.Button>(R.id.loginPrimary).performClick()
         }
-        val auth = instrumentation.waitForMonitorWithTimeout(monitor, 20_000) as? MozillaWebViewActivity
+        val auth = instrumentation.waitForMonitorWithTimeout(monitor, 20_000) as? BrowserFlowActivity
             ?: throw AssertionError("WEBVIEW_DID_NOT_OPEN")
         val deadline = System.currentTimeMillis() + 150_000
         var previousState = ""
@@ -90,7 +90,7 @@ class FoxAccountInstrumentedTest {
         scenario.close()
     }
 
-    private fun evaluate(activity: MozillaWebViewActivity): String {
+    private fun evaluate(activity: BrowserFlowActivity): String {
         val script = """
             (() => {
               const visible = e => !!e && !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
