@@ -41,6 +41,7 @@ class EdgeGuard(
     private val wire: Wire = JdkWire(),
     private val agent: String = ANDROID_FIREFOX_AGENT,
     private val stepTimeoutMs: Int = 10_000,
+    private val workBudgetMs: Long = 15_000L,
     private val roundCap: Int = 8,
     private val budgetMs: Long = 60_000L,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -227,10 +228,11 @@ class EdgeGuard(
         return when (kind) {
             WORK_TASK -> {
                 val base = data.optString("base")
+                val workDeadline = clock() + workBudgetMs
                 val suffix = ProofSolver.findPowSuffix(
                     base,
                     data.optString("hash"),
-                    keepGoing = { !stopped() },
+                    keepGoing = { !stopped() && clock() < workDeadline },
                 ) ?: return Prepared.Stuck("work-unsolved")
                 Prepared.Ready(
                     JSONObject()
@@ -414,6 +416,55 @@ class EdgeGuard(
             return if (hostEnd < 0) url else url.substring(0, hostEnd)
         }
 
+        /**
+         * Hosts whose certificate chain this walk refuses to trust beyond a
+         * known set of public-key pins. The pins are the two Let's Encrypt
+         * intermediates Mozilla's sign-in currently chains through and the
+         * ISRG root they share: leaf certificates rotate every few months,
+         * these do not. A mismatch ends the walk loudly in the trace rather
+         * than handing answers to a stranger.
+         */
+        internal val PINNED_HOSTS: Set<String> = setOf(
+            "accounts.firefox.com",
+            "api.accounts.firefox.com",
+        )
+        internal val CHAIN_PINS: Set<String> = setOf(
+            "LoMHBotttiDko50Gi13uXW71eIy7LAttI+rYT8wXF4w=", // LE YR1
+            "nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=", // LE YR2
+            "fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=", // ISRG Root YR
+        )
+
+        private const val B64_ALPHABET =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+        /** Plain standard-base64 with padding; no platform dependency. */
+        internal fun b64(bytes: ByteArray): String {
+            val out = StringBuilder((bytes.size + 2) / 3 * 4)
+            var i = 0
+            while (i < bytes.size) {
+                val b0 = bytes[i].toInt() and 0xFF
+                val b1 = if (i + 1 < bytes.size) bytes[i + 1].toInt() and 0xFF else -1
+                val b2 = if (i + 2 < bytes.size) bytes[i + 2].toInt() and 0xFF else -1
+                out.append(B64_ALPHABET[b0 shr 2])
+                out.append(B64_ALPHABET[((b0 and 0x03) shl 4) or (if (b1 < 0) 0 else b1 shr 4)])
+                out.append(if (b1 < 0) '=' else B64_ALPHABET[((b1 and 0x0F) shl 2) or (if (b2 < 0) 0 else b2 shr 6)])
+                out.append(if (b2 < 0) '=' else B64_ALPHABET[b2 and 0x3F])
+                i += 3
+            }
+            return out.toString()
+        }
+
+        /** True when some certificate in [chain] carries a known public key. */
+        internal fun chainIsPinned(chain: Array<java.security.cert.X509Certificate>): Boolean {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            for (cert in chain) {
+                val spki = runCatching { cert.publicKey.encoded }.getOrNull() ?: continue
+                val pin = b64(digest.digest(spki))
+                if (CHAIN_PINS.contains(pin)) return true
+            }
+            return false
+        }
+
         /** Case-insensitive header read for diagnostics; "-" when absent. */
         internal fun headerOf(reply: Wire.Reply, name: String = TRACE_HEADER): String =
             reply.headers.entries
@@ -433,6 +484,7 @@ class EdgeGuard(
         private val tunnelHost: String? = null,
         private val tunnelPort: Int = 0,
         private val stepTimeoutMs: Int = 10_000,
+        private val trace: (String) -> Unit = {},
     ) : Wire {
 
         override fun exchange(request: Wire.Request): Wire.Reply {
@@ -454,6 +506,13 @@ class EdgeGuard(
                 if (outgoing != null) {
                     connection.doOutput = true
                     connection.outputStream.use { it.write(outgoing) }
+                }
+                if (connection is javax.net.ssl.HttpsURLConnection) {
+                    val host = URL(request.url).host.lowercase()
+                    if (PINNED_HOSTS.contains(host) && !chainIsPinned(connection.serverCertificates)) {
+                        trace("pin refused host=$host")
+                        throw javax.net.ssl.SSLException("certificate chain not pinned for $host")
+                    }
                 }
                 val status = connection.responseCode
                 val stream =

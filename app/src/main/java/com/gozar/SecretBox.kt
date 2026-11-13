@@ -29,11 +29,16 @@ object SecretBox {
     fun seal(context: Context, value: String): String {
         if (value.isEmpty() || isSealed(value)) return value
         val plain = value.toByteArray(Charsets.UTF_8)
-        keystoreKey(true)?.let { key ->
-            runCatching { return HARDWARE + encode(key, plain) }
+        try {
+            keystoreKey(true)?.let { key ->
+                runCatching { return HARDWARE + encode(key, plain) }
+            }
+            val fallback = softwareKey(context) ?: return ""
+            return SOFTWARE + encode(fallback, plain)
+        } finally {
+            // The UTF-8 copy dies here; the sealed base64 is what survives.
+            plain.fill(0)
         }
-        val fallback = softwareKey(context) ?: return ""
-        return SOFTWARE + encode(fallback, plain)
     }
 
     fun open(context: Context, value: String): String {
@@ -43,7 +48,14 @@ object SecretBox {
             value.startsWith(SOFTWARE) -> softwareKey(context) ?: return ""
             else -> return value
         }
-        return runCatching { String(decode(key, value.substring(3)), Charsets.UTF_8) }.getOrDefault("")
+        return runCatching {
+            val plain = decode(key, value.substring(3))
+            try {
+                String(plain, Charsets.UTF_8)
+            } finally {
+                plain.fill(0)
+            }
+        }.getOrDefault("")
     }
 
     fun isSealed(value: String): Boolean = value.startsWith(HARDWARE) || value.startsWith(SOFTWARE)
