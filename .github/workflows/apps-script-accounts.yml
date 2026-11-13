@@ -16,7 +16,7 @@ jobs:
   account:
     if: ${{ inputs.authorize }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v5
         with:
@@ -45,7 +45,10 @@ jobs:
           GOZAR_LIVE_INPUT: ${{ secrets.GOZAR_LIVE_INPUT }}
           GOZAR_CI_SIGNUP_INPUT: ${{ secrets.GOZAR_CI_SIGNUP_INPUT }}
         with:
-          api-level: 29
+          # API 34's system WebView is new enough for the sign-in features
+          # the flow needs (web-message listener, document-start scripts);
+          # API 29's engine predates both and the screen closed instantly.
+          api-level: 34
           arch: x86_64
           target: google_apis
           disable-animations: true
