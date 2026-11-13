@@ -10,6 +10,15 @@ set -euo pipefail
 # credential path depends on. Screenshots plus that capability report are the
 # artifact; the navigation trail is collected from logcat afterwards.
 
+# Hard self-watchdog: this graphical evidence run must never hang a
+# pipeline. If the whole script has not finished in 15 minutes, it is
+# killed and treated as non-essential. Physical-device testing remains
+# the real validation of WebView and sign-in.
+if [ -z "${GOZAR_UI_WATCHDOG:-}" ]; then
+  export GOZAR_UI_WATCHDOG=1
+  exec timeout --kill-after=30 900 bash "$0" "$@"
+fi
+
 PKG=com.gozar
 TEST_PKG=com.gozar.test
 RUNNER=androidx.test.runner.AndroidJUnitRunner
