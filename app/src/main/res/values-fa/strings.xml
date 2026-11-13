@@ -330,6 +330,7 @@ AGPL-3.0-or-later</string>
     <string name="login_confirm_action">تأیید</string>
     <string name="login_fill">این نشانی ایمیل درست به نظر نمی‌رسد. آن را خالی بگذارید تا در صفحه‌ی خود موزیلا وارد شوید.</string>
     <string name="login_tab_form">ورود با ایمیل و رمز</string>
+    <string name="web_warning">توجه: برای ورود با مرورگر ممکن است نیاز به فیلترشکن داشته باشید. اگر صفحه‌ی لاگین باز نشد یا با خطا مواجه شد، یک بار فیلترشکن خود را روشن کنید، وارد حساب شوید و سپس فیلترشکن را خاموش کنید.</string>
     <string name="login_tab_web">ورود با مرورگر</string>
     <string name="login_form_title">ورود مستقیم</string>
     <string name="login_form_sub">اطلاعات شما مستقیم به هسته می‌رود؛ درست مانند ورود در نسخه‌ی ویندوز.</string>

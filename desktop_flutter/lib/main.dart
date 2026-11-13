@@ -1408,6 +1408,18 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
               value: _state.warpUdp,
               onChanged: _busy ? null : (value) => unawaited(_toggleWarp(value)),
             )),
+        Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: SwitchListTile(
+              secondary: const Icon(Icons.shield_outlined, color: soft),
+              title: Text(words.killSwitch),
+              subtitle: Text(words.killSwitchHint),
+              value: _state.killSwitch,
+              onChanged: _busy
+                  ? null
+                  : (value) =>
+                      unawaited(_requestSetting('kill_switch', {'enabled': value})),
+            )),
         _settingTile(
             Icons.alt_route,
             words.proxyChain,

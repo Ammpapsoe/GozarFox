@@ -301,6 +301,15 @@ func (s *Server) handle(request Request) Response {
 		} else if err := s.app.SetWarpUDP(*body.Enabled, body.Consent); err != nil {
 			response.Error = err.Error()
 		}
+	case "kill_switch":
+		var body struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if err := json.Unmarshal(request.Params, &body); err != nil || body.Enabled == nil {
+			response.Error = "invalid kill switch setting"
+		} else if err := s.app.SetKillSwitch(*body.Enabled); err != nil {
+			response.Error = err.Error()
+		}
 	case "chain":
 		var body struct {
 			Hops []string `json:"hops"`

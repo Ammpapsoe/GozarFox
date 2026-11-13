@@ -4,6 +4,8 @@ package killswitch
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
@@ -87,18 +89,29 @@ foreach ($profile in @('Domain','Private','Public')) {
 `
 }
 
-func enableWindows(cfg Config) error {
-	if err := run("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", windowsEnableScript(cfg)); err != nil {
-		return fmt.Errorf("enable Windows kill switch: %w", err)
+// runPowerShellScript hands the rules to PowerShell through a temporary
+// script file. Passing them with -Command put the whole Iranian prefix
+// list on one command line, and Windows answers a line that long with
+// "The filename or extension is too long" before PowerShell even starts;
+// a file has no such ceiling, and the chunked rules stay chunked inside it.
+func runPowerShellScript(label, script string) error {
+	path := filepath.Join(os.TempDir(), "gozar-killswitch-"+label+".ps1")
+	if err := os.WriteFile(path, []byte(script), 0o600); err != nil {
+		return fmt.Errorf("%s Windows kill switch: write script: %v", label, err)
+	}
+	defer os.Remove(path)
+	if err := run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", path); err != nil {
+		return fmt.Errorf("%s Windows kill switch: %w", label, err)
 	}
 	return nil
 }
 
+func enableWindows(cfg Config) error {
+	return runPowerShellScript("enable", windowsEnableScript(cfg))
+}
+
 func disableWindows() error {
-	if err := run("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", windowsDisableScript()); err != nil {
-		return fmt.Errorf("disable Windows kill switch: %w", err)
-	}
-	return nil
+	return runPowerShellScript("disable", windowsDisableScript())
 }
 
 func enableOS(cfg Config) error { return enableWindows(cfg) }

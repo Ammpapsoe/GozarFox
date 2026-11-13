@@ -39,6 +39,7 @@ type State struct {
 	Theme      string           `json:"theme"`
 	Recents    bool             `json:"recents"`
 	WarpUDP    bool             `json:"warp_udp"`
+	KillSwitch bool             `json:"kill_switch"`
 	LastServer string           `json:"last_server"`
 	Chain      []string         `json:"chain"`
 	Stage      string           `json:"stage"`
@@ -139,6 +140,7 @@ func (a *App) State() State {
 		Theme:      a.cfg.Theme,
 		Recents:    a.cfg.Recents,
 		WarpUDP:    a.cfg.WarpUDP,
+		KillSwitch: a.cfg.KillSwitch,
 		LastServer: a.cfg.LastServer,
 		Chain:      append([]string(nil), a.cfg.Chain...),
 		Stage:      a.stage,
@@ -342,6 +344,33 @@ func (a *App) SetRecents(enabled bool) error {
 		return err
 	}
 	a.cfg = next
+	return nil
+}
+
+// SetKillSwitch stores the opt-in. Switching it off also stands an active
+// firewall down immediately; switching it on takes effect at the next
+// connect, because the rules need the tunnel interface that does not
+// exist yet.
+func (a *App) SetKillSwitch(enabled bool) error {
+	a.connectionMu.Lock()
+	defer a.connectionMu.Unlock()
+	a.mu.Lock()
+	if a.cfg.KillSwitch == enabled {
+		a.mu.Unlock()
+		return nil
+	}
+	next := a.cfg
+	next.KillSwitch = enabled
+	if err := config.Save(next); err != nil {
+		a.mu.Unlock()
+		return err
+	}
+	a.cfg = next
+	a.mu.Unlock()
+	if !enabled && a.killActive {
+		_ = killswitch.Disable()
+		a.killActive = false
+	}
 	return nil
 }
 

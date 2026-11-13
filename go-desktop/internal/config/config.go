@@ -69,7 +69,7 @@ func Dir() string {
 func path() string { return filepath.Join(Dir(), "config.json") }
 
 func defaults() Config {
-	return Config{FullTunnel: true, KillSwitch: true, SplitTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
+	return Config{FullTunnel: true, KillSwitch: false, SplitTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
 }
 
 func (c Config) ActiveAccount() Account {
@@ -167,8 +167,12 @@ func Load() Config {
 		loaded.SettingsVersion = 1
 	}
 	if loaded.SettingsVersion < 2 {
-		loaded.KillSwitch = true
+		// The kill switch used to default on, which produced a firewall
+		// script nobody asked for on plain connections; it is now an opt-in
+		// the person flips in settings, and the migration settles that once.
+		loaded.KillSwitch = false
 		loaded.SplitTunnel = true
+		loaded.SettingsVersion = 2
 	}
 	if loaded.Theme != "light" && loaded.Theme != "dark" {
 		loaded.Theme = "system"

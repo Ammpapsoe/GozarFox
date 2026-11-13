@@ -111,6 +111,10 @@ class Words {
         'Experimental: IPv6 bypasses the tunnel. IPv4 UDP requires the WARP setting.',
       );
   String get warpUdp => pick('UDP با Cloudflare WARP', 'UDP via Cloudflare WARP');
+  String get killSwitch => pick('کلید قطع اضطراری (Kill Switch)', 'Kill switch');
+  String get killSwitchHint => pick(
+      'اگر خاموش باشد، اتصال عادی بدون فایروال برقرار می‌شود؛ روشن کردن آن از اتصال بعدی اعمال می‌شود.',
+      'Off means plain connections run without a firewall; turning it on applies from the next connect.');
   String get warpConsent => pick(
         'با پذیرش شرایط Cloudflare یک هویت رایگان WARP ثبت می‌شود. UDP نسخهٔ IPv4 از WARP در تونل موزیلا عبور می‌کند و Cloudflare آن را پردازش می‌کند. هویت رمزگذاری‌شده برای استفادهٔ بعدی نگه داشته می‌شود؛ خاموش‌کردن گزینه ثبت آن را حذف نمی‌کند. مسیریابی مستقیم انتخابی تا زمان فعال‌بودن WARP متوقف می‌شود. مسیرهای محلی، مسیر رله و ترافیک IPv6، از جمله UDP، ممکن است خارج از تونل باشند. VPN فعال دوباره متصل می‌شود و محافظت ممکن است موقتاً قطع شود.',
         'Accepting Cloudflare’s terms registers a free WARP identity. IPv4 UDP uses WARP inside the Mozilla tunnel; Cloudflare processes it. The encrypted identity is kept for reuse; turning this off does not unregister it. Selective direct routing is paused while WARP is enabled. LAN, relay routes and IPv6 traffic, including UDP, can be outside the tunnel. An active VPN reconnects and protection may briefly be interrupted.',

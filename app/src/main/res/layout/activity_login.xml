@@ -72,7 +72,7 @@
                 <LinearLayout
                     android:id="@+id/loginTabs"
                     android:layout_width="match_parent"
-                    android:layout_height="52dp"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:background="@drawable/pill_bg"
                     android:gravity="center_vertical"
@@ -82,31 +82,59 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/loginTabForm"
                         android:layout_width="0dp"
-                        android:layout_height="match_parent"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:fontFamily="@font/vazirmatn_medium"
+                        android:gravity="center"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
+                        android:maxLines="2"
+                        android:minHeight="46dp"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
                         android:text="@string/login_tab_form"
                         android:textColor="#FFFFFFFF"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         app:backgroundTint="#FFE8112D"
                         app:cornerRadius="21dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/loginTabWeb"
                         android:layout_width="0dp"
-                        android:layout_height="match_parent"
+                        android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:fontFamily="@font/vazirmatn_medium"
+                        android:gravity="center"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
+                        android:maxLines="2"
+                        android:minHeight="46dp"
+                        android:paddingStart="6dp"
+                        android:paddingEnd="6dp"
                         android:text="@string/login_tab_web"
                         android:textColor="#FF9A9AA0"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
                         app:backgroundTint="#00000000"
                         app:cornerRadius="21dp" />
                 </LinearLayout>
+
+                <!-- The browser path can need a filter; say so before it bites. -->
+                <TextView
+                    android:id="@+id/loginWebWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/pill_bg"
+                    android:fontFamily="@font/vazirmatn_regular"
+                    android:lineSpacingExtra="4dp"
+                    android:paddingStart="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingEnd="14dp"
+                    android:paddingBottom="10dp"
+                    android:text="@string/web_warning"
+                    android:textColor="#FFFFC966"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
                 <LinearLayout
                     android:id="@+id/loginMailBox"
@@ -240,12 +268,6 @@
                     android:gravity="center"
                     android:textAppearance="@style/TextAppearance.Gozar.BodySmall"
                     android:textColor="@color/login_accent"
-                    android:visibility="gone" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/loginLogs"
-                    style="@style/Gozar.Login.Switch"
-                    android:text="@string/mozilla_logs"
                     android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton
