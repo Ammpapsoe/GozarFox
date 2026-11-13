@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The floating capsule: matte charcoal with a soft top light, the way the
+     design picture draws both header pills. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="999dp" />
+    <gradient android:angle="270"
+        android:startColor="#FF2E2E31"
+        android:centerColor="#FF1F1F22"
+        android:endColor="#FF121214" />
+    <stroke android:width="1dp" android:color="#FF3C3C41" />
+</shape>

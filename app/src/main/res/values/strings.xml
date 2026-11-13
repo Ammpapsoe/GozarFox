@@ -475,9 +475,9 @@ AGPL-3.0-or-later</string>
     <string name="mozilla_logs_copied">Safe navigation logs copied</string>
     <string name="web_connecting">Connecting…</string>
     <string name="web_stage_tokens">Receiving your pass…</string>
-    <string name="web_success_title">You are connected to 50 GB of free traffic</string>
+    <string name="web_success_title">Signed in successfully</string>
     <string name="web_success_body">Your Firefox account is linked to Gozar. The monthly allowance renews on its own.</string>
-    <string name="web_connect">Connect</string>
+    <string name="web_connect">Start connection</string>
     <string name="web_blocked">Connection failed. Please turn on the VPN once and try again.</string>
     <string name="web_verify_in_page">Enter the confirmation code on this page. Gozar continues on its own afterwards.</string>
     <string name="web_page_failed">Mozilla\'s sign-in page could not be loaded.</string>

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
+import android.widget.FrameLayout
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -91,11 +92,11 @@ class BrowserFlowActivity : BaseActivity() {
     private lateinit var web: WebView
     private lateinit var header: View
     private lateinit var loading: View
-    private lateinit var loadingText: TextView
     private lateinit var done: View
-    private lateinit var error: TextView
+    private lateinit var doneEmail: TextView
+    private lateinit var fallback: View
     private lateinit var connect: MaterialButton
-    private lateinit var back: MaterialButton
+    private lateinit var back: View
     private lateinit var retry: MaterialButton
     private lateinit var openChrome: MaterialButton
 
@@ -122,6 +123,9 @@ class BrowserFlowActivity : BaseActivity() {
 
     private val foxWatcher: () -> Unit = { render() }
 
+    /** Session-token-shaped runs in page text; redacted before logging. */
+    private val secretShaped = Regex("[0-9a-fA-F]{32,}")
+
     private val bridge = object : WebViewCompat.WebMessageListener {
         override fun onPostMessage(
             view: WebView,
@@ -141,10 +145,10 @@ class BrowserFlowActivity : BaseActivity() {
         setContentView(R.layout.activity_browser_flow)
         web = findViewById(R.id.webSignInPage)
         header = findViewById(R.id.webHeader)
-        loading = findViewById(R.id.webLoading)
-        loadingText = findViewById(R.id.webLoadingText)
+        loading = findViewById(R.id.webSpinner)
         done = findViewById(R.id.webDone)
-        error = findViewById(R.id.webError)
+        doneEmail = findViewById(R.id.webDoneEmail)
+        fallback = findViewById(R.id.webFallback)
         connect = findViewById(R.id.webConnect)
         back = findViewById(R.id.webBack)
 
@@ -185,7 +189,8 @@ class BrowserFlowActivity : BaseActivity() {
                 Log.d(
                     "GozarWebView",
                     "console ${consoleMessage.messageLevel()} " +
-                        "${consoleMessage.message()} @${consoleMessage.lineNumber()}"
+                        sanitize(consoleMessage.message()) +
+                        " @${consoleMessage.lineNumber()}"
                 )
                 return true
             }
@@ -240,8 +245,7 @@ class BrowserFlowActivity : BaseActivity() {
     }
 
     private fun reload() {
-        retry.visibility = View.GONE
-        error.visibility = View.GONE
+        fallback.visibility = View.GONE
         Log.d("GozarWebView", "retry requested")
         web.reload()
     }
@@ -263,8 +267,9 @@ class BrowserFlowActivity : BaseActivity() {
         budgetExpired = true
         Log.d("GozarWebView", "page budget expired after ${PAGE_BUDGET_MS}ms")
         show(null)
-        say(getString(R.string.web_timeout))
         retry.visibility = View.VISIBLE
+        openChrome.visibility = View.GONE
+        fallback.visibility = View.VISIBLE
     }
 
     /**
@@ -337,9 +342,7 @@ class BrowserFlowActivity : BaseActivity() {
     private fun accept(login: FoxWebChannel.Login) {
         if (handedOver) return
         handedOver = true
-        error.visibility = View.GONE
         MozillaDiagnostics.record("WEBCHANNEL stage=session-received uid=${login.uid}")
-        loadingText.setText(R.string.web_stage_tokens)
         show(loading)
         Fox.webSignIn(applicationContext, login.email, login.uid, login.sessionToken)
         render()
@@ -350,6 +353,7 @@ class BrowserFlowActivity : BaseActivity() {
         if (Fox.signedIn(this)) {
             completed = true
             MozillaDiagnostics.record("WEBVIEW stage=account-saved")
+            doneEmail.text = FoxStore.email(this)
             show(done)
             return
         }
@@ -379,15 +383,13 @@ class BrowserFlowActivity : BaseActivity() {
             // announces the session again and we take it the second time.
             MozillaDiagnostics.record("WEBVIEW stage=session-unverified")
             handedOver = false
-            say(getString(R.string.web_verify_in_page))
+            Log.d("GozarWebView", "session not confirmed yet; the page keeps the code step")
             show(null)
             return
         }
-        if (diagnostic.contains("http=406") || diagnostic.contains("http=451")) {
-            say(getString(R.string.web_blocked))
-        } else {
-            say(trouble)
-        }
+        // The screen stays clean: what went wrong is a line in the device
+        // log, never a paragraph on the stage.
+        Log.d("GozarWebView", "sign-in trouble: $trouble diag=$diagnostic")
         show(null)
     }
 
@@ -421,10 +423,7 @@ class BrowserFlowActivity : BaseActivity() {
         challengeActive = true
         challengeUrl = url
         disarmPageBudget()
-        retry.visibility = View.GONE
-        openChrome.visibility = View.GONE
-        error.visibility = View.GONE
-        loadingText.setText(R.string.web_challenge_waiting)
+        fallback.visibility = View.GONE
         show(loading)
         handler.postDelayed(challengeGiveUp, CHALLENGE_DEADLINE_MS)
         handler.postDelayed(challengePatience, CHALLENGE_PATIENCE_MS)
@@ -455,24 +454,15 @@ class BrowserFlowActivity : BaseActivity() {
         }
     }
 
-    /** Stage narration with an honest, stage-mapped percentage. */
+    /** The stage the verifier reports, for the device log and nothing else. */
     private fun onVerifierStage(stage: EdgeGuard.Stage) {
         if (!challengeActive || isFinishing) return
-        val template = when (stage) {
-            EdgeGuard.Stage.PROBING,
-            EdgeGuard.Stage.FETCHING_SCRIPT,
-            EdgeGuard.Stage.READING_BRIEFING -> R.string.web_stage_probe
-            EdgeGuard.Stage.SOLVING,
-            EdgeGuard.Stage.DELIVERING -> R.string.web_stage_solve
-            EdgeGuard.Stage.CONFIRMING,
-            EdgeGuard.Stage.CLEARED -> R.string.web_stage_cookie
-        }
-        loadingText.text = getString(template, stage.percent)
+        Log.d("GozarWebView", "stage ${stage.name} ${stage.percent}%")
     }
 
     private fun onChallengeSlow() {
         if (!challengeActive || isFinishing) return
-        loadingText.setText(R.string.web_challenge_patience)
+        Log.d("GozarWebView", "challenge still working after ${CHALLENGE_PATIENCE_MS}ms")
     }
 
     private fun onVerifierVerdict(verdict: EdgeGuard.Verdict) {
@@ -494,7 +484,6 @@ class BrowserFlowActivity : BaseActivity() {
             is EdgeGuard.Verdict.NoChallenge -> {
                 // The page turned out to be the real one; stand the bar down.
                 Log.d("GozarWebView", "verifier saw no challenge")
-                loadingText.setText(R.string.web_connecting)
                 render()
             }
             is EdgeGuard.Verdict.NeedsHuman ->
@@ -524,7 +513,6 @@ class BrowserFlowActivity : BaseActivity() {
         val url = challengeUrl ?: return onChallengeUnresolved("gave-up:no-url")
         pageReady = false
         budgetExpired = false
-        loadingText.setText(R.string.web_connecting)
         show(loading)
         armPageBudget()
         Log.d("GozarWebView", "reloading with challenge cookies")
@@ -550,8 +538,9 @@ class BrowserFlowActivity : BaseActivity() {
         Log.d("GozarWebView", "challenge unresolved reason=$reason")
         MozillaDiagnostics.record("WEBVIEW stage=challenge-unresolved reason=$reason")
         show(null)
-        say(getString(R.string.web_challenge_failed))
+        retry.visibility = View.VISIBLE
         openChrome.visibility = View.VISIBLE
+        fallback.visibility = View.VISIBLE
     }
 
     private fun openInChrome() {
@@ -564,7 +553,7 @@ class BrowserFlowActivity : BaseActivity() {
             try {
                 startActivity(view)
             } catch (_: android.content.ActivityNotFoundException) {
-                say(getString(R.string.web_challenge_failed))
+                Log.d("GozarWebView", "no browser on this device to hand over to")
             }
         }
     }
@@ -574,7 +563,6 @@ class BrowserFlowActivity : BaseActivity() {
             pageReady = false
             Log.d("GozarWebView", "onPageStarted $url")
             if (!handedOver) {
-                loadingText.setText(R.string.web_connecting)
                 show(loading)
                 armPageBudget()
             }
@@ -608,7 +596,9 @@ class BrowserFlowActivity : BaseActivity() {
             val status = response.statusCode
             Log.d("GozarWebView", "onReceivedHttpError $status ${request.url}")
             MozillaDiagnostics.record("WEBVIEW http=$status")
-            if (status == 406 || status == 451) say(getString(R.string.web_blocked))
+            // The screen keeps its silence; the retry pill arrives with the
+            // page budget if the page never finishes.
+            if (status == 406 || status == 451) Log.d("GozarWebView", "blocked status $status")
         }
 
         override fun onReceivedError(
@@ -619,7 +609,7 @@ class BrowserFlowActivity : BaseActivity() {
             if (!request.isForMainFrame) return
             Log.d("GozarWebView", "onReceivedError ${failure.errorCode} ${failure.description} ${request.url}")
             MozillaDiagnostics.record("WEBVIEW error=${failure.errorCode}")
-            if (!handedOver) say(getString(R.string.web_page_failed))
+            if (!handedOver) Log.d("GozarWebView", "main frame failed to load")
         }
     }
 
@@ -655,19 +645,29 @@ class BrowserFlowActivity : BaseActivity() {
         done.visibility = if (overlay === done) View.VISIBLE else View.GONE
     }
 
-    private fun say(text: String) {
-        error.text = text
-        error.visibility = View.VISIBLE
-    }
+    /**
+     * Page-sourced text on its way to the device log: capped, and with any
+     * long hex run (session-token shaped) replaced, so a chatty page can
+     * never plant a credential — or a forged line break — in our log.
+     */
+    private fun sanitize(raw: String): String =
+        secretShaped.replace(raw.take(300), "[redacted]")
 
     private fun applyInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(R.id.webRoot)) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            header.setPadding(header.paddingLeft, bars.top, header.paddingRight, header.paddingBottom)
-            error.setPadding(error.paddingLeft, error.paddingTop, error.paddingRight, bars.bottom)
+            val top = (header.layoutParams as FrameLayout.LayoutParams)
+            top.topMargin = bars.top + dp(10)
+            header.layoutParams = top
+            val bottom = (fallback.layoutParams as FrameLayout.LayoutParams)
+            bottom.bottomMargin = bars.bottom + dp(12)
+            fallback.layoutParams = bottom
             insets
         }
     }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun finishWith(code: Int, data: Intent? = null) {
         setResult(code, data)
