@@ -341,8 +341,8 @@ AGPL-3.0-or-later</string>
     <string name="err_bad_credentials">The email or password is incorrect</string>
     <string name="err_unknown_account">This email has no Mozilla account yet; you can create one</string>
     <string name="err_region_blocked">Mozilla is unavailable from this network (regional restriction). Try again over a trusted connection.</string>
-    <string name="err_security_check">Mozilla's security check was not accepted; try again</string>
-    <string name="err_primary_email">Sign in with your account's primary email address</string>
+    <string name="err_security_check">Mozilla\'s security check was not accepted; try again</string>
+    <string name="err_primary_email">Sign in with your account\'s primary email address</string>
     <string name="err_unblock_needed">Mozilla asks for an unblock code sent to your email; enter it in the code box</string>
     <string name="err_network">Network error; check your internet connection and try again</string>
     <string name="login_mismatch">The two passwords do not match.</string>
