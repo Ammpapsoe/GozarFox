@@ -83,11 +83,13 @@ object ChallengeScriptReader {
                     val end = script.indexOf("*/", index + 2)
                     if (end < 0) return null
                     index = end + 2
+                    continue // the comment is not part of any argument
                 }
                 char == '/' && index + 1 < script.length && script[index + 1] == '/' -> {
                     val end = script.indexOf('\n', index + 2)
                     if (end < 0) return null
                     index = end + 1
+                    continue
                 }
                 char == '{' || char == '[' || char == '(' -> {
                     depth++
