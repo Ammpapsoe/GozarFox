@@ -455,9 +455,10 @@ class EdgeGuard(
         }
 
         /** True when some certificate in [chain] carries a known public key. */
-        internal fun chainIsPinned(chain: Array<java.security.cert.X509Certificate>): Boolean {
+        internal fun chainIsPinned(chain: Array<out java.security.cert.Certificate>): Boolean {
             val digest = java.security.MessageDigest.getInstance("SHA-256")
             for (cert in chain) {
+                if (cert !is java.security.cert.X509Certificate) continue
                 val spki = runCatching { cert.publicKey.encoded }.getOrNull() ?: continue
                 val pin = b64(digest.digest(spki))
                 if (CHAIN_PINS.contains(pin)) return true
