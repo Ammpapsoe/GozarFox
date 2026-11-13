@@ -18,6 +18,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/killswitch"
 	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/signinproxy"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
@@ -104,6 +105,7 @@ type App struct {
 	lastActivity    atomic.Int64
 	passMu          sync.Mutex
 	geo             *geo.Rules
+	signin          *signinproxy.Proxy
 	geoRefresh      atomic.Int64
 	killActive      bool
 	version         string
@@ -523,6 +525,106 @@ var errCode = errors.New("code needed")
 var errLink = errors.New("verification link required")
 
 func NeedsCode(err error) bool { return errors.Is(err, errCode) }
+
+// The session a browser sign-in captured is not confirmed by Mozilla yet:
+// the page stays open for the code and announces the session again when it
+// is. Callers treat this as "wait", not as a failure.
+var errUnverified = errors.New("session not verified yet")
+
+// SessionUnverified reports whether err is the "wait for the page" case of
+// a browser sign-in.
+func SessionUnverified(err error) bool { return errors.Is(err, errUnverified) }
+
+// SignInWithSession completes a sign-in that Mozilla's own page inside the
+// browser view already performed: the session token the page announced is
+// exchanged for OAuth tokens, the proxy pass is fetched, and the account is
+// stored. Nothing is asked of the person here; the page took the address,
+// the password and any confirmation code.
+func (a *App) SignInWithSession(email, uid, sessionToken string) error {
+	a.authMu.Lock()
+	defer a.authMu.Unlock()
+	a.mu.Lock()
+	if a.live || a.connecting {
+		a.mu.Unlock()
+		return errors.New("disconnect before adding an account")
+	}
+	authRevision, sessionRevision := a.authRevision, a.sessionRevision
+	a.mu.Unlock()
+	email = strings.TrimSpace(email)
+	uid = strings.ToLower(strings.TrimSpace(uid))
+	sessionToken = strings.ToLower(strings.TrimSpace(sessionToken))
+	if email == "" || uid == "" || sessionToken == "" {
+		return errors.New("email, uid and session token are required")
+	}
+	a.setStage("در حال ورود…")
+	verified, err := fxa.SessionVerified(sessionToken)
+	if err != nil {
+		a.setStage("")
+		var apiError *fxa.Error
+		if errors.As(err, &apiError) && apiError.Errno == 104 {
+			return errUnverified
+		}
+		return err
+	}
+	if !verified {
+		a.setStage("")
+		return errUnverified
+	}
+	a.setStage("در حال دریافت مجوز…")
+	tokens, err := fxa.SessionTokens(sessionToken)
+	if err != nil {
+		a.setStage("")
+		var apiError *fxa.Error
+		if errors.As(err, &apiError) && apiError.Errno == 104 {
+			return errUnverified
+		}
+		return err
+	}
+	pass, err := a.requestPass(tokens.Access)
+	if err != nil {
+		a.setStage("")
+		return err
+	}
+	account := config.Account{
+		Email: email, UID: uid, Access: tokens.Access, Refresh: tokens.Refresh,
+		ExpiresAt: time.Now().Add(time.Duration(tokens.ExpiresIn-60) * time.Second).Unix(),
+		Limit:     pass.Limit, Remaining: pass.Remaining, Reset: pass.Reset,
+	}
+	if err := a.commitAccount(account, pass, authRevision, sessionRevision); err != nil {
+		a.setStage("")
+		return err
+	}
+	a.setStage("")
+	return nil
+}
+
+// OpenSignInProxy starts (or reuses) the loopback proxy the sign-in browser
+// view connects through, and reports its address. The web view environment
+// of a process is made once, so repeated calls must keep the same port.
+func (a *App) OpenSignInProxy() (string, error) {
+	a.mu.Lock()
+	if a.signin == nil {
+		a.signin = signinproxy.New(nil)
+	}
+	proxy := a.signin
+	a.mu.Unlock()
+	port, err := proxy.Start()
+	if err != nil {
+		return "", err
+	}
+	return "127.0.0.1:" + strconv.Itoa(port), nil
+}
+
+// CloseSignInProxy stops the proxy and every tunnel in it. Safe when none
+// was ever opened.
+func (a *App) CloseSignInProxy() {
+	a.mu.Lock()
+	proxy := a.signin
+	a.mu.Unlock()
+	if proxy != nil {
+		proxy.Stop()
+	}
+}
 
 func (a *App) commitAccount(account config.Account, pass *fxa.Pass, authRevision, sessionRevision uint64) error {
 	a.mu.Lock()
@@ -1021,6 +1123,7 @@ func (a *App) Disconnect() {
 }
 
 func (a *App) Close() {
+	a.CloseSignInProxy()
 	a.cancelConnectionAttempt()
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()

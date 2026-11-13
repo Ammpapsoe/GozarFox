@@ -198,6 +198,28 @@ func (s *Server) handle(request Request) Response {
 				response.Reply = map[string]any{"captcha_image": challenge.Image}
 			}
 		}
+	case "browser_signin":
+		var body struct {
+			Email        string `json:"email"`
+			UID          string `json:"uid"`
+			SessionToken string `json:"session_token"`
+		}
+		json.Unmarshal(request.Params, &body)
+		if err := s.app.SignInWithSession(body.Email, body.UID, body.SessionToken); err != nil {
+			response.Error = err.Error()
+			if app.SessionUnverified(err) {
+				response.Reply = map[string]any{"unverified": true}
+			}
+		}
+	case "open_signin_proxy":
+		address, err := s.app.OpenSignInProxy()
+		if err != nil {
+			response.Error = err.Error()
+		} else {
+			response.Reply = map[string]any{"address": address}
+		}
+	case "close_signin_proxy":
+		s.app.CloseSignInProxy()
 	case "system_accounts":
 		accounts, err := systemaccounts.Emails()
 		if err != nil {

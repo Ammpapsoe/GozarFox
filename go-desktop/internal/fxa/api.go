@@ -331,6 +331,31 @@ func VerifySignup(uid, code string) error {
 	return nil
 }
 
+// SessionVerified reports whether Mozilla has confirmed the session yet.
+// The sign-in page announces its session right after the password, before
+// any code the account asks for has been entered there; until Mozilla says
+// the session is confirmed, exchanging its token fails. The browser view
+// stays open for the code and the page announces the session again, so an
+// unconfirmed session is a "wait", never an error to show.
+func SessionVerified(sessionToken string) (bool, error) {
+	url := authBase + "/recovery_email/status"
+	header := HawkHeader("GET", url, sessionToken, "")
+	if header == "" {
+		return false, errors.New("invalid session token")
+	}
+	reply, err := call("GET", url, "", map[string]string{"Authorization": header})
+	if err != nil {
+		return false, err
+	}
+	var out struct {
+		Verified bool `json:"verified"`
+	}
+	if err := decode(reply, &out); err != nil {
+		return false, err
+	}
+	return out.Verified, nil
+}
+
 func VerifyCode(sessionToken, code, method string) error {
 	body, _ := json.Marshal(map[string]string{"code": strings.TrimSpace(code)})
 	url := authBase + "/session/verify_code"
