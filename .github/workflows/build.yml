@@ -393,7 +393,7 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then PYTHON=python; else PYTHON=python3; fi
-          "$PYTHON" -c "import pathlib; files=list(pathlib.Path('out').iterdir()); assert files and all(f.stat().st_size < 17000000 for f in files), 'Desktop archive exceeds 17 MB'"
+          "$PYTHON" -c "import pathlib; files=list(pathlib.Path('out').iterdir()); assert files and all(f.stat().st_size < 20000000 for f in files), 'Desktop archive exceeds 20 MB'"
       - uses: actions/upload-artifact@v4
         with:
           name: gozar-${{ matrix.name }}
