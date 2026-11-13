@@ -202,6 +202,8 @@ class CoreReply {
     this.state,
     this.error,
     this.needsCode = false,
+    this.unverified = false,
+    this.proxyAddress,
     this.captchaImage,
     this.systemEmails = const [],
     this.update,
@@ -211,6 +213,13 @@ class CoreReply {
   final CoreState? state;
   final String? error;
   final bool needsCode;
+
+  /// The browser sign-in's session is not confirmed by Mozilla yet: the page
+  /// stays open for the code and announces the session again.
+  final bool unverified;
+
+  /// The loopback address of the core's sign-in proxy ("127.0.0.1:port").
+  final String? proxyAddress;
   final String? captchaImage;
   final List<String> systemEmails;
   final DesktopUpdate? update;
@@ -224,6 +233,10 @@ class CoreReply {
       state: state is Map<String, dynamic> ? CoreState.fromJson(state) : null,
       error: error is String && error.isNotEmpty ? error : null,
       needsCode: result is Map && result['needs_code'] == true,
+      unverified: result is Map && result['unverified'] == true,
+      proxyAddress: result is Map && result['address'] is String
+          ? result['address'] as String
+          : null,
       systemEmails: result is Map && result['emails'] is List
           ? (result['emails'] as List)
               .whereType<String>()

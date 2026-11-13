@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import 'core.dart';
 import 'strings.dart';
 import 'theme.dart';
+import 'web_signin.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -305,6 +306,49 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         } else if (reply.error != null) {
           setState(() => _error = reply.error);
         } else if (_state.signedIn) {
+          _password.clear();
+          _confirm.clear();
+          _code.clear();
+          _needsCode = false;
+          _creating = false;
+          _adding = false;
+          _settingsOpen = false;
+          unawaited(_loadServers());
+          unawaited(_usage());
+        }
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Opens Mozilla's own sign-in page inside the app: the session it
+  /// announces goes to the core, which stores the account. Returns with the
+  /// state refreshed once the page reports the account saved.
+  Future<void> _browserSignIn() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final navigator = Navigator.of(context, rootNavigator: true);
+      final done = await navigator.push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => BrowserSignInPage(
+            core: _core,
+            persian: widget.persian,
+            email: _email.text.trim(),
+          ),
+        ),
+      );
+      if (!mounted) return;
+      if (done == true) {
+        _apply(await _core.call('state'));
+        if (!mounted) return;
+        if (_state.signedIn) {
           _password.clear();
           _confirm.clear();
           _code.clear();
@@ -1503,6 +1547,51 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
                         style: TextStyle(color: muted(context)),
                       ),
                       const SizedBox(height: 24),
+                      if (!_creating && browserSignInSupported) ...[
+                        FilledButton.icon(
+                          onPressed: _busy ? null : _browserSignIn,
+                          icon: const Icon(Icons.language_rounded),
+                          label: Text(words.browserSignIn),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          words.browserSignInHint,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: muted(context)),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                height: 1,
+                                color: Theme.of(context).colorScheme.outlineVariant,
+                              ),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                words.browserOrForm,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: muted(context)),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                height: 1,
+                                color: Theme.of(context).colorScheme.outlineVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                      ],
                       TextField(
                         controller: _email,
                         enabled: !_busy,

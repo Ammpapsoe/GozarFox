@@ -102,7 +102,7 @@ ThemeData buildTheme({bool lightMode = false}) {
     scaffoldBackgroundColor: lightMode ? const Color(0xFFFAF9F8) : ink,
     colorScheme: scheme,
     textTheme: _type(base.textTheme, scheme),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: lightMode ? const Color(0xFFF1EFEE) : card,
       elevation: 0,
       margin: EdgeInsets.zero,

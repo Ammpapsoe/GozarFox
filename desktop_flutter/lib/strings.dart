@@ -215,4 +215,20 @@ class Words {
   String get copyAddress => pick('کپی نشانی', 'Copy address');
   String get addressCopied => pick('نشانی کپی شد.', 'Address copied.');
   String get sourceCode => pick('کد منبع', 'Source code');
+  String get browserSignIn => pick('ورود با مرورگر', 'Sign in with the browser');
+  String get browserSignInHint => pick(
+        'صفحهٔ رسمی Mozilla داخل برنامه باز می‌شود؛ همان‌جا وارد شوید.',
+        'Mozilla’s own page opens inside the app; sign in there.',
+      );
+  String get browserOrForm => pick('یا با ایمیل و گذرواژه', 'or with email and password');
+  String get signedInTitle =>
+      pick('با موفقیت وارد شدید', 'Signed in successfully');
+  String get startConnection => pick('شروع اتصال', 'Start connection');
+  String get browserSignInFailed => pick(
+        'ورود با مرورگر ناموفق بود.',
+        'Browser sign-in did not work.',
+      );
+  String get tryAgain => pick('تلاش دوباره', 'Try again');
+  String get useTheForm =>
+      pick('ورود با ایمیل و گذرواژه', 'Sign in with email and password');
 }
