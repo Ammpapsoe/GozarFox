@@ -532,22 +532,25 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(words.language),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final entry in [
-              ('system', words.system),
-              ('fa', 'پارسی'),
-              ('en', 'English'),
-            ])
-              RadioListTile<String>(
-                title: Text(entry.$2),
-                value: entry.$1,
-                groupValue:
-                    widget.language.isEmpty ? 'system' : widget.language,
-                onChanged: (value) => Navigator.pop(dialogContext, value),
-              ),
-          ],
+        content: RadioGroup<String>(
+          groupValue: widget.language.isEmpty ? 'system' : widget.language,
+          onChanged: (value) {
+            if (value != null) Navigator.pop(dialogContext, value);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final entry in [
+                ('system', words.system),
+                ('fa', 'پارسی'),
+                ('en', 'English'),
+              ])
+                RadioListTile<String>(
+                  title: Text(entry.$2),
+                  value: entry.$1,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -654,21 +657,25 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(words.appearance),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final option in [
-              ('system', words.system),
-              ('light', words.lightTheme),
-              ('dark', words.darkTheme),
-            ])
-              RadioListTile<String>(
-                title: Text(option.$2),
-                value: option.$1,
-                groupValue: _state.theme,
-                onChanged: (value) => Navigator.pop(dialogContext, value),
-              ),
-          ],
+        content: RadioGroup<String>(
+          groupValue: _state.theme,
+          onChanged: (value) {
+            if (value != null) Navigator.pop(dialogContext, value);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final option in [
+                ('system', words.system),
+                ('light', words.lightTheme),
+                ('dark', words.darkTheme),
+              ])
+                RadioListTile<String>(
+                  title: Text(option.$2),
+                  value: option.$1,
+                ),
+            ],
+          ),
         ),
       ),
     );

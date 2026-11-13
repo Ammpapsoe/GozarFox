@@ -182,7 +182,9 @@ class DesktopUpdate {
           item['name'] is! String ||
           item['kind'] is! String ||
           item['size'] is! int ||
-          (item['size'] as int) <= 0) return null;
+          (item['size'] as int) <= 0) {
+        return null;
+      }
       packages.add(UpdatePackage(
         id: item['id'] as String,
         name: item['name'] as String,
