@@ -81,6 +81,9 @@ class FastlyChallengeSolver(
 
     fun solve(targetUrl: String): Outcome {
         val deadline = clock() + overallBudgetMs
+        // A short random tag so one attempt's stage lines can be followed in
+        // logcat without ever naming a token, a cookie, or a body.
+        val attemptId = "edge-" + java.util.UUID.randomUUID().toString().take(8)
         // The jar must be empty: an already-solved client is served the real
         // page, and stale cookies would poison a fresh exchange.
         val jar = mutableMapOf<String, String>()
@@ -95,7 +98,13 @@ class FastlyChallengeSolver(
         val scriptUrl = originOf(targetUrl) + prefix + "/script.js?reload=true"
         val script = get(scriptUrl, browserHeaders(), jar, jarRaw)
             ?: return Outcome.Failed("script-fetch")
-        if (script.status != 200) return Outcome.Failed("script-http-" + script.status)
+        if (script.status != 200) {
+            trace(
+                "$attemptId script refused http=${script.status} " +
+                    "fastly-trace=${headerOf(script, TRACE_HEADER)}"
+            )
+            return Outcome.Failed("script-http-" + script.status)
+        }
         val scriptText = utf8(script.body)
         val init = parseInitArguments(scriptText) ?: return Outcome.Failed("init-parse")
         trace("init parsed")
@@ -131,7 +140,13 @@ class FastlyChallengeSolver(
                 jarRaw,
             ) ?: return Outcome.Failed("post-back")
             absorbCookies(post, jar, jarRaw)
-            if (post.status != 200) return Outcome.Failed("post-back-http-" + post.status)
+            if (post.status != 200) {
+                trace(
+                    "$attemptId post-back refused http=${post.status} " +
+                    "fastly-trace=${headerOf(post, TRACE_HEADER)} round=$round"
+                )
+                return Outcome.Failed("post-back-http-" + post.status)
+            }
 
             val reply = runCatching { JSONObject(utf8(post.body)) }.getOrNull()
                 ?: return Outcome.Failed("post-back-parse")
@@ -181,8 +196,10 @@ class FastlyChallengeSolver(
                     .put("answer", suffix)
                     // Echoed back verbatim so the edge can re-verify: these
                     // are the challenge's own fields, not anything we invent.
+                    // The edge issues `expires` as a JSON string and rejects
+                    // type-changed echoes with HTTP 400 — never coerce it.
                     .put("hmac", data.optString("hmac"))
-                    .put("expires", data.optLong("expires"))
+                    .put("expires", echoBack(data, "expires"))
             }
             "pat" -> {
                 // A Private Access Token is a browser-platform feature this
@@ -216,7 +233,10 @@ class FastlyChallengeSolver(
         )
         val response = runCatching { http.send(request) }.getOrNull() ?: return ""
         absorbCookies(response, jar, jarRaw)
-        if (response.status != 200) return ""
+        if (response.status != 200) {
+            trace("pat endpoint answered http=${response.status}")
+            return ""
+        }
         return runCatching { JSONObject(utf8(response.body)).optString("auth") }.getOrDefault("")
     }
 
@@ -229,6 +249,9 @@ class FastlyChallengeSolver(
         .put("v", 2)
 
     companion object {
+        /** The response header Fastly's own script reads when it gets a 400. */
+        private const val TRACE_HEADER = "Fastly-Trace-ID"
+
         /** The canonical Firefox-for-Android identity — no Chromium bones. */
         const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Android 13; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
@@ -440,6 +463,16 @@ class FastlyChallengeSolver(
 
     private fun challengeKind(challenge: JSONObject): String =
         challenge.optString("ty").ifEmpty { "unknown" }
+
+    /** The field exactly as the edge issued it; missing or null echoes "". */
+    private fun echoBack(data: JSONObject, key: String): Any =
+        if (data.has(key) && !data.isNull(key)) data.get(key) else ""
+
+    /** Case-insensitive header read; "-" when absent. Never the body. */
+    private fun headerOf(response: Transport.Response, name: String): String =
+        response.headers.entries
+            .firstOrNull { (key, _) -> key.equals(name, ignoreCase = true) }
+            ?.value?.firstOrNull()?.take(64) ?: "-"
 
     /**
      * [HttpURLConnection] pinned to the loopback proxy so the solver's exit

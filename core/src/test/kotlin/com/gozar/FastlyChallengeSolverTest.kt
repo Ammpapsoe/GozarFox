@@ -44,7 +44,7 @@ class FastlyChallengeSolverTest {
                 .put("base", base)
                 .put("hash", sha256Hex(base + suffix))
                 .put("hmac", "hmac-fixture")
-                .put("expires", 1_700_000_000_000L),
+                .put("expires", "1700000000000"),
         )
 
     private fun scriptWith(vararg initCalls: String) =
@@ -176,7 +176,10 @@ class FastlyChallengeSolverTest {
         assertEquals("fs-base", answer.getString("base"))
         assertEquals("K9", answer.getString("answer"))
         assertEquals("hmac-fixture", answer.getString("hmac"))
-        assertEquals(1_700_000_000_000L, answer.getLong("expires"))
+        // The edge validates the echoed JSON type strictly: a string stays a
+        // string. Sending a number here is what earned v1.13.4 its HTTP 400.
+        assertTrue("expires must stay a JSON string", answer.get("expires") is String)
+        assertEquals("1700000000000", answer.getString("expires"))
 
         // And the solver must ride the loopback identity, not a generic one.
         assertTrue(postBack.headers["User-Agent"]!!.contains("Gecko/145.0 Firefox/145.0"))
@@ -397,5 +400,100 @@ class FastlyChallengeSolverTest {
         assertTrue(!FastlyChallengeSolver.isChallengeBody("just /_fs-ch-ab"))
         assertEquals("/_fs-ch-ab12", FastlyChallengeSolver.challengePrefix("a/_fs-ch-ab12/b"))
         assertNull(FastlyChallengeSolver.challengePrefix("no prefix here"))
+    }
+
+    @Test
+    fun `expires echoes verbatim whatever type the edge issued`() {
+        // A number on the wire stays a number — the rule is faithfulness,
+        // not "always string".
+        val numeric = JSONObject()
+            .put("ty", "pow")
+            .put(
+                "data",
+                JSONObject()
+                    .put("base", "b")
+                    .put("hash", sha256Hex("bQ7"))
+                    .put("hmac", "h")
+                    .put("expires", 1700000000000L),
+            )
+        val edge = ScriptedEdge(
+            listOf(
+                200 to challengePage(),
+                200 to scriptWith("""init([$numeric], "t", "$prefix")"""),
+                200 to """{"status":"success","ch":[],"tok":""}""",
+                200 to realPage(),
+            ),
+            headers = listOf(
+                emptyMap(),
+                emptyMap(),
+                mapOf("Set-Cookie" to listOf("ck=v; Path=/")),
+                emptyMap(),
+            ),
+        )
+        solverFor(edge).solve(target)
+        val sent = JSONObject(String(edge.requests[2].body!!, Charsets.UTF_8))
+            .getJSONArray("data").getJSONObject(0)
+        assertTrue(sent.get("expires") is Number)
+        assertEquals(1700000000000L, sent.getLong("expires"))
+    }
+
+    @Test
+    fun `missing or null expires echoes as empty string without failing`() {
+        for (data in listOf(
+            JSONObject().put("base", "b").put("hash", sha256Hex("bQ7")).put("hmac", "h"),
+            JSONObject().put("base", "b").put("hash", sha256Hex("bQ7")).put("hmac", "h")
+                .put("expires", JSONObject.NULL),
+        )) {
+            val task = JSONObject().put("ty", "pow").put("data", data)
+            val edge = ScriptedEdge(
+                listOf(
+                    200 to challengePage(),
+                    200 to scriptWith("""init([$task], "t", "$prefix")"""),
+                    200 to """{"status":"success","ch":[],"tok":""}""",
+                    200 to realPage(),
+                ),
+                headers = listOf(
+                    emptyMap(),
+                    emptyMap(),
+                    mapOf("Set-Cookie" to listOf("ck=v; Path=/")),
+                    emptyMap(),
+                ),
+            )
+            val outcome = solverFor(edge).solve(target)
+            assertTrue(outcome is FastlyChallengeSolver.Outcome.Success)
+            val sent = JSONObject(String(edge.requests[2].body!!, Charsets.UTF_8))
+                .getJSONArray("data").getJSONObject(0)
+            assertEquals("", sent.getString("expires"))
+        }
+    }
+
+    @Test
+    fun `refused post-back is traced with status and Fastly id but never body or token`() {
+        val lines = mutableListOf<String>()
+        val edge = ScriptedEdge(
+            listOf(
+                200 to challengePage(),
+                200 to scriptWith("""init([${powChallenge("b", "aB")}], "tok-secret", "$prefix")"""),
+                400 to "secret-error-body",
+            ),
+            headers = listOf(
+                emptyMap(),
+                emptyMap(),
+                mapOf("Fastly-Trace-ID" to listOf("TRACE-abc-123")),
+            ),
+        )
+
+        val outcome = solverFor(edge) { lines += it }.solve(target)
+
+        assertTrue(outcome is FastlyChallengeSolver.Outcome.Failed)
+        assertEquals(
+            "post-back-http-400",
+            (outcome as FastlyChallengeSolver.Outcome.Failed).reason,
+        )
+        val traced = lines.joinToString("\n")
+        assertTrue(traced.contains("http=400"))
+        assertTrue(traced.contains("fastly-trace=TRACE-abc-123"))
+        assertTrue(!traced.contains("secret-error-body"))
+        assertTrue(!traced.contains("tok-secret"))
     }
 }
