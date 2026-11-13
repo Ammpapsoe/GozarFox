@@ -220,6 +220,12 @@ class UpdateFakeCore extends FakeCore {
   }
 }
 
+Finder _settingsGear() {
+  final keyed = find.byKey(const ValueKey('home-settings-gear'));
+  if (keyed.evaluate().isNotEmpty) return keyed;
+  return find.byTooltip('Settings').first;
+}
+
 void main() {
   testWidgets('language can be changed from the native login screen',
       (tester) async {
@@ -261,7 +267,9 @@ void main() {
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
     expect(find.text('Gozar'), findsOneWidget);
-    await tester.tap(find.byTooltip('تنظیمات'));
+    final gear = find.byKey(const ValueKey('home-settings-gear'));
+    await tester.tap(
+        gear.evaluate().isNotEmpty ? gear : find.byTooltip('تنظیمات').first);
     await tester.pumpAndSettle();
     expect(find.text('حساب Firefox'), findsOneWidget);
     await tester.tap(find.text('شخصی‌سازی'));
@@ -277,7 +285,7 @@ void main() {
     expect(find.text('Disconnected'), findsOneWidget);
     expect(Directionality.of(tester.element(find.text('Disconnected'))),
         TextDirection.ltr);
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Firefox account'));
     await tester.pumpAndSettle();
@@ -299,7 +307,7 @@ void main() {
     final core = FakeCore(signedIn: true, language: 'en')..live = true;
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Connection'));
     await tester.pumpAndSettle();
@@ -480,7 +488,7 @@ void main() {
     await tester.pumpAndSettle();
 
     Future<void> openAccounts() async {
-      await tester.tap(find.byTooltip('Settings'));
+      await tester.tap(_settingsGear());
       await tester.pumpAndSettle();
       await tester.tap(find.text('Firefox account'));
       await tester.pumpAndSettle();
@@ -521,7 +529,7 @@ void main() {
     await tester.tap(find.text('example@example.com').last);
     await tester.pumpAndSettle();
     expect(core.activeEmail, 'example@example.com');
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Firefox account'));
     await tester.pumpAndSettle();
@@ -584,7 +592,7 @@ void main() {
     final core = FakeCore(signedIn: true, language: 'en');
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('Personalization'));
     await tester.pumpAndSettle();
@@ -637,7 +645,7 @@ void main() {
     final core = UpdateFakeCore();
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('General'));
     await tester.pumpAndSettle();
@@ -668,7 +676,7 @@ void main() {
     final core = UpdateFakeCore(delayCheck: true);
     await tester.pumpWidget(GozarApp(core: core));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(_settingsGear());
     await tester.pumpAndSettle();
     await tester.tap(find.text('General'));
     await tester.pumpAndSettle();
@@ -749,10 +757,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.requests, contains('connect'));
     expect(find.text('Connected'), findsOneWidget);
-    final locations = tester.widget<TextButton>(find.ancestor(
+    final locations = tester.widget<InkWell>(find.ancestor(
         of: find.text('Locations'),
-        matching: find.byWidgetPredicate((widget) => widget is TextButton)));
-    expect(locations.onPressed, isNull);
+        matching: find.byWidgetPredicate((widget) => widget is InkWell)));
+    expect(locations.onTap, isNull);
     expect(tester.takeException(), isNull);
   });
 

@@ -116,10 +116,13 @@ class _WindscribeHomeState extends State<WindscribeHome>
   Widget _header() => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
         child: Row(children: [
-          _IconButton(
-            icon: Icons.settings_outlined,
-            tooltip: widget.words.settings,
-            onTap: widget.busy ? null : widget.onSettings,
+          KeyedSubtree(
+            key: const ValueKey('home-settings-gear'),
+            child: _IconButton(
+              icon: Icons.settings_outlined,
+              tooltip: widget.words.settings,
+              onTap: widget.busy ? null : widget.onSettings,
+            ),
           ),
           const SizedBox(width: 10),
           const Text(
@@ -219,10 +222,12 @@ class _WindscribeHomeState extends State<WindscribeHome>
 
   Widget _connectButton() {
     const diameter = 176.0;
-    return Semantics(
-      button: true,
-      label: widget.live ? widget.words.disconnect : widget.words.connect,
-      child: GestureDetector(
+    return Tooltip(
+      message: widget.live ? widget.words.disconnect : widget.words.connect,
+      child: Semantics(
+        button: true,
+        label: widget.live ? widget.words.disconnect : widget.words.connect,
+        child: GestureDetector(
         onTap: widget.busy ? null : widget.onToggle,
         child: SizedBox(
           width: diameter,
@@ -259,7 +264,8 @@ class _WindscribeHomeState extends State<WindscribeHome>
                       letterSpacing: .6,
                     ),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -304,7 +310,7 @@ class _WindscribeHomeState extends State<WindscribeHome>
           const Spacer(),
           _Bubble(
             icon: Icons.public,
-            label: widget.city,
+            label: widget.words.locations,
             onTap: widget.busy || widget.live ? null : widget.onServers,
           ),
           const Spacer(),
