@@ -285,7 +285,7 @@ class _WindscribeHomeState extends State<WindscribeHome>
                     widget.connecting
                         ? widget.words.connecting
                         : (widget.live
-                            ? widget.words.connected
+                            ? widget.words.disconnect
                             : widget.words.connect),
                     style: const TextStyle(
                       color: Colors.white,
