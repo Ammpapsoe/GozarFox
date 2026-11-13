@@ -257,7 +257,9 @@ class _WindscribeHomeState extends State<WindscribeHome>
         label: widget.live ? widget.words.disconnect : widget.words.connect,
         child: GestureDetector(
         onTap: widget.busy ? null : widget.onToggle,
-        child: SizedBox(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: SizedBox(
           width: diameter,
           height: diameter,
           child: CustomPaint(
@@ -295,6 +297,7 @@ class _WindscribeHomeState extends State<WindscribeHome>
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ),
