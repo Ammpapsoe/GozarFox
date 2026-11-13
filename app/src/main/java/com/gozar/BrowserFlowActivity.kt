@@ -20,6 +20,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
@@ -107,6 +108,7 @@ class BrowserFlowActivity : BaseActivity() {
     private val giveUp = Runnable { onLoadingTimeout() }
 
     private var started = false
+    private var pageStarted = false
     private var pageReady = false
     private var challengeActive = false
     private var challengeAttempted = false
@@ -120,11 +122,22 @@ class BrowserFlowActivity : BaseActivity() {
     private var handedOver = false
     private var completed = false
     private var script: ScriptHandler? = null
+    private var darkCanvas: ScriptHandler? = null
 
     private val foxWatcher: () -> Unit = { render() }
 
     /** Session-token-shaped runs in page text; redacted before logging. */
     private val secretShaped = Regex("[0-9a-fA-F]{32,}")
+
+    /**
+     * Painted before any of the page's own CSS: the sign-in's blank canvas is
+     * the app's dark, never a white flash. Mozilla's stylesheet overrides it
+     * the moment it loads, so the page ends up looking exactly like Mozilla's.
+     */
+    private val DARK_CANVAS =
+        "(function(){var d=document.documentElement;" +
+            "if(d){d.style.backgroundColor='#0b0b0d';}" +
+            "})();"
 
     private val bridge = object : WebViewCompat.WebMessageListener {
         override fun onPostMessage(
@@ -319,6 +332,7 @@ class BrowserFlowActivity : BaseActivity() {
     private fun install() {
         val origins = setOf(FoxWebChannel.ORIGIN)
         script = WebViewCompat.addDocumentStartJavaScript(web, FoxBrowserScript.script, origins)
+        darkCanvas = WebViewCompat.addDocumentStartJavaScript(web, DARK_CANVAS, origins)
         WebViewCompat.addWebMessageListener(web, FoxBrowserScript.BRIDGE, origins, bridge)
     }
 
@@ -343,7 +357,6 @@ class BrowserFlowActivity : BaseActivity() {
         if (handedOver) return
         handedOver = true
         MozillaDiagnostics.record("WEBCHANNEL stage=session-received uid=${login.uid}")
-        show(loading)
         Fox.webSignIn(applicationContext, login.email, login.uid, login.sessionToken)
         render()
     }
@@ -358,13 +371,9 @@ class BrowserFlowActivity : BaseActivity() {
             return
         }
         if (!handedOver) {
-            if (challengeActive) {
-                show(loading)
-            } else if (pageReady || budgetExpired) {
-                show(null)
-            } else {
-                show(loading)
-            }
+            // Only the silence before the first byte of the page gets a
+            // spinner; afterwards the page, and only the page, is on stage.
+            if (!pageStarted && !pageReady && !budgetExpired) show(loading) else show(null)
             return
         }
         if (Fox.busy) {
@@ -424,7 +433,6 @@ class BrowserFlowActivity : BaseActivity() {
         challengeUrl = url
         disarmPageBudget()
         fallback.visibility = View.GONE
-        show(loading)
         handler.postDelayed(challengeGiveUp, CHALLENGE_DEADLINE_MS)
         handler.postDelayed(challengePatience, CHALLENGE_PATIENCE_MS)
 
@@ -433,9 +441,9 @@ class BrowserFlowActivity : BaseActivity() {
             // Same loopback tunnel as the WebView when one is up, so the pass
             // the edge issues is bound to the exit this page will use.
             wire = if (proxyApplied && proxyPort > 0) {
-                EdgeGuard.JdkWire("127.0.0.1", proxyPort)
+                EdgeGuard.JdkWire("127.0.0.1", proxyPort, trace = { line -> Log.d("GozarWebView", line) })
             } else {
-                EdgeGuard.JdkWire()
+                EdgeGuard.JdkWire(trace = { line -> Log.d("GozarWebView", line) })
             },
             agent = FIREFOX_AGENT,
             notify = { stage -> handler.post { onVerifierStage(stage) } },
@@ -512,8 +520,8 @@ class BrowserFlowActivity : BaseActivity() {
     private fun reloadAfterVerifier() {
         val url = challengeUrl ?: return onChallengeUnresolved("gave-up:no-url")
         pageReady = false
+        pageStarted = false
         budgetExpired = false
-        show(loading)
         armPageBudget()
         Log.d("GozarWebView", "reloading with challenge cookies")
         web.loadUrl(url)
@@ -561,11 +569,12 @@ class BrowserFlowActivity : BaseActivity() {
     private fun client() = object : WebViewClient() {
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             pageReady = false
+            pageStarted = true
             Log.d("GozarWebView", "onPageStarted $url")
-            if (!handedOver) {
-                show(loading)
-                armPageBudget()
-            }
+            // The page is painting from here on: our spinner must never be
+            // seen on top of Mozilla's own page.
+            show(null)
+            if (!handedOver) armPageBudget()
         }
 
         override fun onPageFinished(view: WebView, url: String) {
@@ -682,10 +691,13 @@ class BrowserFlowActivity : BaseActivity() {
         // next safe point instead of finishing against a dead screen.
         activeVerifier?.cancel()
         activeVerifier = null
+        verifierThread?.interrupt()
         verifierThread = null
         if (started) Fox.unwatch(foxWatcher)
         script?.remove()
         script = null
+        darkCanvas?.remove()
+        darkCanvas = null
         try {
             // The WebView held a signed-in Mozilla session. Dropping it means
             // the next sign-in starts clean, which is what a shared device
@@ -698,6 +710,13 @@ class BrowserFlowActivity : BaseActivity() {
                 web.stopLoading()
                 web.loadUrl("about:blank")
                 web.clearHistory()
+                web.clearFormData()
+                web.clearCache(true)
+                try {
+                    CookieManager.getInstance().removeSessionCookies(null)
+                    WebStorage.getInstance().deleteAllData()
+                } catch (_: Exception) {
+                }
                 (web.parent as? ViewGroup)?.removeView(web)
                 web.removeAllViews()
                 web.destroy()
