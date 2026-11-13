@@ -384,7 +384,7 @@ class EdgeVerifier(
     companion object {
         /** The identity the WebView itself presents; the pass is bound to it. */
         const val ANDROID_FIREFOX_AGENT =
-            "Mozilla/5.0 (Android 13; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
+            "Mozilla/5.0 (Android 14; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
 
         private const val DELIVERY_PATH = "/fst-post-back"
         private const val WORK_TASK = "pow"

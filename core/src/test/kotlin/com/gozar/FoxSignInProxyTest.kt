@@ -166,4 +166,37 @@ class FoxSignInProxyTest {
         assertEquals(1, answers.size)
         assertEquals("93.184.216.34", answers[0].hostAddress)
     }
+
+    /**
+     * The allowlist is domain-shaped, the way the sign-in is: the real page
+     * spreads over subdomains and named partner hosts, and an exact-host
+     * list starves it into a blank screen. These pin the shape down.
+     */
+    @Test
+    fun allowlistAcceptsSignInDomainsPartnersAndRefusesEverythingElse() {
+        val proxy = FoxSignInProxy() // defaults; never started, permits only
+
+        // Inside the sign-in domains, any depth.
+        assertTrue(proxy.permits("accounts.firefox.com"))
+        assertTrue(proxy.permits("api.accounts.firefox.com"))
+        assertTrue(proxy.permits("oauth.accounts.firefox.com"))
+        assertTrue(proxy.permits("firefox.com"))
+        assertTrue(proxy.permits("www.mozilla.org"))
+        assertTrue(proxy.permits("mozorg.cdn.mozilla.net"))
+        // Named partner hosts.
+        assertTrue(proxy.permits("accounts.google.com"))
+        assertTrue(proxy.permits("appleid.apple.com"))
+        assertTrue(proxy.permits("fonts.gstatic.com"))
+        // Normalization: case and trailing dot are not differences.
+        assertTrue(proxy.permits("ACCOUNTS.Firefox.COM"))
+        assertTrue(proxy.permits("accounts.firefox.com."))
+        // Refusals: strangers, lookalikes, addresses, empties.
+        assertFalse(proxy.permits("evil.example.com"))
+        assertFalse(proxy.permits("accounts.firefox.com.evil.example"))
+        assertFalse(proxy.permits("notfirefox.com"))
+        assertFalse(proxy.permits("1.2.3.4"))
+        assertFalse(proxy.permits("::1"))
+        assertFalse(proxy.permits(""))
+        assertFalse(proxy.permits("."))
+    }
 }

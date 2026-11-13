@@ -71,7 +71,7 @@ class MozillaWebViewActivity : BaseActivity() {
         // agent makes parts of the desktop-v3 flow guess, so the view speaks
         // as Firefox for Android does.
         private const val FIREFOX_AGENT =
-            "Mozilla/5.0 (Android 13; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
+            "Mozilla/5.0 (Android 14; Mobile; rv:145.0) Gecko/145.0 Firefox/145.0"
 
         // How long the thin bar may stay up before the screen admits the
         // network is not answering and offers a retry.

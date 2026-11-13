@@ -36,6 +36,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class FoxSignInProxy(
     private val allowed: Set<String> = SIGN_IN_HOSTS,
+    private val allowedDomains: Set<String> = SIGN_IN_DOMAINS,
+    private val partnerHosts: Set<String> = SIGN_IN_PARTNER_HOSTS,
     private val tlsPort: Int = 443,
     private val dialBudgetMs: Long = DEFAULT_DIAL_BUDGET_MS,
     private val handshakeReadMs: Int = DEFAULT_HANDSHAKE_READ_MS,
@@ -48,6 +50,41 @@ class FoxSignInProxy(
             "oauth.accounts.firefox.com",
             "fonts.gstatic.com",
             "fonts.googleapis.com"
+        )
+
+        /**
+         * The domains a sign-in on accounts.firefox.com lives in, the domain
+         * itself included: the page, its API, its OAuth endpoint and its
+         * bundles are spread over subdomains, and an exact-host list starves
+         * the real page into a blank screen.
+         */
+        val SIGN_IN_DOMAINS: Set<String> = setOf(
+            "firefox.com",
+            "mozilla.com",
+            "mozilla.org",
+            "mozilla.net"
+        )
+
+        /**
+         * Named outside hosts the sign-in page itself offers: the "continue
+         * with Google / Apple" routes and the font and script CDNs they need.
+         */
+        val SIGN_IN_PARTNER_HOSTS: Set<String> = setOf(
+            "accounts.google.com",
+            "accounts.youtube.com",
+            "apis.google.com",
+            "play.google.com",
+            "www.google.com",
+            "ssl.gstatic.com",
+            "www.gstatic.com",
+            "fonts.gstatic.com",
+            "fonts.googleapis.com",
+            "lh3.googleusercontent.com",
+            "appleid.apple.com",
+            "appleid.cdn-apple.com",
+            "idmsa.apple.com",
+            "iforgot.apple.com",
+            "www.apple.com"
         )
 
         const val DEFAULT_DIAL_BUDGET_MS: Long = 30_000L
@@ -142,7 +179,7 @@ class FoxSignInProxy(
                 answer(client, 403)
                 return
             }
-            if (!allowed.contains(host)) {
+            if (!permits(host)) {
                 trace("#$id blocked host=$host")
                 answer(client, 403)
                 return
@@ -165,6 +202,27 @@ class FoxSignInProxy(
             tunnels.remove(client)
         }
     }
+
+    /**
+     * Whether [rawHost] belongs to the sign-in. An explicitly injected host
+     * passes as named; after that, addresses never pass (a sign-in names its
+     * hosts), a partner host passes as named, and any host inside an allowed
+     * domain passes. Comparison is case-folded and a trailing dot is not a
+     * difference; a lookalike ("accounts.firefox.com.evil.example") is not a
+     * suffix match.
+     */
+    internal fun permits(rawHost: String): Boolean {
+        val host = rawHost.lowercase().trimEnd('.')
+        if (host.isEmpty()) return false
+        if (allowed.contains(host)) return true
+        if (isAddress(host)) return false
+        if (partnerHosts.contains(host)) return true
+        return allowedDomains.any { host == it || host.endsWith(".$it") }
+    }
+
+    /** True for anything shaped like a literal address, not a name. */
+    private fun isAddress(host: String): Boolean =
+        host.contains(':') || host.all { it.isDigit() || it == '.' }
 
     /** `CONNECT host:port`, parsed; null when the request is not one. */
     private fun readRequest(input: InputStream): Pair<String, Int>? {
