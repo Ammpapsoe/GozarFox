@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'main.dart' show CountryFlag, ErrorText;
 import 'strings.dart';
 
 /// The connect screen, laid out the way Windscribe's desktop client lays
@@ -20,6 +21,14 @@ class WindscribeHome extends StatefulWidget {
     required this.connecting,
     required this.busy,
     required this.city,
+    required this.code,
+    required this.downloadLabel,
+    required this.uploadLabel,
+    required this.sessionLabel,
+    required this.deviceLabel,
+    required this.exitLabel,
+    required this.usageLabel,
+    this.fault = '',
     required this.statusText,
     required this.protocolText,
     required this.killSwitch,
@@ -35,6 +44,14 @@ class WindscribeHome extends StatefulWidget {
   final bool connecting;
   final bool busy;
   final String city;
+  final String? code;
+  final String downloadLabel;
+  final String uploadLabel;
+  final String sessionLabel;
+  final String deviceLabel;
+  final String exitLabel;
+  final String usageLabel;
+  final String fault;
   final String statusText;
   final String protocolText;
   final bool killSwitch;
@@ -106,7 +123,12 @@ class _WindscribeHomeState extends State<WindscribeHome>
         const SizedBox(height: 6),
         _cityAndStatus(),
         Expanded(child: Center(child: _connectButton())),
-        if (widget.limit > 0) _usageBar(),
+        _infoPanel(),
+        if (widget.fault.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+            child: ErrorText(widget.fault),
+          ),
         _bottomRow(),
         const SizedBox(height: 14),
       ]),
@@ -179,16 +201,22 @@ class _WindscribeHomeState extends State<WindscribeHome>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.city,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
+            Row(children: [
+              CountryFlag(code: widget.code, size: 26),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  widget.city,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+            ]),
             const SizedBox(height: 4),
             Row(children: [
               Container(
@@ -274,32 +302,90 @@ class _WindscribeHomeState extends State<WindscribeHome>
     );
   }
 
-  Widget _usageBar() {
+  Widget _infoPanel() {
     final fraction = widget.limit <= 0
         ? 0.0
         : (widget.remaining / widget.limit).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
       child: Column(children: [
+        if (widget.live)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 2,
+              alignment: WrapAlignment.center,
+              children: [
+                Text(widget.downloadLabel,
+                    style: const TextStyle(color: textSoft, fontSize: 11)),
+                Text(widget.uploadLabel,
+                    style: const TextStyle(color: textSoft, fontSize: 11)),
+                Text(widget.sessionLabel,
+                    style: const TextStyle(
+                        color: Color(0x80DFEEFF), fontSize: 11)),
+              ],
+            ),
+          ),
+        if (widget.limit > 0) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              minHeight: 5,
+              backgroundColor: const Color(0x22FFFFFF),
+              valueColor: AlwaysStoppedAnimation(
+                  fraction < .2 ? dangerRed : connectedBlueSoft),
+              value: fraction,
+            ),
+          ),
+          const SizedBox(height: 5),
+        ],
         Row(children: [
-          Text(widget.words.remaining,
-              style: const TextStyle(color: textSoft, fontSize: 10)),
-          const Spacer(),
-          Text('${(fraction * 100).toStringAsFixed(0)}%',
-              textDirection: TextDirection.ltr,
-              style: const TextStyle(color: textSoft, fontSize: 10)),
+          Expanded(
+            child: Text(
+              widget.usageLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: textSoft, fontSize: 10.5),
+            ),
+          ),
         ]),
         const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: fraction,
-            minHeight: 5,
-            backgroundColor: const Color(0x22FFFFFF),
-            valueColor: AlwaysStoppedAnimation(
-                fraction < .2 ? dangerRed : connectedBlueSoft),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Text(widget.deviceLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Color(0x80DFEEFF), fontSize: 10)),
           ),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(widget.exitLabel,
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Color(0x80DFEEFF), fontSize: 10)),
+          ),
+        ]),
+        const SizedBox(height: 4),
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.shield_outlined, size: 12, color: textSoft),
+          const SizedBox(width: 5),
+          Text(widget.words.firewall,
+              style: const TextStyle(color: textSoft, fontSize: 10)),
+          const SizedBox(width: 6),
+          Text(
+              widget.killSwitch
+                  ? widget.words.activeAccount
+                  : widget.words.unavailable,
+              style: TextStyle(
+                  color: widget.killSwitch
+                      ? connectedBlueSoft
+                      : const Color(0x66DFEEFF),
+                  fontSize: 10)),
+        ]),
       ]),
     );
   }

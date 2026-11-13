@@ -1823,6 +1823,20 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       connecting: connecting,
       busy: _busy || _windowClosing,
       city: location,
+      code: server?.code,
+      downloadLabel:
+          '${words.download}  ${_state.live ? _speed(_state.rateDown) : '—'}',
+      uploadLabel:
+          '${words.upload}  ${_state.live ? _speed(_state.rateUp) : '—'}',
+      sessionLabel:
+          '${words.totalUsage}: ${_size(_state.down + _state.up)}',
+      deviceLabel:
+          '${words.tunnelDevice}: ${_state.live && _state.device.isNotEmpty ? _state.device : '—'}',
+      exitLabel:
+          '${words.exitIp}: ${_state.live && _state.exit.isNotEmpty ? _state.exit : '—'}',
+      usageLabel: _state.limit > 0
+          ? '${_size(_state.remaining)} ${words.remaining}'
+          : words.usageUnavailable,
       statusText: status,
       protocolText: server != null && server.port > 0
           ? 'TUN · Relay ${server.port}'
@@ -1830,6 +1844,9 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       killSwitch: _state.killSwitch,
       limit: _state.limit,
       remaining: _state.remaining,
+      fault: _error != null || _state.fault.isNotEmpty
+          ? _message(_error ?? _state.fault)
+          : '',
       onToggle: _toggleConnection,
       onServers: _showServers,
       onSettings: () => setState(() => _settingsOpen = true),
@@ -2066,6 +2083,8 @@ class _ServerDialogState extends State<ServerDialog> {
     );
   }
 }
+
+String _speed(int bytes) => '${_size(math.max(0, bytes))}/s';
 
 String _size(int value) {
   if (value <= 0) return '0 B';
