@@ -17,7 +17,7 @@ class ChallengeScriptReaderTest {
     fun `reads the standard three-argument briefing`() {
         val script = """
             var x = 1;
-            init([$powTask], "tok-1", "$marker");
+            init([${powTask("b")}], "tok-1", "$marker");
             tail();
         """.trimIndent()
         val briefing = ChallengeScriptReader.read(script, marker)
@@ -39,7 +39,7 @@ class ChallengeScriptReaderTest {
 
     @Test
     fun `escaped quotes inside strings survive`() {
-        val script = """init([$powTask], "tok\"quoted\"", "$marker")"""
+        val script = """init([${powTask("b")}], "tok\"quoted\"", "$marker")"""
         val briefing = ChallengeScriptReader.read(script, marker)
         assertNotNull(briefing)
         assertEquals("tok\"quoted\"", briefing!!.passToken)
@@ -48,42 +48,42 @@ class ChallengeScriptReaderTest {
     @Test
     fun `the last valid call wins over stale decoys`() {
         val script = """
-            init([$powTask], "stale", "$marker");
-            init([$powTask], "fresh", "$marker");
+            init([${powTask("b")}], "stale", "$marker");
+            init([${powTask("b")}], "fresh", "$marker");
         """.trimIndent()
         assertEquals("fresh", ChallengeScriptReader.read(script, marker)?.passToken)
     }
 
     @Test
     fun `comments between arguments and before the closing paren are stepped over`() {
-        val withBlock = """init([$powTask], /* note */ "tok-b", "$marker" /*legacy*/)"""
+        val withBlock = """init([${powTask("b")}], /* note */ "tok-b", "$marker" /*legacy*/)"""
         assertNotNull(ChallengeScriptReader.read(withBlock, marker))
-        val withLine = "init([$powTask], \"tok-l\", \"$marker\" // done\n)"
+        val withLine = "init([${powTask("b")}], \"tok-l\", \"$marker\" // done\n)"
         assertNotNull(ChallengeScriptReader.read(withLine, marker))
     }
 
     @Test
     fun `marker must equal the page marker`() {
-        val script = """init([$powTask], "tok", "/_fs-ch-Other99")"""
+        val script = """init([${powTask("b")}], "tok", "/_fs-ch-Other99")"""
         assertNull(ChallengeScriptReader.read(script, marker))
     }
 
     @Test
     fun `rejects empty token, empty tasks, nameless kinds, and bad shape`() {
-        assertNull(ChallengeScriptReader.read("""init([$powTask], "", "$marker")""", marker))
+        assertNull(ChallengeScriptReader.read("""init([${powTask("b")}], "", "$marker")""", marker))
         assertNull(ChallengeScriptReader.read("""init([], "tok", "$marker")""", marker))
         assertNull(
             ChallengeScriptReader.read("""init([{"ty":"","data":{}}], "tok", "$marker")""", marker),
         )
         assertNull(ChallengeScriptReader.read("var init = 2;", marker))
-        assertNull(ChallengeScriptReader.read("""init([$powTask""", marker))
+        assertNull(ChallengeScriptReader.read("""init([${powTask("b")}""", marker))
         // A trailing empty argument means the delimiter rule failed.
-        assertNull(ChallengeScriptReader.read("""init([$powTask], "tok", "$marker",)""", marker))
+        assertNull(ChallengeScriptReader.read("""init([${powTask("b")}], "tok", "$marker",)""", marker))
     }
 
     @Test
     fun `a real fourth argument is accepted, an empty one is not`() {
-        val withFourth = """init([$powTask], "tok", "$marker", {"extra":1})"""
+        val withFourth = """init([${powTask("b")}], "tok", "$marker", {"extra":1})"""
         val briefing = ChallengeScriptReader.read(withFourth, marker)
         assertNotNull(briefing)
         assertTrue(briefing!!.tasks.size == 1)

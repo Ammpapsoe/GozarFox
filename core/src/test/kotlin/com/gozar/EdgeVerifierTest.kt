@@ -250,7 +250,7 @@ class EdgeVerifierTest {
                 mapOf("Fastly-Trace-ID" to listOf("TRACE-abc-123")),
             ),
         )
-        val verdict = verifierFor(edge) { lines += it }.run(target)
+        val verdict = verifierFor(edge, trace = { lines += it }).run(target)
         assertTrue(verdict is EdgeVerifier.Verdict.GaveUp)
         assertEquals("delivery-refused-400", (verdict as EdgeVerifier.Verdict.GaveUp).why)
         val traced = lines.joinToString("\n")
@@ -368,7 +368,7 @@ class EdgeVerifierTest {
                 emptyMap(),
             ),
         )
-        verifierFor(edge) { lines += it }.run(target)
+        verifierFor(edge, trace = { lines += it }).run(target)
         val traced = lines.joinToString("\n")
         assertTrue(traced.isNotEmpty())
         assertTrue(!traced.contains("secret-tok"))
