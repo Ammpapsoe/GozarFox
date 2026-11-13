@@ -487,4 +487,8 @@ AGPL-3.0-or-later</string>
     <string name="web_challenge_waiting">Mozilla is verifying your browser. Please wait…</string>
     <string name="web_challenge_failed">Mozilla can\'t verify your browser. Please use Chrome instead.</string>
     <string name="web_open_chrome">Open in Chrome</string>
+    <string name="web_stage_probe">Verifying your browser: %1$d%%</string>
+    <string name="web_stage_solve">Solving the challenge: %1$d%%</string>
+    <string name="web_stage_cookie">Fetching your pass: %1$d%%</string>
+    <string name="web_challenge_patience">This is taking a while — please keep waiting…</string>
 </resources>

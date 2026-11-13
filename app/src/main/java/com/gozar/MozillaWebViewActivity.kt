@@ -77,9 +77,13 @@ class MozillaWebViewActivity : BaseActivity() {
         // network is not answering and offers a retry.
         private const val PAGE_BUDGET_MS = 30_000L
 
-        // The solver gets a minute end to end; after that the screen stops
+        // The verifier gets a minute end to end; after that the screen stops
         // promising a verification that is not coming and offers Chrome.
         private const val CHALLENGE_DEADLINE_MS = 60_000L
+
+        // Halfway through that minute, the bar says out loud that the wait
+        // is longer than usual but still moving.
+        private const val CHALLENGE_PATIENCE_MS = 30_000L
 
         private const val CHROME_PACKAGE = "com.android.chrome"
     }
@@ -106,8 +110,12 @@ class MozillaWebViewActivity : BaseActivity() {
     private var challengeActive = false
     private var challengeAttempted = false
     private var challengeUrl: String? = null
-    private var solverThread: Thread? = null
+    private var verifierThread: Thread? = null
+
+    @Volatile
+    private var activeVerifier: EdgeVerifier? = null
     private val challengeGiveUp = Runnable { onChallengeDeadline() }
+    private val challengePatience = Runnable { onChallengeSlow() }
     private var handedOver = false
     private var completed = false
     private var script: ScriptHandler? = null
@@ -403,9 +411,10 @@ class MozillaWebViewActivity : BaseActivity() {
     }
 
     /**
-     * One attempt, on a worker thread, with its own deadline. The thin bar
-     * stays up with the waiting message while the solver talks to the edge;
-     * whatever it brings back is applied or admitted on the main thread.
+     * One attempt, on a worker thread, with its own deadline and a cancel
+     * handle. The thin bar narrates the stage the verifier reports — never
+     * a token, never a cookie — and whatever comes back is applied or
+     * admitted on the main thread.
      */
     private fun startChallengeSolver(url: String) {
         challengeAttempted = true
@@ -418,57 +427,80 @@ class MozillaWebViewActivity : BaseActivity() {
         loadingText.setText(R.string.web_challenge_waiting)
         show(loading)
         handler.postDelayed(challengeGiveUp, CHALLENGE_DEADLINE_MS)
+        handler.postDelayed(challengePatience, CHALLENGE_PATIENCE_MS)
 
         val proxyPort = runCatching { proxy?.port ?: 0 }.getOrDefault(0)
-        solverThread = Thread {
-            val outcome = runCatching {
-                val transport = if (proxyApplied && proxyPort > 0) {
-                    // Same loopback tunnel as the WebView, so the cookie the
-                    // edge issues is bound to the exit this page will use.
-                    FastlyChallengeSolver.JdkTransport("127.0.0.1", proxyPort)
-                } else {
-                    FastlyChallengeSolver.JdkTransport()
-                }
-                FastlyChallengeSolver(
-                    http = transport,
-                    userAgent = FIREFOX_AGENT,
-                    trace = { line -> Log.d("GozarWebView", "solver $line") },
-                ).solve(url)
-            }.getOrElse { crash ->
-                Log.d("GozarWebView", "solver crashed ${crash.javaClass.simpleName}")
-                FastlyChallengeSolver.Outcome.Failed("solver-crash")
+        val verifier = EdgeVerifier(
+            // Same loopback tunnel as the WebView when one is up, so the pass
+            // the edge issues is bound to the exit this page will use.
+            wire = if (proxyApplied && proxyPort > 0) {
+                EdgeVerifier.JdkWire("127.0.0.1", proxyPort)
+            } else {
+                EdgeVerifier.JdkWire()
+            },
+            agent = FIREFOX_AGENT,
+            notify = { stage -> handler.post { onVerifierStage(stage) } },
+            trace = { line -> Log.d("GozarWebView", "verifier $line") },
+        )
+        activeVerifier = verifier
+        verifierThread = Thread {
+            val verdict = runCatching { verifier.run(url) }.getOrElse { crash ->
+                Log.d("GozarWebView", "verifier crashed ${crash.javaClass.simpleName}")
+                EdgeVerifier.Verdict.GaveUp("verifier-crash")
             }
-            handler.post { onSolverOutcome(outcome) }
+            handler.post { onVerifierVerdict(verdict) }
         }.also {
-            it.name = "fastly-solver"
+            it.name = "edge-verifier"
             it.start()
         }
     }
 
-    private fun onSolverOutcome(outcome: FastlyChallengeSolver.Outcome) {
-        solverThread = null
+    /** Stage narration with an honest, stage-mapped percentage. */
+    private fun onVerifierStage(stage: EdgeVerifier.Stage) {
+        if (!challengeActive || isFinishing) return
+        val template = when (stage) {
+            EdgeVerifier.Stage.PROBING,
+            EdgeVerifier.Stage.FETCHING_SCRIPT,
+            EdgeVerifier.Stage.READING_BRIEFING -> R.string.web_stage_probe
+            EdgeVerifier.Stage.SOLVING,
+            EdgeVerifier.Stage.DELIVERING -> R.string.web_stage_solve
+            EdgeVerifier.Stage.CONFIRMING,
+            EdgeVerifier.Stage.CLEARED -> R.string.web_stage_cookie
+        }
+        loadingText.text = getString(template, stage.percent)
+    }
+
+    private fun onChallengeSlow() {
+        if (!challengeActive || isFinishing) return
+        loadingText.setText(R.string.web_challenge_patience)
+    }
+
+    private fun onVerifierVerdict(verdict: EdgeVerifier.Verdict) {
+        verifierThread = null
+        activeVerifier = null
         if (isFinishing || isDestroyed) return
         handler.removeCallbacks(challengeGiveUp)
+        handler.removeCallbacks(challengePatience)
         challengeActive = false
-        when (outcome) {
-            is FastlyChallengeSolver.Outcome.Success -> {
-                Log.d("GozarWebView", "solver success cookies=${outcome.cookies.size}")
+        when (verdict) {
+            is EdgeVerifier.Verdict.Cleared -> {
+                Log.d("GozarWebView", "edge cleared cookies=${verdict.cookies.size}")
                 MozillaDiagnostics.record(
-                    "WEBVIEW stage=challenge-solved cookies=${outcome.cookies.size}"
+                    "WEBVIEW stage=edge-cleared cookies=${verdict.cookies.size}"
                 )
-                injectChallengeCookies(outcome.setCookieHeaders)
-                reloadAfterSolver()
+                injectChallengeCookies(verdict.setCookieLines)
+                reloadAfterVerifier()
             }
-            is FastlyChallengeSolver.Outcome.NotChallenged -> {
+            is EdgeVerifier.Verdict.NoChallenge -> {
                 // The page turned out to be the real one; stand the bar down.
-                Log.d("GozarWebView", "solver saw no challenge")
+                Log.d("GozarWebView", "verifier saw no challenge")
                 loadingText.setText(R.string.web_connecting)
                 render()
             }
-            is FastlyChallengeSolver.Outcome.Blocked ->
-                onChallengeUnresolved("blocked:" + outcome.reason)
-            is FastlyChallengeSolver.Outcome.Failed ->
-                onChallengeUnresolved("failed:" + outcome.reason)
+            is EdgeVerifier.Verdict.NeedsHuman ->
+                onChallengeUnresolved("human:" + verdict.why)
+            is EdgeVerifier.Verdict.GaveUp ->
+                onChallengeUnresolved("gave-up:" + verdict.why)
         }
     }
 
@@ -488,8 +520,8 @@ class MozillaWebViewActivity : BaseActivity() {
         manager.flush()
     }
 
-    private fun reloadAfterSolver() {
-        val url = challengeUrl ?: return onChallengeUnresolved("failed:no-url")
+    private fun reloadAfterVerifier() {
+        val url = challengeUrl ?: return onChallengeUnresolved("gave-up:no-url")
         pageReady = false
         budgetExpired = false
         loadingText.setText(R.string.web_connecting)
@@ -513,6 +545,7 @@ class MozillaWebViewActivity : BaseActivity() {
      */
     private fun onChallengeUnresolved(reason: String) {
         handler.removeCallbacks(challengeGiveUp)
+        handler.removeCallbacks(challengePatience)
         challengeActive = false
         Log.d("GozarWebView", "challenge unresolved reason=$reason")
         MozillaDiagnostics.record("WEBVIEW stage=challenge-unresolved reason=$reason")
@@ -644,7 +677,12 @@ class MozillaWebViewActivity : BaseActivity() {
     override fun onDestroy() {
         disarmPageBudget()
         handler.removeCallbacks(challengeGiveUp)
-        solverThread = null
+        handler.removeCallbacks(challengePatience)
+        // The person left (or the back button spoke): the walk stops at its
+        // next safe point instead of finishing against a dead screen.
+        activeVerifier?.cancel()
+        activeVerifier = null
+        verifierThread = null
         if (started) Fox.unwatch(foxWatcher)
         script?.remove()
         script = null

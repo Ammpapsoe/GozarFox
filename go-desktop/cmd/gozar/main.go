@@ -19,7 +19,7 @@ import (
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
 )
 
-const version = "1.13.5"
+const version = "1.13.6"
 
 func main() {
 	log.SetOutput(io.Discard)
