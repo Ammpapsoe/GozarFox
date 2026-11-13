@@ -132,31 +132,41 @@ class _WindscribeHomeState extends State<WindscribeHome>
             ),
           ),
           const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: widget.killSwitch ? bubble : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: widget.killSwitch
-                    ? const Color(0x66FEBC2E)
-                    : const Color(0x22FFFFFF),
+          Flexible(
+            child: Tooltip(
+              message: widget.words.killSwitchHint,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: widget.killSwitch ? bubble : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: widget.killSwitch
+                        ? const Color(0x66FEBC2E)
+                        : const Color(0x22FFFFFF),
+                  ),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(
+                    Icons.shield_outlined,
+                    size: 14,
+                    color: widget.killSwitch
+                        ? const Color(0xFFFEBC2E)
+                        : textSoft,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      widget.words.killSwitch,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: textSoft, fontSize: 11),
+                    ),
+                  ),
+                ]),
               ),
             ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(
-                Icons.shield_outlined,
-                size: 14,
-                color: widget.killSwitch
-                    ? const Color(0xFFFEBC2E)
-                    : textSoft,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                widget.words.killSwitch,
-                style: const TextStyle(color: textSoft, fontSize: 11),
-              ),
-            ]),
           ),
         ]),
       );
