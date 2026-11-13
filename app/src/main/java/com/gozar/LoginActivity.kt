@@ -47,6 +47,10 @@ class LoginActivity : BaseActivity() {
     private lateinit var reveal: ImageView
     private var shown = false
     private lateinit var primary: MaterialButton
+    private lateinit var tabs: View
+    private lateinit var tabForm: MaterialButton
+    private lateinit var tabWeb: MaterialButton
+    private var webMode = false
     private lateinit var forgot: MaterialButton
     private lateinit var switchButton: MaterialButton
     private lateinit var languageButton: MaterialButton
@@ -111,6 +115,11 @@ class LoginActivity : BaseActivity() {
         confirm = findViewById(R.id.loginConfirm)
         codeInput = findViewById(R.id.loginCode)
         primary = findViewById(R.id.loginPrimary)
+        tabs = findViewById(R.id.loginTabs)
+        tabForm = findViewById(R.id.loginTabForm)
+        tabWeb = findViewById(R.id.loginTabWeb)
+        tabForm.setOnClickListener { if (!Fox.busy) { webMode = false; render() } }
+        tabWeb.setOnClickListener { if (!Fox.busy) { webMode = true; render() } }
         forgot = findViewById(R.id.loginForgot)
         switchButton = findViewById(R.id.loginSwitch)
         progress = findViewById(R.id.loginProgress)
@@ -240,18 +249,41 @@ class LoginActivity : BaseActivity() {
             return
         }
         val address = mail.text?.toString()?.trim().orEmpty()
-        // Mozilla's own page collects the address and the password, so an empty
-        // field here is fine and is the normal way in. A malformed one is not:
-        // it would only prefill the page with something nobody can sign in to.
-        if (address.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
-            show(getString(R.string.login_fill))
+        if (webMode) {
+            // Mozilla's own page collects the address and the password, so an
+            // empty field here is fine and is the normal way in. A malformed
+            // one is not: it would only prefill the page with something
+            // nobody can sign in to.
+            if (address.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+                show(getString(R.string.login_fill))
+                return
+            }
+            secret.text?.clear()
+            confirm.text?.clear()
+            mozillaAuth.launch(Intent(this, BrowserFlowActivity::class.java)
+                .putExtra(BrowserFlowActivity.EXTRA_CREATE, create)
+                .putExtra(BrowserFlowActivity.EXTRA_ADD, adding)
+                .putExtra(BrowserFlowActivity.EXTRA_EMAIL, address))
+            render()
+            return
+        }
+        // The native way in: straight to the core, exactly like the desktop.
+        if (!Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+            show(getString(R.string.login_need_email))
+            return
+        }
+        val password = secret.text?.toString().orEmpty()
+        if (password.isEmpty()) {
+            show(getString(R.string.login_need_password))
+            return
+        }
+        if (create && confirm.text?.toString().orEmpty() != password) {
+            show(getString(R.string.login_confirm_mismatch))
             return
         }
         secret.text?.clear()
         confirm.text?.clear()
-        mozillaAuth.launch(Intent(this, BrowserFlowActivity::class.java)
-            .putExtra(BrowserFlowActivity.EXTRA_CREATE, create)
-            .putExtra(BrowserFlowActivity.EXTRA_EMAIL, address))
+        if (create) Fox.signUp(this, address, password) else Fox.signIn(this, address, password)
         render()
     }
 
@@ -261,6 +293,7 @@ class LoginActivity : BaseActivity() {
         if (signed && !Fox.busy && completed) {
             secret.text?.clear()
             confirm.text?.clear()
+            toast(R.string.login_success)
             if (!adding) startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.AUTO_CONNECT, true))
             finish()
             return
@@ -268,13 +301,16 @@ class LoginActivity : BaseActivity() {
         val step = Fox.needsStep()
         val link = Fox.isLinkStep()
         val retry = Fox.canRetryLogin()
+        tabs.visibility = if (step) View.GONE else View.VISIBLE
+        paintTab(tabForm, !webMode)
+        paintTab(tabWeb, webMode)
         mailBox.visibility = if (step) View.GONE else View.VISIBLE
-        secretBox.visibility = View.GONE
-        confirmBox.visibility = View.GONE
+        secretBox.visibility = if (!step && !webMode) View.VISIBLE else View.GONE
+        confirmBox.visibility = if (!step && !webMode && create) View.VISIBLE else View.GONE
         codeBox.visibility = if (step && !link && !retry) View.VISIBLE else View.GONE
-        forgot.visibility = if (step) View.GONE else View.VISIBLE
+        forgot.visibility = if (step || webMode) View.GONE else View.VISIBLE
         forgot.text = getString(if (create) R.string.login_create_browser else R.string.login_forgot)
-        switchButton.visibility = if (step) View.GONE else View.VISIBLE
+        switchButton.visibility = if (step || webMode) View.GONE else View.VISIBLE
         savedAccounts.visibility = if (!adding && !step && FoxStore.accounts(this).isNotEmpty()) View.VISIBLE else View.GONE
         cancelAdd.visibility = if (adding) View.VISIBLE else View.GONE
 
@@ -282,27 +318,32 @@ class LoginActivity : BaseActivity() {
             step && retry -> getString(R.string.login_retry_title)
             step -> getString(R.string.login_check_title)
             create -> getString(R.string.login_create_title)
-            else -> getString(R.string.login_signin_title)
+            webMode -> getString(R.string.login_signin_title)
+            else -> getString(R.string.login_form_title)
         }
         subtitle.text = when {
             step && retry -> getString(R.string.login_retry_sub)
             step && link -> getString(R.string.login_check_link)
             step -> getString(R.string.login_check_code)
             create -> getString(R.string.login_create_sub)
-            else -> getString(R.string.login_signin_sub)
+            webMode -> getString(R.string.login_signin_sub)
+            else -> getString(R.string.login_form_sub)
         }
         val action = when {
             step && retry -> getString(R.string.login_retry_action)
             step && link -> getString(R.string.login_confirm_action)
             step -> getString(R.string.login_continue)
             create -> getString(R.string.login_create_action)
-            else -> getString(R.string.login_action)
+            webMode -> getString(R.string.login_action)
+            else -> getString(R.string.login_form_action)
         }
         val busy = Fox.busy
         primary.text = if (busy) "" else action
         primary.contentDescription = if (busy) getString(R.string.login_working) else null
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         primary.isEnabled = !busy
+        tabForm.isEnabled = !busy
+        tabWeb.isEnabled = !busy
         languageButton.isEnabled = !busy
         mail.isEnabled = !busy
         secret.isEnabled = !busy
@@ -320,10 +361,45 @@ class LoginActivity : BaseActivity() {
             Fox.message != "code" && Fox.message != "link" &&
             Fox.message != "ping" && Fox.message != "servers" && Fox.message != "quota"
         if (trouble) {
-            error.text = Fox.message
+            error.text = localized(Fox.message)
             error.visibility = View.VISIBLE
         } else {
             error.visibility = View.GONE
         }
+    }
+
+    private fun paintTab(tab: MaterialButton, selected: Boolean) {
+        tab.backgroundTintList = android.content.res.ColorStateList.valueOf(
+            if (selected) 0xFFE8112D.toInt() else 0x00000000
+        )
+        tab.setTextColor(if (selected) 0xFFFFFFFF.toInt() else 0xFF9A9AA0.toInt())
+    }
+
+    /**
+     * Mozilla answers in English; the person here reads Persian first. Known
+     * failures are named in the app's own language, and anything unrecognized
+     * is passed through exactly as it arrived.
+     */
+    private fun localized(raw: String): String {
+        val diagnostic = Fox.lastFailureDiagnostic
+        val id = when {
+            diagnostic.contains("errno=103") || raw.contains("Incorrect email or password") ->
+                R.string.err_bad_credentials
+            diagnostic.contains("errno=102") || raw.contains("Unknown account") ->
+                R.string.err_unknown_account
+            diagnostic.contains("http=451") || raw.contains("HTTP 451") ->
+                R.string.err_region_blocked
+            diagnostic.contains("http=406") || raw.contains("security check") ->
+                R.string.err_security_check
+            diagnostic.contains("errno=120") || raw.contains("email must be your primary") ->
+                R.string.err_primary_email
+            diagnostic.contains("errno=208") || raw.contains("unblock") ->
+                R.string.err_unblock_needed
+            raw.contains("Network error") || raw.contains("Unable to resolve host") ||
+                raw.contains("timeout", true) || raw.contains("SSL") ->
+                R.string.err_network
+            else -> null
+        }
+        return id?.let { getString(it) } ?: raw
     }
 }

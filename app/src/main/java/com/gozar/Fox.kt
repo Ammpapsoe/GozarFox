@@ -421,7 +421,29 @@ object Fox {
     fun webSignIn(c: Context, email: String, uid: String, sessionToken: String) {
         prepareFreshLogin(c)
         authWork(c, R.string.fox_stage_signin) { epoch ->
-            finish(c.applicationContext, sessionToken, uid, email, epoch)
+            try {
+                finish(c.applicationContext, sessionToken, uid, email, epoch)
+            } catch (e: FoxError) {
+                if (e.errno != 104) throw e
+                // The page announced a session Mozilla has not verified yet:
+                // a confirmation code is on its way (2FA). Keep the session
+                // pending instead of stranding the screen — the browser page
+                // may re-announce once the code is typed there, and if it
+                // never does, the native code step is ready to finish the
+                // sign-in with submitCode().
+                currentAuth(epoch) {
+                    pendingEmail = email
+                    pendingUid = uid
+                    pendingToken = sessionToken
+                    pendingPassword = ""
+                    step = STEP_LOGIN
+                    byLink = false
+                    loginSessionVerified = false
+                    message = "code"
+                }
+                // The browser screen re-arms itself on this exact marker.
+                lastFailureDiagnostic = "errno=104; stage=web-signin-two-factor"
+            }
         }
     }
 

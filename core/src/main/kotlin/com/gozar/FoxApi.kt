@@ -54,6 +54,67 @@ object FoxApi {
     private fun authHeader(token: String, method: String, url: java.net.URL, body: String): String =
         FoxCrypto.hawk(method, url, FoxCrypto.hawkId(token), FoxCrypto.hawkKey(token), body)
 
+    /**
+     * The native email + password sign-in, mirroring the desktop core exactly:
+     * the same `POST /v1/account/login` with a hex `authPW`, the same 107
+     * retry with `verificationMethod=email-2fa`, the same 120 retry against
+     * the primary address, and the same transport underneath — relay where
+     * one is offered, direct otherwise, with the edge challenge solved by
+     * [ProofSolver] inside [FoxNet.call].
+     */
+    fun signIn(email: String, password: String): FoxSession = signInAs(email.trim(), password, "")
+
+    private fun signInAs(email: String, password: String, original: String): FoxSession {
+        val body = JSONObject()
+            .put("email", email)
+            .put("authPW", FoxCrypto.hex(FoxCrypto.authPw(email, password)))
+        if (original.isNotEmpty()) body.put("originalLoginEmail", original)
+        var reply = FoxNet.call(FoxNet.AUTH + "/account/login", "POST", body.toString())
+        if (reply.code == 400 && errnoOf(reply) == 107) {
+            // The account insists on a code before it hands out a session;
+            // asking for the email-2fa method up front is the documented way
+            // to get a session that can still be verified with that code.
+            body.put("verificationMethod", "email-2fa")
+            reply = FoxNet.call(FoxNet.AUTH + "/account/login", "POST", body.toString())
+        }
+        if (reply.code !in 200..299) {
+            val error = failure(reply)
+            if (error.errno == 120 && original.isEmpty()) {
+                // 120: this address is a secondary; Mozilla names the primary
+                // in the reply. One retry against it, crediting the original.
+                val primary = try {
+                    JSONObject(reply.body).optString("email", "")
+                } catch (_: Exception) {
+                    ""
+                }
+                if (primary.isNotEmpty() && !primary.equals(email, ignoreCase = true)) {
+                    return signInAs(primary, password, email)
+                }
+            }
+            throw error
+        }
+        return readSignIn(reply)
+    }
+
+    /** Account creation with an emailed one-time code, as the desktop core does it. */
+    fun register(email: String, password: String): FoxSession {
+        val clean = email.trim()
+        val body = JSONObject()
+            .put("email", clean)
+            .put("authPW", FoxCrypto.hex(FoxCrypto.authPw(clean, password)))
+            .put("service", "sync")
+            .put("verificationMethod", "email-otp")
+        // Same origin as sign-in: the account API edge can answer a bare 406
+        // before the service ever sees the request.
+        return readSignIn(FoxNet.call(FoxNet.AUTH + "/account/create", "POST", body.toString()))
+    }
+
+    private fun errnoOf(reply: FoxReply): Int = try {
+        JSONObject(reply.body).optInt("errno", 0)
+    } catch (_: Exception) {
+        0
+    }
+
     internal fun readSignIn(reply: FoxReply): FoxSession {
         val data = json(reply)
         val token = data.optString("sessionToken")

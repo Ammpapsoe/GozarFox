@@ -57,6 +57,7 @@ class BrowserFlowActivity : BaseActivity() {
     companion object {
         const val EXTRA_EMAIL = "email"
         const val EXTRA_CREATE = "create"
+        const val EXTRA_ADD = "add_account"
         const val EXTRA_ERROR = "error"
 
         private const val PAGE = "https://accounts.firefox.com/"
@@ -91,8 +92,6 @@ class BrowserFlowActivity : BaseActivity() {
     }
 
     private lateinit var web: WebView
-    private lateinit var header: View
-    private lateinit var loading: View
     private lateinit var done: View
     private lateinit var doneEmail: TextView
     private lateinit var fallback: View
@@ -121,6 +120,8 @@ class BrowserFlowActivity : BaseActivity() {
     private val challengePatience = Runnable { onChallengeSlow() }
     private var handedOver = false
     private var completed = false
+    private var addAccount = false
+    private var initialRevision = 0L
     private var script: ScriptHandler? = null
     private var darkCanvas: ScriptHandler? = null
 
@@ -157,8 +158,6 @@ class BrowserFlowActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_browser_flow)
         web = findViewById(R.id.webSignInPage)
-        header = findViewById(R.id.webHeader)
-        loading = findViewById(R.id.webSpinner)
         done = findViewById(R.id.webDone)
         doneEmail = findViewById(R.id.webDoneEmail)
         fallback = findViewById(R.id.webFallback)
@@ -215,6 +214,21 @@ class BrowserFlowActivity : BaseActivity() {
 
         val email = intent.getStringExtra(EXTRA_EMAIL).orEmpty().trim()
         val create = intent.getBooleanExtra(EXTRA_CREATE, false)
+        addAccount = intent.getBooleanExtra(EXTRA_ADD, false)
+        initialRevision = FoxStore.authRevision(this)
+        if (addAccount) {
+            // A second account must start from a cold browser: any session
+            // Mozilla still remembers would sign the first account straight
+            // back in and hand us a success card nobody asked for.
+            try {
+                val manager = CookieManager.getInstance()
+                manager.removeAllCookies(null)
+                manager.removeSessionCookies(null)
+                WebStorage.getInstance().deleteAllData()
+            } catch (cold: Exception) {
+                Log.d("GozarWebView", "cookie wipe failed ${cold.javaClass.simpleName}")
+            }
+        }
         openProxyThen {
             MozillaDiagnostics.record("WEBVIEW stage=load create=$create prefill=${email.isNotEmpty()}")
             Log.d("GozarWebView", "loadUrl ${pageUrl(email, create)}")
@@ -363,28 +377,22 @@ class BrowserFlowActivity : BaseActivity() {
 
     private fun render() {
         if (completed) return
-        if (Fox.signedIn(this)) {
+        // Done means *this screen* saved an account, never that somebody was
+        // already signed in before it opened — that check is what turned
+        // "add a second account" into an instant, unearned success card.
+        if (FoxStore.authRevision(this) != initialRevision) {
             completed = true
             MozillaDiagnostics.record("WEBVIEW stage=account-saved")
             doneEmail.text = FoxStore.email(this)
             show(done)
             return
         }
-        if (!handedOver) {
-            // Only the silence before the first byte of the page gets a
-            // spinner; afterwards the page, and only the page, is on stage.
-            if (!pageStarted && !pageReady && !budgetExpired) show(loading) else show(null)
-            return
-        }
-        if (Fox.busy) {
-            show(loading)
+        if (!handedOver || Fox.busy || Fox.message.isEmpty()) {
+            // The page, and only the page, is on stage; work happens behind it.
+            show(null)
             return
         }
         val trouble = Fox.message
-        if (trouble.isEmpty()) {
-            show(loading)
-            return
-        }
         val diagnostic = Fox.lastFailureDiagnostic
         if (diagnostic.contains("errno=104")) {
             // The account is not confirmed yet. That is not a failure of this
@@ -650,7 +658,6 @@ class BrowserFlowActivity : BaseActivity() {
 
     /** The WebView stays laid out and visible; opaque overlays cover it. */
     private fun show(overlay: View?) {
-        loading.visibility = if (overlay === loading) View.VISIBLE else View.GONE
         done.visibility = if (overlay === done) View.VISIBLE else View.GONE
     }
 
@@ -665,9 +672,10 @@ class BrowserFlowActivity : BaseActivity() {
     private fun applyInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(R.id.webRoot)) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val top = (header.layoutParams as FrameLayout.LayoutParams)
-            top.topMargin = bars.top + dp(10)
-            header.layoutParams = top
+            val pill = (back.layoutParams as FrameLayout.LayoutParams)
+            pill.topMargin = bars.top + dp(10)
+            pill.marginStart = bars.left + dp(14)
+            back.layoutParams = pill
             val bottom = (fallback.layoutParams as FrameLayout.LayoutParams)
             bottom.bottomMargin = bars.bottom + dp(12)
             fallback.layoutParams = bottom

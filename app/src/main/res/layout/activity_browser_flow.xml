@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The sign-in screen as the design picture draws it: one black stage, two
-    floating capsules on top (brand left, Cancel right), Mozilla's page
-    beneath them, and nothing else. No status line, no error line, no log
-    text ever appears here — the device log carries those, the screen shows
-    only the page, a spinner capsule while work happens, the success card,
-    and action pills when a person must choose.
+    The sign-in screen with no chrome of our own: Mozilla's page fills the
+    whole stage from edge to edge, one floating back pill is the only control,
+    and the success card and the choice pills appear above the page only when
+    there is something to say. No header band, no spinner — the page paints
+    itself and the device log carries everything else.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -20,93 +19,25 @@
         android:layout_height="match_parent"
         android:background="#FF000000" />
 
-    <!-- One opaque dark band, one capsule inside it: brand and Cancel live
-         together, and the page beneath can never shine through the top. -->
-    <LinearLayout
-        android:id="@+id/webHeader"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#FF000000"
-        android:orientation="vertical"
-        android:paddingStart="14dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="14dp"
-        android:paddingBottom="10dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@drawable/pill_bg"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="14dp"
-            android:paddingEnd="6dp">
-
-            <ImageView
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:contentDescription="@string/app_name"
-                android:src="@drawable/login_fox" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:fontFamily="@font/vazirmatn_semibold"
-                android:includeFontPadding="false"
-                android:text="@string/app_name"
-                android:textColor="#FFFFFFFF"
-                android:textSize="19sp" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <View
-                android:layout_width="1dp"
-                android:layout_height="26dp"
-                android:layout_marginEnd="4dp"
-                android:background="#FF3A3A3E" />
-
-            <TextView
-                android:id="@+id/webBack"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:clickable="true"
-                android:focusable="true"
-                android:fontFamily="@font/vazirmatn_semibold"
-                android:gravity="center"
-                android:minWidth="92dp"
-                android:paddingStart="20dp"
-                android:paddingEnd="20dp"
-                android:text="@string/cancel"
-                android:textColor="#FFE8112D"
-                android:textSize="16sp" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- A spinner capsule, centred, silent: work happens without words. -->
-    <FrameLayout
-        android:id="@+id/webSpinner"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone">
-
-        <FrameLayout
-            android:layout_width="76dp"
-            android:layout_height="52dp"
-            android:layout_gravity="center"
-            android:background="@drawable/pill_bg">
-
-            <ProgressBar
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_gravity="center"
-                android:indeterminate="true"
-                android:indeterminateTint="#FFE8112D" />
-        </FrameLayout>
-    </FrameLayout>
+    <!-- The only control on the stage: one small pill, top-start, back. -->
+    <TextView
+        android:id="@+id/webBack"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/pill_bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:fontFamily="@font/vazirmatn_semibold"
+        android:gravity="center"
+        android:minWidth="88dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="@string/web_back"
+        android:textColor="#FFE8112D"
+        android:textSize="15sp" />
 
     <!-- Success: a green tick, the welcome line, the account, one button. -->
     <LinearLayout

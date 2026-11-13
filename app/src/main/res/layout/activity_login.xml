@@ -67,6 +67,47 @@
                     android:textAppearance="@style/TextAppearance.Gozar.BodyMedium"
                     android:textColor="@color/login_text_dim" />
 
+                <!-- Two ways in, one tap apart: the native form talks to the
+                     core directly, the browser tab opens Mozilla's page. -->
+                <LinearLayout
+                    android:id="@+id/loginTabs"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="18dp"
+                    android:background="@drawable/pill_bg"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="5dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/loginTabForm"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/vazirmatn_medium"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/login_tab_form"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="14sp"
+                        app:backgroundTint="#FFE8112D"
+                        app:cornerRadius="21dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/loginTabWeb"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:fontFamily="@font/vazirmatn_medium"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/login_tab_web"
+                        android:textColor="#FF9A9AA0"
+                        android:textSize="14sp"
+                        app:backgroundTint="#00000000"
+                        app:cornerRadius="21dp" />
+                </LinearLayout>
+
                 <LinearLayout
                     android:id="@+id/loginMailBox"
                     style="@style/Gozar.Login.Well"
