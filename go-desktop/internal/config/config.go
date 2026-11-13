@@ -172,7 +172,6 @@ func Load() Config {
 		// the person flips in settings, and the migration settles that once.
 		loaded.KillSwitch = false
 		loaded.SplitTunnel = true
-		loaded.SettingsVersion = 2
 	}
 	if loaded.Theme != "light" && loaded.Theme != "dark" {
 		loaded.Theme = "system"
@@ -182,6 +181,11 @@ func Load() Config {
 
 func Save(current Config) error {
 	final := current.WithCurrentAccount()
+	// A saved config has settled the settings-2 migration; loading an
+	// unsaved one may still re-apply the safe defaults until then.
+	if final.SettingsVersion < 2 {
+		final.SettingsVersion = 2
+	}
 	final.sealTokens()
 	data, err := json.MarshalIndent(final, "", "  ")
 	if err != nil {

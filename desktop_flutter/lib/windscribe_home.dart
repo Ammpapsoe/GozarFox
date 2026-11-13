@@ -90,9 +90,9 @@ class _WindscribeHomeState extends State<WindscribeHome>
   @override
   Widget build(BuildContext context) {
     return Stack(children: [
-      Positioned.fill(
+      const Positioned.fill(
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,

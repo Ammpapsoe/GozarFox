@@ -2075,5 +2075,3 @@ String _size(int value) {
   final number = value / math.pow(1024, index);
   return '${number.toStringAsFixed(index == 0 ? 0 : 1)} ${units[index]}';
 }
-
-String _speed(int bytes) => '${_size(math.max(0, bytes))}/s';
