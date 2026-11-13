@@ -124,5 +124,12 @@ macOS downloads use .tar.xz; extract them in Terminal with `tar -xJf ARCHIVE.tar
 
 Source code is licensed under GNU AGPL-3.0-or-later. See LICENSE, NOTICE, and WINTUN-LICENSE.txt.
 
+The desktop connect screen (desktop_flutter/lib/windscribe_home.dart) follows
+the layout, palette and component language of the Windscribe desktop client
+(https://github.com/Windscribe/Desktop-App), which is licensed under the
+GNU General Public License, version 2 (see the cloned repository's LICENSE).
+That influence covers the appearance only — the connection logic, tunnel and
+account handling behind every button are original Gozar code.
+
 If Gozar helps you and you would like to support its development, you can donate TON to
 `UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3`. Donations are optional and appreciated.

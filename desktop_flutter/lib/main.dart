@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'core.dart';
 import 'strings.dart';
+import 'windscribe_home.dart';
 import 'theme.dart';
 import 'web_signin.dart';
 
@@ -1800,9 +1801,11 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         ],
       );
 
+  /// The connect stage, drawn in the Windscribe desktop idiom: navy stage,
+  /// wordmark and gear on top, city and state on the left, one big ringed
+  /// connect button in the middle, bubbles along the bottom. See
+  /// lib/windscribe_home.dart for the palette and the attribution.
   Widget _home() {
-    const secondary = Color(0xFFAAADB6);
-    const foreground = Color(0xFFF6F7F8);
     final server = _state.server;
     final selected = server != null && server.host.isNotEmpty;
     final location = selected
@@ -1814,245 +1817,25 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     final status = connecting
         ? (_state.live ? words.disconnecting : words.connecting)
         : (_state.live ? words.connected : words.disconnected);
-    final canSelect = !_busy && !_state.live && !_state.connecting;
-    return Column(children: [
-      Expanded(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _state.live
-                                    ? const Color(0xFF245248)
-                                    : const Color(0xFF3A404B),
-                                borderRadius: BorderRadius.circular(GzRadius.s),
-                              ),
-                              child: Text(status,
-                                  style: const TextStyle(
-                                      color: foreground,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                            Text(
-                                server != null && server.port > 0
-                                    ? 'TUN · Relay ${server.port}'
-                                    : 'TUN',
-                                textDirection: TextDirection.ltr,
-                                style: const TextStyle(
-                                    color: secondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600)),
-                            Tooltip(
-                              message: words.tunnelNotice,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(18),
-                                onTap: () =>
-                                    unawaited(_info('TUN', words.tunnelNotice)),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(4),
-                                  child: Icon(Icons.info_outline,
-                                      color: secondary, size: 15),
-                                ),
-                              ),
-                            ),
-                          ]),
-                      const SizedBox(height: 12),
-                      Text(_state.live ? words.tapDisconnect : words.tapConnect,
-                          style:
-                              const TextStyle(color: secondary, fontSize: 12)),
-                    ]),
-              ),
-              const SizedBox(width: 12),
-              Tooltip(
-                message: _state.live ? words.disconnect : words.connect,
-                child: Semantics(
-                  button: true,
-                  label: _state.live ? words.disconnect : words.connect,
-                  child: Material(
-                    color: foreground,
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: _busy || _windowClosing ? null : _toggleConnection,
-                      child: SizedBox(
-                        width: 78,
-                        height: 78,
-                        child: Center(
-                          child: connecting
-                              ? const SizedBox(
-                                  width: 25,
-                                  height: 25,
-                                  child: CircularProgressIndicator(
-                                      color: Color(0xFF191C22), strokeWidth: 3))
-                              : const Icon(Icons.power_settings_new_rounded,
-                                  color: Color(0xFF191C22), size: 39),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            InkWell(
-              borderRadius: BorderRadius.circular(GzRadius.m),
-              onTap: canSelect ? _showServers : null,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  CountryFlag(code: server?.code, size: 30),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(location,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(color: foreground)),
-                  ),
-                  if (canSelect)
-                    Icon(
-                        widget.persian
-                            ? Icons.chevron_left
-                            : Icons.chevron_right,
-                        color: secondary,
-                        size: 21),
-                ]),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.device_hub_outlined, color: secondary, size: 17),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                    '${words.tunnelDevice}: ${_state.live && _state.device.isNotEmpty ? _state.device : '—'}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: secondary, fontSize: 12)),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                    '${words.exitIp}: ${_state.live && _state.exit.isNotEmpty ? _state.exit : '—'}',
-                    textAlign: TextAlign.end,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: secondary, fontSize: 12)),
-              ),
-            ]),
-            const SizedBox(height: 12),
-            Wrap(spacing: 20, runSpacing: 8, children: [
-              _trafficLabel(Icons.south_rounded, words.download,
-                  _state.live ? _speed(_state.rateDown) : '—'),
-              _trafficLabel(Icons.north_rounded, words.upload,
-                  _state.live ? _speed(_state.rateUp) : '—'),
-              if (_state.live)
-                Text('${words.totalUsage}: ${_size(_state.down + _state.up)}',
-                    style: const TextStyle(color: secondary, fontSize: 11)),
-            ]),
-            if (_error != null || _state.fault.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              ErrorText(_message(_error ?? _state.fault)),
-            ],
-          ]),
-        ),
-      ),
-      Container(
-        decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: Color(0xFF31343A)))),
-        child: Row(children: [
-          Tooltip(
-            message: words.unavailable,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 12, 8),
-              child: Row(children: [
-                const Icon(Icons.shield_outlined,
-                    color: Color(0xFF858A94), size: 20),
-                const SizedBox(width: 8),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(words.firewall,
-                      style: const TextStyle(color: secondary, fontSize: 12)),
-                  Text(words.unavailable,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(color: const Color(0xFF868C97))),
-                ]),
-              ]),
-            ),
-          ),
-          Container(width: 1, height: 36, color: const Color(0xFF31343A)),
-          Expanded(
-            child: TextButton.icon(
-              onPressed: canSelect ? _showServers : null,
-              icon: const Icon(Icons.public, size: 18),
-              label: Text(words.locations,
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              style: TextButton.styleFrom(
-                foregroundColor: foreground,
-                disabledForegroundColor: secondary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              ),
-            ),
-          ),
-        ]),
-      ),
-      Container(
-        color: const Color(0xFF0D1016),
-        padding: const EdgeInsetsDirectional.fromSTEB(20, 8, 8, 8),
-        child: Row(children: [
-          Icon(_state.limit > 0 ? Icons.donut_small : Icons.circle_outlined,
-              color: _state.limit > 0 ? const Color(0xFF70CCB0) : secondary,
-              size: 17),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-                _state.limit > 0
-                    ? '${_size(_state.remaining)} ${words.remaining}'
-                    : words.usageUnavailable,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: secondary, fontSize: 12)),
-          ),
-          TextButton(
-            onPressed: _busy ? null : () => unawaited(_showAccounts()),
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              foregroundColor: const Color(0xFFE5E6EA),
-            ),
-            child: Text(words.account,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-        ]),
-      ),
-    ]);
+    return WindscribeHome(
+      words: words,
+      live: _state.live,
+      connecting: connecting,
+      busy: _busy || _windowClosing,
+      city: location,
+      statusText: status,
+      protocolText: server != null && server.port > 0
+          ? 'TUN · Relay ${server.port}'
+          : 'TUN',
+      killSwitch: _state.killSwitch,
+      limit: _state.limit,
+      remaining: _state.remaining,
+      onToggle: _toggleConnection,
+      onServers: _showServers,
+      onSettings: () => setState(() => _settingsOpen = true),
+    );
   }
 
-  Widget _trafficLabel(IconData icon, String label, String value) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: const Color(0xFFA9AFB9), size: 16),
-          const SizedBox(width: 6),
-          Text('$label  $value',
-              style: const TextStyle(color: Color(0xFFCFD1D6), fontSize: 12)),
-        ],
-      );
 }
 
 class CountryFlag extends StatelessWidget {
