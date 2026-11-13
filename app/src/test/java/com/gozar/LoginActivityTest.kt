@@ -71,7 +71,9 @@ class LoginActivityTest {
         render()
 
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginMailBox).visibility)
-        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
+        // The form tab is the default way in, and it collects the password
+        // itself; the browser tab is what hides the field.
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("", primary.text.toString())
@@ -89,7 +91,7 @@ class LoginActivityTest {
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals(View.GONE, progress.visibility)
-        assertEquals(activity.getString(R.string.login_action), primary.text.toString())
+        assertEquals(activity.getString(R.string.login_form_action), primary.text.toString())
         assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginError).visibility)
         for (id in intArrayOf(R.id.loginPrimary, R.id.loginMail, R.id.loginSecret, R.id.loginConfirm,
             R.id.loginCode, R.id.loginReveal, R.id.loginForgot, R.id.loginSwitch, R.id.loginLanguage)) {
@@ -108,12 +110,27 @@ class LoginActivityTest {
         confirm.setText("sample-password")
         Fox.busy = true
         render()
-        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginConfirmBox).visibility)
+        // Sign-up on the form tab keeps the confirm box on stage, locked.
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginConfirmBox).visibility)
         assertEquals("test@example.invalid", mail.text.toString())
         assertEquals("sample-password", secret.text.toString())
         assertEquals("sample-password", confirm.text.toString())
         assertFalse(confirm.isEnabled)
         assertFalse(activity.findViewById<View>(R.id.loginSwitch).isEnabled)
+    }
+
+    @Test
+    fun browserTabHidesTheNativePasswordFields() {
+        activity.findViewById<MaterialButton>(R.id.loginTabWeb).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginMailBox).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
+        assertEquals(View.GONE, activity.findViewById<View>(R.id.loginConfirmBox).visibility)
+        assertEquals(activity.getString(R.string.login_action),
+            activity.findViewById<MaterialButton>(R.id.loginPrimary).text.toString())
+        activity.findViewById<MaterialButton>(R.id.loginTabForm).performClick()
+        assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.loginSecretBox).visibility)
+        assertEquals(activity.getString(R.string.login_form_action),
+            activity.findViewById<MaterialButton>(R.id.loginPrimary).text.toString())
     }
 
     @Test
