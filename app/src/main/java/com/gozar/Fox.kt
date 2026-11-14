@@ -453,12 +453,20 @@ object Fox {
         val tokens = loginProvider.tokens(sessionToken)
         // Do not start a new pass request after logout has invalidated the job.
         currentAuth(epoch) { }
-        val pass = loginProvider.pass(tokens.access)
+        val pass = keepKnownUsage(c, loginProvider.pass(tokens.access))
         currentAuth(epoch) {
             // Store publication and logout are ordered by the same lock.
             FoxStore.saveAccount(c, mail, uid, tokens, pass)
             clearPendingLocked()
         }
+    }
+
+    /** A failed quota probe must not erase the last known good numbers. */
+    private fun keepKnownUsage(c: Context, fresh: FoxPass): FoxPass {
+        if (fresh.limit != 0L) return fresh
+        val known = FoxStore.limit(c)
+        if (known <= 0L) return fresh
+        return FoxPass(fresh.token, known, FoxStore.remaining(c), FoxStore.reset(c))
     }
 
     fun refreshUsage(c: Context) {
@@ -469,7 +477,8 @@ object Fox {
                 message = "quota"
             } else {
                 val access = validAccess(c)
-                val pass = FoxApi.pass(access.token)
+                val fresh = FoxApi.pass(access.token)
+                val pass = keepKnownUsage(c, fresh)
                 if (FoxStore.saveUsage(c, pass, access.id, access.revision)) message = "quota"
             }
         }

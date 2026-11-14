@@ -269,7 +269,19 @@ object FoxApi {
             reply = fpn("/api/v1/fpn/token", "GET", access)
         }
         FoxDiagnostics.event("FPN stage=token-response status=${reply.code}")
-        return readPass(reply)
+        val base = readPass(reply)
+        if (base.limit != 0L) return base
+        // The token arrived but the quota headers were stripped or absent:
+        // ask once more through the HEAD-then-GET chain before declaring the
+        // user's usage unknown.
+        return try {
+            quota(access)
+                ?.takeIf { it.limit != 0L }
+                ?.let { FoxPass(base.token, it.limit, it.remaining, it.reset) }
+                ?: base
+        } catch (_: Exception) {
+            base
+        }
     }
 
     private fun readPass(reply: FoxReply): FoxPass {
@@ -297,7 +309,14 @@ object FoxApi {
     }
 
     fun quota(access: String): FoxPass? {
-        val reply = fpn("/api/v1/fpn/token", "HEAD", access)
+        var reply = fpn("/api/v1/fpn/token", "HEAD", access)
+        // Some edges and intermediate relays answer HEAD with an error, or
+        // without the X-Quota headers at all. The GET carries the very same
+        // headers plus a body we simply ignore, so it is the natural retry.
+        if (reply.code != 200 || quota(reply) == null) {
+            val fallback = fpn("/api/v1/fpn/token", "GET", access)
+            if (fallback.code == 200) reply = fallback
+        }
         if (reply.code != 200) return null
         return quota(reply)
     }

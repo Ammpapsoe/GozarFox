@@ -21,8 +21,14 @@ const CacheTTL = 24 * time.Hour
 const MaxDocumentBytes = 16 * 1024
 
 const signaturePrefix = "GOZAR-RELAY-ENDPOINTS-V1\n"
-const documentURL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json"
-const signatureURL = documentURL + ".sig"
+// raw.githubusercontent.com is DNS-poisoned to unreachable private ranges by
+// Iranian filtering; every mirror below serves the same signed bytes, and the
+// ed25519 signature - never the host - is what we trust.
+var documentURLs = []string{
+	"https://raw.githubusercontent.com/Ammpapsoe/GozarFox/main/packaging/relay-endpoints.json",
+	"https://cdn.jsdelivr.net/gh/Ammpapsoe/GozarFox@main/packaging/relay-endpoints.json",
+	"https://github.com/Ammpapsoe/GozarFox/raw/main/packaging/relay-endpoints.json",
+}
 
 var state = struct {
 	sync.RWMutex
@@ -232,16 +238,27 @@ func Refresh(ctx context.Context, client *http.Client, force bool) (bool, error)
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
-	raw, err := fetchText(ctx, client, documentURL)
+	var raw, signature []byte
+	var err error
+	for _, documentURL := range documentURLs {
+		raw, err = fetchText(ctx, client, documentURL)
+		if err != nil {
+			continue
+		}
+		signature, err = fetchText(ctx, client, documentURL+".sig")
+		if err != nil {
+			continue
+		}
+		if err = Verify(raw, string(signature)); err != nil {
+			continue
+		}
+		break
+	}
 	if err != nil {
 		return false, err
 	}
-	signature, err := fetchText(ctx, client, signatureURL)
-	if err != nil {
-		return false, err
-	}
-	if err := Verify(raw, string(signature)); err != nil {
-		return false, err
+	if verifyErr := Verify(raw, string(signature)); verifyErr != nil {
+		return false, verifyErr
 	}
 	endpoints, err := Parse(raw)
 	if err != nil {

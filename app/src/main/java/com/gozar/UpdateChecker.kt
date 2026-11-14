@@ -105,6 +105,7 @@ object UpdateChecker {
         val appContext = context.applicationContext
         if (!flight.join(notify, callback)) return
         thread(name = "gozar-update-check") {
+          try {
             val result = latest(appContext)
             val completion = flight.complete(result, Result.Failed) { published, shouldNotify ->
                 when (published) {
@@ -128,6 +129,19 @@ object UpdateChecker {
                     }
                 }
             }
+          } catch (error: Exception) {
+            // A blocked or poisoned update host must degrade to "no update
+            // information", never to a crash. Joined subscribers still get
+            // their answer so nobody waits forever.
+            android.util.Log.w("UpdateChecker", "update check failed", error)
+            val completion = flight.complete(Result.Failed, Result.Failed) { _, _ -> }
+            main.post {
+                completion.callbacks.forEach { subscriber ->
+                    try { subscriber(completion.result) } catch (_: Exception) {
+                    }
+                }
+            }
+          }
         }
     }
 

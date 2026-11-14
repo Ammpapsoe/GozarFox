@@ -10,8 +10,15 @@ object FoxRelayDiscovery {
     const val MAX_SKEW_MS = 5L * 60 * 1000
     const val MAX_DOCUMENT_BYTES = 16 * 1024
     private const val PREFIX = "GOZAR-RELAY-ENDPOINTS-V1\n"
-    private const val DOCUMENT_URL = "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/mission/autonomous-v1/packaging/relay-endpoints.json"
-    private const val SIGNATURE_URL = "$DOCUMENT_URL.sig"
+    // raw.githubusercontent.com is poisoned to fake IPs (10.x) by Iranian
+    // filtering, and a bare ConnectException on the discovery thread used to
+    // take the whole app down. Every mirror serves the same signed bytes, so
+    // the signature - not the host - remains the only thing we trust.
+    private val DOCUMENT_URLS = listOf(
+        "https://raw.githubusercontent.com/Ammpapsoe/GozarFox/mission/autonomous-v1/packaging/relay-endpoints.json",
+        "https://cdn.jsdelivr.net/gh/Ammpapsoe/GozarFox@mission/autonomous-v1/packaging/relay-endpoints.json",
+        "https://github.com/Ammpapsoe/GozarFox/raw/mission/autonomous-v1/packaging/relay-endpoints.json",
+    )
     private val defaults = listOf(
         "https://script.google.com/macros/s/AKfycbwMXiE-wFBEaC_ZpZOode1yvgPG1xIHsrty-sM4czaFz6ZBabAWuCd9udiPW4PLH2GR/exec"
     )
@@ -127,15 +134,25 @@ object FoxRelayDiscovery {
 
     fun refresh(now: Long = System.currentTimeMillis(), force: Boolean = false): Boolean = synchronized(refreshLock) {
         if (!force && fetchedAt > 0 && now >= fetchedAt && now - fetchedAt < TTL_MS) return@synchronized false
-        val document = FoxNet.call(DOCUMENT_URL, "GET", timeout = 15000)
-        if (document.code != 200) return@synchronized false
-        val signature = FoxNet.call(SIGNATURE_URL, "GET", timeout = 15000)
-        if (signature.code != 200) return@synchronized false
-        if (!verify(document.body, signature.body)) return@synchronized false
-        val parsed = parse(document.body) ?: return@synchronized false
-        active = prioritize(parsed)
-        fetchedAt = now
-        true
+        for (documentUrl in DOCUMENT_URLS) {
+            // A poisoned DNS answer, a reset connection or a dead mirror must
+            // never escape this loop: the caller keeps the previous relay set
+            // (or the built-in bootstrap) and the app stays alive.
+            try {
+                val document = FoxNet.call(documentUrl, "GET", timeout = 15000)
+                if (document.code != 200) continue
+                val signature = FoxNet.call("$documentUrl.sig", "GET", timeout = 15000)
+                if (signature.code != 200) continue
+                if (!verify(document.body, signature.body)) continue
+                val parsed = parse(document.body) ?: continue
+                active = prioritize(parsed)
+                fetchedAt = now
+                return@synchronized true
+            } catch (_: Exception) {
+                // try the next mirror
+            }
+        }
+        false
     }
 
     internal fun installForTest(values: List<String>): List<String> {

@@ -585,6 +585,21 @@ func Usage(access string) (*Pass, error) {
 		relayReply, err = relaytransport.Do("/v1/guardian/pass", http.MethodHead, access, nil)
 		reply = fromRelay(relayReply)
 	}
+	// Some edges answer HEAD without the quota headers (or not at all); the
+	// GET carries the same headers plus a body we ignore.
+	if err != nil || reply == nil || reply.Code != 200 || quota(reply) == nil {
+		getReply, getErr := call("GET", guardianURL+"/api/v1/fpn/token", "", map[string]string{
+			"Authorization": "Bearer " + access,
+		})
+		if getErr == nil && getReply != nil && getReply.Code == http.StatusUnavailableForLegalReasons {
+			var relayReply *relaytransport.Reply
+			relayReply, getErr = relaytransport.Do("/v1/guardian/pass", http.MethodGet, access, nil)
+			getReply = fromRelay(relayReply)
+		}
+		if getErr == nil && getReply != nil && getReply.Code == 200 {
+			reply, err = getReply, nil
+		}
+	}
 	if err != nil || reply == nil || reply.Code != 200 {
 		return nil, errors.New("usage is not available")
 	}
