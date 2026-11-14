@@ -124,15 +124,49 @@ object FoxNet {
             }
         }
         try {
-            var reply = once(url, method, body, wire, timeout)
-            reply.route = if (relayFailed) "direct-fallback" else "direct"
-            trace(url, method, reply)
-            if (mayRetryPassWithTls12(url, method, reply.code) || mayRetryRefreshWithTls12(url, method, reply.code)) {
-                // Normal system trust and hostname verification remain enabled.
-                reply = once(url, method, body, wire, timeout, tls12 = true)
-                reply.route = if (relayFailed) "direct-fallback-tls12" else "direct-tls12"
-                trace(url, method, reply)
+            val host = try {
+                URL(url).host
+            } catch (_: Exception) {
+                ""
             }
+            val modes = if (port == null && host.isNotEmpty()) {
+                FoxStrategy.order(host)
+            } else {
+                listOf(FoxStrategy.Mode.PLAIN)
+            }
+            var chosen: FoxReply? = null
+            var lastFailure: IOException? = null
+            for (mode in modes) {
+                val cachedIp = when (mode) {
+                    FoxStrategy.Mode.PLAIN -> null
+                    FoxStrategy.Mode.CACHED_IP -> FoxDns.cached(host) ?: continue
+                }
+                val started = System.currentTimeMillis()
+                try {
+                    var attempt = once(url, method, body, wire, timeout, ip = cachedIp)
+                    attempt.route = directRoute(relayFailed, mode, "")
+                    trace(url, method, attempt)
+                    if (mayRetryPassWithTls12(url, method, attempt.code) ||
+                        mayRetryRefreshWithTls12(url, method, attempt.code)
+                    ) {
+                        // Normal system trust and hostname verification remain enabled.
+                        attempt = once(url, method, body, wire, timeout, tls12 = true, ip = cachedIp)
+                        attempt.route = directRoute(relayFailed, mode, "-tls12")
+                        trace(url, method, attempt)
+                    }
+                    FoxStrategy.success(host, mode, System.currentTimeMillis() - started)
+                    if (cachedIp == null) {
+                        FoxDns.resolve(host).firstOrNull()?.hostAddress?.let { FoxDns.remember(host, it) }
+                    }
+                    chosen = attempt
+                    break
+                } catch (error: IOException) {
+                    FoxStrategy.failure(host, mode)
+                    traceFailure(url, method, directRoute(relayFailed, mode, ""), error)
+                    lastFailure = error
+                }
+            }
+            var reply = chosen ?: throw lastFailure ?: IOException("no transport mode reached $url")
             var round = 0
             // The challenge solver can use direct sockets and is never invoked by
             // an explicitly tunnel-scoped request.
@@ -160,6 +194,12 @@ object FoxNet {
             traceFailure(url, method, if (relayFailed) "direct-fallback" else "direct", error)
             throw error
         }
+    }
+
+    private fun directRoute(relayFailed: Boolean, mode: FoxStrategy.Mode, suffix: String): String {
+        val base = if (relayFailed) "direct-fallback" else "direct"
+        val modeSuffix = if (mode == FoxStrategy.Mode.CACHED_IP) "-cached-ip" else ""
+        return base + modeSuffix + suffix
     }
 
     fun callWithRetry(
@@ -206,13 +246,19 @@ object FoxNet {
         body: String?,
         headers: Map<String, String>,
         timeout: Int,
-        tls12: Boolean = false
+        tls12: Boolean = false,
+        ip: String? = null
     ): FoxReply {
         val target = URL(url)
         val connection = open(target)
-        if (tls12) {
+        if (tls12 || ip != null) {
             val secure = connection as? HttpsURLConnection ?: throw java.io.IOException("HTTPS required")
-            secure.sslSocketFactory = FoxTls12(secure.sslSocketFactory)
+            var factory: javax.net.ssl.SSLSocketFactory = secure.sslSocketFactory
+            if (tls12) factory = FoxTls12(factory)
+            // A remembered address bypasses a poisoned or dead resolver while
+            // SNI, hostname verification and the SPKI pins still decide trust.
+            if (ip != null) factory = FoxCachedTls(factory, ip, timeout)
+            secure.sslSocketFactory = factory
         }
         connection.requestMethod = method
         connection.connectTimeout = timeout

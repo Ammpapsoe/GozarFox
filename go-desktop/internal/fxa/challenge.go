@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -55,7 +56,11 @@ type challengeState struct {
 
 func newHTTPClient() *http.Client {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	return &http.Client{Timeout: 25 * time.Second, Jar: jar}
+	return &http.Client{
+		Timeout:   25 * time.Second,
+		Jar:       jar,
+		Transport: netguard.GuardedTransport(http.DefaultTransport.(*http.Transport)),
+	}
 }
 
 func solveChallenge() error {

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
 )
 
 const KeyHex = "bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"
@@ -21,6 +23,7 @@ const CacheTTL = 24 * time.Hour
 const MaxDocumentBytes = 16 * 1024
 
 const signaturePrefix = "GOZAR-RELAY-ENDPOINTS-V1\n"
+
 // raw.githubusercontent.com is DNS-poisoned to unreachable private ranges by
 // Iranian filtering; every mirror below serves the same signed bytes, and the
 // ed25519 signature - never the host - is what we trust.
@@ -236,7 +239,11 @@ func Refresh(ctx context.Context, client *http.Client, force bool) (bool, error)
 		return false, nil
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client = &http.Client{
+			Timeout:       15 * time.Second,
+			Transport:     netguard.GuardedTransport(http.DefaultTransport.(*http.Transport)),
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		}
 	}
 	var raw, signature []byte
 	var err error

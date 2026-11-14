@@ -2,14 +2,19 @@ package fxa
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
+	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
 	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
 )
 
@@ -24,7 +29,95 @@ const (
 	serversURL  = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"
 )
 
-var client = newHTTPClient()
+var client = guardedClient(newHTTPClient())
+
+// guardedClient installs the poisoning-aware dialer on a client.
+func guardedClient(base *http.Client) *http.Client {
+	transport, ok := base.Transport.(*http.Transport)
+	if !ok {
+		return base
+	}
+	copy := *base
+	copy.Transport = netguard.GuardedTransport(transport)
+	return &copy
+}
+
+// modeClient builds a per-mode clone: cached addresses and hello splitting.
+func modeClient(base *http.Client, mode netguard.Mode) (*http.Client, error) {
+	transport, ok := base.Transport.(*http.Transport)
+	if !ok {
+		return nil, errors.New("transport is not tunable")
+	}
+	clone := transport.Clone()
+	dialer := &net.Dialer{Timeout: 25 * time.Second}
+	clone.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		target := host
+		switch mode {
+		case netguard.ModeCached:
+			ip := netguard.Cached(host)
+			if ip == "" {
+				return nil, errors.New("no remembered address for " + host)
+			}
+			target = ip
+		default:
+			if routable := netguard.Resolve(host); len(routable) > 0 {
+				target = routable[0].String()
+			} else if ip := netguard.Cached(host); ip != "" {
+				target = ip
+			} else {
+				return nil, &net.DNSError{Err: "poisoned or unreachable", Name: host, IsNotFound: true}
+			}
+		}
+		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(target, port))
+		if err != nil {
+			return nil, err
+		}
+		if mode == netguard.ModeSplit {
+			conn = &netguard.SplitConn{Conn: conn}
+		}
+		return conn, nil
+	}
+	copy := *base
+	copy.Transport = clone
+	return &copy, nil
+}
+
+// callGuarded lets the core escalate transport modes by itself: plain, then
+// a segmented hello, then a remembered address - whichever the learner
+// currently trusts, without any user-visible switch.
+func callGuarded(primary *http.Client, method, address, body string, headers map[string]string) (*Reply, error) {
+	host := ""
+	if parsed, err := url.Parse(address); err == nil {
+		host = parsed.Hostname()
+	}
+	var lastErr error
+	for _, mode := range netguard.Order(host) {
+		using := primary
+		if mode != netguard.ModePlain {
+			alternative, err := modeClient(primary, mode)
+			if err != nil {
+				continue
+			}
+			using = alternative
+		}
+		start := time.Now()
+		reply, err := callWithTLSRetry(using, method, address, body, headers)
+		if err == nil {
+			netguard.Success(host, mode, time.Since(start))
+			return reply, nil
+		}
+		netguard.Failure(host, mode)
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no transport mode reached " + address)
+	}
+	return nil, lastErr
+}
 
 type Reply struct {
 	Code    int
@@ -43,7 +136,7 @@ func (e *Error) Error() string { return e.Message }
 
 func call(method, url, body string, headers map[string]string) (*Reply, error) {
 	for attempt := 0; attempt < 3; attempt++ {
-		reply, err := callWithTLSRetry(client, method, url, body, headers)
+		reply, err := callGuarded(client, method, url, body, headers)
 		if err != nil || reply.Code != http.StatusNotAcceptable ||
 			(!strings.HasPrefix(url, authBase+"/") && !strings.HasPrefix(url, accountBase+"/")) {
 			return reply, err
