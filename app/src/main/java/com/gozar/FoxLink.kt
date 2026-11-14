@@ -405,7 +405,16 @@ object FoxLink {
     private fun storePass(app: Context, pass: FoxPass, access: FoxAccess, attempt: Long, live: Boolean = false): Boolean =
         synchronized(stateLock) {
             if (attempt != generation || (live && !connected)) false
-            else FoxStore.saveUsage(app, pass, access.id, access.revision)
+            else {
+                // A renewal that came back without quota headers must never
+                // erase the last known good balance.
+                val kept = if (pass.limit == 0L && FoxStore.limit(app) > 0L) {
+                    FoxPass(pass.token, FoxStore.limit(app), FoxStore.remaining(app), FoxStore.reset(app))
+                } else {
+                    pass
+                }
+                FoxStore.saveUsage(app, kept, access.id, access.revision)
+            }
         }
 
     fun stop() = stopAttempt(null, "")

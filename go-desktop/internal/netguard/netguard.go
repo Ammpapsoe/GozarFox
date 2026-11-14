@@ -165,13 +165,14 @@ func Order(host string) []Mode {
 		m := st.of(mode)
 		value := m.average
 		if m.successes == 0 {
-			value = 0.5 // untried modes sit in the middle
+			value = 0.5 // untried modes sit in the middle of the pack
 		}
 		weight := value
 		if mode == ModePlain {
 			weight *= 0.9 // small home advantage for the boring path
 		}
-		if weight > bestScore {
+		// Lower weighted latency wins; -1 seeds the first candidate.
+		if bestScore < 0 || weight < bestScore {
 			bestScore = weight
 			best = mode
 		}
@@ -240,7 +241,9 @@ func (c *SplitConn) Write(b []byte) (int, error) {
 			if _, err = c.Conn.Write(b[:splitHeadBytes]); err != nil {
 				return
 			}
-			_ = c.Conn.SetNoDelay(true)
+			if tcp, ok := c.Conn.(*net.TCPConn); ok {
+				_ = tcp.SetNoDelay(true)
+			}
 			time.Sleep(splitPause)
 			_, err = c.Conn.Write(b[splitHeadBytes:])
 			return
@@ -266,17 +269,31 @@ func DialContext(dialer *net.Dialer) func(ctx context.Context, network, addr str
 		if err != nil {
 			return nil, err
 		}
-		target := host
+		candidates := make([]string, 0, 4)
 		if routable := Resolve(host); len(routable) > 0 {
-			target = routable[0].String()
-			Remember(host, target)
+			for _, ip := range routable {
+				candidates = append(candidates, ip.String())
+			}
+			Remember(host, candidates[0])
 		} else if cached := Cached(host); cached != "" {
-			target = cached
+			candidates = append(candidates, cached)
 		} else if Poisoned(host) {
 			return nil, &net.DNSError{Err: "resolver answered only with sinkholed addresses", Name: host, IsNotFound: true}
+		} else {
+			candidates = append(candidates, host)
 		}
-		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(target, port))
-		if err != nil {
+		var conn net.Conn
+		var err error
+		for _, target := range candidates {
+			conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(target, port))
+			if err == nil {
+				break
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+		}
+		if conn == nil {
 			return nil, err
 		}
 		if modes := Order(host); len(modes) > 0 && modes[0] == ModeSplit {

@@ -305,7 +305,12 @@ func (m *Manager) h3Client(timeout time.Duration) (*h3Session, error) {
 			m.h3Opening = true
 			m.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			config := &tls.Config{ServerName: m.target.Host, NextProtos: []string{http3.NextProtoH3}, MinVersion: tls.VersionTLS13}
+			config := &tls.Config{
+				ServerName:         m.target.Host,
+				NextProtos:         []string{http3.NextProtoH3},
+				MinVersion:         tls.VersionTLS13,
+				ClientSessionCache: sessionCache,
+			}
 			if m.testTLS != nil {
 				config = m.testTLS.Clone()
 				config.ServerName = m.target.Host

@@ -24,6 +24,45 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class FoxVpnService : VpnService() {
 
+    // A device that roams from WiFi to mobile data keeps the old tunnel
+    // sockets on a dead network. The platform fires network callbacks; we
+    // answer by retiring every transport session so the next flow rebuilds
+    // on the live path instead of stalling until its own timeout.
+    private val resetHandler = Handler(android.os.Looper.getMainLooper())
+    private val resetTask = Runnable { FoxTunnel.resetTransport() }
+    private var networkWatcher: android.net.ConnectivityManager.NetworkCallback? = null
+
+    private fun registerNetworkWatcher() {
+        if (networkWatcher != null) return
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            private fun queueReset() {
+                resetHandler.removeCallbacks(resetTask)
+                resetHandler.postDelayed(resetTask, 1500)
+            }
+            override fun onAvailable(network: android.net.Network) = queueReset()
+            override fun onLost(network: android.net.Network) = queueReset()
+            override fun onLinkPropertiesChanged(network: android.net.Network, lp: android.net.LinkProperties) = queueReset()
+        }
+        try {
+            manager.registerDefaultNetworkCallback(callback)
+            networkWatcher = callback
+        } catch (_: Exception) {
+            networkWatcher = null
+        }
+    }
+
+    private fun unregisterNetworkWatcher() {
+        resetHandler.removeCallbacks(resetTask)
+        val callback = networkWatcher ?: return
+        networkWatcher = null
+        try {
+            (getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager)
+                ?.unregisterNetworkCallback(callback)
+        } catch (_: Exception) {
+        }
+    }
+
     @Volatile private var descriptor: ParcelFileDescriptor? = null
 
     private var stack: FoxStack? = null
@@ -79,6 +118,7 @@ class FoxVpnService : VpnService() {
         }
         // Reserve enough headroom for CONNECT-IP even when WARP is enabled
         // after the interface was created; larger fragmented UDP is dropped.
+        registerNetworkWatcher()
         val mtu = minOf(FoxNetwork.mtu(this), 1280)
         val builder = Builder()
             .setSession(getString(R.string.fox_title))
@@ -194,6 +234,7 @@ class FoxVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        unregisterNetworkWatcher()
         release(destroyed = true)
         super.onDestroy()
     }

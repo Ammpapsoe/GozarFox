@@ -71,12 +71,16 @@ func dialTLS(target Target, protocols []string, timeout time.Duration) (*tls.Con
 	return dialTLSConfigured(target, protocols, timeout, nil)
 }
 
+// sessionCache lets resumed handshakes skip the full round-trip dance:
+// reconnects after a network blip or an idle reap cost one RTT less.
+var sessionCache = tls.NewLRUClientSessionCache(128)
+
 func dialTLSConfigured(target Target, protocols []string, timeout time.Duration, override *tls.Config) (*tls.Conn, error) {
 	raw, err := dialChain(target, timeout)
 	if err != nil {
 		return nil, err
 	}
-	config := &tls.Config{}
+	config := &tls.Config{ClientSessionCache: sessionCache}
 	if override != nil {
 		config = override.Clone()
 	}

@@ -169,7 +169,7 @@ func tls12Client(base *http.Client) (*http.Client, func()) {
 		return nil, func() {}
 	}
 	transport := original.Clone()
-	config := &tls.Config{}
+	config := &tls.Config{ClientSessionCache: tls.NewLRUClientSessionCache(64)}
 	if transport.TLSClientConfig != nil {
 		config = transport.TLSClientConfig.Clone()
 	}
