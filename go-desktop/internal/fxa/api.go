@@ -33,32 +33,41 @@ const (
 )
 
 var (
-	clientMu   sync.Mutex
-	clientBase http.RoundTripper
-	clientInst *http.Client
+	clientMu sync.Mutex
+	// client is the active FxA client: either built by apiClient (then
+	// clientBase records which DefaultTransport it guards) or installed
+	// directly by tests, which save and restore this var.
+	client     *http.Client
+	clientBase *http.Transport
+	// Shared jar for the custom-RoundTripper seam so cookies survive across
+	// calls even though the fallback client cannot be identity-cached
+	// (func-based RoundTrippers are uncomparable: == would panic).
+	fallbackJar http.CookieJar
 )
 
 // apiClient resolves the FxA client against the CURRENT http.DefaultTransport.
 // Capturing a transport at package init bypasses any runtime swap of the
 // default (tests inject a fake RoundTripper; a stale capture would sail past
-// it onto the real network), so the guarded client is cached per transport
-// identity and rebuilt whenever the default changes.
+// it onto the real network).
 func apiClient() *http.Client {
 	clientMu.Lock()
 	defer clientMu.Unlock()
-	base := http.DefaultTransport
-	if clientInst != nil && clientBase == base {
-		return clientInst
+	base, tunable := http.DefaultTransport.(*http.Transport)
+	if !tunable {
+		// Custom RoundTripper installed (test seam): honor it on every call.
+		if fallbackJar == nil {
+			fallbackJar, _ = cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		}
+		return &http.Client{Timeout: 25 * time.Second, Jar: fallbackJar, Transport: http.DefaultTransport}
+	}
+	if client != nil && (clientBase == nil || clientBase == base) {
+		// clientBase == nil means the var was set externally (tests);
+		// clientBase == base means our cache still matches the default.
+		return client
 	}
 	clientBase = base
-	if _, tunable := base.(*http.Transport); tunable {
-		clientInst = guardedClient(newHTTPClient())
-	} else {
-		// A custom RoundTripper (test seam): honor it verbatim.
-		jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-		clientInst = &http.Client{Timeout: 25 * time.Second, Jar: jar, Transport: base}
-	}
-	return clientInst
+	client = guardedClient(newHTTPClient())
+	return client
 }
 
 // guardedClient installs the poisoning-aware dialer on a client.
