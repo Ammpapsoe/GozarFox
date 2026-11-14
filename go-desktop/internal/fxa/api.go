@@ -10,12 +10,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
 	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -29,7 +32,34 @@ const (
 	serversURL  = "https://firefox.settings.services.mozilla.com/v1/buckets/main/collections/vpn-serverlist/records"
 )
 
-var client = guardedClient(newHTTPClient())
+var (
+	clientMu   sync.Mutex
+	clientBase http.RoundTripper
+	clientInst *http.Client
+)
+
+// apiClient resolves the FxA client against the CURRENT http.DefaultTransport.
+// Capturing a transport at package init bypasses any runtime swap of the
+// default (tests inject a fake RoundTripper; a stale capture would sail past
+// it onto the real network), so the guarded client is cached per transport
+// identity and rebuilt whenever the default changes.
+func apiClient() *http.Client {
+	clientMu.Lock()
+	defer clientMu.Unlock()
+	base := http.DefaultTransport
+	if clientInst != nil && clientBase == base {
+		return clientInst
+	}
+	clientBase = base
+	if _, tunable := base.(*http.Transport); tunable {
+		clientInst = guardedClient(newHTTPClient())
+	} else {
+		// A custom RoundTripper (test seam): honor it verbatim.
+		jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+		clientInst = &http.Client{Timeout: 25 * time.Second, Jar: jar, Transport: base}
+	}
+	return clientInst
+}
 
 // guardedClient installs the poisoning-aware dialer on a client.
 func guardedClient(base *http.Client) *http.Client {
@@ -138,7 +168,7 @@ func (e *Error) Error() string { return e.Message }
 
 func call(method, url, body string, headers map[string]string) (*Reply, error) {
 	for attempt := 0; attempt < 3; attempt++ {
-		reply, err := callGuarded(client, method, url, body, headers)
+		reply, err := callGuarded(apiClient(), method, url, body, headers)
 		if err != nil || reply.Code != http.StatusNotAcceptable ||
 			(!strings.HasPrefix(url, authBase+"/") && !strings.HasPrefix(url, accountBase+"/")) {
 			return reply, err

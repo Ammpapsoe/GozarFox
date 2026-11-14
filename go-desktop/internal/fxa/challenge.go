@@ -127,7 +127,7 @@ func prepareChallenge(base string) (*challengeState, error) {
 	if err != nil {
 		return nil, err
 	}
-	transport := client.Transport
+	transport := apiClient().Transport
 	fresh := &http.Client{
 		Transport: transport,
 		Jar:       jar,
@@ -390,7 +390,7 @@ func (s *challengeState) fetch(method, address, body, accept string) ([]byte, er
 }
 
 func (s *challengeState) installCookies() error {
-	if client.Jar == nil {
+	if apiClient().Jar == nil {
 		return errors.New("security-check cookie storage is unavailable")
 	}
 	source, _ := url.Parse(s.base + "/")
@@ -406,8 +406,8 @@ func (s *challengeState) installCookies() error {
 	if len(cookies) == 0 {
 		return errors.New("security check did not issue a cookie")
 	}
-	client.Jar.SetCookies(api, cookies)
-	client.Jar.SetCookies(oauth, cookies)
-	client.Jar.SetCookies(site, cookies)
+	apiClient().Jar.SetCookies(api, cookies)
+	apiClient().Jar.SetCookies(oauth, cookies)
+	apiClient().Jar.SetCookies(site, cookies)
 	return nil
 }

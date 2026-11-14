@@ -534,7 +534,8 @@ object FoxTunnel {
                         pooled.openStream(host, port, pass, timeout)
                     } catch (stale: Exception) {
                         if (stale is TransportReset || isCertificateFailure(stale) ||
-                            stale is FoxError || stale is FoxProxyRefusal
+                            stale is FoxError || stale is FoxProxyRefusal ||
+                            pooled.bornAt >= started
                         ) throw stale
                         // The pooled session may have died silently (carrier
                         // NAT rebind, radio sleep, screen-off). Kill it and
@@ -604,12 +605,14 @@ object FoxTunnel {
             if (!transportEnabled || (expectedTransport != null && expectedTransport != sessionGeneration)) throw TransportReset()
             sessionGeneration
         }
+        val udpStarted = System.nanoTime()
         val pooledUdp = acquireSession(location, key, timeout, generation, udp = true)
         val duplex = try {
             pooledUdp.openDatagram(path, pass, timeout)
         } catch (stale: Exception) {
             if (stale is TransportReset || isCertificateFailure(stale) ||
-                stale is FoxError || stale is FoxProxyRefusal
+                stale is FoxError || stale is FoxProxyRefusal ||
+                pooledUdp.bornAt >= udpStarted
             ) throw stale
             pooledUdp.shutdown()
             acquireSession(location, key, timeout, generation, udp = true).openDatagram(path, pass, timeout)
@@ -787,6 +790,10 @@ object FoxTunnel {
         private var connectionWindow = 65535L
         private var initialWindow = 65535L
         private var nextId = 1
+        // Monotonic birth stamp: a session created by the current attempt is
+        // not a stale pooled one, so its first-use failure must not trigger
+        // the stale-session retry (that would double-dial honest refusals).
+        internal val bornAt: Long = System.nanoTime()
         @Volatile private var dead = false
         // Set on a graceful GOAWAY: established streams may drain to EOF,
         // but no new stream is handed this connection.
