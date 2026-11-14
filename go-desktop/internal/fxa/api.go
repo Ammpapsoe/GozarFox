@@ -64,7 +64,9 @@ func modeClient(base *http.Client, mode netguard.Mode) (*http.Client, error) {
 			}
 			target = ip
 		default:
-			if routable := netguard.Resolve(host); len(routable) > 0 {
+			if net.ParseIP(host) != nil {
+				target = host
+			} else if routable := netguard.Resolve(host); len(routable) > 0 {
 				target = routable[0].String()
 			} else if ip := netguard.Cached(host); ip != "" {
 				target = ip

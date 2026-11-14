@@ -270,7 +270,11 @@ func DialContext(dialer *net.Dialer) func(ctx context.Context, network, addr str
 			return nil, err
 		}
 		candidates := make([]string, 0, 4)
-		if routable := Resolve(host); len(routable) > 0 {
+		if net.ParseIP(host) != nil {
+			// An IP literal (loopback in tests, a pinned address elsewhere)
+			// is never a hostname to poison-check.
+			candidates = append(candidates, host)
+		} else if routable := Resolve(host); len(routable) > 0 {
 			for _, ip := range routable {
 				candidates = append(candidates, ip.String())
 			}
@@ -283,7 +287,6 @@ func DialContext(dialer *net.Dialer) func(ctx context.Context, network, addr str
 			candidates = append(candidates, host)
 		}
 		var conn net.Conn
-		var err error
 		for _, target := range candidates {
 			conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(target, port))
 			if err == nil {
