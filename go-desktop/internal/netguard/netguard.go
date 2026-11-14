@@ -149,7 +149,9 @@ func Order(host string) []Mode {
 	st.count++
 	now := time.Now()
 	ready := func(m *measure) bool { return !m.until.After(now) }
-	hasCached := Cached(host) != ""
+	// Inline the cache probe: Cached() would re-lock mu (deadlock).
+	entry, entryOK := good[host]
+	hasCached := entryOK && time.Since(entry.at) <= cacheTTL
 	score := map[Mode]bool{
 		ModePlain:  ready(&st.plain),
 		ModeSplit:  ready(&st.split),
