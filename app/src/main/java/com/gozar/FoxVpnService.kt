@@ -36,13 +36,37 @@ class FoxVpnService : VpnService() {
         if (networkWatcher != null) return
         val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            // Edge-triggered on a real change of the underlying (non-VPN)
+            // default network only. Our own tunnel interface becoming the
+            // default, the sticky event delivered at registration, DNS and
+            // link-property churn must NOT tear the transport down: that
+            // kills the very sessions this watcher is meant to protect.
+            private var watched: android.net.Network? = null
+            private fun isVpn(network: android.net.Network): Boolean = try {
+                manager.getNetworkCapabilities(network)
+                    ?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+            } catch (_: Exception) {
+                false
+            }
             private fun queueReset() {
                 resetHandler.removeCallbacks(resetTask)
                 resetHandler.postDelayed(resetTask, 1500)
             }
-            override fun onAvailable(network: android.net.Network) = queueReset()
-            override fun onLost(network: android.net.Network) = queueReset()
-            override fun onLinkPropertiesChanged(network: android.net.Network, lp: android.net.LinkProperties) = queueReset()
+            override fun onAvailable(network: android.net.Network) {
+                if (isVpn(network)) return
+                val previous = watched
+                watched = network
+                // Registration delivers the current default immediately; that
+                // is a baseline, not a roam.
+                if (previous != null && previous != network) queueReset()
+            }
+            override fun onLost(network: android.net.Network) {
+                if (isVpn(network)) return
+                if (watched == network) {
+                    watched = null
+                    queueReset()
+                }
+            }
         }
         try {
             manager.registerDefaultNetworkCallback(callback)

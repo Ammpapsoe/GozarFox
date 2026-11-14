@@ -529,7 +529,20 @@ object FoxTunnel {
             val started = System.nanoTime()
             val result = try {
                 if (h2) {
-                    acquireSession(location, key, timeout, generation).openStream(host, port, pass, timeout)
+                    val pooled = acquireSession(location, key, timeout, generation)
+                    try {
+                        pooled.openStream(host, port, pass, timeout)
+                    } catch (stale: Exception) {
+                        if (stale is TransportReset || isCertificateFailure(stale) ||
+                            stale is FoxError || stale is FoxProxyRefusal
+                        ) throw stale
+                        // The pooled session may have died silently (carrier
+                        // NAT rebind, radio sleep, screen-off). Kill it and
+                        // retry once on a brand-new connection so one stale
+                        // socket cannot stall this flow - and poison the next.
+                        pooled.shutdown()
+                        acquireSession(location, key, timeout, generation).openStream(host, port, pass, timeout)
+                    }
                 } else {
                     openH1(location, host, port, pass, timeout, generation)
                 }
@@ -591,7 +604,16 @@ object FoxTunnel {
             if (!transportEnabled || (expectedTransport != null && expectedTransport != sessionGeneration)) throw TransportReset()
             sessionGeneration
         }
-        val duplex = acquireSession(location, key, timeout, generation, udp = true).openDatagram(path, pass, timeout)
+        val pooledUdp = acquireSession(location, key, timeout, generation, udp = true)
+        val duplex = try {
+            pooledUdp.openDatagram(path, pass, timeout)
+        } catch (stale: Exception) {
+            if (stale is TransportReset || isCertificateFailure(stale) ||
+                stale is FoxError || stale is FoxProxyRefusal
+            ) throw stale
+            pooledUdp.shutdown()
+            acquireSession(location, key, timeout, generation, udp = true).openDatagram(path, pass, timeout)
+        }
         val accepted = synchronized(sessions) {
             if (!transportEnabled || generation != sessionGeneration) false else {
                 h2Streams.add(duplex)
@@ -624,7 +646,9 @@ object FoxTunnel {
             val list = pool.getOrPut(key) { mutableListOf() }
             val now = System.currentTimeMillis()
             list.removeAll { session ->
-                val gone = !session.alive() || (session.activeCount() == 0 && now - session.lastUse() > SESSION_IDLE_MS)
+                val idle = session.activeCount() == 0
+                val gone = !session.alive() ||
+                    (idle && (now - session.lastUse() > SESSION_IDLE_MS || session.isDraining()))
                 if (gone) session.shutdown()
                 gone
             }
@@ -640,11 +664,15 @@ object FoxTunnel {
             }
             // Every session is at the soft stream limit: grow the pool while
             // there is room, otherwise share the least busy session rather
-            // than making the caller wait.
-            if (list.isNotEmpty() && list.size >= MAX_SESSIONS) {
-                val fallback = list.minByOrNull { it.activeCount() }!!
-                fallback.touch()
-                return fallback
+            // than making the caller wait. Draining (GOAWAY) sessions do not
+            // count toward capacity: a replacement is always allowed.
+            val usable = list.filter { !it.isDraining() }
+            if (usable.size >= MAX_SESSIONS) {
+                val fallback = usable.minByOrNull { it.activeCount() }
+                if (fallback != null) {
+                    fallback.touch()
+                    return fallback
+                }
             }
             sessionGeneration
         }
@@ -663,9 +691,10 @@ object FoxTunnel {
                 if (gone) session.shutdown()
                 gone
             }
-            if (list.size >= MAX_SESSIONS) {
+            val candidates = list.filter { !it.isDraining() }
+            if (candidates.size >= MAX_SESSIONS) {
                 fresh.shutdown()
-                val fallback = list.minByOrNull { it.activeCount() }!!
+                val fallback = candidates.minByOrNull { it.activeCount() }!!
                 fallback.touch()
                 return fallback
             }
@@ -759,6 +788,9 @@ object FoxTunnel {
         private var initialWindow = 65535L
         private var nextId = 1
         @Volatile private var dead = false
+        // Set on a graceful GOAWAY: established streams may drain to EOF,
+        // but no new stream is handed this connection.
+        @Volatile private var draining = false
         @Volatile private var lastUse = System.currentTimeMillis()
         @Volatile private var pingSentAt = 0L
         @Volatile private var lastPong = 0L
@@ -782,8 +814,9 @@ object FoxTunnel {
         private val reader = kotlin.concurrent.thread(isDaemon = true, name = "fox-h2-reader") { readLoop() }
 
         fun alive(): Boolean = !dead && !socket.isClosed
+        fun isDraining(): Boolean = draining
         fun activeCount(): Int = streams.size
-        fun hasRoom(softLimit: Int): Boolean = activeCount() < softLimit && activeCount() < serverMaxStreams
+        fun hasRoom(softLimit: Int): Boolean = !draining && activeCount() < softLimit && activeCount() < serverMaxStreams
         fun lastUse(): Long = lastUse
         fun touch() {
             lastUse = System.currentTimeMillis()
@@ -821,7 +854,7 @@ object FoxTunnel {
         }
 
         fun openStream(host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
-            if (dead) throw java.io.IOException("the tunnel session is gone")
+            if (dead || draining) throw java.io.IOException("the tunnel session is gone")
             if (activeCount() >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
             val deadline = System.currentTimeMillis() + timeout
             // RFC 9113 lets the client send frames right after its preface; waiting
@@ -881,7 +914,7 @@ object FoxTunnel {
                         if (left <= 0) throw java.io.IOException("the proxy did not advertise HTTP/2 settings")
                         stateLock.wait(left)
                     }
-                    if (dead || !peerExtendedConnect) throw java.io.IOException("the proxy did not enable extended CONNECT")
+                    if (dead || draining || !peerExtendedConnect) throw java.io.IOException("the proxy did not enable extended CONNECT")
                     if (System.currentTimeMillis() >= deadline) throw java.io.IOException("the UDP open timed out")
                     if (streams.size >= serverMaxStreams) throw java.io.IOException("the proxy limits concurrent streams")
                     val next = nextId
@@ -926,7 +959,7 @@ object FoxTunnel {
             }.toByteArray()
             val (id, stream) = synchronized(udpOpenLock) {
                 val allocated = synchronized(stateLock) {
-                    if (dead || streams.size >= serverMaxStreams) throw java.io.IOException("WARP session unavailable")
+                    if (dead || draining || streams.size >= serverMaxStreams) throw java.io.IOException("WARP session unavailable")
                     val next = nextId
                     if (next <= 0 || next > Int.MAX_VALUE - 2) throw java.io.IOException("HTTP/2 stream IDs exhausted")
                     nextId += 2
@@ -1067,7 +1100,14 @@ object FoxTunnel {
                         } else {
                             lastPong = System.currentTimeMillis()
                         }
-                        0x07 -> throw java.io.IOException("the proxy closed the connection (${code(payload)})")
+                        0x07 -> {
+                            // Graceful GOAWAY: the relay recycles connections
+                            // periodically. Killing active streams here cuts
+                            // downloads mid-flight; instead stop handing out
+                            // new streams and let established ones drain until
+                            // the socket actually closes.
+                            draining = true
+                        }
                         0x08 -> windowUpdate(id, payload)
                         0x09 -> continuation(id, flags, payload)
                     }
