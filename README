@@ -131,5 +131,10 @@ GNU General Public License, version 2 (see the cloned repository's LICENSE).
 That influence covers the appearance only — the connection logic, tunnel and
 account handling behind every button are original Gozar code.
 
+A small set of Windscribe's own vector badges (connection state, network
+glyphs) ships verbatim inside desktop_flutter/assets/windscribe/, together
+with a copy of their license (LICENSE-WINDSCRIBE.txt), under the same
+GPL-2.0 terms.
+
 If Gozar helps you and you would like to support its development, you can donate TON to
 `UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3`. Donations are optional and appreciated.

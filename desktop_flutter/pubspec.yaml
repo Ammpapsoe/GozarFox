@@ -1,7 +1,7 @@
 name: gozar
 description: Gozar desktop
 publish_to: 'none'
-version: 1.15.0+60
+version: 1.16.0+61
 
 environment:
   sdk: ^3.13.5
@@ -14,6 +14,7 @@ dependencies:
   webview_flutter: ^4.14.1
   webview_windows: ^0.4.0
   window_manager: ^0.5.0
+  flutter_svg: ^2.9.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
@@ -24,6 +25,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/firefox.png
+    - assets/windscribe/connection-badge/
+    - assets/windscribe/network/
+    - assets/windscribe/emergencyconnect/
+    - assets/windscribe/pingbar/
+    - assets/windscribe/update/
+    - assets/windscribe/LICENSE-WINDSCRIBE.txt
     - assets/gozar.png
     - assets/flags/
   fonts:

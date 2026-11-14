@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:flutter_svg/flutter_svg.dart';
+
 import 'main.dart' show CountryFlag, ErrorText;
 import 'strings.dart';
 
@@ -157,6 +159,18 @@ class _WindscribeHomeState extends State<WindscribeHome>
             ),
           ),
           const Spacer(),
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: SvgPicture.asset(
+              widget.live
+                  ? 'assets/windscribe/network/WIFI_SECURED.svg'
+                  : 'assets/windscribe/network/WIFI_UNSECURED.svg',
+              width: 16,
+              height: 16,
+              colorFilter: const ColorFilter.mode(
+                  Color(0xB3DFEEFF), BlendMode.srcIn),
+            ),
+          ),
           Flexible(
             child: Tooltip(
               message: widget.words.killSwitchHint,
@@ -219,15 +233,14 @@ class _WindscribeHomeState extends State<WindscribeHome>
             ]),
             const SizedBox(height: 4),
             Row(children: [
-              Container(
-                width: 8,
+              SvgPicture.asset(
+                widget.fault.isNotEmpty
+                    ? 'assets/windscribe/connection-badge/NO_INT.svg'
+                    : (widget.live
+                        ? 'assets/windscribe/connection-badge/ON.svg'
+                        : 'assets/windscribe/connection-badge/OFF.svg'),
+                width: 16,
                 height: 8,
-                decoration: BoxDecoration(
-                  color: widget.connecting
-                      ? const Color(0xFFFEBC2E)
-                      : accent,
-                  shape: BoxShape.circle,
-                ),
               ),
               const SizedBox(width: 8),
               Text(
