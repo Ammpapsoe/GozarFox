@@ -384,6 +384,28 @@ object FoxTunnel {
     private const val MAX_SESSIONS = 2
     private const val MAX_STREAMS = 16
     private const val SESSION_IDLE_MS = 60_000L
+
+    // Idle sessions are probed with H2 PINGs so a silently dead path (carrier
+    // NAT drop, middlebox reset) is discovered while idle, never by stalling
+    // the next flow the user starts.
+    private val sweeper = kotlin.concurrent.thread(isDaemon = true, name = "fox-h2-sweeper") {
+        while (true) {
+            try {
+                Thread.sleep(20_000)
+            } catch (_: InterruptedException) {
+                return@thread
+            }
+            val now = System.currentTimeMillis()
+            for (pool in listOf(sessions, udpSessions)) {
+                val snapshot = synchronized(sessions) { pool.values.flatMap { it.toList() } }
+                for (session in snapshot) {
+                    if (!session.alive()) continue
+                    if (session.activeCount() > 0 || now - session.lastUse() <= 25_000) continue
+                    if (!session.probe(now)) session.shutdown()
+                }
+            }
+        }
+    }
     private const val UPLOAD_STALL_MS = 25_000L
 
     private class TransportReset : java.io.IOException("transport reset during session creation")
@@ -738,6 +760,8 @@ object FoxTunnel {
         private var nextId = 1
         @Volatile private var dead = false
         @Volatile private var lastUse = System.currentTimeMillis()
+        @Volatile private var pingSentAt = 0L
+        @Volatile private var lastPong = 0L
         @Volatile private var serverMaxStreams = Int.MAX_VALUE
 
         init {
@@ -763,6 +787,27 @@ object FoxTunnel {
         fun lastUse(): Long = lastUse
         fun touch() {
             lastUse = System.currentTimeMillis()
+        }
+
+        /**
+         * Liveness probe for idle sessions: send one H2 PING and expect the
+         * ACK inside fifteen seconds. A path that died silently (carrier NAT
+         * drop, middlebox reset) is therefore discovered while idle instead
+         * of stalling the next flow the user starts.
+         */
+        fun probe(now: Long): Boolean {
+            if (pingSentAt != 0L && lastPong >= pingSentAt) pingSentAt = 0L
+            return if (pingSentAt == 0L) {
+                pingSentAt = now
+                try {
+                    sendFrame(frame(0x06, 0x00, 0, ByteArray(8)))
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+            } else {
+                now - pingSentAt < 15_000
+            }
         }
 
         fun shutdown() {
@@ -1017,7 +1062,11 @@ object FoxTunnel {
                             stream?.fail(java.io.IOException("the proxy reset the tunnel (${code(payload)})"))
                         }
                         0x04 -> settingsIn(flags, payload)
-                        0x06 -> if (flags and 0x01 == 0) sendFrame(frame(0x06, 0x01, 0, payload))
+                        0x06 -> if (flags and 0x01 == 0) {
+                            sendFrame(frame(0x06, 0x01, 0, payload))
+                        } else {
+                            lastPong = System.currentTimeMillis()
+                        }
                         0x07 -> throw java.io.IOException("the proxy closed the connection (${code(payload)})")
                         0x08 -> windowUpdate(id, payload)
                         0x09 -> continuation(id, flags, payload)
