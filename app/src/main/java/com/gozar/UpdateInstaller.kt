@@ -7,7 +7,6 @@ import android.os.Looper
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
 
@@ -32,10 +31,26 @@ object UpdateInstaller {
     }
 
     private fun downloadAndInstall(context: Context): Boolean =
-        downloadAndInstall(context) { url -> url.openConnection() as HttpURLConnection }
+        downloadAndInstall(context) { url ->
+            // Follows redirects like HttpURLConnection did: release assets
+            // live behind GitHub's redirect to the object store.
+            okhttp3.OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .connectTimeout(15_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(30_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build()
+                .newCall(
+                    okhttp3.Request.Builder()
+                        .url(url.toString())
+                        .header("User-Agent", "Gozar updater")
+                        .header("Connection", "close")
+                        .build()
+                ).execute()
+        }
 
     /** The injectable transport is used only by isolated debug-fixture tests. */
-    internal fun downloadAndInstall(context: Context, connect: (URL) -> HttpURLConnection): Boolean {
+    internal fun downloadAndInstall(context: Context, connect: (URL) -> okhttp3.Response): Boolean {
         val version = Store.updateVersion(context)
         val url = Store.updateUrl(context)
         val sha = Store.updateSha(context)
@@ -50,20 +65,16 @@ object UpdateInstaller {
         if (!directory.isDirectory && !directory.mkdirs()) return false
         val target = File(directory, "gozar-$version.apk")
         val temporary = File(directory, "gozar-$version.apk.part")
-        val connection = connect(URL(url))
         try {
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 30_000
-            connection.setRequestProperty("User-Agent", "Gozar updater")
-            connection.setRequestProperty("Connection", "close")
-            if (connection.responseCode !in 200..299) return false
-            connection.inputStream.use { input ->
-                if (!saveVerified(input, temporary, target, size, sha)) return false
+            connect(URL(url)).use { response ->
+                if (response.code !in 200..299) return false
+                val body = response.body ?: return false
+                body.byteStream().use { input ->
+                    if (!saveVerified(input, temporary, target, size, sha)) return false
+                }
             }
         } catch (_: Exception) {
             return false
-        } finally {
-            connection.disconnect()
         }
 
         val journal = App.journal(context)

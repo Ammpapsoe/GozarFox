@@ -17,6 +17,12 @@ dependencies {
     // Stateful RFC 7541 response decoding for the dedicated UDP HTTP/2 pool.
     // Its published POM lists test libraries as runtime dependencies; none are needed.
     implementation('com.twitter:hpack:1.0.2') { transitive = false }
+    // HTTP client (Stage 1 of the standard-library migration; replaces the
+    // hand-rolled HttpURLConnection plumbing in FoxNet/FoxRelay/FoxShield).
+    implementation 'com.squareup.okhttp3:okhttp:5.5.1'
+    // DNS message codec for the in-tunnel resolver (Stage 1; replaces the
+    // hand-rolled packet parsing kept only for TTL patching).
+    implementation 'dnsjava:dnsjava:3.7.1'
     compileOnly 'org.json:json:20240303'
     testImplementation 'org.json:json:20240303'
     testImplementation 'junit:junit:4.13.2'

@@ -1,12 +1,8 @@
 package com.gozar
 
-import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.io.InputStream
-import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
 import org.json.JSONObject
 
 object FoxRelay {
@@ -135,52 +131,52 @@ object FoxRelay {
         } else {
             body
         }
-        val connection = open(target, google, timeout)
-        connection.requestMethod = if (google) "POST" else method
-        connection.setRequestProperty("Accept", "application/json")
-        connection.setRequestProperty("Accept-Encoding", "identity")
-        connection.setRequestProperty("Cache-Control", "no-store")
-        if (!google && !authorization.isNullOrEmpty()) connection.setRequestProperty("Authorization", authorization)
-        if (payload != null) {
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.doOutput = true
-            connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
-        }
-        return if (google) readGoogle(connection, timeout, 0) else readDirect(connection)
+        // OkHttp: same trust model as before (system trust + SPKI pins for
+        // the verified relays, plain Google trust for Apps Script), no
+        // redirect following (Google redirects are validated by hand below).
+        val builder = FoxHttp.builder(FoxNet.controlPortOf(), timeout)
+        val client = if (google) builder.build() else FoxHttp.secureWith(builder, FoxPinnedTls.socketFactory())
+        val methodName = if (google) "POST" else method
+        val requestBuilder = okhttp3.Request.Builder()
+            .url(target.toString())
+            .method(methodName, payload?.let { FoxHttp.jsonBody(it) })
+            .header("Accept", "application/json")
+            .header("Accept-Encoding", "identity")
+            .header("Cache-Control", "no-store")
+        if (!google && !authorization.isNullOrEmpty()) requestBuilder.header("Authorization", authorization)
+        if (payload != null) requestBuilder.header("Content-Type", "application/json")
+        val response = client.newCall(requestBuilder.build()).execute()
+        return if (google) readGoogle(client, response, timeout, 0) else readDirect(response)
     }
 
-    private fun open(target: URL, google: Boolean, timeout: Int): HttpURLConnection {
-        val connection = FoxNet.open(target) as HttpsURLConnection
-        if (!google) connection.sslSocketFactory = FoxPinnedTls.socketFactory()
-        connection.connectTimeout = timeout
-        connection.readTimeout = timeout
-        connection.instanceFollowRedirects = false
-        connection.useCaches = false
-        return connection
-    }
-
-    private fun readGoogle(connection: HttpURLConnection, timeout: Int, redirects: Int): FoxReply {
-        val code = connection.responseCode
+    private fun readGoogle(
+        client: okhttp3.OkHttpClient,
+        response: okhttp3.Response,
+        timeout: Int,
+        redirects: Int
+    ): FoxReply = response.use {
+        val code = it.code
         if (code in setOf(301, 302, 303, 307, 308)) {
             if (redirects != 0) throw IOException("too many relay redirects")
-            val location = connection.getHeaderField("Location") ?: throw IOException("missing relay redirect")
-            connection.disconnect()
+            val location = it.header("Location") ?: throw IOException("missing relay redirect")
             val uri = URI(location)
             if (uri.scheme != "https" || uri.host != "script.googleusercontent.com" || uri.port != -1 || uri.userInfo != null || uri.fragment != null) {
                 throw IOException("relay redirect is not permitted")
             }
-            val redirected = open(uri.toURL(), true, timeout)
-            redirected.requestMethod = "GET"
-            redirected.setRequestProperty("Accept", "application/json")
-            redirected.setRequestProperty("Accept-Encoding", "identity")
-            redirected.setRequestProperty("Cache-Control", "no-store")
-            return readGoogle(redirected, timeout, 1)
+            val redirectedRequest = okhttp3.Request.Builder()
+                .url(uri.toString())
+                .method("GET", null)
+                .header("Accept", "application/json")
+                .header("Accept-Encoding", "identity")
+                .header("Cache-Control", "no-store")
+                .build()
+            val redirected = client.newCall(redirectedRequest).execute()
+            return readGoogle(client, redirected, timeout, 1)
         }
-        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        val text = stream?.let { String(readBounded(it), Charsets.UTF_8) } ?: ""
-        connection.disconnect()
+        val bodyBytes = it.body?.let { body -> FoxHttp.readBounded(body.byteStream(), MAX_RESPONSE_BYTES) } ?: ByteArray(0)
+        val text = String(bodyBytes, Charsets.UTF_8)
         if (code != 200) throw IOException("Apps Script relay HTTP $code")
-        return try {
+        try {
             val root = JSONObject(text)
             val status = root.optInt("status", 0)
             val body = root.optString("body")
@@ -201,19 +197,16 @@ object FoxRelay {
         }
     }
 
-    private fun readDirect(connection: HttpURLConnection): FoxReply {
-        try {
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.let { String(readBounded(it), Charsets.UTF_8) } ?: ""
-            val headers = HashMap<String, String>()
-            for ((name, values) in connection.headerFields) {
-                if (name != null && values.isNotEmpty() && !name.equals("Set-Cookie", true)) headers[name] = values.joinToString(",")
-            }
-            return FoxReply(code, text, headers)
-        } finally {
-            connection.disconnect()
+    private fun readDirect(response: okhttp3.Response): FoxReply = response.use {
+        val code = it.code
+        val bodyBytes = it.body?.let { body -> FoxHttp.readBounded(body.byteStream(), MAX_RESPONSE_BYTES) } ?: ByteArray(0)
+        val text = String(bodyBytes, Charsets.UTF_8)
+        val headers = HashMap<String, String>()
+        for ((name, values) in it.headers.toMultimap()) {
+            if (values.isEmpty() || name.equals("Set-Cookie", true)) continue
+            headers[name] = values.joinToString(",")
         }
+        FoxReply(code, text, headers)
     }
 
     internal fun installForTest(handler: ((Request) -> FoxReply)?): (() -> Unit) {
@@ -222,15 +215,4 @@ object FoxRelay {
         return { testHandler = previous }
     }
 
-    private fun readBounded(input: InputStream): ByteArray = input.use { stream ->
-        val output = ByteArrayOutputStream()
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = stream.read(buffer)
-            if (count < 0) break
-            output.write(buffer, 0, count)
-            if (output.size() > MAX_RESPONSE_BYTES) throw IOException("relay response is too large")
-        }
-        output.toByteArray()
-    }
 }

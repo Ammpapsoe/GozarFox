@@ -2,8 +2,6 @@ package com.gozar
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.regex.Pattern
 
 class FoxJar {
@@ -160,38 +158,35 @@ object FoxShield {
     }
 
     fun send(jar: FoxJar, url: String, method: String, body: String?, extra: Map<String, String>): FoxReply? {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = method
-        connection.connectTimeout = 20000
-        connection.readTimeout = 20000
-        connection.instanceFollowRedirects = false
-        connection.setRequestProperty("User-Agent", AGENT)
+        // Direct connection, never through the control tunnel scope: the
+        // challenge solver is what earns the pass the WebView will present.
+        val client = FoxHttp.builder(null, 20000).build()
+        val payload = body?.takeIf { it.isNotEmpty() }
+        val requestBuilder = okhttp3.Request.Builder()
+            .url(url)
+            .method(method, payload?.let { FoxHttp.jsonBody(it) })
+            .header("User-Agent", AGENT)
         val cookie = jar.header(url)
-        if (cookie.isNotEmpty()) connection.setRequestProperty("Cookie", cookie)
-        for ((k, v) in extra) connection.setRequestProperty(k, v)
-        if (body != null && body.isNotEmpty()) connection.setRequestProperty("Content-Type", "application/json")
+        if (cookie.isNotEmpty()) requestBuilder.header("Cookie", cookie)
+        for ((k, v) in extra) requestBuilder.header(k, v)
+        if (payload != null) requestBuilder.header("Content-Type", "application/json")
         return try {
-            if (body != null && body.isNotEmpty()) {
-                connection.doOutput = true
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            client.newCall(requestBuilder.build()).execute().use { response ->
+                val code = response.code
+                val text = response.body?.string() ?: ""
+                val found = HashMap<String, String>()
+                val cookies = ArrayList<String>()
+                for ((k, values) in response.headers.toMultimap()) {
+                    if (values.isEmpty()) continue
+                    found[k] = values.joinToString(",")
+                    if (k.equals("Set-Cookie", true)) cookies.addAll(values)
+                }
+                val reply = FoxReply(code, text, found, cookies)
+                jar.absorb(url, reply)
+                reply
             }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
-            val found = HashMap<String, String>()
-            val cookies = ArrayList<String>()
-            for ((k, values) in connection.headerFields) {
-                if (k == null || values.isEmpty()) continue
-                found[k] = values.joinToString(",")
-                if (k.equals("Set-Cookie", true)) cookies.addAll(values)
-            }
-            val reply = FoxReply(code, text, found, cookies)
-            jar.absorb(url, reply)
-            reply
         } catch (_: Exception) {
             null
-        } finally {
-            connection.disconnect()
         }
     }
 }

@@ -3,8 +3,6 @@ package com.gozar
 import android.content.Context
 import android.telephony.TelephonyManager
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
 
 data class IpInfo(
@@ -108,24 +106,25 @@ object Ip {
         }
     }
 
-    private fun request(url: String): String? {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 4_000
-            connection.readTimeout = 4_000
-            connection.useCaches = false
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Gozar")
-            connection.setRequestProperty("Accept", "application/json, text/plain;q=0.9, */*;q=0.8")
-            connection.setRequestProperty("Connection", "close")
-            if (connection.responseCode !in 200..299) return null
-            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        } catch (_: Exception) {
-            null
-        } finally {
-            connection?.disconnect()
+    private fun request(url: String): String? = try {
+        // Browsers/HttpURLConnection followed redirects here; keep it.
+        val client = okhttp3.OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .connectTimeout(4_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(4_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .header("User-Agent", "Gozar")
+            .header("Accept", "application/json, text/plain;q=0.9, */*;q=0.8")
+            .header("Connection", "close")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (response.code !in 200..299) null else response.body?.string()
         }
+    } catch (_: Exception) {
+        null
     }
 
     fun carrierCountry(context: Context): String? {

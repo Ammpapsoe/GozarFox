@@ -1,12 +1,8 @@
 package com.gozar
 
 import java.io.IOException
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.InetSocketAddress
-import java.net.Proxy
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocketFactory
 
 class FoxReply(
     val code: Int, val body: String, val headers: Map<String, String>,
@@ -78,10 +74,8 @@ object FoxNet {
 
     internal fun controlScoped(): Boolean = controlPort.get() != null
 
-    internal fun open(target: URL): HttpURLConnection {
-        val control = controlPort.get() ?: return target.openConnection() as HttpURLConnection
-        return target.openConnection(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", control))) as HttpURLConnection
-    }
+    /** The control-tunnel scope of the current thread, if any. */
+    internal fun controlPortOf(): Int? = controlPort.get()
 
     internal fun mayRetryRefreshWithTls12(url: String, method: String, status: Int): Boolean =
         status == 406 && method == "POST" && url == TOKEN_REFRESH
@@ -249,53 +243,49 @@ object FoxNet {
         tls12: Boolean = false,
         ip: String? = null
     ): FoxReply {
-        val target = URL(url)
-        val connection = open(target)
+        val control = controlPort.get()
+        var factory: SSLSocketFactory? = null
         if (tls12 || ip != null) {
-            val secure = connection as? HttpsURLConnection ?: throw java.io.IOException("HTTPS required")
-            var factory: javax.net.ssl.SSLSocketFactory = secure.sslSocketFactory
-            if (tls12) factory = FoxTls12(factory)
+            var layered: SSLSocketFactory = FoxHttp.defaultSocketFactory()
+            if (tls12) layered = FoxTls12(layered)
             // A remembered address bypasses a poisoned or dead resolver while
             // SNI, hostname verification and the SPKI pins still decide trust.
-            if (ip != null) factory = FoxCachedTls(factory, ip, timeout)
-            secure.sslSocketFactory = factory
+            if (ip != null) layered = FoxCachedTls(layered, ip, timeout)
+            factory = layered
         }
-        connection.requestMethod = method
-        connection.connectTimeout = timeout
-        connection.readTimeout = timeout
-        // Never forward manually supplied Authorization or cookies to a
-        // redirect target; API callers handle non-2xx responses explicitly.
-        connection.instanceFollowRedirects = false
-        connection.setRequestProperty("User-Agent", UA)
-        connection.setRequestProperty("Accept", "*/*")
+        val builder = FoxHttp.builder(control, timeout)
+        val client = if (factory != null) FoxHttp.secureWith(builder, factory) else builder.build()
+
+        // Same wire shape the HttpURLConnection path produced: UA, Accept,
+        // Cache-Control, the cookie jar, Accept-Encoding only where the old
+        // code forced identity, and caller headers last.
+        val requestBuilder = okhttp3.Request.Builder()
+            .url(url)
+            .method(method, body?.let { FoxHttp.jsonBody(it) })
+            .header("User-Agent", UA)
+            .header("Accept", "*/*")
+            .header("Cache-Control", "max-age=0")
         if (url.startsWith(AUTH + "/") || url.startsWith(ACCOUNT_AUTH + "/")) {
-            connection.setRequestProperty("Accept-Encoding", "identity")
+            requestBuilder.header("Accept-Encoding", "identity")
         }
-        connection.setRequestProperty("Cache-Control", "max-age=0")
         val cookie = jar.header(url)
-        if (cookie.isNotEmpty()) connection.setRequestProperty("Cookie", cookie)
-        if (body != null) connection.setRequestProperty("Content-Type", "application/json")
-        for ((k, v) in headers) connection.setRequestProperty(k, v)
-        try {
-            if (body != null) {
-                connection.doOutput = true
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            }
-            val code = connection.responseCode
-            val stream: InputStream? = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+        if (cookie.isNotEmpty()) requestBuilder.header("Cookie", cookie)
+        if (body != null) requestBuilder.header("Content-Type", "application/json")
+        for ((k, v) in headers) requestBuilder.header(k, v)
+
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            val code = response.code
+            val text = response.body?.string() ?: ""
             val found = HashMap<String, String>()
             val cookies = ArrayList<String>()
-            for ((k, values) in connection.headerFields) {
-                if (k == null || values.isEmpty()) continue
+            for ((k, values) in response.headers.toMultimap()) {
+                if (values.isEmpty()) continue
                 found[k] = values.joinToString(",")
                 if (k.equals("Set-Cookie", true)) cookies.addAll(values)
             }
             val reply = FoxReply(code, text, found, cookies)
             jar.absorb(url, reply)
             return reply
-        } finally {
-            connection.disconnect()
         }
     }
 }

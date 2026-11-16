@@ -7,8 +7,6 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.concurrent.thread
 
 /** Checks the published GitHub release without a tracker, account, or background SDK. */
@@ -146,17 +144,27 @@ object UpdateChecker {
     }
 
     private fun latest(context: Context): Result {
-        var connection: HttpURLConnection? = null
+        // Direct connection; GitHub's release endpoint answers in one response.
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
         return try {
-            connection = URL(LATEST_RELEASE).openConnection() as HttpURLConnection
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 5_000
-            connection.useCaches = false
-            connection.setRequestProperty("User-Agent", "Gozar update checker")
-            connection.setRequestProperty("Accept", "application/vnd.github+json")
-            connection.setRequestProperty("Connection", "close")
-            if (connection.responseCode !in 200..299) return Result.Failed
-            val jsonText = connection.inputStream.use { readLimited(it, RELEASE_JSON_LIMIT) } ?: return Result.Failed
+            val request = okhttp3.Request.Builder()
+                .url(LATEST_RELEASE)
+                .header("User-Agent", "Gozar update checker")
+                .header("Accept", "application/vnd.github+json")
+                .header("Connection", "close")
+                .build()
+            // HttpURLConnection followed redirects here; keep that behavior.
+            val response = client.newCall(request).execute()
+            if (response.code !in 200..299) {
+                response.close()
+                return Result.Failed
+            }
+            val jsonText = response.use { resp ->
+                resp.body?.byteStream()?.use { readLimited(it, RELEASE_JSON_LIMIT) }
+            } ?: return Result.Failed
             val json = JSONObject(jsonText)
             val packageInfo = try {
                 context.packageManager.getPackageInfo(context.packageName, 0)
@@ -171,8 +179,6 @@ object UpdateChecker {
             verdictFrom(json, installed, installedCode = installedCode) { name -> assetText(json, name) }
         } catch (_: Exception) {
             Result.Failed
-        } finally {
-            connection?.disconnect()
         }
     }
 
@@ -184,19 +190,26 @@ object UpdateChecker {
             if (asset.optString("name") != name) continue
             val url = asset.optString("browser_download_url")
             if (!FoxUpdate.trusted(url)) return null
-            var connection: HttpURLConnection? = null
             return try {
-                connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = 5_000
-                connection.readTimeout = 5_000
-                connection.setRequestProperty("User-Agent", "Gozar update checker")
-                connection.setRequestProperty("Connection", "close")
-                if (connection.responseCode !in 200..299) return null
-                connection.inputStream.use { readLimited(it, FoxUpdateManifestLimit) }
+                // Follow redirects like HttpURLConnection did (asset URLs
+                // redirect to GitHub's object store).
+                val client = okhttp3.OkHttpClient.Builder()
+                    .followRedirects(true)
+                    .followSslRedirects(true)
+                    .connectTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .readTimeout(5_000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .build()
+                val request = okhttp3.Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Gozar update checker")
+                    .header("Connection", "close")
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    if (response.code !in 200..299) return null
+                    response.body?.byteStream()?.use { readLimited(it, FoxUpdateManifestLimit) }
+                }
             } catch (_: Exception) {
                 null
-            } finally {
-                connection?.disconnect()
             }
         }
         return null

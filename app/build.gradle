@@ -119,6 +119,11 @@ dependencies {
     // directly which capabilities this image really has.
     androidTestImplementation 'androidx.webkit:webkit:1.18.0'
     implementation project(':core')
+    // Declared again for the Android packaging even though :core brings them
+    // transitively at runtime: the Android artifact variant of OkHttp is the
+    // one that should end up in the APK.
+    implementation 'com.squareup.okhttp3:okhttp:5.5.1'
+    implementation 'dnsjava:dnsjava:3.7.1'
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'androidx.core:core:1.17.0'
     implementation 'androidx.appcompat:appcompat:1.7.1'
