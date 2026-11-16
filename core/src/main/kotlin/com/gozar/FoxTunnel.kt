@@ -1057,12 +1057,16 @@ object FoxTunnel {
                     }
                 })
 
-            val connectAddress = if (FoxUpstream.hops.isEmpty()) {
-                java.net.InetSocketAddress(target, targetPort)
-            } else {
-                // Upstream proxies tunnel to the target; keep its name unresolved locally.
+            val isWarp = warpConn != null
+            val isProxied = isWarp || FoxUpstream.hops.isNotEmpty()
+            val connectAddress = if (isProxied) {
+                // Proxies tunnel to the target; keep its name unresolved locally and let
+                // the ProxyHandlers redirect the TCP connection to the first hop.
                 java.net.InetSocketAddress.createUnresolved(target, targetPort)
+            } else {
+                java.net.InetSocketAddress(target, targetPort)
             }
+            if (isProxied) bootstrap.disableResolver()
             val connectFuture = bootstrap.connect(connectAddress)
             var channel: io.netty.channel.Channel? = null
             try {
