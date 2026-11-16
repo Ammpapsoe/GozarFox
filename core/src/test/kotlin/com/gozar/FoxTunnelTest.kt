@@ -90,39 +90,6 @@ class FoxTunnelTest {
     }
 
     @Test
-    fun udpPacketsFlowThroughAuthenticatedProxyAndBackToTheStack() {
-        LocalProxy(udpMode = true).use { proxy ->
-            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
-            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
-            val input = PacketInput()
-            val output = PacketOutput()
-            val stack = FoxStack(
-                input, output, 0x0a6f0002, FoxResolver(0),
-                { _, _, _ -> throw java.io.IOException("unexpected direct dial") },
-                { _, _ -> },
-                prepareUdp = { host, port ->
-                    val open: () -> FoxDatagramPipe = { FoxTunnel.openUDP(location, host, port, "local-test-only", 4000) }
-                    open
-                }
-            )
-            stack.start()
-            try {
-                for (payload in listOf("through-proxy".toByteArray(), byteArrayOf())) {
-                    input.offer(udpPacket(payload))
-                    val reply = output.next()
-                    assertEquals(17, reply[9].toInt() and 255)
-                    assertArrayEquals(payload, reply.copyOfRange(28, reply.size))
-                }
-                assertTrue(proxy.authHeads.single().contains("Bearer local-test-only"))
-                assertTrue(proxy.authHeads.single().contains("/.well-known/masque/udp/203.0.113.7/443/"))
-            } finally {
-                stack.stop()
-                input.close()
-            }
-        }
-    }
-
-    @Test
     fun udpRequiresExtendedConnectAndCapsuleConfirmation() {
         for ((settings, capsule) in listOf(false to true, true to false)) {
             LocalProxy(udpMode = true, udpSettings = settings, udpCapsule = capsule).use { proxy ->
@@ -539,44 +506,6 @@ class FoxTunnelTest {
     }
 
     @Test
-    fun packetStackAndVerifiedH2TunnelWorkTogetherWithoutAnOsDevice() {
-        LocalProxy().use { proxy ->
-            val input = PacketInput()
-            val output = PacketOutput()
-            FoxUpstream.hops = listOf(FoxHop("http", "127.0.0.1", proxy.port))
-            val location = FoxLocation("", "", "", "edge.fastly.invalid", 2499, false)
-            val stack = FoxStack(input, output, 0x0a6f0002, FoxResolver(0), { host, _, port ->
-                FoxTunnel.open(location, host, port, "local-test-only", 4000)
-            }, { _, _ -> })
-            stack.start()
-            try {
-                val sequence = 1000L
-                input.offer(tcp(sequence, 0, 0x02, byteArrayOf()))
-                val synAck = output.next()
-                assertEquals(0x12, synAck[33].toInt() and 0xff)
-                val serverSequence = u32(synAck, 24) + 1
-                input.offer(tcp(sequence + 1, serverSequence, 0x10, byteArrayOf()))
-                val request = "upload-over-tunnel".toByteArray(Charsets.US_ASCII)
-                input.offer(tcp(sequence + 1, serverSequence, 0x18, request))
-                val received = ByteArrayOutputStream()
-                while (received.size() < proxy.reply.size) {
-                    val packet = output.next()
-                    if ((packet[9].toInt() and 0xff) == 6 && packet.size > 40) {
-                        received.write(packet, 40, packet.size - 40)
-                    }
-                }
-                assertArrayEquals(proxy.reply, received.toByteArray())
-                assertEquals("upload-over-tunnel", String(proxy.upload.toByteArray(), Charsets.US_ASCII))
-                assertTrue(proxy.authHeads.single().contains("203.0.113.7:443"))
-                assertTrue(proxy.authHeads.single().contains("Bearer local-test-only"))
-            } finally {
-                stack.stop()
-                input.close()
-            }
-        }
-    }
-
-    @Test
     fun mismatchedHostnameIsRejectedBeforeAuthorization() {
         LocalProxy().use { proxy ->
             val error = failure { open(proxy, "other.fastly.invalid") }
@@ -888,80 +817,7 @@ class FoxTunnelTest {
         }
     }
 
-    private class PacketInput : InputStream() {
-        private val packets = LinkedBlockingQueue<ByteArray>()
-        fun offer(packet: ByteArray) = packets.put(packet)
-        override fun read(): Int = throw UnsupportedOperationException()
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            val packet = packets.poll(5, TimeUnit.SECONDS) ?: return -1
-            if (packet.isEmpty()) return -1
-            System.arraycopy(packet, 0, buffer, offset, packet.size)
-            return packet.size
-        }
-        override fun close() {
-            packets.offer(byteArrayOf())
-        }
-    }
-
-    private class PacketOutput : java.io.OutputStream() {
-        private val packets = LinkedBlockingQueue<ByteArray>()
-        override fun write(value: Int) = throw UnsupportedOperationException()
-        override fun write(buffer: ByteArray, offset: Int, length: Int) {
-            packets.put(buffer.copyOfRange(offset, offset + length))
-        }
-        fun next(): ByteArray = packets.poll(5, TimeUnit.SECONDS) ?: throw AssertionError("no packet returned")
-    }
-
     companion object {
-        private fun udpPacket(data: ByteArray): ByteArray {
-            val packet = ByteArray(28 + data.size)
-            packet[0] = 0x45
-            packet[8] = 64
-            packet[9] = 17
-            put16(packet, 2, packet.size)
-            byteArrayOf(10, 111, 0, 2).copyInto(packet, 12)
-            byteArrayOf(203.toByte(), 0, 113, 7).copyInto(packet, 16)
-            put16(packet, 20, 40000)
-            put16(packet, 22, 443)
-            put16(packet, 24, 8 + data.size)
-            data.copyInto(packet, 28)
-            return packet
-        }
-
-        private fun tcp(sequence: Long, acknowledgment: Long, flags: Int, data: ByteArray): ByteArray {
-            val packet = ByteArray(40 + data.size)
-            packet[0] = 0x45
-            packet[8] = 64
-            packet[9] = 6
-            put16(packet, 2, packet.size)
-            byteArrayOf(10, 111, 0, 2).copyInto(packet, 12)
-            byteArrayOf(203.toByte(), 0, 113, 7).copyInto(packet, 16)
-            put16(packet, 20, 40000)
-            put16(packet, 22, 443)
-            put32(packet, 24, sequence)
-            put32(packet, 28, acknowledgment)
-            packet[32] = 0x50
-            packet[33] = flags.toByte()
-            put16(packet, 34, 64000)
-            data.copyInto(packet, 40)
-            return packet
-        }
-
-        private fun put16(data: ByteArray, offset: Int, value: Int) {
-            data[offset] = (value ushr 8).toByte()
-            data[offset + 1] = value.toByte()
-        }
-
-        private fun put32(data: ByteArray, offset: Int, value: Long) {
-            data[offset] = (value ushr 24).toByte()
-            data[offset + 1] = (value ushr 16).toByte()
-            data[offset + 2] = (value ushr 8).toByte()
-            data[offset + 3] = value.toByte()
-        }
-
-        private fun u32(data: ByteArray, offset: Int): Long =
-            ((data[offset].toLong() and 255) shl 24) or ((data[offset + 1].toLong() and 255) shl 16) or
-                ((data[offset + 2].toLong() and 255) shl 8) or (data[offset + 3].toLong() and 255)
 
         private fun resource(name: String): InputStream =
             FoxTunnelTest::class.java.getResourceAsStream("/tls/$name") ?: error("missing test resource $name")

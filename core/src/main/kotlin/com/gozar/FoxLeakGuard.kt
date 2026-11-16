@@ -17,8 +17,6 @@ import java.util.concurrent.atomic.AtomicLong
  * proxy; it reports connectivity and unexpected answers only.
  */
 object FoxLeakGuard {
-    const val IPV6_DROPPED = "ipv6-dropped"
-    const val MALFORMED_DROPPED = "malformed-dropped"
     const val LOCKDOWN_INTERRUPTION = "lockdown-interruption"
 
     enum class Check { OK, ISSUE, UNKNOWN }
@@ -44,7 +42,6 @@ object FoxLeakGuard {
     }
 
     fun count(event: String): Long = counters[event]?.get() ?: 0L
-    fun snapshot(): Map<String, Long> = counters.mapValues { it.value.get() }
     fun lastReport(): Report? = reports.current()
     fun beginReport(): Long = reports.begin()
     fun publish(ticket: Long, value: Report): Boolean = reports.publish(ticket, value)

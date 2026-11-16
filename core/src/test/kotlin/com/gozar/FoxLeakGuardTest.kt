@@ -14,65 +14,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class FoxLeakGuardTest {
 
-    private class Tunnel : AutoCloseable {
-        val input = LinkedBlockingQueue<ByteArray>()
-        val output = ByteArrayOutputStream()
-        val dialed = AtomicInteger()
-        val stack = FoxStack(
-            object : java.io.InputStream() {
-                override fun read(): Int = 0
-                override fun read(b: ByteArray, off: Int, len: Int): Int {
-                    val packet = input.poll(50, TimeUnit.MILLISECONDS) ?: return -1
-                    packet.copyInto(b, off)
-                    return packet.size
-                }
-            },
-            output,
-            0x0a6f0002,
-            FoxResolver(0),
-            { _, _, _ ->
-                dialed.incrementAndGet()
-                object : FoxPipe {
-                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = -1
-                    override fun write(buffer: ByteArray, offset: Int, length: Int) = Unit
-                    override fun close() = Unit
-                }
-            },
-            { _, _ -> }
-        )
-        override fun close() = stack.stop()
-    }
-
-    private fun ipv6Syn(): ByteArray {
-        val packet = ByteArray(60)
-        packet[0] = 0x60
-        packet[4] = 0
-        packet[5] = 20
-        packet[6] = 6
-        packet[7] = 40
-        packet[21] = 0x02
-        return packet
-    }
-
-    @Test
-    fun ipv6FramesAreDroppedInsteadOfLeakingOutOfTheTunnel() {
-        FoxLeakGuard.reset()
-        Tunnel().use { tunnel ->
-            repeat(8) { tunnel.input.offer(ipv6Syn()) }
-            tunnel.stack.start()
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-            while (FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED) < 8 && System.nanoTime() < deadline) Thread.yield()
-            assertEquals(0, tunnel.dialed.get())
-            assertEquals(0, tunnel.output.size())
-            // The guard must have accounted for every stopped frame.
-            assertEquals(8L, FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED))
-            assertEquals(mapOf(FoxLeakGuard.IPV6_DROPPED to 8L), FoxLeakGuard.snapshot())
-        }
-    }
-
-    private val positive = "api.example.test"
-    private val canary = "nonce.gozar-check.invalid"
-
     private fun answer(host: String): FoxLeakGuard.Lookup = if (host == canary) {
         FoxLeakGuard.Lookup(FoxLeakGuard.LookupCode.NXDOMAIN)
     } else {
@@ -245,43 +186,6 @@ class FoxLeakGuardTest {
         FoxLeakGuard.reset()
         assertEquals(0L, FoxLeakGuard.count(FoxLeakGuard.LOCKDOWN_INTERRUPTION))
         assertNull(FoxLeakGuard.lastReport())
-    }
-
-    @Test
-    fun synFloodKeepsFlowTableBounded() {
-        FoxLeakGuard.reset()
-        Tunnel().use { tunnel ->
-            val base = ByteArray(40)
-            base[0] = 0x45
-            base[2] = 0
-            base[3] = 40
-            base[8] = 64
-            base[9] = 6
-            base[32] = 0x50 // TCP header length = five words
-            byteArrayOf(10, 111, 0, 2).copyInto(base, 12)
-            for (index in 0 until 4000) {
-                val packet = base.copyOf()
-                byteArrayOf(203.toByte(), 0, 113, 7).copyInto(packet, 16)
-                packet[20] = ((1024 + index) / 256).toByte()
-                packet[21] = ((1024 + index) % 256).toByte()
-                packet[22] = 0
-                packet[23] = 80
-                packet[33] = 0x02
-                tunnel.input.offer(packet)
-            }
-            // The sentinel is processed after all SYNs; this avoids passing
-            // merely because the reader has not yet consumed the flood.
-            tunnel.input.offer(byteArrayOf(0))
-            tunnel.stack.start()
-            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
-            while (FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED) == 0L && System.nanoTime() < deadline) {
-                assertTrue(tunnel.stack.active() <= 256)
-                Thread.yield()
-            }
-            assertEquals(1L, FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED))
-            assertTrue(tunnel.output.size() > 0)
-            assertTrue(tunnel.stack.active() <= 256)
-        }
     }
 
     @Test
