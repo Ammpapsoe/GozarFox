@@ -932,15 +932,15 @@ object FoxTunnel {
             if (udp) {
                 val raw = try { settings.getIntValue(8.toChar()) } catch (_: Exception) { null }
                 if (raw != null) {
-                    if (raw != 0L && raw != 1L) {
+                    if (raw != 0 && raw != 1) {
                         connectionError(java.io.IOException("invalid extended CONNECT setting"))
                         return
                     }
-                    if (peerExtendedConnect && raw == 0L) {
+                    if (peerExtendedConnect && raw == 0) {
                         connectionError(java.io.IOException("extended CONNECT was disabled"))
                         return
                     }
-                    peerExtendedConnect = raw == 1L
+                    peerExtendedConnect = raw == 1
                     peerSettingsSeen = true
                 }
             }
@@ -1391,9 +1391,7 @@ object FoxTunnel {
 
             private const val UPLOAD_STALL_MS = 25_000L
 
-            private val H2_EVENT_LOOP = io.netty.channel.nio.NioEventLoopGroup(2) { runnable ->
-                Thread(runnable, "fox-h2").apply { isDaemon = true }
-            }
+            private val H2_EVENT_LOOP = io.netty.channel.nio.NioEventLoopGroup(2, io.netty.util.concurrent.DefaultThreadFactory("fox-h2", true))
         }
 
         /** Sends [bytes] as DATA of [child]; non-blocking sends return the tail that did not fit. */
