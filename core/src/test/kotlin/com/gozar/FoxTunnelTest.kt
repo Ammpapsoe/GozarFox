@@ -748,8 +748,14 @@ class FoxTunnelTest {
                 udpH2(input, output)
                 return
             }
-            val headers = readFrameWithId(input)
-            check(headers.first == 1)
+            // The client may interleave its SETTINGS ACK (or a connection
+            // WINDOW_UPDATE) with the CONNECT HEADERS; skip non-HEADERS
+            // frames instead of dying on a stray type-4 frame.
+            var headers: Triple<Int, Int, ByteArray>
+            while (true) {
+                val next = readFrameWithId(input)
+                if (next.first == 1) { headers = next; break }
+            }
             val streamId = headers.second
             authHeads.add(String(headers.third, Charsets.UTF_8))
             if (rejectH2) {

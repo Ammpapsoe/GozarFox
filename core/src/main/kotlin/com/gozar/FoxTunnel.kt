@@ -545,7 +545,14 @@ object FoxTunnel {
         }
         // Closing outside the pool lock permits callbacks and new generations
         // to progress without letting old resources be put back into the pool.
-        for (socket in oldPending) try { socket.close() } catch (_: Exception) { }
+        for (socket in oldPending) {
+            // A blocking relay read may hold this socket from another thread;
+            // plain close() then never sends FIN. Shutdown both directions
+            // first so the peer observes EOF and the reader wakes up.
+            try { socket.shutdownInput() } catch (_: Exception) { }
+            try { socket.shutdownOutput() } catch (_: Exception) { }
+            try { socket.close() } catch (_: Exception) { }
+        }
         // Close in-flight Netty relays so a pending proxy/TLS handshake does
         // not outlive the transport that owns it.
         for (channel in oldChannels) try { channel.close() } catch (_: Exception) { }
