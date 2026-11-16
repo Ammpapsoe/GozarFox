@@ -1120,6 +1120,18 @@ object FoxTunnel {
                                 }
                                 ctx.fireChannelInactive()
                             }
+                            // Netty's ProxyHandler does NOT propagate channelInactive
+                            // past itself: a proxy whose CONNECT never completes fails
+                            // the waiter via exceptionCaught instead. Unblock the
+                            // handshake latch from that exception as well.
+                            override fun exceptionCaught(ctx: io.netty.channel.ChannelHandlerContext, cause: Throwable) {
+                                if (!settled.get()) {
+                                    val mapped = cause as? Exception ?: java.io.IOException("TLS handshake failed", cause)
+                                    handshakeFailure.compareAndSet(null, mapped)
+                                    handshake.countDown()
+                                }
+                                ctx.fireExceptionCaught(cause)
+                            }
                         })
                         pipeline.addLast("h2", multiplexCodec)
                         pipeline.addLast("observer", SessionObserver())
