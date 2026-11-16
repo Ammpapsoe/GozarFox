@@ -877,6 +877,23 @@ object FoxTunnel {
                 }
             }
 
+            override fun userEventTriggered(ctx: io.netty.channel.ChannelHandlerContext, evt: Any) {
+                when (evt) {
+                    is io.netty.handler.codec.http2.Http2GoAwayFrame -> {
+                        // The server relays a retained duplicate of GOAWAY to every stream it
+                        // will never process. Unblock that stream instead of hanging until
+                        // the read timeout; the caller may retry on a fresh session.
+                        val channel = ctx.channel() as? io.netty.handler.codec.http2.Http2StreamChannel
+                        if (channel != null) {
+                            streams[channel]?.fail(java.io.IOException("the proxy will not process this stream"))
+                        }
+                        evt.release()
+                    }
+                    is io.netty.util.ReferenceCounted -> evt.release()
+                    else -> ctx.fireUserEventTriggered(evt)
+                }
+            }
+
             override fun exceptionCaught(ctx: io.netty.channel.ChannelHandlerContext, cause: Throwable) {
                 val channel = ctx.channel() as? io.netty.handler.codec.http2.Http2StreamChannel
                 if (channel != null) {
