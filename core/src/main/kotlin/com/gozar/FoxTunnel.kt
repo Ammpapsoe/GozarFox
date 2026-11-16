@@ -963,38 +963,43 @@ object FoxTunnel {
             val handshake = java.util.concurrent.CountDownLatch(1)
             val handshakeFailure = java.util.concurrent.atomic.AtomicReference<Exception?>(null)
 
-            val engine = sslContext.createSSLEngine(sniHost, targetPort)
+            // Wrap the app's SSLContext in a Netty JSSE context with ALPN pinned
+            // to h2. This keeps every provider property (default vs WARP-pinned
+            // contexts, trust managers, session tickets) identical to v1.16.0 while
+            // making the negotiated protocol visible through the SslHandler.
+            val alpn = io.netty.handler.ssl.ApplicationProtocolConfig(
+                io.netty.handler.ssl.ApplicationProtocolConfig.Protocol.ALPN,
+                io.netty.handler.ssl.ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                io.netty.handler.ssl.ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                "h2"
+            )
+            val jdkContext = try {
+                io.netty.handler.ssl.JdkSslContext(
+                    sslContext,
+                    true,
+                    null as Iterable<String>?,
+                    io.netty.handler.ssl.IdentityCipherSuiteFilter.INSTANCE,
+                    alpn,
+                    io.netty.handler.ssl.ClientAuth.NONE
+                )
+            } catch (cause: Exception) {
+                throw java.io.IOException("HTTP/2 negotiation is unavailable", cause)
+            }
+            val engine = jdkContext.newEngine(io.netty.buffer.UnpooledByteBufAllocator.DEFAULT, sniHost, targetPort)
             engine.useClientMode = true
             val parameters = engine.sslParameters
             parameters.serverNames = listOf(javax.net.ssl.SNIHostName(sniHost))
             parameters.endpointIdentificationAlgorithm = "HTTPS"
-            var alpnConfigured = true
-            try {
-                parameters.applicationProtocols = arrayOf("h2")
-            } catch (_: NoSuchMethodError) {
-                alpnConfigured = false
-            }
-            if (!alpnConfigured) {
-                // API 24–25 platform Conscrypt exposes ALPN only through the
-                // engine implementation. Fail closed when unavailable.
-                try {
-                    engine.javaClass.getMethod("setAlpnProtocols", ByteArray::class.java)
-                        .invoke(engine, byteArrayOf(2, 'h'.code.toByte(), '2'.code.toByte()))
-                } catch (_: Exception) {
-                    throw java.io.IOException("HTTP/2 negotiation is unavailable")
-                }
-            }
             engine.sslParameters = parameters
             val sslHandler = io.netty.handler.ssl.SslHandler(engine)
             sslHandler.setHandshakeTimeoutMillis(timeout.toLong())
 
             fun selectedAlpn(): String = try {
+                // JdkSslEngine implements ApplicationProtocolAccessor when ALPN is
+                // supported; otherwise fail closed (default negotiator -> no wrapper).
                 sslHandler.applicationProtocol() ?: ""
             } catch (_: Throwable) {
-                try {
-                    val bytes = engine.javaClass.getMethod("getAlpnSelectedProtocol").invoke(engine) as? ByteArray
-                    bytes?.toString(Charsets.US_ASCII) ?: ""
-                } catch (_: Exception) { "" }
+                ""
             }
 
             val childRouter = SessionChildRouter()
