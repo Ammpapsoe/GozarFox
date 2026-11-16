@@ -17,9 +17,6 @@ import android.os.SystemClock
 import java.util.Locale
 import kotlin.concurrent.thread
 import androidx.core.app.NotificationCompat
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 class FoxVpnService : VpnService() {
@@ -89,7 +86,8 @@ class FoxVpnService : VpnService() {
 
     @Volatile private var descriptor: ParcelFileDescriptor? = null
 
-    private var stack: FoxStack? = null
+    @Volatile private var dnsBridge: FoxDnsBridge? = null
+    @Volatile private var hevMeter: Thread? = null
     @Volatile private var stackLifetime: AtomicBoolean? = null
     @Volatile private var resolver: FoxResolver? = null
     private var rootSession: RootSession? = null
@@ -185,61 +183,33 @@ class FoxVpnService : VpnService() {
         this.resolver = resolver
         val lifetime = AtomicBoolean(true)
         stackLifetime = lifetime
-        val engine = FoxStack(
-            FileInputStream(fd.fileDescriptor),
-            FileOutputStream(fd.fileDescriptor),
-            addressOf(LOCAL_ADDRESS),
-            resolver,
-            { _, _, _ -> throw IOException("unscoped TUN dial is disabled") },
-            { inbound, size -> FoxLink.count(inbound, size) },
-            mtu,
-            prepareDial = { host, address, port ->
-                // Capture the attempt while the flow is admitted, not later
-                // when a delayed worker happens to start running.
-                val scope = if (lifetime.get()) FoxLink.transportScope() else null
-                val open: () -> FoxPipe = {
-                    val expected = scope ?: throw IOException("not connected yet")
-                    if (!lifetime.get() || !FoxLink.transportIsCurrent(expected.ticket)) throw IOException("tunnel stopped")
-                    if (directRoutingAllowed() && FoxRoute.direct(host)) {
-                        val pipe = FoxLink.connectDirect(address, port, expected.ticket) ?: throw IOException("direct connection failed")
-                        val guarded = DirectPipe(pipe) {
-                            lifetime.get() && directRoutingAllowed() && FoxLink.transportIsCurrent(expected.ticket)
-                        }
-                        if (!lifetime.get() || !directRoutingAllowed() || !FoxLink.transportIsCurrent(expected.ticket)) {
-                            guarded.close()
-                            throw IOException("tunnel stopped")
-                        }
-                        guarded
-                    } else {
-                        val token = FoxLink.pass(app)
-                        if (token.isEmpty()) throw IOException("no pass")
-                        FoxTunnel.open(expected.location, host, port, token, expectedTransport = expected.ticket)
-                    }
-                }
-                open
-            },
-            prepareDns = { dnsScope() },
-            prepareUdp = { address, port ->
-                // UDP is always tunnelled, including split-routing cases; an
-                // unsupported relay is never replaced by an unprotected socket.
-                val scope = if (lifetime.get() && instance === this) FoxLink.transportScope() else null
-                scope?.let { expected ->
-                    val isCurrent = { lifetime.get() && instance === this && FoxLink.transportIsCurrent(expected.ticket) }
-                    val open: () -> FoxDatagramPipe = {
-                        if (!isCurrent()) throw IOException("tunnel stopped")
-                        val pipe = FoxLink.openWarpUDP(expected.ticket, address, port)
-                        if (!isCurrent()) {
-                            pipe.close()
-                            throw IOException("tunnel stopped")
-                        }
-                        ScopedDatagramPipe(pipe, isCurrent)
-                    }
-                    open
+        // The anti-censorship DNS plane answers the port-53 flows that the
+        // native engine cannot peek at; it fences answers to this attempt.
+        val bridge = FoxDnsBridge(resolver, mtu) { dnsScope() }
+        dnsBridge = bridge
+        FoxLink.attachDns(bridge)
+        // The native engine forwards everything through the loopback socks
+        // proxy; the TUN byte counters (not the proxy pipe) meter this path.
+        val credential = FoxLink.socksCredential()
+        val started = credential != null && HevEngine.start(app, mtu, FoxLink.socksPort, credential, fd.fileDescriptor.fd)
+        if (!started) {
+            FoxLink.attachDns(null)
+            abortStart(getString(R.string.fox_no_device))
+            return
+        }
+        // Poll the native cumulative counters once a second; deltas feed the
+        // same down/up totals the UI and the quota screen already read.
+        hevMeter = thread(isDaemon = true, name = "fox-hev-meter") {
+            while (lifetime.get() && instance === this) {
+                val stats = HevEngine.stats()
+                if (stats != null && stats.size >= 4) FoxLink.hevBytes(stats[1], stats[3])
+                try {
+                    Thread.sleep(1000)
+                } catch (_: InterruptedException) {
+                    return@thread
                 }
             }
-        )
-        engine.start()
-        stack = engine
+        }
         FoxLink.start(this)
     }
 
@@ -285,17 +255,17 @@ class FoxVpnService : VpnService() {
         // replacement has already become the process-wide owner.
         stackLifetime?.set(false)
         stackLifetime = null
+        hevMeter?.interrupt()
+        hevMeter = null
+        dnsBridge?.let { FoxLink.attachDns(null) }
+        dnsBridge = null
+        HevEngine.stop()
         val root = synchronized(this) {
             val current = rootSession
             rootSession = null
             current
         }
         root?.stop()
-        try {
-            stack?.stop()
-        } catch (e: Exception) {
-        }
-        stack = null
         resolver = null
         try {
             descriptor?.close()
@@ -527,14 +497,6 @@ class FoxVpnService : VpnService() {
         }
 
         fun lockdownActive(): Boolean = instance != null && !directRoutingAllowed()
-
-        fun addressOf(text: String): Int {
-            val parts = text.split(".")
-            if (parts.size != 4) return 0
-            var value = 0
-            for (part in parts) value = (value shl 8) or (part.toIntOrNull()?.and(0xFF) ?: 0)
-            return value
-        }
 
         fun start(c: Context) {
             val intent = Intent(c, FoxVpnService::class.java)

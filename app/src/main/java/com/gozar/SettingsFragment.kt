@@ -211,8 +211,6 @@ class SettingsFragment : Fragment() {
                     else -> {
                         val report = FoxLeakGuard.lastReport()
                         shownLeakReport = report
-                        val blocked = FoxLeakGuard.count(FoxLeakGuard.IPV6_DROPPED) +
-                            FoxLeakGuard.count(FoxLeakGuard.MALFORMED_DROPPED)
                         val base = when {
                             report == null -> getString(R.string.leak_idle)
                             report.dnsCheck == FoxLeakGuard.Check.ISSUE -> getString(R.string.leak_issue)
@@ -220,7 +218,7 @@ class SettingsFragment : Fragment() {
                                 getString(R.string.leak_tunnel_ok)
                             else -> getString(R.string.leak_inconclusive)
                         }
-                        if (blocked > 0) base + " · " + getString(R.string.leak_blocked, ltr(plain(blocked))) else base
+                        base
                     }
                 }
                 linkState = connectionState()

@@ -19,6 +19,21 @@ object FoxLink {
     @Volatile var dnsPort: Int = 0
         private set
 
+    /** Set by the VPN service while the native tunnel is up; null otherwise. */
+    @Volatile internal var dnsBridge: com.gozar.FoxDnsBridge? = null
+
+    /** The socks listener's per-start loopback credential, for native tunnel bring-up only. */
+    internal fun socksCredential(): String? = synchronized(stateLock) { socks?.sessionCredential() }
+
+    /** Publish (or clear) the DNS bridge the VPN service built for this attempt. */
+    internal fun attachDns(bridge: com.gozar.FoxDnsBridge?) {
+        val previous = dnsBridge
+        dnsBridge = bridge
+        if (previous != null && previous !== bridge) {
+            try { previous.close() } catch (_: Exception) { }
+        }
+    }
+
     @Volatile var connected = false
     @Volatile var connecting = false
     @Volatile var error: String = ""
@@ -81,13 +96,40 @@ object FoxLink {
         lastTraffic.set(System.currentTimeMillis())
     }
 
+    // Cumulative native counters (hev stats) are turned into deltas here so
+    // the tunnel's packet boundary is not charged twice.
+    private val hevTx = AtomicLong(-1)
+    private val hevRx = AtomicLong(-1)
+
+    /** Feed a sample of the native tunnel's cumulative counters. */
+    internal fun hevBytes(txBytes: Long, rxBytes: Long) {
+        val lastTx = hevTx.getAndSet(txBytes)
+        val lastRx = hevRx.getAndSet(rxBytes)
+        val addedUp = if (lastTx < 0 || txBytes < lastTx) txBytes else txBytes - lastTx
+        val addedDown = if (lastRx < 0 || rxBytes < lastRx) rxBytes else rxBytes - lastRx
+        if (addedUp > 0) upBytes.addAndGet(addedUp)
+        if (addedDown > 0) downBytes.addAndGet(addedDown)
+        if (addedUp > 0 || addedDown > 0) lastTraffic.set(System.currentTimeMillis())
+    }
+
+    private fun resetHevMeter() {
+        hevTx.set(-1)
+        hevRx.set(-1)
+    }
+
+    /** Open one WARP UDP flow fenced to a transport ticket; always revoked on reconnect, never direct. */
+    internal fun openUdpScoped(ticket: Long, host: String, port: Int): com.gozar.FoxDatagramPipe {
+        val pipe = openWarpUDP(ticket, host, port)
+        return com.gozar.ScopedDatagramPipe(pipe) { transportIsCurrent(ticket) }
+    }
+
     fun trafficHistory(): List<Pair<Float, Float>> = synchronized(historyLock) { history.toList() }
 
     fun prepare(c: Context): Boolean {
         val app = c.applicationContext
         return synchronized(stateLock) {
             if (prepared) return true
-            socks = FoxProxy(0) { pass(app).ifEmpty { null } }
+            socks = FoxProxy(0, countTraffic = false) { pass(app).ifEmpty { null } }
             web = FoxProxy(0) { pass(app).ifEmpty { null } }
             // The force-tunnel proxy must never recursively renew the pass
             // while it carries the control request itself.
@@ -210,6 +252,7 @@ object FoxLink {
                     since = System.currentTimeMillis()
                     downBytes.set(0L)
                     upBytes.set(0L)
+                    resetHevMeter()
                     lastTraffic.set(System.currentTimeMillis())
                     synchronized(historyLock) { history.clear() }
                     error = ""

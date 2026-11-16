@@ -4,6 +4,7 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.InputStream
 import java.net.InetAddress
+import java.net.DatagramSocket
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.MessageDigest
@@ -40,6 +41,7 @@ class FoxProxy(
     private val connections = Any()
     private val clients = mutableSetOf<Socket>()
     private val pipes = mutableSetOf<FoxPipe>()
+    private val associations = mutableSetOf<FoxUdpAssociate>()
     private var paused = false
     private var epoch = 0L
 
@@ -73,16 +75,20 @@ class FoxProxy(
     internal fun pause() {
         val openClients: List<Socket>
         val openPipes: List<FoxPipe>
+        val openAssociations: List<FoxUdpAssociate>
         synchronized(connections) {
             paused = true
             epoch += 1
             openClients = clients.toList()
             openPipes = pipes.toList()
+            openAssociations = associations.toList()
             clients.clear()
             pipes.clear()
+            associations.clear()
         }
         for (client in openClients) try { client.close() } catch (_: Exception) { }
         for (pipe in openPipes) try { pipe.close() } catch (_: Exception) { }
+        for (association in openAssociations) try { association.close() } catch (_: Exception) { }
     }
 
     internal fun resume() {
@@ -92,6 +98,7 @@ class FoxProxy(
     fun stop() {
         val openClients: List<Socket>
         val openPipes: List<FoxPipe>
+        val openAssociations: List<FoxUdpAssociate>
         synchronized(connections) {
             running = false
             paused = true
@@ -103,11 +110,14 @@ class FoxProxy(
             server = null
             openClients = clients.toList()
             openPipes = pipes.toList()
+            openAssociations = associations.toList()
             clients.clear()
             pipes.clear()
+            associations.clear()
         }
         for (client in openClients) try { client.close() } catch (_: Exception) { }
         for (pipe in openPipes) try { pipe.close() } catch (_: Exception) { }
+        for (association in openAssociations) try { association.close() } catch (_: Exception) { }
     }
 
     private fun activeEpoch(expected: Long): Boolean = synchronized(connections) {
@@ -176,7 +186,8 @@ class FoxProxy(
         if (!login(input, output)) return
         val head = ByteArray(4)
         if (readFull(input, head) < 0 || head[0].toInt() != 0x05 || head[2].toInt() != 0x00) return
-        if (head[1].toInt() != 0x01) {
+        val command = head[1].toInt()
+        if (command != 0x01 && command != 0x03) {
             output.write(byteArrayOf(0x05, 0x07, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
             output.flush()
             return
@@ -204,6 +215,10 @@ class FoxProxy(
         val portBytes = ByteArray(2)
         if (readFull(input, portBytes) < 0) return
         val target = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
+        if (command == 0x03) {
+            udpAssociate(input, output, acceptedEpoch, host, target)
+            return
+        }
         val tunnel = open(host, target, acceptedEpoch)
         if (tunnel == null) {
             output.write(byteArrayOf(0x05, 0x05, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
@@ -213,6 +228,85 @@ class FoxProxy(
         output.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0))
         output.flush()
         pump(input, output, tunnel)
+    }
+
+    /**
+     * RFC 1928 UDP ASSOCIATE. The reply advertises a loopback relay the
+     * client sends its socks5-wrapped datagrams to; the association lives as
+     * long as the TCP control connection stays open. Port 53 datagrams are
+     * answered locally by the anti-censorship resolver; the rest are tunneled
+     * through the authenticated CONNECT-UDP relay (WARP) when available.
+     */
+    private fun udpAssociate(input: InputStream, output: BufferedOutputStream, acceptedEpoch: Long, host: String, port: Int) {
+        val reject = fun(code: Int) {
+            output.write(byteArrayOf(0x05, code.toByte(), 0x00, 0x01, 0, 0, 0, 0, 0, 0))
+            output.flush()
+        }
+        if (!activeEpoch(acceptedEpoch)) {
+            reject(0x05)
+            return
+        }
+        if (!FoxUdpAssociate.reserve()) {
+            reject(0x01)
+            return
+        }
+        val scope = tunnelScope(this)
+        val relay = try {
+            DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
+        } catch (_: Exception) {
+            FoxUdpAssociate.release()
+            reject(0x01)
+            return
+        }
+        val association = FoxUdpAssociate(
+            socket = relay,
+            mtu = UDP_ANSWER_MTU,
+            dns = FoxLink.dnsBridge,
+            openUdp = { targetHost, targetPort ->
+                val ticket = scope?.ticket
+                if (ticket == null || !activeEpoch(acceptedEpoch) || !scopeCurrent(ticket)) null
+                else try {
+                    FoxLink.openUdpScoped(ticket, targetHost, targetPort)
+                } catch (_: Exception) {
+                    null
+                }
+            },
+            count = if (countTraffic) { inbound, bytes -> FoxLink.count(inbound, bytes) } else null,
+            stale = { !activeEpoch(acceptedEpoch) }
+        )
+        val accepted = synchronized(connections) {
+            if (!running || paused || epoch != acceptedEpoch) {
+                false
+            } else {
+                associations.add(association)
+                true
+            }
+        }
+        if (!accepted) {
+            try { association.close() } catch (_: Exception) { }
+            reject(0x05)
+            return
+        }
+        val bnd = relay.localPort
+        output.write(
+            byteArrayOf(
+                0x05, 0x00, 0x00, 0x01,
+                127, 0, 0, 1,
+                (bnd ushr 8).toByte(), (bnd and 255).toByte()
+            )
+        )
+        output.flush()
+        association.start()
+        // The control connection carries no data; its EOF is the signal that
+        // the client closed the association.
+        try {
+            val one = ByteArray(1)
+            while (input.read(one) != -1) { }
+        } catch (_: Exception) {
+        } finally {
+            synchronized(connections) { associations.remove(association) }
+            try { association.close() } catch (_: Exception) { }
+        }
     }
 
     private fun login(input: InputStream, output: BufferedOutputStream): Boolean {
@@ -291,7 +385,11 @@ class FoxProxy(
         if (!activeEpoch(acceptedEpoch)) return null
         val scope = tunnelScope(this) ?: return null
         if (!activeEpoch(acceptedEpoch) || !scopeCurrent(scope.ticket)) return null
-        val tunnel = if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
+        val tunnel: FoxPipe? = if (port == 53) {
+            // DNS is served locally by the anti-censorship resolver even when
+            // direct routing would otherwise apply; it never hits the wire.
+            FoxLink.dnsBridge?.tcpPipe()
+        } else if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
             val address = directAddress(host, scope.ticket) ?: return null
             if (!activeEpoch(acceptedEpoch) || !directAllowed() || !scopeCurrent(scope.ticket)) return null
             val pipe = directConnect(address, port, scope.ticket) ?: return null
@@ -373,6 +471,9 @@ class FoxProxy(
 
     companion object {
         private const val MAX_CLIENTS = 64
+        // UDP payloads above the tunnel's path MTU are dropped rather than
+        // silently fragmented or misdelivered.
+        private const val UDP_ANSWER_MTU = 1280
     }
 
     private fun readFull(input: InputStream, buffer: ByteArray): Int {

@@ -226,7 +226,6 @@
     <string name="leak_tunnel_ok">Tunnel DNS and exit responded; device-wide leaks are not verified</string>
     <string name="leak_issue">Unexpected DNS answer; device-wide leaks are not verified</string>
     <string name="leak_inconclusive">Tunnel check inconclusive; device-wide leaks are not verified</string>
-    <string name="leak_blocked">%s packets dropped by the tunnel</string>
     <string name="tamper_detected">This copy of Gozar is not signed with the official key and cannot connect</string>
     <string name="update_download_failed">The update could not be downloaded</string>
     <string name="rollback_notification_title">Update health not yet confirmed</string>
