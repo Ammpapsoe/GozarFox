@@ -1037,6 +1037,13 @@ object FoxTunnel {
             engine.sslParameters = parameters
             val sslHandler = io.netty.handler.ssl.SslHandler(engine)
             sslHandler.setHandshakeTimeoutMillis(timeout.toLong())
+            // While a proxy CONNECT is still pending, the ProxyHandler holds
+            // the outbound close_notify hostage, which stalls the real socket
+            // close for the default 3s closeNotifyFlushTimeoutMillis - longer
+            // than the reset contract allows. Bound the grace period so a
+            // stalled relay connection is torn down promptly (0 is invalid:
+            // it would disable the force-close watchdog entirely).
+            sslHandler.setCloseNotifyFlushTimeoutMillis(500)
 
             fun selectedAlpn(): String = try {
                 // JdkSslEngine implements ApplicationProtocolAccessor when ALPN is
