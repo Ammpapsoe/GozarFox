@@ -1,11 +1,7 @@
 package com.gozar
 
-import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.URL
 import java.util.Collections
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ConcurrentHashMap
@@ -19,8 +15,17 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import javax.net.ssl.HttpsURLConnection
 import kotlin.concurrent.thread
+import okhttp3.toMediaType
+import org.xbill.DNS.ARecord
+import org.xbill.DNS.DClass
+import org.xbill.DNS.Flags
+import org.xbill.DNS.Message
+import org.xbill.DNS.Name
+import org.xbill.DNS.Question
+import org.xbill.DNS.Record
+import org.xbill.DNS.Section
+import org.xbill.DNS.Type
 
 interface FoxPipe {
     fun read(buffer: ByteArray, offset: Int, length: Int): Int
@@ -466,56 +471,20 @@ class FoxStack(
         }
     }
 
-    private fun questionName(query: ByteArray): String? {
-        if (query.size < 13) return null
-        val out = StringBuilder()
-        var index = 12
-        while (index < query.size) {
-            val size = query[index].toInt() and 0xFF
-            if (size == 0) break
-            if (size > 63 || index + 1 + size > query.size) return null
-            if (out.isNotEmpty()) out.append('.')
-            out.append(String(query, index + 1, size, Charsets.UTF_8))
-            index += size + 1
-        }
-        return if (out.isEmpty()) null else out.toString()
-    }
+    private fun questionName(query: ByteArray): String? = runCatching {
+        val question = Message(query).getQuestion() as? Question ?: return null
+        question.name.toString().removeSuffix(".").ifEmpty { null }
+    }.getOrNull()
 
-    private fun addresses(answer: ByteArray): List<Int> {
-        if (answer.size < 12) return emptyList()
-        val found = mutableListOf<Int>()
-        var questions = u16(answer, 4)
-        var count = u16(answer, 6)
-        var index = 12
-        while (questions > 0) {
-            index = skipName(answer, index)
-            index += 4
-            questions--
-        }
-        while (count > 0 && index + 12 <= answer.size) {
-            index = skipName(answer, index)
-            if (index + 10 > answer.size) return found
-            val type = u16(answer, index)
-            val size = u16(answer, index + 8)
-            index += 10
-            if (index + size > answer.size) return found
-            if (type == 1 && size == 4) found.add(i32(answer, index))
-            index += size
-            count--
-        }
-        return found
-    }
-
-    private fun skipName(bytes: ByteArray, from: Int): Int {
-        var index = from
-        while (index < bytes.size) {
-            val size = bytes[index].toInt() and 0xFF
-            if (size == 0) return index + 1
-            if (size and 0xC0 == 0xC0) return index + 2
-            index += size + 1
-        }
-        return index
-    }
+    private fun addresses(answer: ByteArray): List<Int> = runCatching {
+        Message(answer).getSection(Section.ANSWER)
+            .filter { it.type == Type.A && it.dclass == DClass.IN }
+            .map { record ->
+                val bytes = (record as ARecord).address.address
+                ((bytes[0].toInt() and 255) shl 24) or ((bytes[1].toInt() and 255) shl 16) or
+                    ((bytes[2].toInt() and 255) shl 8) or (bytes[3].toInt() and 255)
+            }
+    }.getOrDefault(emptyList())
 
     private fun replyUdp(destination: Int, destinationPort: Int, sourcePort: Int, payload: ByteArray) {
         val total = 28 + payload.size
@@ -1123,34 +1092,18 @@ class FoxResolver(
             catch (_: Exception) { return null }
         val labels = ascii.split('.')
         if (ascii.length > 253 || labels.any { it.isEmpty() || it.length > 63 }) return null
-        val id = java.util.concurrent.ThreadLocalRandom.current().nextInt(65536)
-        val query = ByteArrayOutputStream().apply {
-            write(byteArrayOf((id ushr 8).toByte(), id.toByte(), 1, 0, 0, 1, 0, 0, 0, 0, 0, 0))
-            for (label in labels) {
-                val bytes = label.toByteArray(Charsets.US_ASCII)
-                write(bytes.size)
-                write(bytes)
-            }
-            write(byteArrayOf(0, 0, 1, 0, 1))
-        }.toByteArray()
+        val name = runCatching { Name.fromString("$ascii.") }.getOrNull() ?: return null
+        val queryRecord = Record.newRecord(name, Type.A, DClass.IN)
+        val query = Message.newQuery(queryRecord).toWire()
         val body = answer(query, scope) ?: return null
-        if (!scopeCurrent(scope) || body.size < 12 || body[3].toInt() and 15 != 0) return null
-        var at = questionEnd(body, 12)
-        if (at < 0 || at + 4 > body.size) return null
-        at += 4
-        repeat(short(body, 6).coerceAtMost(256)) {
-            at = questionEnd(body, at)
-            if (at < 0 || at + 10 > body.size) return null
-            val type = short(body, at)
-            val recordClass = short(body, at + 2)
-            val size = short(body, at + 8)
-            at += 10
-            if (at + size > body.size) return null
-            if (type == 1 && recordClass == 1 && size == 4) {
-                val address = (0..3).joinToString(".") { index -> (body[at + index].toInt() and 255).toString() }
+        if (!scopeCurrent(scope)) return null
+        val parsed = runCatching { Message(body) }.getOrNull() ?: return null
+        if (parsed.header.getRcode() != 0) return null
+        for (record in parsed.getSection(Section.ANSWER)) {
+            if (record.type == Type.A && record.dclass == DClass.IN) {
+                val address = (record as ARecord).address.hostAddress
                 if (address != "0.0.0.0") return address
             }
-            at += size
         }
         return null
     }
@@ -1211,15 +1164,27 @@ class FoxResolver(
 
     private fun failure(query: ByteArray): ByteArray = response(query, 2)
 
-    private fun response(query: ByteArray, code: Int): ByteArray {
+    private fun response(query: ByteArray, code: Int): ByteArray = try {
+        val sent = Message(query)
+        val reply = Message(sent.header.id)
+        reply.header.setFlag(Flags.QR)
+        if (sent.header.getFlag(Flags.RD)) reply.header.setFlag(Flags.RD)
+        reply.header.setFlag(Flags.RA)
+        reply.header.setOpcode(sent.header.getOpcode())
+        reply.header.setRcode(code)
+        sent.getQuestion()?.let { reply.addRecord(it, Section.QUESTION) }
+        reply.toWire()
+    } catch (_: Exception) {
         val end = questionEnd(query, 12)
         val copy = if (end >= 0 && end + 4 <= query.size) query.copyOf(end + 4) else query.copyOf()
-        copy[2] = ((copy[2].toInt() or 0x80) and 0xFF).toByte()
-        copy[3] = ((copy[3].toInt() and 0x70) or 0x80 or code).toByte()
-        putShort(copy, 6, 0)
-        putShort(copy, 8, 0)
-        putShort(copy, 10, 0)
-        return copy
+        if (copy.size >= 4) {
+            copy[2] = ((copy[2].toInt() or 0x80) and 0xFF).toByte()
+            copy[3] = ((copy[3].toInt() and 0x70) or 0x80 or code).toByte()
+            putShort(copy, 6, 0)
+            putShort(copy, 8, 0)
+            putShort(copy, 10, 0)
+        }
+        copy
     }
 
     /**
@@ -1278,66 +1243,50 @@ class FoxResolver(
 
     private fun over(url: String, query: ByteArray): ByteArray? {
         request?.let { return it(url, query) }
-        val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", proxyPort))
-        val connection = URL(url).openConnection(proxy) as HttpsURLConnection
-        try {
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.requestMethod = "POST"
-            connection.instanceFollowRedirects = false
-            connection.doOutput = true
-            connection.setRequestProperty("content-type", "application/dns-message")
-            connection.setRequestProperty("accept", "application/dns-message")
-            connection.outputStream.use { it.write(query) }
-            if (connection.responseCode != 200) return null
-            val body = connection.inputStream.use { input ->
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(4096)
-                while (true) {
-                    val size = input.read(buffer)
-                    if (size < 0) break
-                    if (output.size() + size > 65535) return null
-                    output.write(buffer, 0, size)
-                }
-                output.toByteArray()
+        // DNS travels inside the tunnel: through the app's own loopback HTTP
+        // proxy, exactly like before, now on OkHttp.
+        val mediaType = "application/dns-message".toMediaType()
+        val message = object : okhttp3.RequestBody() {
+            override fun contentType(): okhttp3.MediaType = mediaType
+            override fun contentLength(): Long = query.size.toLong()
+            override fun writeTo(sink: okio.BufferedSink) = sink.write(query)
+        }
+        val httpRequest = okhttp3.Request.Builder()
+            .url(url)
+            .post(message)
+            .header("accept", "application/dns-message")
+            .build()
+        return try {
+            FoxHttp.builder(proxyPort, 8000).build().newCall(httpRequest).execute().use { response ->
+                if (response.code != 200) return null
+                val stream = response.body?.byteStream() ?: return null
+                val body = FoxHttp.readBounded(stream, 65535)
+                if (body.size in 12..65535) body else null
             }
-            return if (body.size in 12..65535) body else null
-        } finally {
-            connection.disconnect()
+        } catch (_: Exception) {
+            null
         }
     }
 
     private fun valid(query: ByteArray, body: ByteArray): Boolean {
-        if (body.size < 12 || body[0] != query[0] || body[1] != query[1] || body[2].toInt() and 0x80 == 0) return false
-        if (short(body, 4) != 1 || short(query, 4) != 1) return false
-        val queryEnd = questionEnd(query, 12)
-        val bodyEnd = questionEnd(body, 12)
-        if (queryEnd < 0 || bodyEnd < 0 || queryEnd + 4 > query.size || bodyEnd + 4 > body.size) return false
-        return query.copyOfRange(12, queryEnd + 4).contentEquals(body.copyOfRange(12, bodyEnd + 4))
+        val sent = runCatching { Message(query) }.getOrNull() ?: return false
+        val received = runCatching { Message(body) }.getOrNull() ?: return false
+        if (!received.header.getFlag(Flags.QR)) return false
+        if (received.header.id != sent.header.id) return false
+        if (sent.getSection(Section.QUESTION).size != 1) return false
+        if (received.getSection(Section.QUESTION).size != 1) return false
+        val asked = sent.getQuestion() as? Question ?: return false
+        val answered = received.getQuestion() as? Question ?: return false
+        if (asked.type != answered.type || asked.dclass != answered.dclass) return false
+        return asked.name.toString().equals(answered.name.toString(), true)
     }
 
     private fun ttl(body: ByteArray): Long {
-        if (body.size < 12 || body[3].toInt() and 0x0F != 0) return 0
-        val count = short(body, 6)
-        if (count !in 1..256) return 0
-        var at = 12
-        repeat(short(body, 4)) {
-            at = questionEnd(body, at)
-            if (at < 0 || at + 4 > body.size) return 0
-            at += 4
-        }
-        var minimum = Long.MAX_VALUE
-        repeat(count) {
-            at = questionEnd(body, at)
-            if (at < 0 || at + 10 > body.size) return 0
-            val seconds = ((body[at + 4].toLong() and 255) shl 24) or
-                ((body[at + 5].toLong() and 255) shl 16) or
-                ((body[at + 6].toLong() and 255) shl 8) or (body[at + 7].toLong() and 255)
-            val size = short(body, at + 8)
-            if (at + 10 + size > body.size) return 0
-            minimum = minOf(minimum, seconds)
-            at += 10 + size
-        }
+        val message = runCatching { Message(body) }.getOrNull() ?: return 0
+        if (message.header.getRcode() != 0) return 0
+        val answers = message.getSection(Section.ANSWER)
+        if (answers.isEmpty() || answers.size > 256) return 0
+        val minimum = answers.minOf { it.getTTL() }
         // Honor the server's TTL but stay inside sane bounds: a 60 second floor
         // avoids pointless refetches, a 5 minute cap bounds stale answers.
         return minimum.coerceIn(MIN_TTL_SECONDS, MAX_TTL_SECONDS) * 1000L
@@ -1359,33 +1308,14 @@ class FoxResolver(
     private fun short(data: ByteArray, at: Int): Int =
         ((data[at].toInt() and 255) shl 8) or (data[at + 1].toInt() and 255)
 
-    private fun question(query: ByteArray): String? {
-        val out = StringBuilder()
-        var index = 12
-        while (index < query.size) {
-            val size = query[index].toInt() and 0xFF
-            if (size == 0) break
-            if (size > 63 || index + 1 + size > query.size) return null
-            if (out.isNotEmpty()) out.append('.')
-            out.append(String(query, index + 1, size, Charsets.UTF_8).lowercase())
-            index += size + 1
-        }
-        return if (out.isEmpty()) null else out.toString()
-    }
+    private fun question(query: ByteArray): String? = runCatching {
+        val question = Message(query).getQuestion() as? Question ?: return null
+        question.name.toString().removeSuffix(".").lowercase().ifEmpty { null }
+    }.getOrNull()
 
-    private fun questionType(query: ByteArray): Int {
-        var index = 12
-        while (index < query.size) {
-            val size = query[index].toInt() and 0xFF
-            if (size == 0) {
-                index += 1
-                break
-            }
-            index += size + 1
-        }
-        if (index + 2 > query.size) return 1
-        return ((query[index].toInt() and 0xFF) shl 8) or (query[index + 1].toInt() and 0xFF)
-    }
+    private fun questionType(query: ByteArray): Int = runCatching {
+        (Message(query).getQuestion() as? Question)?.type ?: 1
+    }.getOrDefault(1)
 
     private fun putShort(bytes: ByteArray, index: Int, value: Int) {
         if (index + 1 >= bytes.size) return
