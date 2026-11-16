@@ -16,13 +16,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
-import okhttp3.toMediaType
 import org.xbill.DNS.ARecord
 import org.xbill.DNS.DClass
 import org.xbill.DNS.Flags
 import org.xbill.DNS.Message
 import org.xbill.DNS.Name
-import org.xbill.DNS.Question
 import org.xbill.DNS.Record
 import org.xbill.DNS.Section
 import org.xbill.DNS.Type
@@ -472,15 +470,15 @@ class FoxStack(
     }
 
     private fun questionName(query: ByteArray): String? = runCatching {
-        val question = Message(query).getQuestion() as? Question ?: return null
-        question.name.toString().removeSuffix(".").ifEmpty { null }
+        val question = Message(query).getQuestion() ?: return null
+        question.getName().toString().removeSuffix(".").ifEmpty { null }
     }.getOrNull()
 
     private fun addresses(answer: ByteArray): List<Int> = runCatching {
         Message(answer).getSection(Section.ANSWER)
-            .filter { it.type == Type.A && it.dclass == DClass.IN }
+            .filter { it.getType() == Type.A && it.getDClass() == DClass.IN }
             .map { record ->
-                val bytes = (record as ARecord).address.address
+                val bytes = (record as ARecord).getAddress().address
                 ((bytes[0].toInt() and 255) shl 24) or ((bytes[1].toInt() and 255) shl 16) or
                     ((bytes[2].toInt() and 255) shl 8) or (bytes[3].toInt() and 255)
             }
@@ -1100,8 +1098,8 @@ class FoxResolver(
         val parsed = runCatching { Message(body) }.getOrNull() ?: return null
         if (parsed.header.getRcode() != 0) return null
         for (record in parsed.getSection(Section.ANSWER)) {
-            if (record.type == Type.A && record.dclass == DClass.IN) {
-                val address = (record as ARecord).address.hostAddress
+            if (record.getType() == Type.A && record.getDClass() == DClass.IN) {
+                val address = (record as ARecord).getAddress().hostAddress
                 if (address != "0.0.0.0") return address
             }
         }
@@ -1166,10 +1164,10 @@ class FoxResolver(
 
     private fun response(query: ByteArray, code: Int): ByteArray = try {
         val sent = Message(query)
-        val reply = Message(sent.header.id)
-        reply.header.setFlag(Flags.QR)
-        if (sent.header.getFlag(Flags.RD)) reply.header.setFlag(Flags.RD)
-        reply.header.setFlag(Flags.RA)
+        val reply = Message(sent.header.getID())
+        reply.header.setFlag(Flags.QR.toInt())
+        if (sent.header.getFlag(Flags.RD.toInt())) reply.header.setFlag(Flags.RD.toInt())
+        reply.header.setFlag(Flags.RA.toInt())
         reply.header.setOpcode(sent.header.getOpcode())
         reply.header.setRcode(code)
         sent.getQuestion()?.let { reply.addRecord(it, Section.QUESTION) }
@@ -1245,15 +1243,17 @@ class FoxResolver(
         request?.let { return it(url, query) }
         // DNS travels inside the tunnel: through the app's own loopback HTTP
         // proxy, exactly like before, now on OkHttp.
-        val mediaType = "application/dns-message".toMediaType()
         val message = object : okhttp3.RequestBody() {
-            override fun contentType(): okhttp3.MediaType = mediaType
+            override fun contentType(): okhttp3.MediaType? = null
             override fun contentLength(): Long = query.size.toLong()
-            override fun writeTo(sink: okio.BufferedSink) = sink.write(query)
+            override fun writeTo(sink: okio.BufferedSink) {
+                sink.write(query)
+            }
         }
         val httpRequest = okhttp3.Request.Builder()
             .url(url)
             .post(message)
+            .header("content-type", "application/dns-message")
             .header("accept", "application/dns-message")
             .build()
         return try {
@@ -1271,14 +1271,14 @@ class FoxResolver(
     private fun valid(query: ByteArray, body: ByteArray): Boolean {
         val sent = runCatching { Message(query) }.getOrNull() ?: return false
         val received = runCatching { Message(body) }.getOrNull() ?: return false
-        if (!received.header.getFlag(Flags.QR)) return false
-        if (received.header.id != sent.header.id) return false
+        if (!received.header.getFlag(Flags.QR.toInt())) return false
+        if (received.header.getID() != sent.header.getID()) return false
         if (sent.getSection(Section.QUESTION).size != 1) return false
         if (received.getSection(Section.QUESTION).size != 1) return false
-        val asked = sent.getQuestion() as? Question ?: return false
-        val answered = received.getQuestion() as? Question ?: return false
-        if (asked.type != answered.type || asked.dclass != answered.dclass) return false
-        return asked.name.toString().equals(answered.name.toString(), true)
+        val asked = sent.getQuestion() ?: return false
+        val answered = received.getQuestion() ?: return false
+        if (asked.getType() != answered.getType() || asked.getDClass() != answered.getDClass()) return false
+        return asked.getName().toString().equals(answered.getName().toString(), true)
     }
 
     private fun ttl(body: ByteArray): Long {
@@ -1309,12 +1309,12 @@ class FoxResolver(
         ((data[at].toInt() and 255) shl 8) or (data[at + 1].toInt() and 255)
 
     private fun question(query: ByteArray): String? = runCatching {
-        val question = Message(query).getQuestion() as? Question ?: return null
-        question.name.toString().removeSuffix(".").lowercase().ifEmpty { null }
+        val question = Message(query).getQuestion() ?: return null
+        question.getName().toString().removeSuffix(".").lowercase().ifEmpty { null }
     }.getOrNull()
 
     private fun questionType(query: ByteArray): Int = runCatching {
-        (Message(query).getQuestion() as? Question)?.type ?: 1
+        Message(query).getQuestion()?.getType() ?: 1
     }.getOrDefault(1)
 
     private fun putShort(bytes: ByteArray, index: Int, value: Int) {

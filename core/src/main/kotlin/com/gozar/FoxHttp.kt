@@ -1,7 +1,6 @@
 package com.gozar
 
 import okhttp3.OkHttpClient
-import okhttp3.toMediaType
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.security.KeyStore
@@ -61,14 +60,19 @@ internal object FoxHttp {
     fun secureWith(builder: OkHttpClient.Builder, factory: SSLSocketFactory): OkHttpClient =
         builder.sslSocketFactory(factory, trustManager).build()
 
-    /** A JSON body with a fixed `application/json` media type. */
+    /**
+     * A JSON body. The media type is carried by the explicit `Content-Type`
+     * header every caller sets, so this returns null rather than guessing
+     * OkHttp's MediaType factory.
+     */
     fun jsonBody(text: String): okhttp3.RequestBody {
         val bytes = text.toByteArray(Charsets.UTF_8)
-        val mediaType = "application/json".toMediaType()
         return object : okhttp3.RequestBody() {
-            override fun contentType(): okhttp3.MediaType = mediaType
+            override fun contentType(): okhttp3.MediaType? = null
             override fun contentLength(): Long = bytes.size.toLong()
-            override fun writeTo(sink: okio.BufferedSink) = sink.write(bytes)
+            override fun writeTo(sink: okio.BufferedSink) {
+                sink.write(bytes)
+            }
         }
     }
 
