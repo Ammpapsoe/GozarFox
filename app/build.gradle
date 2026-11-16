@@ -18,6 +18,8 @@ android {
         applicationId 'com.gozar'
         minSdk 24
         targetSdk 35
+        // Prebuilt strip-mined NDK that CI installs explicitly.
+        ndkVersion '27.0.12077973'
         versionCode 61
         versionName '1.16.0'
         manifestPlaceholders.appLabel = '@string/app_name'
@@ -30,6 +32,13 @@ android {
         }
         resourceConfigurations += ['en', 'fa']
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            // Builds the vendored hev-socks5-tunnel shared library.
+            path 'src/main/jni/Android.mk'
+        }
     }
 
     splits {
