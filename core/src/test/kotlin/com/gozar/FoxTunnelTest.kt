@@ -803,7 +803,7 @@ class FoxTunnelTest {
                             authHeads.add(String(payload, Charsets.UTF_8))
                             val response = ByteArrayOutputStream().apply {
                                 write(0x88)
-                                write(FoxTunnel.pair("capsule-protocol", "?1"))
+                                write(literal("capsule-protocol", "?1"))
                             }.toByteArray()
                             output.write(frame(1, 4, id, response))
                             output.flush()
@@ -830,7 +830,7 @@ class FoxTunnelTest {
             }
             val response = ByteArrayOutputStream().apply {
                 write(0x88) // indexed :status 200
-                if (udpCapsule) write(FoxTunnel.pair("capsule-protocol", "?1"))
+                if (udpCapsule) write(literal("capsule-protocol", "?1"))
             }.toByteArray()
             output.write(frame(1, 4, 1, response))
             output.flush()
@@ -1002,6 +1002,19 @@ class FoxTunnelTest {
             val payload = ByteArray(size)
             readFully(input, payload)
             return Triple(head[3].toInt() and 255, id, payload)
+        }
+
+        /** HPACK literal header field without indexing, new name (ASCII only). */
+        private fun literal(name: String, value: String): ByteArray {
+            val out = java.io.ByteArrayOutputStream()
+            out.write(0x00)
+            val n = name.toByteArray(Charsets.US_ASCII)
+            out.write(n.size)
+            out.write(n)
+            val v = value.toByteArray(Charsets.US_ASCII)
+            out.write(v.size)
+            out.write(v)
+            return out.toByteArray()
         }
 
         private fun frame(type: Int, flags: Int, id: Int, payload: ByteArray): ByteArray {

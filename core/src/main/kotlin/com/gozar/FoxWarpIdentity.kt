@@ -63,6 +63,7 @@ internal data class WarpIdentity(
 
 /** Tracks every loopback socket, so stop interrupts enrollment and endpoint probes. */
 internal class WarpSockets(private val proxyPort: Int, private val current: () -> Boolean) {
+    internal val port: Int get() = proxyPort
     private val lock = Any()
     private val open = HashSet<Socket>()
     @Volatile private var stopped = false
@@ -249,36 +250,5 @@ internal object WarpTLS {
             }
         }
         return SSLContext.getInstance("TLS").apply { init(km.keyManagers, arrayOf(trust), SecureRandom()) }
-    }
-    fun connect(sockets: WarpSockets, ssl: SSLContext, host: String, port: Int): Pair<Socket, SSLSocket> {
-        val raw = sockets.connect(host, port)
-        try {
-            val secured = ssl.socketFactory.createSocket(raw, "consumer-masque.cloudflareclient.com", port, true) as SSLSocket
-            val parameters = secured.sslParameters
-            parameters.serverNames = listOf(SNIHostName("consumer-masque.cloudflareclient.com"))
-            var legacyAlpn = false
-            try { parameters.applicationProtocols = arrayOf("h2") }
-            catch (_: NoSuchMethodError) { legacyAlpn = true }
-            secured.sslParameters = parameters
-            if (legacyAlpn) {
-                // Android 7–9's platform Conscrypt exposes ALPN before the
-                // public API. If unavailable or blocked, fail closed.
-                try {
-                    secured.javaClass.getMethod("setAlpnProtocols", ByteArray::class.java)
-                        .invoke(secured, byteArrayOf(2, 'h'.code.toByte(), '2'.code.toByte()))
-                } catch (_: Exception) { throw IOException("WARP requires HTTP/2 ALPN") }
-            }
-            secured.startHandshake()
-            val selected = if (legacyAlpn) {
-                try {
-                    val bytes = secured.javaClass.getMethod("getAlpnSelectedProtocol").invoke(secured) as? ByteArray
-                    bytes?.toString(Charsets.US_ASCII) ?: ""
-                } catch (_: Exception) { "" }
-            } else try { secured.applicationProtocol } catch (_: NoSuchMethodError) { "" }
-            if (selected != "h2") throw IOException("WARP did not negotiate HTTP/2")
-            secured.soTimeout = 0
-            if (!sockets.valid()) throw IOException("WARP stopped")
-            return raw to secured
-        } catch (error: Exception) { sockets.release(raw); throw error }
     }
 }

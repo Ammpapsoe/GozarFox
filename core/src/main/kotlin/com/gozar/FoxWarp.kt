@@ -73,9 +73,8 @@ class FoxWarp(
             thread(isDaemon = true, name = "warp-scan") {
                 var candidate: WarpSession? = null
                 try {
-                    val (raw, secured) = WarpTLS.connect(sockets, ssl, host, port)
-                    candidate = try { WarpSession.open(sockets, identity, raw, secured) }
-                    catch (e: Exception) { sockets.release(raw); throw e }
+                    if (!sockets.valid()) throw IOException("WARP stopped")
+                    candidate = WarpSession.open(sockets, identity, ssl, host, port)
                     if (!candidate.verify() || !sockets.valid()) throw IOException("WARP UDP probe failed")
                     synchronized(monitor) {
                         if (!decided) { winner = candidate; candidate = null; decided = true; monitor.notifyAll() }
@@ -107,7 +106,6 @@ class FoxWarp(
 private class WarpSession private constructor(
     private val sockets: WarpSockets,
     private val source: Int,
-    private val raw: Socket,
     private val h2: FoxTunnel.H2Session,
     private val stream: FoxDuplex
 ) {
@@ -167,9 +165,8 @@ private class WarpSession private constructor(
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         val all = synchronized(flowLock) { flows.values.toList().also { flows.clear() } }
-        // Close the raw socket first: a blocked DATA write must not prevent
-        // shutdown or flush a late capsule while a flow is being revoked.
-        sockets.release(raw)
+        // Closing the HTTP/2 session tears down the underlying Netty channel;
+        // a blocked DATA write must not prevent shutdown or flush a late capsule.
         try { h2.shutdown() } catch (_: Exception) { }
         all.forEach { it.close() }
         try { stream.abort() } catch (_: Exception) { }
@@ -192,11 +189,12 @@ private class WarpSession private constructor(
         } finally { flow.close() }
     }
     companion object {
-        fun open(sockets: WarpSockets, identity: WarpIdentity, raw: Socket, ssl: javax.net.ssl.SSLSocket): WarpSession {
-            val h2 = FoxTunnel.H2Session(null, 12000, 0L, udp = true, providedSocket = ssl, warp = true)
+        fun open(sockets: WarpSockets, identity: WarpIdentity, ssl: SSLContext, host: String, port: Int): WarpSession {
+            val h2 = FoxTunnel.H2Session(null, 12000, 0L, udp = true,
+                providedWarp = FoxTunnel.WarpTarget(ssl, host, port, sockets.port), warp = true)
             try {
                 val stream = h2.openWarpIP(12000)
-                return WarpSession(sockets, FoxWarpPackets.ipv4(identity.ipv4) ?: throw IOException("invalid WARP address"), raw, h2, stream)
+                return WarpSession(sockets, FoxWarpPackets.ipv4(identity.ipv4) ?: throw IOException("invalid WARP address"), h2, stream)
             } catch (e: Exception) { h2.shutdown(); throw e }
         }
     }
