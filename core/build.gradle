@@ -19,7 +19,7 @@ dependencies {
     implementation('com.twitter:hpack:1.0.2') { transitive = false }
     // HTTP client (Stage 1 of the standard-library migration; replaces the
     // hand-rolled HttpURLConnection plumbing in FoxNet/FoxRelay/FoxShield).
-    implementation 'com.squareup.okhttp3:okhttp:5.5.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     // DNS message codec for the in-tunnel resolver (Stage 1; replaces the
     // hand-rolled packet parsing kept only for TTL patching).
     implementation 'dnsjava:dnsjava:3.7.1'
