@@ -748,9 +748,10 @@ class FoxTunnelTest {
                 udpH2(input, output)
                 return
             }
-            val headers = readFrame(input)
+            val headers = readFrameWithId(input)
             check(headers.first == 1)
-            authHeads.add(String(headers.second, Charsets.UTF_8))
+            val streamId = headers.second
+            authHeads.add(String(headers.third, Charsets.UTF_8))
             if (rejectH2) {
                 output.write(frame(7, 0, 0, ByteArray(8)))
                 output.flush()
@@ -758,30 +759,30 @@ class FoxTunnelTest {
             }
             val settings = if (smallWindow) byteArrayOf(0, 4, 0, 0, 0, 0) else ByteArray(0)
             output.write(frame(4, 0, 0, settings))
-            if (smallWindow) output.write(frame(8, 0, 1, byteArrayOf(0, 0, 0, 5)))
+            if (smallWindow) output.write(frame(8, 0, streamId, byteArrayOf(0, 0, 0, 5)))
             if (refuseH2) {
-                output.write(frame(1, 4, 1, byteArrayOf(0x08, 0x83.toByte(), 0x68, 0x0e, 0xff.toByte())))
+                output.write(frame(1, 4, streamId, byteArrayOf(0x08, 0x83.toByte(), 0x68, 0x0e, 0xff.toByte())))
                 output.flush()
                 return
             } else if (splitH2Headers) {
-                output.write(frame(1, 0x28, 1, byteArrayOf(2, 0, 0, 0, 0, 0, 0x20, 0, 0)))
-                output.write(frame(9, 4, 1, byteArrayOf(0x88.toByte())))
+                output.write(frame(1, 0x28, streamId, byteArrayOf(2, 0, 0, 0, 0, 0, 0x20, 0, 0)))
+                output.write(frame(9, 4, streamId, byteArrayOf(0x88.toByte())))
             } else {
-                output.write(frame(1, 4, 1, byteArrayOf(0x88.toByte())))
+                output.write(frame(1, 4, streamId, byteArrayOf(0x88.toByte())))
             }
             output.flush()
             while (upload.size() < "upload-over-tunnel".length) {
-                val data = readFrame(input)
+                val data = readFrameWithId(input)
                 if (data.first == 0) {
-                    upload.write(data.second)
+                    upload.write(data.third)
                     if (smallWindow) {
-                        val amount = data.second.size
-                        output.write(frame(8, 0, 1, byteArrayOf(0, 0, 0, amount.toByte())))
+                        val amount = data.third.size
+                        output.write(frame(8, 0, data.second, byteArrayOf(0, 0, 0, amount.toByte())))
                         output.flush()
                     }
                 }
             }
-            output.write(frame(0, 1, 1, reply))
+            output.write(frame(0, 1, streamId, reply))
             output.flush()
         }
 
@@ -817,10 +818,12 @@ class FoxTunnelTest {
                     }
                 }
             }
+            var udpStreamId = 1
             while (true) {
-                val request = readFrame(input)
+                val request = readFrameWithId(input)
                 if (request.first != 1) continue
-                authHeads.add(String(request.second, Charsets.UTF_8))
+                udpStreamId = request.second
+                authHeads.add(String(request.third, Charsets.UTF_8))
                 break
             }
             if (udpIdleWindow) {
@@ -832,24 +835,24 @@ class FoxTunnelTest {
                 write(0x88) // indexed :status 200
                 if (udpCapsule) write(literal("capsule-protocol", "?1"))
             }.toByteArray()
-            output.write(frame(1, 4, 1, response))
+            output.write(frame(1, 4, udpStreamId, response))
             output.flush()
             if (!udpCapsule) return
             while (true) {
-                val data = readFrame(input)
+                val data = readFrameWithId(input)
                 if (data.first == 3) {
                     udpReset.countDown()
                     return
                 }
                 if (data.first == 0) {
-                    udpDataBytes.addAndGet(data.second.size)
-                    output.write(frame(0, 0, 1, data.second))
+                    udpDataBytes.addAndGet(data.third.size)
+                    output.write(frame(0, 0, data.second, data.third))
                     output.flush()
-                    if (udpSmallWindow && data.second.isNotEmpty()) {
+                    if (udpSmallWindow && data.third.isNotEmpty()) {
                         firstUdpData.countDown()
                         check(resumeUdpWindow.await(5, TimeUnit.SECONDS))
-                        val amount = data.second.size
-                        output.write(frame(8, 0, 1, byteArrayOf(
+                        val amount = data.third.size
+                        output.write(frame(8, 0, data.second, byteArrayOf(
                             (amount ushr 24).toByte(), (amount ushr 16).toByte(),
                             (amount ushr 8).toByte(), amount.toByte()
                         )))

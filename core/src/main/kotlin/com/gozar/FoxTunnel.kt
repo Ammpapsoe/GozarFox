@@ -451,6 +451,10 @@ object FoxTunnel {
     private val h1Streams = HashSet<FoxDuplex>()
     private val h2Streams = HashSet<FoxDuplex>()
     private val pendingRelays = HashSet<Socket>()
+    // Netty connections that are still dialing or handshaking and have not
+    // reached the pool yet. A transport reset must revoke these exactly like
+    // the raw relay sockets it already tracks, or the peer never sees EOF.
+    private val pendingChannels = HashSet<io.netty.channel.Channel>()
     // TLS wraps the raw socket; close the raw socket on reset so buffered TLS
     // output is not intentionally flushed during revocation.
     private val pendingTls = HashMap<SSLSocket, Socket>()
@@ -496,6 +500,13 @@ object FoxTunnel {
         transportEnabled && sessionGeneration == ticket
     }
 
+    // Called under the pool lock (or re-entrantly with it): reset either sees
+    // the channel in this set or sees the owning session pooled/dead afterwards.
+    private fun untrackPendingChannel(channel: io.netty.channel.Channel?) {
+        if (channel == null) return
+        pendingChannels.remove(channel)
+    }
+
     private fun releasePendingLocked(socket: SSLSocket) {
         pendingTls.remove(socket)?.let { pendingRelays.remove(it) }
     }
@@ -512,6 +523,7 @@ object FoxTunnel {
         val oldH1: List<FoxDuplex>
         val oldH2: List<FoxDuplex>
         val oldPending: List<Socket>
+        val oldChannels: List<io.netty.channel.Channel>
         val ticket: Long
         synchronized(sessions) {
             sessionGeneration += 1
@@ -522,16 +534,21 @@ object FoxTunnel {
             oldH1 = h1Streams.toList()
             oldH2 = h2Streams.toList()
             oldPending = pendingRelays.toList()
+            oldChannels = pendingChannels.toList()
             sessions.clear()
             udpSessions.clear()
             h1Streams.clear()
             h2Streams.clear()
             pendingRelays.clear()
+            pendingChannels.clear()
             pendingTls.clear()
         }
         // Closing outside the pool lock permits callbacks and new generations
         // to progress without letting old resources be put back into the pool.
         for (socket in oldPending) try { socket.close() } catch (_: Exception) { }
+        // Close in-flight Netty relays so a pending proxy/TLS handshake does
+        // not outlive the transport that owns it.
+        for (channel in oldChannels) try { channel.close() } catch (_: Exception) { }
         // Close pooled sockets before aborting H2 streams, so their teardown
         // cannot flush an obsolete session while discarding queued writes.
         for (session in oldSessions) session.shutdown()
@@ -543,7 +560,7 @@ object FoxTunnel {
     internal fun pooledSessionCount(): Int = synchronized(sessions) { sessions.values.sumOf { it.size } }
     internal fun activeH1Count(): Int = synchronized(sessions) { h1Streams.size }
     internal fun activeH2Count(): Int = synchronized(sessions) { h2Streams.size }
-    internal fun pendingRelayCount(): Int = synchronized(sessions) { pendingRelays.size }
+    internal fun pendingRelayCount(): Int = synchronized(sessions) { pendingRelays.size + pendingChannels.size }
 
     fun open(
         location: FoxLocation, host: String, port: Int, pass: String,
@@ -732,6 +749,9 @@ object FoxTunnel {
                 return fallback
             }
             list.add(fresh)
+            // Hand-off complete: the session is pooled now, so reset finds it
+            // through the pool, not through the pending set.
+            untrackPendingChannel(fresh.parentChannel())
         }
         return fresh
     }
@@ -1059,19 +1079,32 @@ object FoxTunnel {
                         }
                         pipeline.addLast("ssl", sslHandler)
                         pipeline.addLast("alpn", object : io.netty.channel.ChannelInboundHandlerAdapter() {
+                            // The reset path closes the channel while the relay or TLS
+                            // handshake is in flight; unblock the waiter immediately
+                            // instead of letting it sit out the full deadline. A normal
+                            // handshake already counted the latch down, so this is a no-op.
+                            private val settled = java.util.concurrent.atomic.AtomicBoolean(false)
                             override fun userEventTriggered(ctx: io.netty.channel.ChannelHandlerContext, evt: Any) {
                                 if (evt is io.netty.handler.ssl.SslHandshakeCompletionEvent) {
+                                    settled.set(true)
                                     if (evt.isSuccess) {
                                         if (selectedAlpn() != "h2") {
-                                            handshakeFailure.set(java.io.IOException("the proxy did not negotiate HTTP/2"))
+                                            handshakeFailure.compareAndSet(null, java.io.IOException("the proxy did not negotiate HTTP/2"))
                                         }
                                     } else {
-                                        handshakeFailure.set(evt.cause() as? Exception ?: java.io.IOException("TLS handshake failed", evt.cause()))
+                                        handshakeFailure.compareAndSet(null, evt.cause() as? Exception ?: java.io.IOException("TLS handshake failed", evt.cause()))
                                     }
                                     handshake.countDown()
                                     return
                                 }
                                 ctx.fireUserEventTriggered(evt)
+                            }
+                            override fun channelInactive(ctx: io.netty.channel.ChannelHandlerContext) {
+                                if (!settled.get()) {
+                                    handshakeFailure.compareAndSet(null, java.io.IOException("the proxy closed the connection"))
+                                    handshake.countDown()
+                                }
+                                ctx.fireChannelInactive()
                             }
                         })
                         pipeline.addLast("h2", multiplexCodec)
@@ -1089,7 +1122,11 @@ object FoxTunnel {
                 java.net.InetSocketAddress(target, targetPort)
             }
             if (isProxied) bootstrap.disableResolver()
-            val connectFuture = bootstrap.connect(connectAddress)
+            // Register the in-flight connection before the reset snapshot can
+            // pass us: whoever closes it first wins, both paths converge.
+            val connectFuture = synchronized(sessions) {
+                bootstrap.connect(connectAddress).also { future -> pendingChannels.add(future.channel()) }
+            }
             var channel: io.netty.channel.Channel? = null
             try {
                 if (!connectFuture.awaitUninterruptibly(remaining(deadline).toLong())) {
@@ -1112,6 +1149,7 @@ object FoxTunnel {
                 }
                 this.parent = channel
             } catch (e: Exception) {
+                try { untrackPendingChannel(connectFuture.channel()) } catch (_: Exception) { }
                 try { channel?.close() } catch (_: Exception) { }
                 throw e
             }
@@ -1157,6 +1195,9 @@ object FoxTunnel {
             }
         }
 
+        internal fun parentChannel(): io.netty.channel.Channel? =
+            if (::parent.isInitialized) parent else null
+
         fun alive(): Boolean = !dead && ::parent.isInitialized && parent.isActive
         fun isDraining(): Boolean = draining
         fun activeCount(): Int = streams.size
@@ -1192,7 +1233,12 @@ object FoxTunnel {
             dead = true
             synchronized(stateLock) { stateLock.notifyAll() }
             failAll(java.io.IOException("the tunnel session was closed"))
-            try { if (::parent.isInitialized) parent.close() } catch (_: Exception) { }
+            try {
+                if (::parent.isInitialized) {
+                    untrackPendingChannel(parent)
+                    parent.close()
+                }
+            } catch (_: Exception) { }
         }
 
         fun openStream(host: String, port: Int, pass: String, timeout: Int): FoxDuplex {
