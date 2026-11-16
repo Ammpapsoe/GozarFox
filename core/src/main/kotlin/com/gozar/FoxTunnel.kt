@@ -1126,7 +1126,13 @@ object FoxTunnel {
 
         private fun childChannel(): io.netty.handler.codec.http2.Http2StreamChannel {
             val parentChannel = if (::parent.isInitialized) parent else throw java.io.IOException("the tunnel session is gone")
-            val future = io.netty.handler.codec.http2.Http2StreamChannelBootstrap(parentChannel).open()
+            // The codec's forClient(childRouter) is registered only on remotely-created
+            // stream channels; outbound streams created by this bootstrap get an empty
+            // pipeline otherwise and every inbound response frame would be dropped
+            // silently. Attach the router explicitly (it is @Sharable).
+            val future = io.netty.handler.codec.http2.Http2StreamChannelBootstrap(parentChannel)
+                .handler(SessionChildRouter())
+                .open()
             if (!future.awaitUninterruptibly(10_000)) {
                 future.cancel(true)
                 throw java.io.IOException("the HTTP/2 stream did not open")
