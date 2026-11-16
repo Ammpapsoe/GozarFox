@@ -20,9 +20,14 @@ dependencies {
     // DNS message codec for the in-tunnel resolver (Stage 1; replaces the
     // hand-rolled packet parsing kept only for TTL patching).
     implementation 'dnsjava:dnsjava:3.7.1'
-    implementation 'io.netty:netty-codec-http2:4.2.20.Final'
-    implementation 'io.netty:netty-handler-proxy:4.2.20.Final'
-    implementation 'io.netty:netty-handler:4.2.20.Final'
+    // Netty 4.1, not 4.2: 4.2 shades invoke-polymorphic VarHandle method
+    // handles (shaded jctools queues), which D8 cannot desugar below
+    // min-api 26. The Android app ships minSdk 24, so the APK must use
+    // 4.1.x, whose class files contain no signature-polymorphic call sites
+    // (verified by constant-pool scan of every netty 4.1.140 artifact).
+    implementation 'io.netty:netty-codec-http2:4.1.140.Final'
+    implementation 'io.netty:netty-handler-proxy:4.1.140.Final'
+    implementation 'io.netty:netty-handler:4.1.140.Final'
     compileOnly 'org.json:json:20240303'
     testImplementation 'org.json:json:20240303'
     testImplementation 'junit:junit:4.13.2'
