@@ -14,6 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class FoxLeakGuardTest {
 
+    private val positive = "api.example.test"
+    private val canary = "nonce.gozar-check.invalid"
+
     private fun answer(host: String): FoxLeakGuard.Lookup = if (host == canary) {
         FoxLeakGuard.Lookup(FoxLeakGuard.LookupCode.NXDOMAIN)
     } else {
