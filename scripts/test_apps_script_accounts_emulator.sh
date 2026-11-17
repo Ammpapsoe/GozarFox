@@ -38,7 +38,7 @@ for key in ('GOZAR_LOGIN_EMAIL','GOZAR_LOGIN_PASSWORD','GOZAR_SIGNUP_EMAIL','GOZ
  if value:text=text.replace(value,'[redacted]')
 text=re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}','[email]',text)
 text=re.sub(r'(?i)(bearer\s+)[A-Za-z0-9._~+/-]+',r'\1[redacted]',text)
-lines=[line for line in text.splitlines() if re.search(r'(STATE=|CODE_REQUIRED|AssertionError|FoxError|Exception|INSTRUMENTATION_CODE|shortMsg|FAILURE|Error:)',line,re.I)]
+lines=[line for line in text.splitlines() if re.search(r'(STATE=|CODE_REQUIRED|AssertionError|FoxError|Exception|INSTRUMENTATION_CODE|shortMsg|FAILURE|Error:|dom=)',line,re.I)]
 print('\n'.join(lines[-50:]) if lines else 'Account instrumentation did not report its required passing test')
 PY
   return 1

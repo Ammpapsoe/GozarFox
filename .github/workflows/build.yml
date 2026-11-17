@@ -559,7 +559,8 @@ jobs:
           tests=$(printf '%s' "$runs" | jq '[.workflow_runs[] | select(.name == "Test" and .conclusion == "success")] | length')
           android=$(printf '%s' "$runs" | jq -r '.workflow_runs[] | select(.name == "Autonomous Android" and .conclusion == "success") | .id' | head -1)
           if [ "$tests" -lt 1 ] || [ -z "$android" ]; then
-            echo '::error::No successful Test and Autonomous Android run for this exact commit'
+            echo "missing_test_runs=$tests missing_android_run=${android:-none}"
+            echo "::error::No successful Test and Autonomous Android run for this exact commit $sha; dispatch test.yml and autonomous-android.yml on it first"
             exit 1
           fi
           jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$android/jobs?per_page=100" --jq '[.jobs[] | select((.name == "compile" or .name == "unit-tests" or .name == "artifact") and .conclusion == "success")] | length')
