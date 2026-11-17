@@ -16,8 +16,8 @@ import javax.net.ssl.X509TrustManager
  *
  * - Redirects are never followed automatically; each call site decides
  *   (Mozilla's API answers non-2xx for accounts we must not leak credentials to).
- * - Threads without a control-tunnel scope go out directly; threads inside
- *   [FoxNet.throughControlTunnel] go out through the loopback control proxy.
+ * - Callers pass the control-tunnel scope explicitly (see
+ *   [FoxNet.throughControlTunnel]); threads without a scope go out directly.
  * - Per-request TLS behavior (TLS 1.2 retry, remembered-IP dial) is layered
  *   on top of the system trust manager via [FoxTls12]/[FoxCachedTls]; trust
  *   and hostname verification are never weakened.
@@ -45,8 +45,8 @@ internal object FoxHttp {
 
     /**
      * A redirect-free builder with timeouts applied and the control scope of
-     * [control] honored. Pass the value from [FoxNet.controlPortOf] (null for
-     * a direct connection).
+     * [control] honored. Pass the control-tunnel port (null for a direct
+     * connection; see [FoxNet.throughControlTunnel]).
      */
     fun builder(control: Int?, timeoutMs: Int): OkHttpClient.Builder = OkHttpClient.Builder()
         .followRedirects(false)
