@@ -15,34 +15,40 @@ import java.io.File
 internal object HevEngine {
 
     /**
-     * Write the config and hand the tun fd to hev. Returns true when the
-     * worker thread started; false leaves no native state behind.
+     * Write the config and hand the tun fd to hev.
+     *
+     * Returns true only when the engine is still running a moment after the
+     * worker thread was started. The JNI start call reports merely that
+     * `pthread_create` succeeded, and the worker exits immediately when the
+     * configuration cannot be opened (for example because the file mode makes
+     * it unreadable). Reporting that as success left the UI showing a
+     * connected state while no packet was ever read from the tun device.
      */
     fun start(context: Context, mtu: Int, socksPort: Int, pass: String, tunFd: Int): Boolean {
         if (!TProxyService.isNativeAvailable) return false
-        val config = buildString {
-            append("tunnel:\n")
-            append("  mtu: ").append(mtu).append('\n')
-            append("socks5:\n")
-            append("  address: 127.0.0.1\n")
-            append("  port: ").append(socksPort).append('\n')
-            // Base64 credentials never contain a single quote, so plain
-            // single-quoted YAML scalars are safe here.
-            append("  username: '").append(pass).append("'\n")
-            append("  password: '").append(pass).append("'\n")
-            append("  udp: 'udp'\n")
-            append("misc:\n")
-            append("  log-level: warn\n")
+        val document = try {
+            HevConfig.document(mtu, socksPort, pass)
+        } catch (_: IllegalArgumentException) {
+            return false
         }
-        val file = File(context.cacheDir, "hev-socks5-config.yaml")
-        return try {
-            file.writeText(config)
-            file.setReadable(false, false)
-            file.setWritable(true, true)
+        val file = File(context.cacheDir, CONFIG_FILE)
+        try {
+            // The editor creates the file owner-only (0600), which is what a
+            // credential-bearing document needs. Do not call setReadable or
+            // setWritable afterwards: setReadable(false, false) clears the
+            // owner read bit too, and the native engine then cannot open its
+            // own configuration and exits before touching the tun device.
+            file.writeText(document)
+        } catch (_: Exception) {
+            return false
+        }
+        val started = try {
             TProxyService.TProxyStartService(file.absolutePath, tunFd)
         } catch (_: Exception) {
             false
         }
+        if (!started) return false
+        return aliveAfterStart()
     }
 
     fun stop() {
@@ -60,4 +66,27 @@ internal object HevEngine {
     fun stats(): LongArray? =
         if (!TProxyService.isNativeAvailable) null
         else runCatching { TProxyService.TProxyGetStats() }.getOrNull()
+
+    /**
+     * The worker thread sets its running flag before it parses the config, so
+     * one read is not proof of life. Poll until the flag survives the startup
+     * window; a worker that exited leaves it cleared.
+     */
+    private fun aliveAfterStart(attempts: Int = ALIVE_ATTEMPTS, intervalMillis: Long = ALIVE_INTERVAL_MS): Boolean {
+        for (attempt in 0 until attempts) {
+            if (!isRunning()) return false
+            if (attempt == attempts - 1) break
+            try {
+                Thread.sleep(intervalMillis)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+        }
+        return isRunning()
+    }
+
+    internal const val CONFIG_FILE = "hev-socks5-config.yaml"
+    private const val ALIVE_ATTEMPTS = 6
+    private const val ALIVE_INTERVAL_MS = 50L
 }
