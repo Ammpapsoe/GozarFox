@@ -30,6 +30,15 @@ run_test() {
     printf '::notice::%s\n' "$marker"
     return 0
   fi
+  adb shell pidof com.gozar >/dev/null 2>&1 || printf 'app_process_alive=no (the app or the emulator died, see logcat below)\n'
+  adb logcat -d -t 400 2>/dev/null | grep -E 'FATAL|AndroidRuntime|com\.gozar|libnativegauss|UnsatisfiedLink|SIGSEGV|tombstone' | tail -40 \
+    | python3 -c 'import os,re,sys
+text=sys.stdin.read()
+for key in ("GOZAR_LOGIN_EMAIL","GOZAR_LOGIN_PASSWORD","GOZAR_SIGNUP_EMAIL","GOZAR_SIGNUP_PASSWORD"):
+    value=os.environ.get(key,"")
+    if value: text=text.replace(value,"[redacted]")
+text=re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}","[email]",text)
+print(text.rstrip()) if text.strip() else print("logcat empty or emulator gone")' || true
   python3 - "$result" <<'PY'
 import os,re,sys
 text=open(sys.argv[1],errors='replace').read()
