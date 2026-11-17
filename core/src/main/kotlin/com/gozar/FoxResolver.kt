@@ -15,6 +15,8 @@ import org.xbill.DNS.Name
 import org.xbill.DNS.Record
 import org.xbill.DNS.Section
 import org.xbill.DNS.Type
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.X509TrustManager
 
 private const val MIN_TTL_SECONDS = 60L
 private const val MAX_TTL_SECONDS = 300L
@@ -31,7 +33,11 @@ class FoxResolver(
     private val request: ((String, ByteArray) -> ByteArray?)? = null,
     private val now: () -> Long = { System.nanoTime() / 1_000_000L },
     private val endpoints: List<String> = DnsPolicy.endpoints(DnsPolicy.AUTO, "", false),
-    private val raceHeadStartMs: Long = RACE_HEAD_START_MS
+    private val raceHeadStartMs: Long = RACE_HEAD_START_MS,
+    /** Test seam: when both are set, DoH requests are made with this TLS layer
+     *  instead of the system trust store. Production callers leave them null. */
+    private val tlsSocketFactory: SSLSocketFactory? = null,
+    private val tlsTrustManager: X509TrustManager? = null
 ) {
 
     private data class LookupKey(val question: String, val scope: Any?)
@@ -331,8 +337,13 @@ class FoxResolver(
             .header("content-type", "application/dns-message")
             .header("accept", "application/dns-message")
             .build()
+        val client = if (tlsSocketFactory != null && tlsTrustManager != null) {
+            FoxHttp.builder(proxyPort, 8000).sslSocketFactory(tlsSocketFactory, tlsTrustManager).build()
+        } else {
+            FoxHttp.builder(proxyPort, 8000).build()
+        }
         return try {
-            FoxHttp.builder(proxyPort, 8000).build().newCall(httpRequest).execute().use { response ->
+            client.newCall(httpRequest).execute().use { response ->
                 if (response.code != 200) return null
                 val stream = response.body?.byteStream() ?: return null
                 val body = FoxHttp.readBounded(stream, 65535)

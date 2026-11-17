@@ -15,6 +15,7 @@ import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.thread
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -28,6 +29,13 @@ import org.robolectric.annotation.Config
 @Config(sdk = [28], application = Application::class)
 class DnsTunnelIntegrationTest {
     private val password = "local-test-only".toCharArray()
+
+    private fun trustManager(): X509TrustManager {
+        val store = KeyStore.getInstance("PKCS12")
+        javaClass.getResourceAsStream("/tls/dns-loopback.p12")!!.use { store.load(it, password) }
+        val trust = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(store) }
+        return trust.trustManagers.filterIsInstance<X509TrustManager>().first()
+    }
 
     private fun tlsContext(): SSLContext {
         val store = KeyStore.getInstance("PKCS12")
@@ -179,7 +187,16 @@ class DnsTunnelIntegrationTest {
             assertTrue(proxy.start())
             val query = byteArrayOf(0, 42, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 3, 119, 119, 119,
                 7, 101, 120, 97, 109, 112, 108, 101, 3, 99, 111, 109, 0, 0, 1, 0, 1)
-            val resolver = FoxResolver(proxyPort, endpoints = listOf("https://localhost:${dns.localPort}/dns-query"))
+            // OkHttp (unlike the old HttpsURLConnection path) never consults the JSSE default,
+            // so hand it the loopback CA explicitly instead of relying on setDefault factories.
+            val resolver = FoxResolver(
+                proxyPort,
+                endpoints = listOf("https://localhost:${dns.localPort}/dns-query"),
+                tlsSocketFactory = SSLContext.getInstance("TLS").apply {
+                    init(null, arrayOf(trustManager()), null)
+                }.socketFactory,
+                tlsTrustManager = trustManager()
+            )
             val directAddress = resolver.directAddress("www.example.com")
             assertEquals("relay=$relayRequests dns=${dnsRequests.size} failures=$failures events=$events", "1.2.3.4", directAddress)
             val answer = resolver.answer(query)

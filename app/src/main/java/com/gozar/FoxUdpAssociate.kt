@@ -179,9 +179,10 @@ internal class FoxUdpAssociate(
 
     private fun sendSocks(payload: ByteArray, replyHeader: ByteArray) {
         val target = peer ?: return
-        val out = ByteArray(3 + replyHeader.size + payload.size)
-        replyHeader.copyInto(out, 3)
-        payload.copyInto(out, 3 + replyHeader.size)
+        // replyHeader already carries the RFC 1928 RSV/FRAG prefix; do not add another.
+        val out = ByteArray(replyHeader.size + payload.size)
+        replyHeader.copyInto(out, 0)
+        payload.copyInto(out, replyHeader.size)
         try {
             socket.send(DatagramPacket(out, out.size, target))
             count?.invoke(true, payload.size.toLong())
