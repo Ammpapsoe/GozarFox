@@ -36,7 +36,9 @@ import kotlin.concurrent.thread
 internal class FoxUdpAssociate(
     private val socket: DatagramSocket,
     private val mtu: Int,
-    private val dns: FoxDnsBridge?,
+    // Read per query, never captured once: the bridge is replaced (and the
+    // old one closed) on every reconnect, and an association may outlive it.
+    private val dns: () -> FoxDnsBridge?,
     private val openUdp: (String, Int) -> FoxDatagramPipe?,
     private val count: ((Boolean, Long) -> Unit)?,
     private val stale: () -> Boolean
@@ -150,7 +152,13 @@ internal class FoxUdpAssociate(
         count?.invoke(false, payload.size.toLong())
         if (port == 53) {
             val replyHeader = replyHeader(atyp, addressBytes, port)
-            dns?.answer(payload) { answer -> sendSocks(answer, replyHeader) } ?: Unit
+            val bridge = dns()
+            if (bridge == null || !bridge.isOpen()) {
+                // No live DNS plane for this attempt: drop the query instead
+                // of answering from a bridge another attempt already closed.
+                return
+            }
+            bridge.answer(payload) { answer -> sendSocks(answer, replyHeader) }
             return
         }
         val flow = synchronized(lock) {

@@ -223,8 +223,15 @@ class FoxFragment : Fragment() {
 
         account.text = if (mail.isEmpty()) getString(R.string.fox_signed_out) else mail
 
-        quotaBar.visibility = if (Fox.limit > 0) View.VISIBLE else View.GONE
-        if (Fox.limit > 0) {
+        val unlimited = Fox.unlimited
+        quotaBar.visibility = if (Fox.limit > 0 && !unlimited) View.VISIBLE else View.GONE
+        if (unlimited) {
+            quotaText.text = getString(R.string.fox_usage_unlimited)
+            quotaBar.progress = 0
+            reset.visibility =
+                if (Fox.reset.isEmpty()) View.GONE else View.VISIBLE
+            reset.text = if (Fox.reset.isEmpty()) "" else getString(R.string.fox_reset, resetText(Fox.reset))
+        } else if (Fox.limit > 0) {
             val used = (Fox.limit - Fox.remaining).coerceAtLeast(0)
             quotaText.text = getString(R.string.fox_quota_value, fmtBytes(used), fmtBytes(Fox.limit))
             quotaBar.progress = ((used * 100) / Fox.limit).toInt().coerceIn(0, 100)

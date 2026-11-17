@@ -35,6 +35,9 @@ object Fox {
 
     @Volatile var email: String = ""
     @Volatile var limit: Long = 0L
+
+    /** Mozilla's unmetered-month flag (`X-Quota-Unlimited`), as last seen. */
+    @Volatile var unlimited: Boolean = false
     @Volatile var remaining: Long = 0L
     @Volatile var reset: String = ""
     var busy: Boolean
@@ -76,6 +79,7 @@ object Fox {
         limit = FoxStore.limit(c)
         remaining = FoxStore.remaining(c)
         reset = FoxStore.reset(c)
+        unlimited = FoxStore.unlimited(c)
     }
 
     fun signedIn(c: Context): Boolean = FoxStore.email(c).isNotEmpty() && FoxStore.refreshToken(c).isNotEmpty()
@@ -463,10 +467,15 @@ object Fox {
 
     /** A failed quota probe must not erase the last known good numbers. */
     private fun keepKnownUsage(c: Context, fresh: FoxPass): FoxPass {
-        if (fresh.limit != 0L) return fresh
-        val known = FoxStore.limit(c)
-        if (known <= 0L) return fresh
-        return FoxPass(fresh.token, known, FoxStore.remaining(c), FoxStore.reset(c))
+        if (fresh.usageKnown) return fresh
+        if (FoxStore.limit(c) <= 0L && !FoxStore.unlimited(c)) return fresh
+        return FoxPass(
+            fresh.token,
+            FoxStore.limit(c),
+            FoxStore.remaining(c),
+            FoxStore.reset(c),
+            FoxStore.unlimited(c)
+        )
     }
 
     fun refreshUsage(c: Context) {

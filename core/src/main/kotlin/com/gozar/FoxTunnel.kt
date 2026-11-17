@@ -789,7 +789,15 @@ object FoxTunnel {
         return false
     }
 
-    internal fun authority(host: String, port: Int) = "$host:$port"
+    /**
+     * RFC 7230 / RFC 3986 authority. A literal IPv6 destination must be
+     * bracketed, `[2001:db8::1]:443`, or the CONNECT target parses as a
+     * bogus host with many colons and the relay refuses it.
+     */
+    internal fun authority(host: String, port: Int): String {
+        val bare = host.trim().trim('[', ']')
+        return if (bare.contains(':')) "[$bare]:$port" else "$bare:$port"
+    }
 
     private fun openH1(location: FoxLocation, host: String, port: Int, pass: String, timeout: Int, generation: Long): FoxDuplex {
         val socket = connect(location, arrayOf("http/1.1"), timeout, generation)

@@ -12,14 +12,24 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 object MozillaDiagnostics {
     private val lock = Any()
-    private val events = mutableListOf<String>()
+    private val events = ArrayDeque<String>()
+
+    /**
+     * Per-flow events (a CONNECT per connection, a UDP association per
+     * destination) would otherwise grow this buffer for as long as the
+     * tunnel stays up, so only the most recent [LIMIT] survive.
+     */
+    private const val LIMIT = 600
 
     fun clear() = synchronized(lock) { events.clear() }
 
     fun hasEvents(): Boolean = synchronized(lock) { events.isNotEmpty() }
 
     fun record(event: String) {
-        synchronized(lock) { events.add(event) }
+        synchronized(lock) {
+            events.addLast(event)
+            while (events.size > LIMIT) events.removeFirst()
+        }
         Log.d("MozillaWebView", event)
     }
 

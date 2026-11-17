@@ -64,7 +64,7 @@ class FoxUdpAssociateTest {
         count: ((Boolean, Long) -> Unit)? = null,
     ): Pair<FoxUdpAssociate, DatagramSocket> {
         val socket = DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
-        val association = FoxUdpAssociate(socket, 1280, bridge, openUdp, count, stale)
+        val association = FoxUdpAssociate(socket, 1280, { bridge }, openUdp, count, stale)
         association.start()
         return association to socket
     }

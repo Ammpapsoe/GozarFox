@@ -9,7 +9,24 @@ class FoxSession(val uid: String, val token: String, val needsCode: Boolean, val
 
 class FoxTokens(val access: String, val refresh: String, val expiresIn: Int)
 
-class FoxPass(val token: String, val limit: Long, val remaining: Long, val reset: String)
+/**
+ * One proxy pass plus the quota snapshot Mozilla returned with it.
+ *
+ * [unlimited] mirrors `X-Quota-Unlimited`: during an open (unmetered) period
+ * Mozilla's own clients report the month as unlimited instead of printing
+ * numbers. The flag is kept beside the numbers rather than replacing them,
+ * because the header can arrive with or without a numeric limit.
+ */
+class FoxPass(
+    val token: String,
+    val limit: Long,
+    val remaining: Long,
+    val reset: String,
+    val unlimited: Boolean = false
+) {
+    /** True when the month's usage is known: either numbers or the flag. */
+    val usageKnown: Boolean get() = limit > 0L || unlimited
+}
 
 class FoxLocation(
     val code: String,
@@ -215,15 +232,22 @@ object FoxApi {
         )
     }
 
-    private fun quota(reply: FoxReply): FoxPass? {
-        if (reply.header("X-Quota-Unlimited")?.trim()?.equals("true", true) == true) {
-            return FoxPass("", -1, -1, "")
-        }
-        val limit = reply.header("X-Quota-Limit")?.trim()?.toLongOrNull() ?: return null
-        val remaining = reply.header("X-Quota-Remaining")?.trim()?.toLongOrNull() ?: return null
+    /** Test seam: parses the quota headers of one Guardian response. */
+    internal fun quota(reply: FoxReply): FoxPass? {
+        // Mozilla's Guardian marks an unmetered month with X-Quota-Unlimited.
+        // It may send that flag together with the numeric limit (and then
+        // X-Quota-Remaining equals the whole allowance) or on its own. Both
+        // shapes mean "usage is known": treating the flag as "no headers"
+        // made the account screen claim usage was unavailable for every
+        // account during an open period, while the numbers sat right there.
+        val unlimited = reply.header("X-Quota-Unlimited")?.trim()?.equals("true", true) == true
+        val limit = reply.header("X-Quota-Limit")?.trim()?.toLongOrNull()
+        val remaining = reply.header("X-Quota-Remaining")?.trim()?.toLongOrNull()
         val reset = reply.header("X-Quota-Reset")?.trim() ?: ""
-        if (limit < 0 || remaining < 0) return null
-        return FoxPass("", limit, remaining, reset)
+        if (limit == null || remaining == null || limit <= 0 || remaining < 0) {
+            return if (unlimited) FoxPass("", 0, 0, reset, true) else null
+        }
+        return FoxPass("", limit, remaining, reset, unlimited)
     }
 
     fun pass(access: String): FoxPass = pass(access, true)
@@ -270,14 +294,14 @@ object FoxApi {
         }
         FoxDiagnostics.event("FPN stage=token-response status=${reply.code}")
         val base = readPass(reply)
-        if (base.limit != 0L) return base
+        if (base.usageKnown) return base
         // The token arrived but the quota headers were stripped or absent:
         // ask once more through the HEAD-then-GET chain before declaring the
         // user's usage unknown.
         return try {
             quota(access)
-                ?.takeIf { it.limit != 0L }
-                ?.let { FoxPass(base.token, it.limit, it.remaining, it.reset) }
+                ?.takeIf { it.usageKnown }
+                ?.let { FoxPass(base.token, it.limit, it.remaining, it.reset, it.unlimited) }
                 ?: base
         } catch (_: Exception) {
             base
@@ -297,7 +321,10 @@ object FoxApi {
         }
         if (token.isEmpty()) throw FoxError("Mozilla did not return a proxy pass", status = reply.code)
         val usage = quota(reply) ?: FoxPass(token, 0, 0, "")
-        return FoxPass(token, usage.limit, usage.remaining, usage.reset)
+        FoxDiagnostics.event(
+            "PASS stage=quota unlimited=${usage.unlimited} limit=${usage.limit} remaining=${usage.remaining}"
+        )
+        return FoxPass(token, usage.limit, usage.remaining, usage.reset, usage.unlimited)
     }
 
     private fun activate(access: String) {

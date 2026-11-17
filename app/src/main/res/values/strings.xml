@@ -473,6 +473,8 @@ AGPL-3.0-or-later</string>
     <string name="always_on_managed">Disable Always-on VPN in Android settings before disconnecting, signing out or changing this protection.</string>
     <string name="fox_disconnected">Disconnected</string>
     <string name="fox_usage_pending">Usage information unavailable</string>
+    <!-- Mozilla reported X-Quota-Unlimited: the month has no data cap. -->
+    <string name="fox_usage_unlimited">Unlimited traffic</string>
     <string name="settings_group_protection">Protection &amp; connection</string>
     <string name="settings_group_app">Appearance &amp; app</string>
     <string name="warp_udp_title">UDP via Cloudflare WARP</string>

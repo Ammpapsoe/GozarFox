@@ -191,7 +191,10 @@ object FoxLink {
                 if (!current(attempt)) return@thread
                 val candidates = Fox.autoCandidates(app)
                 if (candidates.isEmpty()) throw FoxError("No server available")
-                val lower = pass.limit > 0 && pass.remaining <= 0
+                // An unmetered month reports remaining == limit, so the flag
+                // must win over the arithmetic; only a metered, exhausted
+                // month blocks the connection.
+                val lower = !pass.unlimited && pass.limit > 0 && pass.remaining <= 0
                 if (lower) throw FoxError("Your 50 GB for this month is used up")
                 val prepared = attempts.ifCurrent(attempt) { prepare(app) } ?: return@thread
                 if (!prepared) throw FoxError("The local proxy did not start")
@@ -451,8 +454,15 @@ object FoxLink {
             else {
                 // A renewal that came back without quota headers must never
                 // erase the last known good balance.
-                val kept = if (pass.limit == 0L && FoxStore.limit(app) > 0L) {
-                    FoxPass(pass.token, FoxStore.limit(app), FoxStore.remaining(app), FoxStore.reset(app))
+                val known = FoxStore.limit(app) > 0L || FoxStore.unlimited(app)
+                val kept = if (!pass.usageKnown && known) {
+                    FoxPass(
+                        pass.token,
+                        FoxStore.limit(app),
+                        FoxStore.remaining(app),
+                        FoxStore.reset(app),
+                        FoxStore.unlimited(app)
+                    )
                 } else {
                     pass
                 }

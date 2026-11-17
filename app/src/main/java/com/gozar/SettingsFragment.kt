@@ -33,7 +33,7 @@ class SettingsFragment : Fragment() {
     private var warpUpdating = false
     private var linkState: List<Any>? = null
     private var shownLeakReport: FoxLeakGuard.Report? = null
-    private var usageState: Pair<Long, Long>? = null
+    private var usageState: Triple<Long, Long, Boolean>? = null
     private var versionName: String? = null
     private val accountListener: () -> Unit = { if (isAdded && view != null && !isHidden) paint() }
     private val linkListener: () -> Unit = {
@@ -45,7 +45,9 @@ class SettingsFragment : Fragment() {
                     linkState = current
                     paint()
                 }
-            } else if (section == "account" && usageState != (Fox.limit to Fox.remaining)) {
+            } else if (section == "account" &&
+                usageState != Triple(Fox.limit, Fox.remaining, Fox.unlimited)
+            ) {
                 paint()
             }
         }
@@ -93,6 +95,14 @@ class SettingsFragment : Fragment() {
         find<View>(R.id.rowUpdate).setOnClickListener { checkUpdates() }
         find<View>(R.id.rowGithub).setOnClickListener { openProject() }
         find<View>(R.id.rowAbout).setOnClickListener { showLegalNotice() }
+        // The structured log (sign-in, quota, tunnel stages) had no way out of
+        // the app: MozillaDiagnostics.show() existed but nothing called it, so
+        // a report could only ever be "it does not work". Long-press About to
+        // read and copy it.
+        find<View>(R.id.rowAbout).setOnLongClickListener {
+            activity?.let { MozillaDiagnostics.show(it) }
+            true
+        }
         find<View>(R.id.rowRouting).setOnClickListener { changeProtection { pickRouting() } }
         find<View>(R.id.rowChain).setOnClickListener { changeProtection { editChain() } }
         find<View>(R.id.rowApps).setOnClickListener { changeProtection { pickApps() } }
@@ -183,24 +193,35 @@ class SettingsFragment : Fragment() {
                     if (Fox.signedIn(context) && mail.isNotBlank()) mail else getString(R.string.settings_account_desc)
             }
             "account" -> {
-                usageState = Fox.limit to Fox.remaining
+                usageState = Triple(Fox.limit, Fox.remaining, Fox.unlimited)
                 val signed = Fox.signedIn(context)
                 val mail = FoxStore.email(context)
                 find<TextView>(R.id.tvAccountEmail).text = if (signed) mail else getString(R.string.fox_signed_out)
                 find<TextView>(R.id.tvAccountInitial).text =
                     if (signed && mail.isNotEmpty()) mail.substring(0, 1).uppercase() else "?"
                 val limit = Fox.limit
+                val unlimited = Fox.unlimited
                 val used = (limit - Fox.remaining).coerceAtLeast(0)
                 val left = Fox.remaining.coerceAtLeast(0)
                 val percent = if (limit > 0) ((used * 100) / limit).toInt().coerceIn(0, 100) else 0
                 find<TextView>(R.id.tvAccountPlan).text = getString(R.string.settings_account)
-                find<TextView>(R.id.tvUsagePercent).text = if (limit > 0) "$percent%" else "—"
-                find<TextView>(R.id.tvUsageUsed).text =
-                    if (limit > 0) getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit))) else getString(R.string.fox_usage_pending)
+                // Mozilla's unmetered month: there is no meaningful
+                // percentage, so the card names the state instead of
+                // claiming the numbers are unavailable.
+                find<TextView>(R.id.tvUsagePercent).text = when {
+                    unlimited -> "\u221E"
+                    limit > 0 -> "$percent%"
+                    else -> "—"
+                }
+                find<TextView>(R.id.tvUsageUsed).text = when {
+                    unlimited -> getString(R.string.fox_usage_unlimited)
+                    limit > 0 -> getString(R.string.account_usage, ltr(plain(used)), ltr(plain(limit)))
+                    else -> getString(R.string.fox_usage_pending)
+                }
                 find<TextView>(R.id.tvUsageLeft).text =
-                    if (limit > 0) getString(R.string.usage_left, ltr(plain(left))) else ""
+                    if (!unlimited && limit > 0) getString(R.string.usage_left, ltr(plain(left))) else ""
                 find<UsageMeterView>(R.id.usageMeter).apply {
-                    visibility = if (limit > 0) View.VISIBLE else View.GONE
+                    visibility = if (limit > 0 && !unlimited) View.VISIBLE else View.GONE
                     setProgress(percent)
                 }
                 find<View>(R.id.btnAccountRefresh).isEnabled = signed

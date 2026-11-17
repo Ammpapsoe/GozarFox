@@ -61,6 +61,8 @@ object FoxStore {
     fun limit(c: Context): Long = p(c).getLong("limit", 0L)
     fun remaining(c: Context): Long = p(c).getLong("remaining", 0L)
     fun reset(c: Context): String = p(c).getString("reset", "") ?: ""
+    /** Mozilla's unmetered-month flag, as last seen. */
+    fun unlimited(c: Context): Boolean = p(c).getBoolean("unlimited", false)
     fun selected(c: Context): String = p(c).getString("selected", "REC") ?: "REC"
     fun authRevision(c: Context): Long = p(c).getLong("auth_revision", 0L)
 
@@ -96,7 +98,8 @@ object FoxStore {
         val until = minOf(explicit, prefs.getLong("pass_until", 0L))
         if (until <= now || until - now <= marginMs.coerceAtLeast(0L)) return@synchronized null
         FoxBootstrap(FoxPass(token, prefs.getLong("limit", 0L), prefs.getLong("remaining", 0L),
-            prefs.getString("reset", "").orEmpty()), id, prefs.getLong("session_revision", 0L))
+            prefs.getString("reset", "").orEmpty(), prefs.getBoolean("unlimited", false)),
+            id, prefs.getLong("session_revision", 0L))
     }
 
     /** The DNS/WARP listener shares this callback. Do not recurse into
@@ -126,6 +129,7 @@ object FoxStore {
         .put("pass_until", prefs.getLong("pass_until", 0L))
         .put("limit", prefs.getLong("limit", 0L))
         .put("remaining", prefs.getLong("remaining", 0L))
+        .put("unlimited", prefs.getBoolean("unlimited", false))
         .put("reset", prefs.getString("reset", "").orEmpty())
         .put("selected", prefs.getString("selected", "REC").orEmpty())
 
@@ -153,6 +157,7 @@ object FoxStore {
         for (key in listOf("expires_at", "pass_until", "limit", "remaining")) {
             edit.putLong(key, account.optLong(key, 0L))
         }
+        edit.putBoolean("unlimited", account.optBoolean("unlimited", false))
     }
 
     fun accounts(c: Context): List<SavedFoxAccount> = synchronized(lock) {
@@ -218,6 +223,7 @@ object FoxStore {
             .put("pass_until", passExpiry(pass.token))
             .put("limit", pass.limit)
             .put("remaining", pass.remaining)
+            .put("unlimited", pass.unlimited)
             .put("reset", pass.reset)
             .put("selected", existing?.optString("selected", "REC") ?: "REC")
         data.put(id, account)
@@ -252,6 +258,7 @@ object FoxStore {
             .put("pass_until", passExpiry(pass.token))
             .put("limit", pass.limit)
             .put("remaining", pass.remaining)
+            .put("unlimited", pass.unlimited)
             .put("reset", pass.reset)
         data.put(id, account)
         val edit = prefs.edit().putString("accounts", SecretBox.seal(c, data.toString()))

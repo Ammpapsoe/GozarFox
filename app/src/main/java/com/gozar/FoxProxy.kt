@@ -267,13 +267,20 @@ class FoxProxy(
         val association = FoxUdpAssociate(
             socket = relay,
             mtu = UDP_ANSWER_MTU,
-            dns = FoxLink.dnsBridge,
+            dns = { FoxLink.dnsBridge },
             openUdp = { targetHost, targetPort ->
                 val ticket = scope?.ticket
-                if (ticket == null || !activeEpoch(acceptedEpoch) || !scopeCurrent(ticket)) null
-                else try {
-                    FoxLink.openUdpScoped(ticket, targetHost, targetPort)
-                } catch (_: Exception) {
+                if (ticket == null || !activeEpoch(acceptedEpoch) || !scopeCurrent(ticket)) {
+                    FoxDiagnostics.event("PROXY stage=udp-skipped target=$targetHost:$targetPort reason=stale")
+                    null
+                } else try {
+                    FoxLink.openUdpScoped(ticket, targetHost, targetPort).also {
+                        FoxDiagnostics.event("PROXY stage=udp-open target=$targetHost:$targetPort")
+                    }
+                } catch (e: Exception) {
+                    FoxDiagnostics.event(
+                        "PROXY stage=udp-failed target=$targetHost:$targetPort error=${e.javaClass.simpleName}:${e.message}"
+                    )
                     null
                 }
             },
@@ -394,6 +401,10 @@ class FoxProxy(
         // The engine hands us destination addresses; rewrite an IPv4 literal
         // back to the hostname the resolver learned for it, when one exists.
         val dial = nameOf(host) ?: host
+        // Destination-level evidence: which flows reach the proxy, and
+        // whether the CONNECT for them succeeded. A native app that will not
+        // tunnel leaves a trace here instead of a silent black hole.
+        FoxDiagnostics.event("PROXY stage=tcp-open target=$dial:$port addressed=$host")
         val tunnel: FoxPipe = (if (port == 53) {
             // DNS is served locally by the anti-censorship resolver even when
             // direct routing would otherwise apply; it never hits the wire.
@@ -414,6 +425,9 @@ class FoxProxy(
             try {
                 tunnelConnect(scope.location, dial, port, access, scope.ticket)
             } catch (e: Exception) {
+                FoxDiagnostics.event(
+                    "PROXY stage=tcp-failed target=$dial:$port error=${e.javaClass.simpleName}:${e.message}"
+                )
                 if (!forceTunnel && activeEpoch(acceptedEpoch)) FoxLink.fault(e.message ?: "tunnel failed")
                 null
             }
