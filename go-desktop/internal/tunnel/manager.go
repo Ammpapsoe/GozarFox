@@ -33,6 +33,20 @@ type h3Session struct {
 	client *http3.ClientConn
 }
 
+// Session sizing.
+//
+// Every stream on one HTTP/2 session shares a single TLS connection, so a lost
+// packet on that TCP socket stalls *all* of its streams until the retransmit
+// lands. The previous desktop policy kept at most two sessions and multiplexed
+// an unbounded number of connections onto them, which turns any loss on a long
+// haul relay into a stall for the whole tunnel; that matches the report of very
+// low throughput and downloads that never start. Spreading connections across
+// more sessions keeps every flow on a socket with fewer neighbours.
+const (
+	h2StreamsPerSession = 8
+	h2SessionLimit      = 8
+)
+
 type Manager struct {
 	target    Target
 	mu        sync.Mutex
@@ -47,6 +61,10 @@ type Manager struct {
 	h2Score   measure
 	h3Score   measure
 	testTLS   *tls.Config
+
+	// h3DisabledForTest pins a manager to HTTP/2 so a loopback test that has
+	// no QUIC endpoint does not spend its budget on a guaranteed failure.
+	h3DisabledForTest bool
 }
 
 func NewManager(target Target) *Manager {
@@ -72,9 +90,13 @@ func (m *Manager) Open(host string, port int, pass string, timeout time.Duration
 		var conn Dup
 		var err error
 		if h3 {
+			// The previous 2.5 s cap made the first stream of every session
+			// pay a full QUIC handshake timeout before the HTTP/2 fallback
+			// (the probe had its own budget), which showed up as a slow
+			// start for the very first connections of a session.
 			budget := timeout
-			if budget > 2500*time.Millisecond {
-				budget = 2500 * time.Millisecond
+			if budget > 1200*time.Millisecond {
+				budget = 1200 * time.Millisecond
 			}
 			conn, err = m.openH3(host, port, pass, budget)
 		} else {
@@ -121,7 +143,7 @@ func (m *Manager) choice() (bool, bool) {
 	if m.closed {
 		return false, false
 	}
-	canH3 := len(m.target.Chain) == 0 && m.target.DialHost != ""
+	canH3 := len(m.target.Chain) == 0 && m.target.DialHost != "" && !m.h3DisabledForTest
 	if !canH3 {
 		return false, false
 	}
@@ -214,12 +236,12 @@ func (m *Manager) h2Client(timeout time.Duration) (*h2Session, error) {
 			}
 		}
 		m.h2 = alive
-		if best != nil && (best.active < 8 || len(m.h2)+m.h2Opening >= 2) {
+		if best != nil && (best.active < h2StreamsPerSession || len(m.h2)+m.h2Opening >= h2SessionLimit) {
 			best.active++
 			m.mu.Unlock()
 			return best, nil
 		}
-		if len(m.h2)+m.h2Opening < 2 {
+		if len(m.h2)+m.h2Opening < h2SessionLimit {
 			m.h2Opening++
 			m.mu.Unlock()
 			raw, err := dialTLSConfigured(m.target, []string{"h2"}, timeout, m.testTLS)

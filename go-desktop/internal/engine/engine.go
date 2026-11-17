@@ -21,7 +21,17 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-const mtu = 1500
+// mtu is what the tunnel device accepts from local applications. It is larger
+// than an Ethernet frame because the device carries no Ethernet header, so the
+// stack never has to fragment a full-size local segment before handing it to
+// the proxy stream.
+const mtu = 1600
+
+// Copy buffers. A 32 KiB buffer cannot keep a long-haul TCP flow saturated:
+// the sender stalls while userspace copies, so the receive window never fills
+// and throughput stays far below the link. 64 KiB per direction is what a
+// loopback copy needs to stay out of the way on a typical desktop.
+const relayBuffer = 64 * 1024
 
 func setTCP[T any](created *stack.Stack, value T) error {
 	if err := created.SetTransportProtocolOption(tcp.ProtocolNumber, any(&value).(tcpip.SettableTransportProtocolOption)); err != nil {
@@ -272,7 +282,7 @@ func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
 }
 
 func copyMetered(dst io.Writer, src io.Reader, counter *atomic.Int64) error {
-	buffer := make([]byte, 32*1024)
+	buffer := make([]byte, relayBuffer)
 	for {
 		count, readErr := src.Read(buffer)
 		for offset := 0; offset < count; {
