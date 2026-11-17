@@ -191,7 +191,11 @@ class FoxVpnService : VpnService() {
         // The native engine forwards everything through the loopback socks
         // proxy; the TUN byte counters (not the proxy pipe) meter this path.
         val credential = FoxLink.socksCredential()
-        val started = credential != null && HevEngine.start(app, mtu, FoxLink.socksPort, credential, fd.fileDescriptor.fd)
+        // ParcelFileDescriptor.fd is the public int property for the tun fd. hev is
+// handed the raw int by design, but it never closes app-owned tun fds (the
+// tunnel_fini path only releases fds hev itself opened), so ownership of
+// this PFD stays with the service and release() closes it exactly once.
+        val started = credential != null && HevEngine.start(app, mtu, FoxLink.socksPort, credential, fd.fd)
         if (!started) {
             FoxLink.attachDns(null)
             abortStart(getString(R.string.fox_no_device))

@@ -385,7 +385,7 @@ class FoxProxy(
         if (!activeEpoch(acceptedEpoch)) return null
         val scope = tunnelScope(this) ?: return null
         if (!activeEpoch(acceptedEpoch) || !scopeCurrent(scope.ticket)) return null
-        val tunnel: FoxPipe? = if (port == 53) {
+        val tunnel: FoxPipe = (if (port == 53) {
             // DNS is served locally by the anti-censorship resolver even when
             // direct routing would otherwise apply; it never hits the wire.
             FoxLink.dnsBridge?.tcpPipe()
@@ -408,7 +408,7 @@ class FoxProxy(
                 if (!forceTunnel && activeEpoch(acceptedEpoch)) FoxLink.fault(e.message ?: "tunnel failed")
                 null
             }
-        } ?: return null
+        }) ?: return null
         val accepted = synchronized(connections) {
             if (!running || paused || epoch != acceptedEpoch) false else pipes.add(tunnel)
         }
