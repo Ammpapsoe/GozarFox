@@ -19,6 +19,12 @@ class FoxProxy(
     private val directAllowed: () -> Boolean = { FoxVpnService.directRoutingAllowed() },
     private val directAddress: (String, Long) -> String? = { host, ticket -> FoxVpnService.directAddress(host, ticket) },
     private val directConnect: (String, Int, Long) -> FoxPipe? = { host, port, ticket -> FoxLink.connectDirect(host, port, ticket) },
+    // The native engine only knows destination addresses, never names. The
+    // anti-censorship resolver learns A-record names on the way through, so
+    // an IPv4 literal can be rewritten to its owning hostname — like the
+    // hand-rolled stack did. Direct-routing, upstream CONNECT policy and the
+    // pass-room all see the real name again.
+    private val nameOf: (String) -> String? = { host -> FoxVpnService.nameFor(host) },
     private val tunnelConnect: (FoxLocation, String, Int, String, Long) -> FoxPipe? = { place, host, port, pass, ticket ->
         FoxTunnel.open(place, host, port, pass, expectedTransport = ticket)
     },
@@ -385,12 +391,15 @@ class FoxProxy(
         if (!activeEpoch(acceptedEpoch)) return null
         val scope = tunnelScope(this) ?: return null
         if (!activeEpoch(acceptedEpoch) || !scopeCurrent(scope.ticket)) return null
+        // The engine hands us destination addresses; rewrite an IPv4 literal
+        // back to the hostname the resolver learned for it, when one exists.
+        val dial = nameOf(host) ?: host
         val tunnel: FoxPipe = (if (port == 53) {
             // DNS is served locally by the anti-censorship resolver even when
             // direct routing would otherwise apply; it never hits the wire.
             FoxLink.dnsBridge?.tcpPipe()
-        } else if (!forceTunnel && directAllowed() && FoxRoute.direct(host)) {
-            val address = directAddress(host, scope.ticket) ?: return null
+        } else if (!forceTunnel && directAllowed() && FoxRoute.direct(dial)) {
+            val address = directAddress(dial, scope.ticket) ?: return null
             if (!activeEpoch(acceptedEpoch) || !directAllowed() || !scopeCurrent(scope.ticket)) return null
             val pipe = directConnect(address, port, scope.ticket) ?: return null
             val guarded = DirectPipe(pipe) { activeEpoch(acceptedEpoch) && directAllowed() && scopeCurrent(scope.ticket) }
@@ -403,7 +412,7 @@ class FoxProxy(
             val access = pass() ?: return null
             if (!activeEpoch(acceptedEpoch)) return null
             try {
-                tunnelConnect(scope.location, host, port, access, scope.ticket)
+                tunnelConnect(scope.location, dial, port, access, scope.ticket)
             } catch (e: Exception) {
                 if (!forceTunnel && activeEpoch(acceptedEpoch)) FoxLink.fault(e.message ?: "tunnel failed")
                 null

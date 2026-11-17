@@ -484,6 +484,32 @@ class FoxVpnService : VpnService() {
             return service.resolver?.directAddress(host, scope)
         }
 
+        /**
+         * The hostname the local resolver learned for this IPv4 literal, or
+         * null. The native engine hands us addresses, never names; the map is
+         * filled on the way through by the anti-censorship DNS plane, like the
+         * hand-rolled stack did. A miss dials the address — exactly like before,
+         * never less.
+         */
+        internal fun nameFor(host: String): String? {
+            val service = instance ?: return null
+            val int = ipv4ToInt(host) ?: return null
+            if (int == 0) return null
+            return service.resolver?.nameOf(int)
+        }
+
+        private fun ipv4ToInt(host: String): Int? {
+            val parts = host.split('.')
+            if (parts.size != 4) return null
+            var value = 0
+            for (part in parts) {
+                val octet = part.toIntOrNull()
+                if (octet == null || octet !in 0..255) return null
+                value = (value shl 8) or octet
+            }
+            return value
+        }
+
         /** Diagnostic DNS uses the service resolver and its force-tunnel proxy,
          * not system DNS from this VPN-excluded process. */
         fun diagnosticDns(host: String, expectedTicket: Long): FoxLeakGuard.Lookup {
