@@ -19,3 +19,16 @@
 -dontwarn org.slf4j.impl.StaticLoggerBinder
 -dontwarn org.slf4j.impl.StaticMDCBinder
 -dontwarn org.slf4j.impl.StaticMarkerBinder
+
+# netty 4.1.140 performs Runtime reflection in class initialisation:
+#   AbstractByteBufAllocator.<clinit> -> ResourceLeakDetector.addExclusions(class, "toLeakAwareBuffer")
+#   AdvancedLeakAwareByteBuf.<clinit> -> addExclusions(class, "touch", "recordLeakNonRefCountingOperation")
+#   ReferenceCountUtil.<clinit>       -> addExclusions(class, "touch")
+# addExclusions() walks clz.getDeclaredMethods() and throws
+# IllegalArgumentException("Can't find '[x]' in <clz>") when R8 has renamed
+# the method. That exception kills the worker thread on Connect with
+# ExceptionInInitializerError ("Send feedback" crash). Keep the exact
+# classes whose members are looked up this way.
+-keep class io.netty.util.ReferenceCountUtil { *; }
+-keep class io.netty.buffer.AbstractByteBufAllocator { *; }
+-keep class io.netty.buffer.AdvancedLeakAwareByteBuf { *; }
