@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="frost_row">#B81A1D24</color>
+    <color name="frost_edge">#26FFFFFF</color>
+    <color name="frost_hero">#B8252A34</color>
+</resources>

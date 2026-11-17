@@ -1,0 +1,2 @@
+build/arch/x86/hev-task-arch-x86_64.o: \
+ src/arch/x86/hev-task-arch-x86_64.c

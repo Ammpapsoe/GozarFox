@@ -1,0 +1,3 @@
+build/kern/task/hev-task-stack-mmap.o: \
+ src/kern/task/hev-task-stack-mmap.c include/hev-memory-allocator.h \
+ src/lib/misc/hev-compiler.h src/kern/task/hev-task-stack.h

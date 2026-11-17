@@ -10,6 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Liquid glass surfaces ship as an AAR with prebuilt native blur
+        // kernels; it is not on Maven Central or Google's repository.
+        maven { url 'https://jitpack.io' }
     }
 }
 rootProject.name = "Gozar"

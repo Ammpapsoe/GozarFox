@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="shell_backdrop_start">#FDFDFF</color>
+    <color name="shell_backdrop_end">#E9EEF7</color>
+    <color name="shell_glow">#33E4002B</color>
+    <color name="shell_glow_alt">#2E5B8DEF</color>
+</resources>

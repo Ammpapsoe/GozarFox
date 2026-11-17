@@ -1,0 +1,2 @@
+build/kern/task/hev-task-execute.o: src/kern/task/hev-task-execute.S \
+ src/arch/x86/hev-task-execute-x86_64.s src/arch/x86/asm.h

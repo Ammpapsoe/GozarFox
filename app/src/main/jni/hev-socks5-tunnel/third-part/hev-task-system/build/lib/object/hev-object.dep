@@ -1,0 +1,2 @@
+build/lib/object/hev-object.o: src/lib/object/hev-object.c \
+ include/hev-object.h src/lib/misc/hev-compiler.h

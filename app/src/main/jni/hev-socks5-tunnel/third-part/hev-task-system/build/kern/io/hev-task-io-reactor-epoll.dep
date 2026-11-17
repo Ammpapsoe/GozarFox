@@ -1,0 +1,4 @@
+build/kern/io/hev-task-io-reactor-epoll.o: \
+ src/kern/io/hev-task-io-reactor-epoll.c include/hev-memory-allocator.h \
+ src/kern/io/hev-task-io-reactor.h \
+ src/kern/io/hev-task-io-reactor-epoll.h

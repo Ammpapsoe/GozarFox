@@ -102,7 +102,56 @@ class FoxFragment : Fragment() {
         connect.setOnClickListener { toggle() }
         map.setOnClickListener { startActivity(Intent(requireContext(), RouteMapActivity::class.java)) }
         view.findViewById<View>(R.id.foxServerRow).setOnClickListener { pickServer() }
+        applyGlass(view)
         return view
+    }
+
+    /**
+     * Give the hero, the traffic card and the server row a refracting pane.
+     *
+     * Each container keeps its own background as the thing the glass bends, so
+     * the hero gradient and the metric icons are still drawn exactly once and
+     * the pane bends what is already there instead of covering it. When the
+     * device cannot load the native blur kernels [FoxGlass] reports no glass
+     * and this is a no-op.
+     */
+    private fun applyGlass(view: View) {
+        val dark = (resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val tint = if (dark) GlassViewConfig.DARK_TINT else GlassViewConfig.REGULAR_TINT
+        val context = view.context
+        val radius = FoxGlass.dp(context, FoxGlass.PANEL_RADIUS_DP)
+        (view.findViewById<ViewGroup>(R.id.foxHero))?.let { hero ->
+            FoxGlass.wrap(hero, GlassViewConfig(
+                cornerRadiusPx = radius,
+                tint = tint,
+                keepBackdrop = true,
+                dispersion = 0.12f,
+                sensorHighlight = true,
+                bevelWidthPx = FoxGlass.dp(context, 24f),
+                refractionHeightPx = FoxGlass.dp(context, 14f)
+            ))
+        }
+        // chartCard is a MaterialCardView, which is a ViewGroup.
+        (chartCard as? ViewGroup)?.let { card ->
+            FoxGlass.wrap(card, GlassViewConfig(
+                cornerRadiusPx = radius,
+                tint = tint,
+                keepBackdrop = true
+            ))
+        }
+        (view.findViewById<ViewGroup>(R.id.foxServerRow))?.let { row ->
+            // The row sits on a rounded card drawable; that drawable is the
+            // backdrop, so it has to stay in place.
+            FoxGlass.wrap(row, GlassViewConfig(
+                cornerRadiusPx = FoxGlass.dp(context, 20f),
+                tint = tint,
+                keepBackdrop = true,
+                bevelWidthPx = FoxGlass.dp(context, 16f),
+                refractionHeightPx = FoxGlass.dp(context, 8f)
+            ))
+        }
     }
 
     override fun onViewCreated(view: View, saved: Bundle?) {

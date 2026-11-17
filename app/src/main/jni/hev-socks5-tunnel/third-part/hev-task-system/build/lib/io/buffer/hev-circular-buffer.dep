@@ -1,0 +1,4 @@
+build/lib/io/buffer/hev-circular-buffer.o: \
+ src/lib/io/buffer/hev-circular-buffer.c include/hev-circular-buffer.h \
+ include/hev-sys.h include/hev-sys-unix.h include/hev-memory-allocator.h \
+ src/lib/misc/hev-compiler.h

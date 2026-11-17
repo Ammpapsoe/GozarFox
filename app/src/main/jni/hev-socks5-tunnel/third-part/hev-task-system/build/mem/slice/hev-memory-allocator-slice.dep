@@ -1,0 +1,4 @@
+build/mem/slice/hev-memory-allocator-slice.o: \
+ src/mem/slice/hev-memory-allocator-slice.c src/lib/misc/hev-compiler.h \
+ src/mem/slice/hev-memory-allocator-slice.h \
+ src/mem/base/hev-memory-allocator.h

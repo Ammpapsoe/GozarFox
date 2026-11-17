@@ -37,6 +37,11 @@ class App : Application() {
         UpdateChecker.check(this)
         FoxRelayStore.initialize(this)
         FoxDiagnostics.sink = MozillaDiagnostics::record
+        // Probe the glass renderer once, off the first frame: the library's
+        // native blur kernels only exist for arm64-v8a and armeabi-v7a, and
+        // asking here keeps that decision away from a screen that is being laid
+        // out.
+        Thread({ runCatching { FoxGlass.install(this) } }, "fox-glass-probe").start()
     }
 
     /** Respect the system battery-saver setting without penalizing normal use. */

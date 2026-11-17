@@ -1,0 +1,3 @@
+build/kern/sync/hev-task-mutex.o: src/kern/sync/hev-task-mutex.c \
+ include/hev-task.h include/hev-sys.h include/hev-sys-unix.h \
+ include/hev-task-mutex.h src/lib/misc/hev-compiler.h

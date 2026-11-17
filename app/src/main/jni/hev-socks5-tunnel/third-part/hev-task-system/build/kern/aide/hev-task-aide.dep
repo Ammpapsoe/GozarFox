@@ -1,0 +1,13 @@
+build/kern/aide/hev-task-aide.o: src/kern/aide/hev-task-aide.c \
+ src/sys/hev-sys-private.h src/sys/unix/hev-sys-private.h \
+ include/hev-sys.h include/hev-sys-unix.h \
+ src/sys/unix/hev-sys-task-stack.h src/sys/unix/hev-sys-task-execute.h \
+ src/sys/unix/hev-sys-thread.h src/sys/unix/hev-sys-mutex.h \
+ src/sys/unix/hev-sys-fd.h include/hev-task.h include/hev-task-io.h \
+ include/hev-task-io-socket.h include/hev-memory-allocator.h \
+ src/kern/task/hev-task-private.h src/kern/task/hev-task-stack.h \
+ src/lib/list/hev-list.h src/lib/rbtree/hev-rbtree.h \
+ src/kern/io/hev-task-io-reactor.h \
+ src/kern/io/hev-task-io-reactor-epoll.h \
+ src/mem/simple/hev-memory-allocator-simple.h \
+ src/mem/base/hev-memory-allocator.h src/kern/aide/hev-task-aide.h

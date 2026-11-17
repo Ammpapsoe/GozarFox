@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The window backdrop. The glass panes sample what is drawn behind them, so
+     a flat colour would refract into nothing; two very low-contrast radial
+     washes give the lens edges something to bend without tinting the text. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="@color/shell_backdrop_end"
+                android:startColor="@color/shell_backdrop_start" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="60%p"
+                android:centerX="0.15"
+                android:centerY="0.08"
+                android:startColor="@color/shell_glow"
+                android:endColor="@android:color/transparent" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="55%p"
+                android:centerX="0.9"
+                android:centerY="0.85"
+                android:startColor="@color/shell_glow_alt"
+                android:endColor="@android:color/transparent" />
+        </shape>
+    </item>
+</layer-list>

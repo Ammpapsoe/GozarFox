@@ -1,0 +1,23 @@
+build/hev-main.o: src/hev-main.c third-part/lwip/src/include/lwip/init.h \
+ third-part/lwip/src/include/lwip/opt.h \
+ third-part/lwip/src/ports/include/lwipopts.h \
+ third-part/lwip/src/ports/include/lwipopts.h \
+ third-part/lwip/src/include/lwip/debug.h \
+ third-part/lwip/src/include/lwip/arch.h \
+ third-part/lwip/src/ports/include/arch/cc.h \
+ third-part/lwip/src/ports/include/arch/../../unix/include/cc.h \
+ third-part/hev-task-system/include/hev-task.h \
+ third-part/hev-task-system/include/hev-sys.h \
+ third-part/hev-task-system/include/hev-sys-unix.h \
+ third-part/hev-task-system/include/hev-task-system.h \
+ src/core/include/hev-socks5-misc.h src/core/include/hev-socks5-proto.h \
+ src/misc/hev-utils.h third-part/lwip/src/include/lwip/ip_addr.h \
+ third-part/lwip/src/include/lwip/def.h \
+ third-part/lwip/src/include/lwip/ip4_addr.h \
+ third-part/lwip/src/include/lwip/ip6_addr.h \
+ third-part/lwip/src/include/lwip/def.h \
+ third-part/lwip/src/include/lwip/ip6_zone.h \
+ src/core/include/hev-socks5-proto.h src/misc/hev-compiler.h \
+ src/hev-config.h src/hev-config-const.h src/misc/hev-logger.h \
+ src/core/include/hev-socks5-logger.h src/hev-socks5-tunnel.h \
+ src/misc/hev-list.h src/hev-main.h

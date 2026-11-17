@@ -1,0 +1,13 @@
+build/core/src/hev-socks5-udp.o: src/core/src/hev-socks5-udp.c \
+ third-part/hev-task-system/include/hev-sys.h \
+ third-part/hev-task-system/include/hev-sys-unix.h \
+ third-part/hev-task-system/include/hev-task.h \
+ third-part/hev-task-system/include/hev-task-io.h \
+ third-part/hev-task-system/include/hev-task-io-socket.h \
+ third-part/hev-task-system/include/hev-memory-allocator.h \
+ src/core/include/hev-socks5.h \
+ third-part/hev-task-system/include/hev-object.h \
+ src/core/src/hev-socks5-misc-priv.h src/core/include/hev-socks5-misc.h \
+ src/core/include/hev-socks5-proto.h src/core/include/hev-socks5-proto.h \
+ src/core/src/hev-socks5-logger-priv.h \
+ src/core/include/hev-socks5-logger.h src/core/include/hev-socks5-udp.h

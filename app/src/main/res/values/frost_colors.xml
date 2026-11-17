@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Rows and cards are frosted rather than opaque: on a device that draws
+         the liquid-glass pane the pane is visible through them, and on a device
+         that cannot the surface still reads as a soft translucent card. -->
+    <color name="frost_row">#B8FFFFFF</color>
+    <color name="frost_edge">#33FFFFFF</color>
+    <color name="frost_hero">#A6FFFFFF</color>
+</resources>

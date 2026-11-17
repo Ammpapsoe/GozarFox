@@ -1,0 +1,7 @@
+build/lib/io/poll/hev-task-io-poll.o: src/lib/io/poll/hev-task-io-poll.c \
+ src/sys/hev-sys-private.h src/sys/unix/hev-sys-private.h \
+ include/hev-sys.h include/hev-sys-unix.h \
+ src/sys/unix/hev-sys-task-stack.h src/sys/unix/hev-sys-task-execute.h \
+ src/sys/unix/hev-sys-thread.h src/sys/unix/hev-sys-mutex.h \
+ src/sys/unix/hev-sys-fd.h include/hev-task.h include/hev-task-io-poll.h \
+ src/lib/misc/hev-compiler.h

@@ -1,0 +1,2 @@
+build/misc/hev-exec.o: src/misc/hev-exec.c src/misc/hev-compat.h \
+ src/misc/hev-logger.h src/misc/hev-exec.h

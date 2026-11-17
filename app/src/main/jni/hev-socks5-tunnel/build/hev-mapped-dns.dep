@@ -1,0 +1,8 @@
+build/hev-mapped-dns.o: src/hev-mapped-dns.c \
+ third-part/hev-task-system/include/hev-sys.h \
+ third-part/hev-task-system/include/hev-sys-unix.h \
+ src/misc/hev-compiler.h \
+ third-part/hev-task-system/include/hev-memory-allocator.h \
+ src/misc/hev-logger.h src/hev-mapped-dns.h src/misc/hev-list.h \
+ src/core/include/hev-rbtree.h \
+ third-part/hev-task-system/include/hev-object.h

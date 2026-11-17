@@ -1,0 +1,23 @@
+build/hev-socks5-session.o: src/hev-socks5-session.c src/misc/hev-utils.h \
+ third-part/lwip/src/include/lwip/ip_addr.h \
+ third-part/lwip/src/include/lwip/opt.h \
+ third-part/lwip/src/ports/include/lwipopts.h \
+ third-part/lwip/src/ports/include/lwipopts.h \
+ third-part/lwip/src/include/lwip/debug.h \
+ third-part/lwip/src/include/lwip/arch.h \
+ third-part/lwip/src/ports/include/arch/cc.h \
+ third-part/lwip/src/ports/include/arch/../../unix/include/cc.h \
+ third-part/lwip/src/include/lwip/def.h \
+ third-part/lwip/src/include/lwip/ip4_addr.h \
+ third-part/lwip/src/include/lwip/ip6_addr.h \
+ third-part/lwip/src/include/lwip/def.h \
+ third-part/lwip/src/include/lwip/ip6_zone.h \
+ third-part/hev-task-system/include/hev-task.h \
+ third-part/hev-task-system/include/hev-sys.h \
+ third-part/hev-task-system/include/hev-sys-unix.h \
+ src/core/include/hev-socks5-proto.h src/misc/hev-logger.h \
+ src/hev-config.h src/hev-config-const.h \
+ src/core/include/hev-socks5-client.h src/core/include/hev-socks5.h \
+ third-part/hev-task-system/include/hev-object.h \
+ src/core/include/hev-socks5-proto.h src/hev-socks5-tunnel.h \
+ src/misc/hev-list.h src/hev-socks5-session.h

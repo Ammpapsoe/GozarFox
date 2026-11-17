@@ -1,0 +1,6 @@
+build/kern/itc/hev-task-channel-select.o: \
+ src/kern/itc/hev-task-channel-select.c include/hev-memory-allocator.h \
+ include/hev-task-channel-select.h include/hev-task-channel.h \
+ include/hev-sys.h include/hev-sys-unix.h src/lib/misc/hev-compiler.h \
+ src/kern/itc/hev-task-channel-select-private.h include/hev-task.h \
+ src/lib/list/hev-list.h src/kern/itc/hev-task-channel-private.h

@@ -1,0 +1,3 @@
+build/misc/hev-logger.o: src/misc/hev-logger.c \
+ third-part/hev-task-system/include/hev-sys.h \
+ third-part/hev-task-system/include/hev-sys-unix.h src/misc/hev-logger.h

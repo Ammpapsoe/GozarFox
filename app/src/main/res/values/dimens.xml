@@ -9,12 +9,12 @@
     <dimen name="sp_3xl">32dp</dimen>
     <dimen name="screen_gutter">16dp</dimen>
     <dimen name="stack_gap">2dp</dimen>
-    <dimen name="radius_s">12dp</dimen>
-    <dimen name="radius_m">20dp</dimen>
-    <dimen name="radius_l">28dp</dimen>
-    <dimen name="card_radius">28dp</dimen>
+    <dimen name="radius_s">16dp</dimen>
+    <dimen name="radius_m">24dp</dimen>
+    <dimen name="radius_l">32dp</dimen>
+    <dimen name="card_radius">32dp</dimen>
     <dimen name="tile_size">40dp</dimen>
-    <dimen name="tile_radius">12dp</dimen>
+    <dimen name="tile_radius">16dp</dimen>
     <dimen name="tile_icon">22dp</dimen>
     <dimen name="row_height">64dp</dimen>
     <dimen name="row_pad_start">16dp</dimen>

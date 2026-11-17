@@ -1,0 +1,2 @@
+build/arch/arm/hev-task-arch-aarch64.o: \
+ src/arch/arm/hev-task-arch-aarch64.c

@@ -4,7 +4,7 @@
     android:id="@+id/shell"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:attr/colorBackground"
+    android:background="@drawable/shell_backdrop"
     android:orientation="vertical">
 
     <FrameLayout
@@ -13,12 +13,21 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNav"
-        style="@style/Widget.Gozar.NavigationBar"
+    <!-- The bar is translucent so the backdrop wash reads through it; the glass
+         pane is added on top by MainActivity when the renderer is available. -->
+    <FrameLayout
+        android:id="@+id/navHost"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorSurfaceContainer"
-        app:menu="@menu/main_nav" />
+        android:background="@android:color/transparent">
+
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottomNav"
+            style="@style/Widget.Gozar.NavigationBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/nav_bar_surface"
+            app:menu="@menu/main_nav" />
+    </FrameLayout>
 
 </LinearLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Marks a container whose children were moved inside a glass pane, so a
+         second pass over the same view is a no-op. -->
+    <item name="glass_host" type="id" />
+    <!-- Marks a view that already has a glass pane drawn under it. -->
+    <item name="glass_pane" type="id" />
+</resources>
