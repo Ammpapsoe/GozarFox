@@ -32,3 +32,18 @@
 -keep class io.netty.util.ReferenceCountUtil { *; }
 -keep class io.netty.buffer.AbstractByteBufAllocator { *; }
 -keep class io.netty.buffer.AdvancedLeakAwareByteBuf { *; }
+
+# Liquid glass. R8 cannot see the JNI side of the native blur kernels, and the
+# whole library is reached only through FoxGlass, so without these rules the
+# classes that declare `native` methods are stripped and the loader fails at
+# runtime with UnsatisfiedLinkError inside a static initialiser.
+-keep class com.example.liquidglass.** { *; }
+-keep class com.example.blur.** { *; }
+-keepclasseswithmembernames class com.example.liquidglass.** { native <methods>; }
+-dontwarn com.example.liquidglass.**
+-dontwarn com.example.blur.**
+
+# hev's config document is parsed by the native engine, not by Java, so the
+# generated strings must survive shrinking verbatim (they already do; this keeps
+# a future refactor from inlining them away).
+-keepclassmembers class com.gozar.HevConfig { *; }
