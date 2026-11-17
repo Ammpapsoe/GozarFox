@@ -30,14 +30,18 @@ class HevConfigTest {
     }
 
     @Test
-    fun `every line is either a section header or an indented key`() {
+    fun `every line is a section header or a two-space key, never a tab`() {
         val text = HevConfig.document(1280, 1, credential)
         val lines = text.split('\n').filter { it.isNotEmpty() }
-        for (line in lines) {
-            val ok = !line.first().isWhitespace() || line.startsWith("  ")
-            assertTrue("unexpected indentation in <$line>", ok)
+        val headers = lines.filter { !it.first().isWhitespace() }
+        val keys = lines.filter { it.first().isWhitespace() }
+        assertEquals(listOf("tunnel:", "socks5:", "misc:"), headers)
+        for (line in keys) {
+            assertTrue("a key must be indented exactly two spaces: <$line>", line.startsWith("  ") && !line.startsWith("   "))
+            assertFalse("YAML forbids tabs: <$line>", line.contains('\t'))
+            assertTrue("a key line must end with a value: <$line>", line.contains(':'))
         }
-        assertEquals(2, lines.count { !it.first().isWhitespace() })
+        assertTrue("the engine needs at least one key per section", keys.size >= 6)
     }
 
     @Test(expected = IllegalArgumentException::class)

@@ -1,6 +1,0 @@
-build/core/src/hev-socks5-user.o: src/core/src/hev-socks5-user.c \
- src/core/src/hev-socks5-logger-priv.h \
- src/core/include/hev-socks5-logger.h src/core/include/hev-socks5-user.h \
- third-part/hev-task-system/include/hev-object-atomic.h \
- third-part/hev-task-system/include/hev-object.h \
- src/core/include/hev-rbtree.h

@@ -1,1 +1,0 @@
-build/arch/x86/hev-task-arch-x86.o: src/arch/x86/hev-task-arch-x86.c

@@ -1,1 +1,0 @@
-build/sys/windows/hev-sys-fd.o: src/sys/windows/hev-sys-fd.c

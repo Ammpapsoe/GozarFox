@@ -1,3 +1,0 @@
-build/mem/api/hev-memory-allocator-api.o: \
- src/mem/api/hev-memory-allocator-api.c include/hev-memory-allocator.h \
- src/lib/misc/hev-compiler.h src/mem/base/hev-memory-allocator.h

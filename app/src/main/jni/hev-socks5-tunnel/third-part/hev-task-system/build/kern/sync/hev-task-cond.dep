@@ -1,4 +1,0 @@
-build/kern/sync/hev-task-cond.o: src/kern/sync/hev-task-cond.c \
- include/hev-task.h include/hev-sys.h include/hev-sys-unix.h \
- include/hev-task-cond.h include/hev-task-mutex.h \
- src/lib/misc/hev-compiler.h

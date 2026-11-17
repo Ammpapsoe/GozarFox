@@ -1,5 +1,0 @@
-build/core/src/hev-socks5-logger.o: src/core/src/hev-socks5-logger.c \
- third-part/hev-task-system/include/hev-sys.h \
- third-part/hev-task-system/include/hev-sys-unix.h \
- src/core/include/hev-socks5-logger.h \
- src/core/src/hev-socks5-logger-priv.h

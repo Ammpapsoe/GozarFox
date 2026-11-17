@@ -1,2 +1,0 @@
-build/kern/io/hev-task-io-reactor-kqueue.o: \
- src/kern/io/hev-task-io-reactor-kqueue.c

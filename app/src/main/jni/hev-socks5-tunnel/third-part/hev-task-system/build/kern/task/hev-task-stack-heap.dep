@@ -1,3 +1,0 @@
-build/kern/task/hev-task-stack-heap.o: \
- src/kern/task/hev-task-stack-heap.c include/hev-memory-allocator.h \
- src/lib/misc/hev-compiler.h src/kern/task/hev-task-stack.h

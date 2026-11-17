@@ -1,4 +1,0 @@
-build/misc/hev-ring-buffer.o: src/misc/hev-ring-buffer.c \
- src/misc/hev-compiler.h src/misc/hev-ring-buffer.h \
- third-part/hev-task-system/include/hev-sys.h \
- third-part/hev-task-system/include/hev-sys-unix.h

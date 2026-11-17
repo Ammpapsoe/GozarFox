@@ -1,8 +1,0 @@
-build/core/src/hev-socks5-authenticator.o: \
- src/core/src/hev-socks5-authenticator.c src/core/src/hev-compiler.h \
- src/core/src/hev-socks5-logger-priv.h \
- src/core/include/hev-socks5-logger.h \
- src/core/include/hev-socks5-authenticator.h \
- third-part/hev-task-system/include/hev-object-atomic.h \
- third-part/hev-task-system/include/hev-object.h \
- src/core/include/hev-rbtree.h src/core/include/hev-socks5-user.h

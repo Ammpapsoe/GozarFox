@@ -1,2 +1,0 @@
-build/core/src/hev-rbtree.o: src/core/src/hev-rbtree.c \
- src/core/include/hev-rbtree.h

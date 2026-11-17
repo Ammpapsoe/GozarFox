@@ -20,3 +20,10 @@ desktop/build
 packaging/flatpak/_local-*.yaml
 packaging/flatpak/.flatpak-builder/
 __pycache__/
+
+# Local native builds of the vendored tunnel engine (CI builds these with the
+# NDK; committing host-built objects would shadow them and bloat the tree).
+app/src/main/jni/hev-socks5-tunnel/bin/
+app/src/main/jni/hev-socks5-tunnel/build/
+app/src/main/jni/hev-socks5-tunnel/third-part/*/bin/
+app/src/main/jni/hev-socks5-tunnel/third-part/*/build/

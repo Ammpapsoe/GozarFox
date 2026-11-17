@@ -1,1 +1,0 @@
-build/sys/windows/hev-sys-errno.o: src/sys/windows/hev-sys-errno.c

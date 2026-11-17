@@ -1,2 +1,0 @@
-build/sys/windows/hev-sys-task-execute.o: \
- src/sys/windows/hev-sys-task-execute.c
