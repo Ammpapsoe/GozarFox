@@ -122,8 +122,14 @@ class FoxGlassTest {
             "app/src/main/java/com/gozar/MainActivity.kt",
             "app/src/main/java/com/gozar/FoxServers.kt"
         )
+        // Gradle runs the tests from the module directory, so resolve the
+        // repository root instead of trusting the working directory.
+        var root = java.io.File(System.getProperty("user.dir") ?: ".").absoluteFile
+        while (root.parentFile != null && !java.io.File(root, "app/src/main/java/com/gozar/App.kt").exists()) {
+            root = root.parentFile
+        }
         for (path in sources) {
-            val text = java.io.File(path).readText()
+            val text = java.io.File(root, path).readText()
             val calls = text.lines().filter { line ->
                 val code = line.substringBefore("//")
                 code.contains("applyGlass(") || code.contains("glassNavBar(") ||
