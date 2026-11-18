@@ -62,9 +62,7 @@ func gateway() (string, string) {
 	if best == nil {
 		return "", ""
 	}
-	nextHop := netip.AddrFrom4([4]byte{
-		best.NextHop.Addr[0], best.NextHop.Addr[1], best.NextHop.Addr[2], best.NextHop.Addr[3],
-	})
+	nextHop := addrOf(best.NextHop)
 	if !nextHop.IsValid() || nextHop.IsUnspecified() {
 		return "", ""
 	}

@@ -54,3 +54,17 @@ func TestSockaddrInet6MatchesTheCStruct(t *testing.T) {
 		t.Fatalf("the address tail is wrong: % x", bytes[8:24])
 	}
 }
+
+func TestSockaddrRoundTripsThroughTheUnion(t *testing.T) {
+	for _, text := range []string{"10.111.0.2", "8.8.8.8", "2001:4860:4860::8888", "fd00:d11::2"} {
+		want := netip.MustParseAddr(text)
+		if got := addrOf(sockaddrOf(want)); got != want {
+			t.Fatalf("%s came back as %s", want, got)
+		}
+	}
+	// A default route's next hop is the value gateway() reads out of the
+	// forwarding table; reading it from the wrong offset yields 0.0.0.0.
+	if got := addrOf(sockaddrOf(netip.MustParseAddr("192.168.1.1"))); got.IsUnspecified() || got.String() != "192.168.1.1" {
+		t.Fatalf("the v4 next hop did not survive the union: %v", got)
+	}
+}

@@ -203,6 +203,23 @@ func sockaddrOf(addr netip.Addr) rawSockaddrInet {
 	return s
 }
 
+// addrOf is the inverse of sockaddrOf: it reads an address out of a
+// SOCKADDR_INET at the offset its family uses. Reading an IPv4 next hop from the
+// v6 position returns 0.0.0.0, which made gateway() report that no default route
+// existed on a machine that had one.
+func addrOf(s rawSockaddrInet) netip.Addr {
+	raw := unsafe.Slice((*byte)(unsafe.Pointer(&s)), int(unsafe.Sizeof(s)))
+	switch s.Family {
+	case syscall.AF_INET:
+		return netip.AddrFrom4([4]byte{raw[4], raw[5], raw[6], raw[7]})
+	case syscall.AF_INET6:
+		var address [16]byte
+		copy(address[:], raw[8:24])
+		return netip.AddrFrom16(address)
+	}
+	return netip.Addr{}
+}
+
 // addInterfaceAddress assigns a static address to the tunnel interface.
 // A /32 is used deliberately: the tunnel needs one source address, not a
 // subnet, and a wider mask would let Windows install a connected route that
