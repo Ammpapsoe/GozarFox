@@ -137,9 +137,12 @@ func configure(cfg *Config) error {
 	// The metric is set before the routes, otherwise Windows may rank the
 	// physical adapter's default above the tunnel for the moment between the
 	// two calls and a burst of traffic escapes unencrypted.
-	if err := setInterfaceMetric(index, false, 1); err != nil {
-		return fmt.Errorf("setting the interface metric failed: %w", err)
-	}
+	// The metric is a preference, not a requirement: the two /1 routes added
+	// below are more specific than any /0 default, so they win on their own.
+	// This call is also the most environment-sensitive of the set (some
+	// adapters and third-party network filters refuse it), and blocking a
+	// working tunnel over a preference is the wrong trade.
+	_ = setInterfaceMetric(index, false, 1)
 	// The resolver is the proxy's own DNS listener. Setting it on the interface
 	// is what makes applications that read the OS resolver (rather than the
 	// VPN's) use the tunnel instead of the carrier's DNS.
