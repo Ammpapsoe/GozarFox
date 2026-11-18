@@ -253,3 +253,57 @@ func TestWriteBufferDefaultSizeIsNotTiny(t *testing.T) {
 		t.Fatalf("a zero size gave a %d-byte ring, want the default", got)
 	}
 }
+
+// A write larger than the ring must remain contiguous even while another
+// writer arrives during a full-buffer wait.
+func TestWriteBufferSerializesLargeConcurrentWrites(t *testing.T) {
+	for attempt := 0; attempt < 100; attempt++ {
+		b := newWriteBuffer(3)
+		var writers sync.WaitGroup
+		writers.Add(2)
+		go func() {
+			defer writers.Done()
+			if _, err := b.Write([]byte("AAAAAA")); err != nil {
+				t.Errorf("first writer: %v", err)
+			}
+		}()
+		first := make([]byte, 1)
+		if _, err := io.ReadFull(b, first); err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			defer writers.Done()
+			if _, err := b.Write([]byte("BBBBBB")); err != nil {
+				t.Errorf("second writer: %v", err)
+			}
+		}()
+		go func() {
+			writers.Wait()
+			b.Close()
+		}()
+		rest, err := io.ReadAll(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(first) + string(rest); got != "AAAAAABBBBBB" {
+			t.Fatalf("interleaved writes: %q", got)
+		}
+	}
+}
+
+func TestWriteBufferEmptyReadDoesNotBlock(t *testing.T) {
+	b := newWriteBuffer(3)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if n, err := b.Read(nil); n != 0 || err != nil {
+			t.Errorf("empty read = %d, %v", n, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		b.Close()
+		t.Fatal("empty read blocked")
+	}
+}

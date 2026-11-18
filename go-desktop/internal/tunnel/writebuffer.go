@@ -26,6 +26,7 @@ const writeBufferSize = 128 * 1024
 var errWriteBufferClosed = errors.New("tunnel: write buffer is closed")
 
 type writeBuffer struct {
+	writeMu  sync.Mutex // serializes whole writes even when the ring is full
 	mu       sync.Mutex
 	notEmpty *sync.Cond
 	notFull  *sync.Cond
@@ -49,10 +50,12 @@ func newWriteBuffer(size int) *writeBuffer {
 	return b
 }
 
-// Write appends p, blocking while the ring is full. It never splits a Write
-// across two waits once it has taken part of p, so a short Write is only
-// returned on error.
+// Write appends p, blocking while the ring is full. Writes are serialized
+// across waits, so bytes from concurrent calls cannot interleave; a short
+// Write is only returned on error.
 func (b *writeBuffer) Write(p []byte) (int, error) {
+	b.writeMu.Lock()
+	defer b.writeMu.Unlock()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	written := 0
@@ -93,6 +96,9 @@ func (b *writeBuffer) Write(p []byte) (int, error) {
 // Read drains buffered bytes, blocking while the ring is empty and the buffer
 // is open. It returns io.EOF once the buffer is closed and empty, like io.Pipe.
 func (b *writeBuffer) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for b.size == 0 {
@@ -103,9 +109,6 @@ func (b *writeBuffer) Read(p []byte) (int, error) {
 			return 0, io.EOF
 		}
 		b.notEmpty.Wait()
-	}
-	if len(p) == 0 {
-		return 0, nil
 	}
 	n := b.size
 	if run := b.limit - b.head; run < n {
