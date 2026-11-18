@@ -214,10 +214,20 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertIn('select(.name == "Autonomous Android" and .conclusion == "success")', publish)
         self.assertIn('.name == "compile" or .name == "unit-tests" or .name == "artifact"', publish)
         self.assertNotIn("android-recovery-emulator", publish)
-        self.assertIn("Require same-commit Apps Script account evidence", publish)
+        self.assertIn("Require Apps Script account evidence or an explicit manual approval", publish)
         self.assertIn('select(.name == "Apps Script Account Validation" and .event == "workflow_dispatch" and .conclusion == "success")', publish)
         self.assertIn('.name == "account"', publish)
         self.assertIn('if [ "$count" -eq 1 ]', publish)
+        # A stable tag may only skip the automated account tests through the
+        # explicit human approval input, never by simply omitting them.
+        self.assertIn("MANUAL_APPROVE", publish)
+        self.assertIn("manual_approve", workflow)
+        self.assertIn('if [ "$MANUAL_APPROVE" != "1" ]', publish)
+        self.assertLess(publish.index('if [ "$found" = true ]'), publish.index('if [ "$MANUAL_APPROVE" != "1" ]'))
+        self.assertIn("MANUAL_APPROVAL_APPLIED=true", publish)
+        # The release body must disclose which evidence applied.
+        self.assertIn("scripts/release_notes_note.py --manual-approval", publish)
+        self.assertIn("scripts/release_notes_note.py --automated", publish)
         self.assertIn('"Gozar_${ANDROID_VERSION}_universal.apk"', publish)
         self.assertIn('"Gozar_${ANDROID_VERSION}_x86.apk"', publish)
         self.assertIn('test "$(printf \'%s\\n\' "$assets" | wc -l)" -eq 71', publish)
@@ -225,6 +235,28 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertIn("prerelease: ${{ steps.version.outputs.prerelease }}", publish)
         self.assertIn("--draft=false --prerelease --latest=false", publish)
         self.assertLess(publish.index("Verify draft release files"), publish.index("Publish verified release"))
+
+    def test_manual_approval_disclosure_is_explicit_and_differs_from_automated(self):
+        script = ROOT / "scripts/release_notes_note.py"
+        manual = command("python3", str(script), "--manual-approval", env=self.env)
+        automated = command("python3", str(script), "--automated", env=self.env)
+        self.assertEqual(0, manual.returncode)
+        self.assertEqual(0, automated.returncode)
+        # The exact sentence the release owner asked to publish, in markdown
+        # bold: the rendered release page reads it as one sentence.
+        self.assertIn("> **تست خودکار ورود (Apps Script) برای این نسخه اجرا نشد.**", manual.stdout)
+        self.assertIn(
+            "این نسخه با تأیید دستی (Manual Approval) به عنوان Stable منتشر شده است.",
+            manual.stdout,
+        )
+        self.assertIn("The automated Apps Script login test was not run", manual.stdout)
+        self.assertNotIn("not run", automated.stdout)
+        self.assertIn("passed for this commit", automated.stdout)
+        # One mode exactly; never both, never neither.
+        both = command("python3", str(script), "--manual-approval", "--automated", env=self.env)
+        self.assertNotEqual(0, both.returncode)
+        neither = command("python3", str(script), env=self.env)
+        self.assertNotEqual(0, neither.returncode)
 
     def test_release_notes_fail_closed_for_drafts_and_missing_versions(self):
         # Keep this test independent of whether the real release notes later

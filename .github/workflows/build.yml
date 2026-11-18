@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      manual_approve:
+        description: Manually approve publishing a stable tag whose Apps Script account validation was not run
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -568,10 +573,11 @@ jobs:
             echo '::error::Autonomous Android compile, unit-tests, and artifact evidence is incomplete'
             exit 1
           fi
-      - name: Require same-commit Apps Script account evidence
+      - name: Require Apps Script account evidence or an explicit manual approval
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANUAL_APPROVE: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_approve && '1' || '0' }}
         run: |
           set -e
           android=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
@@ -587,10 +593,21 @@ jobs:
             count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select(.name == "account" and .conclusion == "success")] | length')
             if [ "$count" -eq 1 ]; then found=true; break; fi
           done
-          if [ "$found" != true ]; then
-            echo '::error::Release requires successful Apps Script login/Pass and signup-code tests for this exact commit'
+          if [ "$found" = true ]; then
+            echo 'Automated account evidence: the Apps Script login/Pass and signup-code tests passed on this commit'
+            exit 0
+          fi
+          # The automated account tests cannot pass unattended: Mozilla answers a
+          # password sign-in with an emailed code for this account, and nothing in
+          # this repository may read that mailbox. A stable tag must therefore be
+          # released either with automated evidence or with an explicit human
+          # approval -- the release notes always say which one applied.
+          if [ "$MANUAL_APPROVE" != "1" ]; then
+            echo '::error::Release requires successful Apps Script login/Pass and signup-code tests for this exact commit, or a workflow_dispatch run of Build with manual_approve enabled'
             exit 1
           fi
+          echo '::warning::Releasing a stable tag with manual approval: the automated Apps Script account tests did not run'
+          echo 'MANUAL_APPROVAL_APPLIED=true' >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
           path: collected
@@ -716,7 +733,14 @@ jobs:
       - name: Notes
         env:
           GOZAR_ALLOW_DRAFT_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release && '1' || '0' }}
-        run: python3 scripts/notes.py "${{ steps.version.outputs.desktop }}" "${{ github.repository }}" "${{ steps.version.outputs.android }}" "${{ steps.version.outputs.tag }}" > "$RUNNER_TEMP/notes.md"
+        run: |
+          set -e
+          python3 scripts/notes.py "${{ steps.version.outputs.desktop }}" "${{ github.repository }}" "${{ steps.version.outputs.android }}" "${{ steps.version.outputs.tag }}" > "$RUNNER_TEMP/notes.md"
+          if [ "${MANUAL_APPROVAL_APPLIED:-}" = true ]; then
+            python3 scripts/release_notes_note.py --manual-approval >> "$RUNNER_TEMP/notes.md"
+          else
+            python3 scripts/release_notes_note.py --automated >> "$RUNNER_TEMP/notes.md"
+          fi
       - name: Upload release-validation evidence
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release }}
         uses: actions/upload-artifact@v4
