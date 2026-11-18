@@ -95,11 +95,10 @@ func (m *Manager) OpenUDP(host string, port int, pass string, timeout time.Durat
 }
 
 func openUDPStream(client roundTripper, authority, path, pass string, timeout time.Duration, release func()) (Dup, error) {
-	reader, writer := io.Pipe()
-	request, err := http.NewRequest(http.MethodConnect, "https://"+authority+path, reader)
+	body := newWriteBuffer(writeBufferSize)
+	request, err := http.NewRequest(http.MethodConnect, "https://"+authority+path, body)
 	if err != nil {
-		_ = reader.Close()
-		_ = writer.Close()
+		_ = body.CloseWithError(err)
 		return nil, err
 	}
 	request.Host = authority
@@ -127,8 +126,7 @@ func openUDPStream(client roundTripper, authority, path, pass string, timeout ti
 			_ = response.Body.Close()
 		}
 		cancel()
-		_ = reader.CloseWithError(err)
-		_ = writer.CloseWithError(err)
+		_ = body.CloseWithError(err)
 		return nil, err
 	}
 	if err := validUDPResponse(response); err != nil {
@@ -136,11 +134,10 @@ func openUDPStream(client roundTripper, authority, path, pass string, timeout ti
 			_ = response.Body.Close()
 		}
 		cancel()
-		_ = reader.Close()
-		_ = writer.Close()
+		_ = body.Close()
 		return nil, err
 	}
-	return &managedStream{body: response.Body, writer: writer, cancel: cancel, release: release}, nil
+	return &managedStream{body: response.Body, writer: body, cancel: cancel, release: release}, nil
 }
 
 // This intentionally requires an explicit, unparameterized ?1 response; RFC

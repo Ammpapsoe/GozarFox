@@ -184,12 +184,11 @@ func connectH2(conn net.Conn, host string, port int, pass string, timeout time.D
 		conn.Close()
 		return nil, err
 	}
-	reader, writer := io.Pipe()
+	body := newWriteBuffer(writeBufferSize)
 	authority := net.JoinHostPort(host, strconv.Itoa(port))
-	request, err := http.NewRequest(http.MethodConnect, "https://"+authority, reader)
+	request, err := http.NewRequest(http.MethodConnect, "https://"+authority, body)
 	if err != nil {
-		reader.Close()
-		writer.Close()
+		body.CloseWithError(err)
 		client.Close()
 		return nil, err
 	}
@@ -200,24 +199,24 @@ func connectH2(conn net.Conn, host string, port int, pass string, timeout time.D
 	response, err := client.RoundTrip(request.WithContext(ctx))
 	if err != nil {
 		cancel()
-		writer.CloseWithError(err)
+		body.CloseWithError(err)
 		client.Close()
 		return nil, err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		response.Body.Close()
 		cancel()
-		writer.Close()
+		body.Close()
 		client.Close()
 		return nil, reason(response.StatusCode)
 	}
 	conn.SetDeadline(time.Time{})
-	return &h2Stream{body: response.Body, writer: writer, client: client, cancel: cancel}, nil
+	return &h2Stream{body: response.Body, writer: body, client: client, cancel: cancel}, nil
 }
 
 type h2Stream struct {
 	body   io.ReadCloser
-	writer *io.PipeWriter
+	writer *writeBuffer
 	client *http2.ClientConn
 	cancel context.CancelFunc
 	once   sync.Once

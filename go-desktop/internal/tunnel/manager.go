@@ -408,12 +408,11 @@ func openStream(client roundTripper, host string, port int, pass string, timeout
 	if host == "" || port < 1 || port > 65535 {
 		return nil, errors.New("invalid destination")
 	}
-	reader, writer := io.Pipe()
+	body := newWriteBuffer(writeBufferSize)
 	authority := net.JoinHostPort(host, strconv.Itoa(port))
-	request, err := http.NewRequest(http.MethodConnect, "https://"+authority, reader)
+	request, err := http.NewRequest(http.MethodConnect, "https://"+authority, body)
 	if err != nil {
-		reader.Close()
-		writer.Close()
+		body.CloseWithError(err)
 		return nil, err
 	}
 	request.Host = authority
@@ -425,22 +424,21 @@ func openStream(client roundTripper, host string, port int, pass string, timeout
 	timer.Stop()
 	if err != nil {
 		cancel()
-		reader.CloseWithError(err)
-		writer.CloseWithError(err)
+		body.CloseWithError(err)
 		return nil, err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		response.Body.Close()
 		cancel()
-		writer.Close()
+		body.Close()
 		return nil, &proxyRefusal{code: response.StatusCode}
 	}
-	return &managedStream{body: response.Body, writer: writer, cancel: cancel, release: release}, nil
+	return &managedStream{body: response.Body, writer: body, cancel: cancel, release: release}, nil
 }
 
 type managedStream struct {
 	body    io.ReadCloser
-	writer  *io.PipeWriter
+	writer  *writeBuffer
 	cancel  context.CancelFunc
 	release func()
 	once    sync.Once
