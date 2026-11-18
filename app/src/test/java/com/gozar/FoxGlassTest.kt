@@ -107,4 +107,31 @@ class FoxGlassTest {
         assertNull(FoxGlass.rehost(lonely, GlassViewConfig()))
         assertFalse(empty.childCount > 0)
     }
+
+    /**
+     * Liquid glass is switched off on purpose, and it must stay off until it is
+     * turned back on deliberately: every surface in the app now draws its plain
+     * Material background, and a stray `install` would put a refracting pane
+     * back on the hero card, the navigation bar and the server sheet.
+     */
+    @Test
+    fun `no screen turns glass on`() {
+        val sources = listOf(
+            "app/src/main/java/com/gozar/App.kt",
+            "app/src/main/java/com/gozar/FoxFragment.kt",
+            "app/src/main/java/com/gozar/MainActivity.kt",
+            "app/src/main/java/com/gozar/FoxServers.kt"
+        )
+        for (path in sources) {
+            val text = java.io.File(path).readText()
+            val calls = text.lines().filter { line ->
+                val code = line.substringBefore("//")
+                code.contains("applyGlass(") || code.contains("glassNavBar(") ||
+                    code.contains("FoxGlass.wrap(") || code.contains("FoxGlass.rehost(") ||
+                    code.contains("FoxGlass.sheet(") ||
+                    (code.contains("FoxGlass.install(") && !code.trim().startsWith("//"))
+            }
+            assertEquals("$path still turns glass on: $calls", emptyList<String>(), calls)
+        }
+    }
 }

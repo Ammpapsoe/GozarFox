@@ -6,8 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.example.liquidglass.LiquidGlassListItem
-import com.example.liquidglass.LiquidGlassChipGroup
 import com.google.android.material.bottomsheet.BottomSheetDialog
 
 object FoxServers {
@@ -36,13 +34,17 @@ object FoxServers {
                 row.findViewById<CountryFlagView>(R.id.foxFlag).countryCode = location.code
                 row.findViewById<TextView>(R.id.foxCountry).text = location.country
                 val city = row.findViewById<TextView>(R.id.foxCity)
-                city.text = if (location.city.isEmpty()) host.getString(R.string.fox_recommended) else location.city
+                // One clean line per row: show the city only when there is one.
+                city.text = location.city
+                city.visibility = if (location.city.isEmpty()) View.GONE else View.VISIBLE
                 val delay = Fox.delayOf(location)
-                row.findViewById<TextView>(R.id.foxDelay).text = when {
+                val delayText = row.findViewById<TextView>(R.id.foxDelay)
+                delayText.text = when {
                     delay < 0 -> host.getString(R.string.fox_ping_wait)
-                    delay == 0 -> "—"
+                    delay == 0 -> ""
                     else -> "$delay ms"
                 }
+                delayText.visibility = if (delayText.text.isEmpty()) View.GONE else View.VISIBLE
                 row.findViewById<View>(R.id.foxCheck).visibility =
                     if (location.code == chosen) View.VISIBLE else View.INVISIBLE
                 row.setOnClickListener {
@@ -50,16 +52,7 @@ object FoxServers {
                     dialog.dismiss()
                     onPick()
                 }
-                val view = glassRow(host, row, servers.size, list.childCount) ?: row
-                if (view === row) {
-                    // No glass here: the row still needs its own gap so the
-                    // rounded corners of neighbouring cards stay visible.
-                    (row.layoutParams as? LinearLayout.LayoutParams)?.apply {
-                        topMargin = (FoxGlass.dp(host, 3f)).toInt()
-                        bottomMargin = (FoxGlass.dp(host, 3f)).toInt()
-                    }
-                }
-                list.addView(view)
+                list.addView(row)
             }
         }
 
@@ -76,69 +69,27 @@ object FoxServers {
         dialog.setOnDismissListener { Fox.unwatch(listener) }
         paint()
         if (!Fox.busy && Fox.servers.isNotEmpty() && !Fox.hasDelays()) Fox.measure(host)
-        // the sheet is a ModalBottomSheet: give its own panel rounded corners
         dialog.setCanceledOnTouchOutside(true)
-        view.post { glassSheet(dialog, view) }
+        // The sheet is a plain rounded panel now; only the top corners are
+        // rounded and the list rows sit on it as flat rows with separators.
+        view.post { roundedSheet(dialog) }
         dialog.show()
     }
 
     /**
-     * Replace one list row with a glass list item that draws the same content.
+     * Give the sheet the top-rounded surface declared in the layout.
      *
-     * The row is moved into the item, so `paint()` keeps updating the same
-     * [TextView]s and the click listener set on the row still fires. Returns
-     * false when glass is unavailable, and the caller then adds the plain row.
-     *
-     * The item's `position` is what gives a stack of rows one shared outline:
-     * only the first and last corners are rounded, so the list no longer reads
-     * as a column of sharp-edged boxes.
+     * The rows are plain list rows with a hairline separator, a check mark on
+     * the right of the chosen one, and no card of their own, which is what the
+     * reference screen shows. Nothing here draws glass.
      */
-    private fun glassRow(host: Context, row: View, total: Int, index: Int): LiquidGlassListItem? {
-        if (!FoxGlass.available() || total == 0) return null
-        return try {
-            val item = LiquidGlassListItem(host)
-            item.position = when {
-                total == 1 -> LiquidGlassListItem.Position.SINGLE
-                index == 0 -> LiquidGlassListItem.Position.FIRST
-                index == total - 1 -> LiquidGlassListItem.Position.LAST
-                else -> LiquidGlassListItem.Position.MIDDLE
-            }
-            // Detach first: contentView's setter removes the value from its
-            // current parent, and that parent is the item itself once the value
-            // has been stored. Doing it the other way round pulled the row back
-            // out of the item and every server rendered as an empty glass bar.
-            (row.parent as? ViewGroup)?.removeView(row)
-            item.contentView = row
-            item.enableDynamicBackground = true
-            item.glassTint = GlassViewConfig.REGULAR_TINT
-            item.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                // A 1dp gap keeps neighbouring glass rims from touching; the
-                // library draws each row's rim inside its own bounds.
-                topMargin = (FoxGlass.dp(host, 1f)).toInt()
-                bottomMargin = (FoxGlass.dp(host, 1f)).toInt()
-            }
-            item.setOnClickListener { row.performClick() }
-            item
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    /** Give the sheet panel itself a glass surface. */
-    private fun glassSheet(dialog: BottomSheetDialog, view: View) {
+    private fun roundedSheet(dialog: BottomSheetDialog) {
         try {
-            FoxGlass.sheet(dialog, GlassViewConfig(
-                cornerRadiusPx = FoxGlass.dp(view.context, 24f),
-                tint = GlassViewConfig.REGULAR_TINT,
-                bevelWidthPx = FoxGlass.dp(view.context, 40f),
-                refractionHeightPx = FoxGlass.dp(view.context, 120f),
-                dispersion = 0.10f,
-                sensorHighlight = true,
-                keepBackdrop = true
-            ))
+            val frame = dialog.findViewById<View>(
+                com.google.android.material.R.id.design_bottom_sheet
+            ) as? ViewGroup ?: return
+            frame.setBackgroundResource(R.drawable.sheet_surface)
+            frame.clipChildren = false
         } catch (_: Throwable) {
         }
     }

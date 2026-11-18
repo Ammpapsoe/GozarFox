@@ -1,62 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  One server row: flag, country, and a check mark on the chosen one.
+
+  The row is deliberately plain. It has no card of its own and no glass: rows sit
+  directly on the sheet surface, separated by a hairline rule that runs from the
+  country text to the right edge, which is the list style the reference screen
+  uses. The city and the measured delay are still collected and still update;
+  they are hidden until they carry a value, so a row reads as one clean line.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/row_card"
-    android:foreground="?attr/selectableItemBackground"
-    android:gravity="center_vertical"
-    android:minHeight="@dimen/row_height"
-    android:orientation="horizontal"
-    android:paddingStart="@dimen/sp_s"
-    android:paddingTop="@dimen/sp_s"
-    android:paddingEnd="@dimen/sp_s"
-    android:paddingBottom="@dimen/sp_s">
-
-    <com.gozar.CountryFlagView
-        android:id="@+id/foxFlag"
-        android:layout_width="30dp"
-        android:layout_height="30dp" />
+    android:background="?attr/selectableItemBackground"
+    android:orientation="vertical">
 
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/sp_m"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:minHeight="64dp"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/sp_l"
+        android:paddingTop="@dimen/sp_s"
+        android:paddingEnd="@dimen/sp_l"
+        android:paddingBottom="@dimen/sp_s">
+
+        <com.gozar.CountryFlagView
+            android:id="@+id/foxFlag"
+            android:layout_width="28dp"
+            android:layout_height="28dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/sp_m"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/foxCountry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="?attr/colorOnSurface" />
+
+            <TextView
+                android:id="@+id/foxCity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/sp_s"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="?attr/textAppearanceBodySmall"
+                android:textColor="@color/text2"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/foxCountry"
-            android:layout_width="match_parent"
+            android:id="@+id/foxDelay"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="?attr/textAppearanceBodyLarge" />
-
-        <TextView
-            android:id="@+id/foxCity"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:layout_marginEnd="@dimen/sp_s"
+            android:textAppearance="?attr/textAppearanceLabelMedium"
             android:textColor="@color/text2" />
+
+        <ImageView
+            android:id="@+id/foxCheck"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:contentDescription="@string/fox_selected"
+            android:src="@drawable/ic_check"
+            android:visibility="invisible"
+            app:tint="?attr/colorOnSurface" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/foxDelay"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="@dimen/sp_s"
-        android:textAppearance="?attr/textAppearanceLabelMedium"
-        android:textColor="@color/text2" />
-
-    <ImageView
-        android:id="@+id/foxCheck"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:contentDescription="@string/fox_selected"
-        android:src="@drawable/ic_check"
-        android:visibility="invisible"
-        app:tint="@color/fox_red" />
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="72dp"
+        android:background="?attr/colorOutlineVariant" />
 </LinearLayout>

@@ -54,7 +54,7 @@ class MainActivity : BaseActivity() {
 
         val bar = findViewById<BottomNavigationView>(R.id.bottomNav)
         nav = bar
-        glassNavBar(bar)
+        // Glass is disabled; the bar keeps the surface declared in the layout.
         bar.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> {
@@ -129,26 +129,5 @@ class MainActivity : BaseActivity() {
         val transaction = supportFragmentManager.beginTransaction().setReorderingAllowed(true)
         if (onSettings) transaction.hide(fox).show(settings) else transaction.hide(settings).show(fox)
         transaction.commitAllowingStateLoss()
-    }
-
-    /**
-     * Give the navigation bar a refracting pane over the window backdrop.
-     *
-     * The bar keeps its menu, its ids and its listener; only the surface behind
-     * the items changes. When the glass renderer is unavailable the bar keeps
-     * the frozen surface declared in the layout.
-     */
-    private fun glassNavBar(bar: BottomNavigationView) {
-        val dark = (resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-        FoxGlass.rehost(bar, GlassViewConfig(
-            cornerRadiusPx = FoxGlass.dp(this, 32f),
-            tint = if (dark) GlassViewConfig.DARK_TINT else GlassViewConfig.REGULAR_TINT,
-            bevelWidthPx = FoxGlass.dp(this, 22f),
-            refractionHeightPx = FoxGlass.dp(this, 10f),
-            dispersion = 0.10f,
-            keepBackdrop = true
-        ))
     }
 }
