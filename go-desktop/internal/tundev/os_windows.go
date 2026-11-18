@@ -132,6 +132,14 @@ func configure(cfg *Config) error {
 	if err := waitWindowsReady(cfg.Interface); err != nil {
 		return fmt.Errorf("waiting for %s to come up failed: %w", cfg.Interface, err)
 	}
+	if cfg.MTU > 0 {
+		previous, err := setInterfaceMTU(index, uint32(cfg.MTU))
+		if err != nil {
+			return fmt.Errorf("setting tunnel MTU failed: %w", err)
+		}
+		cfg.windowsMTU = previous
+		cfg.windowsMTUSet = true
+	}
 	// The metric is set before the routes, otherwise Windows may rank the
 	// physical adapter's default above the tunnel for the moment between the
 	// two calls and a burst of traffic escapes unencrypted.
@@ -195,6 +203,10 @@ func configure(cfg *Config) error {
 func restore(cfg *Config) {
 	index, err := interfaceIndex(cfg.Interface)
 	if err == nil {
+		if cfg.windowsMTUSet {
+			_, _ = setInterfaceMTU(index, cfg.windowsMTU)
+			cfg.windowsMTUSet = false
+		}
 		for slot, prefix := range splitV4 {
 			if cfg.Routes[slot] {
 				_ = removeMatchingRoutes(index, prefix)

@@ -219,6 +219,15 @@ func TestLiveKernelTunnel(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(e.Stop)
+	if runtime.GOOS == "windows" {
+		// Inspect the kernel IP interface, not only the userspace endpoint's
+		// advertised MTU. This test runs solely on the isolated CI runner.
+		script := fmt.Sprintf("(Get-NetIPInterface -InterfaceAlias '%s' -AddressFamily IPv4).NlMtu", e.Device())
+		out, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script).CombinedOutput()
+		if err != nil || strings.TrimSpace(string(out)) != "9000" {
+			t.Fatalf("Windows IPv4 TUN MTU is not 9000: %s (%v)", out, err)
+		}
+	}
 	if len(keep) > 0 && (runtime.GOOS == "windows" || runtime.GOOS == "darwin") {
 		present, err := false, error(nil)
 		if runtime.GOOS == "windows" {

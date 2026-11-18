@@ -14,6 +14,7 @@ import (
 
 type Config struct {
 	Interface       string
+	MTU             int
 	DNS             string
 	Keep            []netip.Addr
 	AddedKeep       []netip.Addr
@@ -23,6 +24,8 @@ type Config struct {
 	DNSChanged      bool
 	ServiceDNS      map[string][]string
 	ChangedServices []string
+	windowsMTU      uint32
+	windowsMTUSet   bool
 	windowsGateway  string
 	windowsIndex    string
 	linuxKeepRoutes [][]string

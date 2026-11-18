@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/netip"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,23 @@ import (
 // stack never has to fragment a full-size local segment before handing it to
 // the proxy stream.
 const mtu = 1600
+
+// tunnelMTU keeps the WARP datagram path at 1280: its packet demultiplexer
+// cannot reassemble larger fragments. On Windows without UDP, TCP terminates
+// in the userspace stack and the separate upstream TCP socket remains subject
+// to the host network stack's path-MTU handling. This is not a PMTU discovery
+// implementation for the WARP or Android datagram paths.
+func tunnelMTU(platform string, udpEnabled bool) int {
+	if udpEnabled {
+		// WARP's CONNECT-IP inner path uses a 1280-byte MTU; avoid emitting
+		// UDP fragments that the initial packet demultiplexer cannot reassemble.
+		return 1280
+	}
+	if platform == "windows" {
+		return 9000
+	}
+	return mtu
+}
 
 // Copy buffers. A 32 KiB buffer cannot keep a long-haul TCP flow saturated:
 // the sender stalls while userspace copies, so the receive window never fills
@@ -149,12 +167,7 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
 	}
-	deviceMTU := mtu
-	if udpDial != nil {
-		// WARP's CONNECT-IP inner path uses a 1280-byte MTU; avoid emitting
-		// UDP fragments that the initial packet demultiplexer cannot reassemble.
-		deviceMTU = 1280
-	}
+	deviceMTU := tunnelMTU(runtime.GOOS, udpDial != nil)
 	device, err := tundev.Open(deviceMTU)
 	if err != nil {
 		return nil, err
@@ -224,7 +237,7 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 	engine.listenUDP(created)
 
 	keep := append([]netip.Addr{}, protect...)
-	engine.config = tundev.Config{Interface: device.Name(), DNS: dnsproxy.Address, Keep: keep}
+	engine.config = tundev.Config{Interface: device.Name(), MTU: deviceMTU, DNS: dnsproxy.Address, Keep: keep}
 	if err := tundev.Configure(&engine.config); err != nil {
 		engine.dns.Close()
 		device.Close()

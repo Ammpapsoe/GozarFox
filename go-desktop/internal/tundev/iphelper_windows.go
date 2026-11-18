@@ -373,6 +373,22 @@ func deleteAddress(row *mibUnicastIpAddressRow) error {
 	return nil
 }
 
+// setInterfaceMTU updates the IPv4 interface row using the current kernel
+// values. WireGuard's CreateTUN mtu is a device-side limit, not a Windows IP
+// interface setting; both sides must agree before routes are installed.
+func setInterfaceMTU(index uint32, mtu uint32) (uint32, error) {
+	row := mibIpInterfaceRow{Family: uint16(syscall.AF_INET), InterfaceIndex: index}
+	if code, _, _ := procGetIpInterfaceEntry.Call(uintptr(unsafe.Pointer(&row))); code != 0 {
+		return 0, windows.Errno(code)
+	}
+	previous := row.NlMtu
+	row.NlMtu = mtu
+	if code, _, _ := procSetIpInterfaceEntry.Call(uintptr(unsafe.Pointer(&row))); code != 0 {
+		return 0, windows.Errno(code)
+	}
+	return previous, nil
+}
+
 // setInterfaceMetric lowers the tunnel's interface metric so its routes win
 // against the physical adapter. With UseAutomaticMetric cleared Windows honours
 // this value directly instead of deriving one from the link speed.

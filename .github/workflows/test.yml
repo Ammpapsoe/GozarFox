@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      windows_live_tun:
+        description: Run the privileged Windows kernel TUN integration test
+        required: false
+        type: boolean
+        default: false
       skip_graphics_tests:
         description: Skip desktop UI tests for an explicitly approved expedited run
         required: false
@@ -173,6 +178,27 @@ jobs:
           else
             echo 'signature pending from Sign relay endpoints workflow'
           fi
+
+  windows-live-tun:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_live_tun }}
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Compile and test the real Windows TUN
+        working-directory: go-desktop
+        shell: pwsh
+        run: |
+          go test -c -o "$env:RUNNER_TEMP/gozar-live-tun.test.exe" ./internal/engine
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:GOZAR_LIVE_TUN_TEST = '1'
+          $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
+          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTunnel$' '-test.timeout=75s'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   desktop-ui:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests) }}
