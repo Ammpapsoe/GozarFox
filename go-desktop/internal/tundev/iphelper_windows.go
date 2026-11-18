@@ -127,10 +127,9 @@ type mibUnicastIpAddressRow struct {
 // MIB_IPINTERFACE_ROW, spelled out in full.
 //
 // Truncating this one is a trap: x/sys declares only the first two members, so
-// a row built from that declaration is 80 bytes where Windows expects 176, and
-// SetIpInterfaceEntry reads past the end of the struct and answers
-// ERROR_INVALID_PARAMETER. The size assertion below is the guard against
-// repeating that, and it is what caught this.
+// a row built from that declaration is shorter than the Windows SDK layout.
+// The SDK's two NL_INTERFACE_OFFLOAD_ROD members are one-byte bitfields, not
+// uint32 values; size and offset assertions guard the full layout below.
 type mibIpInterfaceRow struct {
 	Family                               uint16
 	InterfaceLuid                        uint64
@@ -164,18 +163,20 @@ type mibIpInterfaceRow struct {
 	SupportsNeighborDiscovery            uint8
 	SupportsRouterDiscovery              uint8
 	ReachableTime                        uint32
-	TransmitOffload                      uint32
-	ReceiveOffload                       uint32
+	TransmitOffload                      uint8
+	ReceiveOffload                       uint8
 	DisableDefaultRoutes                 uint8
 }
 
 // The published sizes of the three structures on every Windows targeted by the
 // desktop build (amd64 and arm64 both use this packing).
 var (
-	_ [unsafe.Sizeof(mibIpForwardRow2{})]byte       = [104]byte{}
-	_ [unsafe.Sizeof(ipAddressPrefix{})]byte        = [32]byte{}
-	_ [unsafe.Sizeof(mibUnicastIpAddressRow{})]byte = [80]byte{}
-	_ [unsafe.Sizeof(mibIpInterfaceRow{})]byte      = [176]byte{}
+	_ [unsafe.Sizeof(mibIpForwardRow2{})]byte                         = [104]byte{}
+	_ [unsafe.Sizeof(ipAddressPrefix{})]byte                          = [32]byte{}
+	_ [unsafe.Sizeof(mibUnicastIpAddressRow{})]byte                   = [80]byte{}
+	_ [unsafe.Sizeof(mibIpInterfaceRow{})]byte                        = [168]byte{}
+	_ [unsafe.Offsetof(mibIpInterfaceRow{}.NlMtu)]byte                = [152]byte{}
+	_ [unsafe.Offsetof(mibIpInterfaceRow{}.DisableDefaultRoutes)]byte = [166]byte{}
 )
 
 // sockaddrOf builds a SOCKADDR_INET for addr.
@@ -382,6 +383,9 @@ func setInterfaceMTU(index uint32, mtu uint32) (uint32, error) {
 		return 0, windows.Errno(code)
 	}
 	previous := row.NlMtu
+	// For AF_INET the API requires SitePrefixLength to be zero, including
+	// when GetIpInterfaceEntry returned a nonzero value.
+	row.SitePrefixLength = 0
 	row.NlMtu = mtu
 	if code, _, _ := procSetIpInterfaceEntry.Call(uintptr(unsafe.Pointer(&row))); code != 0 {
 		return 0, windows.Errno(code)
@@ -403,6 +407,9 @@ func setInterfaceMetric(index uint32, ipv6 bool, metric uint32) error {
 		return windows.Errno(code)
 	}
 	row.InterfaceIndex = index
+	if !ipv6 {
+		row.SitePrefixLength = 0
+	}
 	row.UseAutomaticMetric = 0
 	row.Metric = metric
 	if code, _, _ := procSetIpInterfaceEntry.Call(uintptr(unsafe.Pointer(&row))); code != 0 {
