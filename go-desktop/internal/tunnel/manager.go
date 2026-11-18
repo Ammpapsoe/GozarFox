@@ -272,12 +272,13 @@ func (m *Manager) h2Client(timeout time.Duration) (*h2Session, error) {
 				// ReadIdleTimeout/PingTimeout turn a silently dead path into a
 				// connection error instead of an indefinite hang: the transport
 				// pings when idle and kills the conn when the peer stays mute.
-				keepalive := &http2.Transport{
-					DisableCompression: true,
-					ReadIdleTimeout:    30 * time.Second,
-					PingTimeout:        15 * time.Second,
+				var keepalive *http2.Transport
+				keepalive, err = newH2Transport()
+				if err == nil {
+					keepalive.ReadIdleTimeout = 30 * time.Second
+					keepalive.PingTimeout = 15 * time.Second
+					client, err = keepalive.NewClientConn(raw)
 				}
-				client, err = keepalive.NewClientConn(raw)
 				if err != nil {
 					raw.Close()
 				}

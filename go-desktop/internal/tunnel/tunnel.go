@@ -178,7 +178,11 @@ func openH2(target Target, host string, port int, pass string, timeout time.Dura
 
 func connectH2(conn net.Conn, host string, port int, pass string, timeout time.Duration) (Dup, error) {
 	conn.SetDeadline(time.Now().Add(timeout))
-	transport := &http2.Transport{DisableCompression: true}
+	transport, err := newH2Transport()
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
 	client, err := transport.NewClientConn(conn)
 	if err != nil {
 		conn.Close()
