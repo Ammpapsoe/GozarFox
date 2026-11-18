@@ -4,7 +4,6 @@ package tundev
 
 import (
 	"net/netip"
-	"syscall"
 	"testing"
 	"unsafe"
 )
@@ -20,19 +19,19 @@ func rawBytesOf(addr netip.Addr) []byte {
 }
 
 func TestSockaddrInet4MatchesTheCStruct(t *testing.T) {
-	raw := sockaddrOf(netip.MustParseAddr("10.111.0.2"))
-	if raw.Family != syscall.AF_INET {
-		t.Fatalf("family is %d, want AF_INET", raw.Family)
-	}
-	if raw.Port != 0x0a6f { // 10.111 in network order, read as a uint16
-		t.Fatalf("sin_addr high half is %#x, want 0x0a6f", raw.Port)
-	}
-	if raw.Flowinfo != 0x0002_0000 { // 0.2 then the sin_zero padding
-		t.Fatalf("sin_addr low half is %#x", raw.Flowinfo)
-	}
 	bytes := rawBytesOf(netip.MustParseAddr("10.111.0.2"))
-	// sin_family at 0..1, sin_port at 2..3, sin_addr at 4..7 — this is the
-	// assertion that would have caught the original mistake.
+	if len(bytes) != 28 {
+		t.Fatalf("SOCKADDR_INET is %d bytes, want 28", len(bytes))
+	}
+	if bytes[0] != 2 { // AF_INET on Windows
+		t.Fatalf("sin_family is %d, want AF_INET", bytes[0])
+	}
+	// sin_port must stay zero: an address written into the port field is how
+	// the first version of this file failed, with ERROR_INVALID_PARAMETER.
+	if bytes[2] != 0 || bytes[3] != 0 {
+		t.Fatalf("sin_port is % x, want zero", bytes[2:4])
+	}
+	// sin_addr at byte 4, in network order.
 	if bytes[4] != 10 || bytes[5] != 111 || bytes[6] != 0 || bytes[7] != 2 {
 		t.Fatalf("sin_addr is not at byte 4: % x", bytes[:16])
 	}
@@ -40,9 +39,6 @@ func TestSockaddrInet4MatchesTheCStruct(t *testing.T) {
 		if bytes[index] != 0 {
 			t.Fatalf("sin_zero must stay zero, byte %d is %d", index, bytes[index])
 		}
-	}
-	if len(bytes) != 28 {
-		t.Fatalf("SOCKADDR_INET is %d bytes, want 28", len(bytes))
 	}
 }
 

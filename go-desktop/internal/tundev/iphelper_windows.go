@@ -169,20 +169,28 @@ var (
 	_ [unsafe.Sizeof(mibIpInterfaceRow{})]byte      = [168]byte{}
 )
 
+// sockaddrOf builds a SOCKADDR_INET for addr.
+//
+// The bytes are written through a byte view of the struct instead of through
+// the Port/Flowinfo/Addr fields. That is deliberate: the v4 view keeps sin_addr
+// at byte 4, which lands inside the uint32 the v6 view calls sin6_flowinfo, so
+// naming fields here means remembering which of two layouts wins. Writing the
+// address at the documented offset cannot drift, and the tests in
+// iphelper_windows_test.go assert exactly those offsets.
 func sockaddrOf(addr netip.Addr) rawSockaddrInet {
 	var s rawSockaddrInet
+	raw := unsafe.Slice((*byte)(unsafe.Pointer(&s)), int(unsafe.Sizeof(s)))
 	if addr.Is4() {
-		// sin_family, sin_port, sin_addr: the address starts at byte 4.
 		s.Family = syscall.AF_INET
 		v4 := addr.As4()
-		s.Port = uint16(v4[0])<<8 | uint16(v4[1])
-		s.Flowinfo = uint32(v4[2])<<24 | uint32(v4[3])<<16
+		// SOCKADDR_IN: family 0..1, port 2..3, sin_addr 4..7, sin_zero 8..15.
+		copy(raw[4:8], v4[:])
 		return s
 	}
-	// sin6_family, sin6_port, sin6_flowinfo, sin6_addr: address at byte 8.
 	s.Family = syscall.AF_INET6
+	// SOCKADDR_IN6: family 0..1, port 2..3, flowinfo 4..7, sin6_addr 8..23.
 	v6 := addr.As16()
-	copy(s.Addr[:], v6[:])
+	copy(raw[8:24], v6[:])
 	return s
 }
 
