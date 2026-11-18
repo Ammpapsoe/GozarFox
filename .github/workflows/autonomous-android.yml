@@ -5,6 +5,11 @@ on:
     branches: ['mission/autonomous-v1']
   workflow_dispatch:
     inputs:
+      skip_login_and_graphics:
+        description: Skip login and graphical unit tests in an expedited run
+        required: false
+        type: boolean
+        default: false
       login_ui:
         description: Boot an emulator and capture the sign-in screens (optional, never gates a release)
         required: false
@@ -56,7 +61,9 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: Run DNS, relay and application unit tests
-        run: bash scripts/run_gradle_ci.sh unit :core:test :app:testDebugUnitTest
+        env:
+          SKIP_LOGIN_AND_GRAPHICS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_login_and_graphics && 'true' || 'false' }}
+        run: bash scripts/run_gradle_ci.sh unit :core:test :app:testDebugUnitTest -PgozarSkipLoginAndGraphics="$SKIP_LOGIN_AND_GRAPHICS"
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

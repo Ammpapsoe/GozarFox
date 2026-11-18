@@ -250,7 +250,11 @@ jobs:
           set -uo pipefail
           log="${RUNNER_TEMP}/gozar-desktop-protocols.log"
           set +e
-          go test -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app ./internal/localproxy -count=1 2>&1 | tee "$log"
+          skip='^$'
+          if [ "${{ github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests }}" = 'true' ]; then
+            skip='(?i)(sign.?in|login|signup|unblock|blocked.*sign|verification.*session|session.*verification)'
+          fi
+          go test -skip "$skip" -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app ./internal/localproxy -count=1 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
@@ -292,7 +296,9 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Core unit tests
-        run: bash ./gradlew :core:test --no-daemon --stacktrace
+        env:
+          SKIP_LOGIN_AND_GRAPHICS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests && 'true' || 'false' }}
+        run: bash ./gradlew :core:test --no-daemon --stacktrace -PgozarSkipLoginAndGraphics="$SKIP_LOGIN_AND_GRAPHICS"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -315,7 +321,9 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
       - name: App unit tests
-        run: bash ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+        env:
+          SKIP_LOGIN_AND_GRAPHICS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests && 'true' || 'false' }}
+        run: bash ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace -PgozarSkipLoginAndGraphics="$SKIP_LOGIN_AND_GRAPHICS"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

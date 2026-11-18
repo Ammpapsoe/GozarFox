@@ -3,3 +3,28 @@ plugins {
     id 'org.jetbrains.kotlin.android' version '2.2.21' apply false
     id 'org.jetbrains.kotlin.jvm' version '2.2.21' apply false
 }
+
+// Optional expedited CI profile: skip login and graphical tests without
+// dropping the network, tunnel, update, or packaging checks.
+subprojects {
+    tasks.withType(Test).configureEach {
+        if (providers.gradleProperty('gozarSkipLoginAndGraphics').orNull == 'true') {
+            filter {
+                excludeTestsMatching '*Login*'
+                excludeTestsMatching '*login*'
+                excludeTestsMatching '*SignIn*'
+                excludeTestsMatching '*signin*'
+                excludeTestsMatching '*Signup*'
+                excludeTestsMatching '*signup*'
+                excludeTestsMatching '*Unblock*'
+                excludeTestsMatching '*unblock*'
+                excludeTestsMatching '*FoxAuthProtocolTest*'
+                excludeTestsMatching '*FoxWebChannelTest*'
+                excludeTestsMatching '*UiTest*'
+                excludeTestsMatching '*UITest*'
+                excludeTestsMatching '*ScreenTest*'
+                excludeTestsMatching '*ActivityTest*'
+            }
+        }
+    }
+}
