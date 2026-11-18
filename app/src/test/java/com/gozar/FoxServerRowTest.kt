@@ -11,10 +11,10 @@ import com.example.liquidglass.LiquidGlassListItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
@@ -57,7 +57,7 @@ class FoxServerRowTest {
         assertEquals(1, list.childCount)
         assertEquals(item, list.getChildAt(0))
         assertEquals("the row must not be orphaned", item, row.parent)
-        assertTrue("the row must still be rendered", row.isShown || row.visibility == View.VISIBLE)
+        assertEquals(View.VISIBLE, row.visibility)
     }
 
     @Test
@@ -75,8 +75,12 @@ class FoxServerRowTest {
 
     @Test
     fun `rows keep their own background and text`() {
-        val list = LinearLayout(context)
-        val row = LayoutInflater.from(context).inflate(R.layout.item_fox_server, list, false)
+        // item_fox_server resolves ?attr/ color and selectableItemBackground,
+        // so it has to be inflated inside the activity the app really uses.
+        val activity = Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        activity.setTheme(R.style.AppTheme)
+        val list = LinearLayout(activity)
+        val row = LayoutInflater.from(activity).inflate(R.layout.item_fox_server, list, false)
         val country = row.findViewById<TextView>(R.id.foxCountry)
         country.text = "Netherlands"
         val item = LiquidGlassListItem(context)
