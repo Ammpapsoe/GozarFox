@@ -142,11 +142,15 @@ func configure(cfg *Config) error {
 	// The resolver is the proxy's own DNS listener. Setting it on the interface
 	// is what makes applications that read the OS resolver (rather than the
 	// VPN's) use the tunnel instead of the carrier's DNS.
+	//
+	// A failure here is not fatal. If the API is missing on this build, or the
+	// adapter refuses the row (some third-party LSPs and metered-connection
+	// policies do), the interface resolver simply stays unset and the proxy's
+	// own DNS listener still answers: a connection that works without the OS
+	// resolver is better than a connect that aborts over a name server.
 	if cfg.DNS != "" {
 		if address, err := netip.ParseAddr(cfg.DNS); err == nil {
-			if err := setInterfaceDNS(index, address); err != nil {
-				return err
-			}
+			_, _ = setInterfaceDNS(index, address)
 		}
 	}
 	gate, gateIndex := gateway()

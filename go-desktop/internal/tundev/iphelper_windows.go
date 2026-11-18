@@ -364,9 +364,11 @@ func freeIpForwardTable(table *mibIpForwardTable2) {
 	}
 }
 
-// DNS_INTERFACE_SETTINGS, as documented for SetInterfaceDnsSettings. Only the
-// name-server field is used; the rest must be present because Windows reads the
-// whole struct, and Version tells it which fields are meaningful.
+// DNS_INTERFACE_SETTINGS, as documented for SetInterfaceDnsSettings.
+//
+// onlyVersion1 says which version the OS actually supports: the call exists from
+// Windows 10 1903 and versions 2 and 3 arrive with later updates. Version 1 is
+// the only one every supported build accepts.
 type dnsInterfaceSettings struct {
 	Version             uint32
 	Flags               uint64
@@ -389,30 +391,40 @@ const (
 )
 
 // setInterfaceDNS points the tunnel interface at one resolver. It is the
-// structured replacement for `netsh interface ipv4 set dnsservers`. The
-// interface is identified by LUID, which is the key the API expects; the index
-// used by the route calls is not accepted here.
-func setInterfaceDNS(index uint32, server netip.Addr) error {
+// structured replacement for `netsh interface ipv4 set dnsservers`, which used
+// to run as a child process on every connect.
+//
+// It returns (false, nil) when the OS does not offer the call at all — Windows
+// 10 before 1903 and Windows Server 2019 — so the caller can fall back instead
+// of failing the connection over a name server.
+func setInterfaceDNS(index uint32, server netip.Addr) (bool, error) {
+	if err := procSetInterfaceDnsSettings.Find(); err != nil {
+		return false, nil
+	}
 	luid, err := interfaceLUID(index)
 	if err != nil {
-		return err
+		return true, err
 	}
 	text, err := windows.UTF16PtrFromString(server.String())
 	if err != nil {
-		return err
+		return true, err
 	}
 	settings := dnsInterfaceSettings{
 		Version:    dnsSettingVersion,
 		Flags:      dnsSettingNameServer,
 		NameServer: text,
 	}
-	if code, _, _ := procSetInterfaceDnsSettings.Call(
+	if code, _, callErr := procSetInterfaceDnsSettings.Call(
 		uintptr(unsafe.Pointer(&luid)),
 		uintptr(unsafe.Pointer(&settings)),
 	); code != 0 {
-		return windows.Errno(code)
+		return true, windows.Errno(code)
+	} else if callErr != nil && callErr != windows.ERROR_SUCCESS {
+		// syscall.Errno(0) is returned as a non-nil error by LazyProc.Call; the
+		// zero code above already covers the real failures.
+		_ = callErr
 	}
-	return nil
+	return true, nil
 }
 
 // interfaceLUID converts an interface index to the LUID the DNS API needs.
