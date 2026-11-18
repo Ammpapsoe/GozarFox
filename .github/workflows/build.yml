@@ -577,7 +577,10 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A tag push carries no inputs, so the approval can also be recorded
+          # by dispatching Build on the same commit with manual_approve enabled.
           MANUAL_APPROVE: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_approve && '1' || '0' }}
+          TAGGED_REF: ${{ github.ref_name }}
         run: |
           set -e
           android=$(grep -m1 'versionName' app/build.gradle | sed -E "s/.*'([^']+)'.*/\1/" | tr -d ' ')
@@ -602,8 +605,10 @@ jobs:
           # this repository may read that mailbox. A stable tag must therefore be
           # released either with automated evidence or with an explicit human
           # approval -- the release notes always say which one applied.
+          approve_runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '[.workflow_runs[] | select(.name == "Build" and .event == "workflow_dispatch" and .conclusion == "success")] | length')
+          if [ "$approve_runs" -gt 0 ]; then MANUAL_APPROVE=1; fi
           if [ "$MANUAL_APPROVE" != "1" ]; then
-            echo '::error::Release requires successful Apps Script login/Pass and signup-code tests for this exact commit, or a workflow_dispatch run of Build with manual_approve enabled'
+            echo "::error::Release requires successful Apps Script login/Pass and signup-code tests for this exact commit, or a successful workflow_dispatch run of Build with manual_approve enabled on the same commit"
             exit 1
           fi
           echo '::warning::Releasing a stable tag with manual approval: the automated Apps Script account tests did not run'

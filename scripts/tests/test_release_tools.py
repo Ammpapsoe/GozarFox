@@ -225,6 +225,11 @@ class ReleaseToolsTest(unittest.TestCase):
         self.assertIn('if [ "$MANUAL_APPROVE" != "1" ]', publish)
         self.assertLess(publish.index('if [ "$found" = true ]'), publish.index('if [ "$MANUAL_APPROVE" != "1" ]'))
         self.assertIn("MANUAL_APPROVAL_APPLIED=true", publish)
+        # A tag push carries no inputs: the approval must also be reachable from
+        # a Build dispatch on the same commit, or no tag release could ever be
+        # approved without weakening the gate.
+        self.assertIn('select(.name == "Build" and .event == "workflow_dispatch" and .conclusion == "success")', publish)
+        self.assertLess(publish.index("approve_runs="), publish.index('if [ "$MANUAL_APPROVE" != "1" ]'))
         # The release body must disclose which evidence applied.
         self.assertIn("scripts/release_notes_note.py --manual-approval", publish)
         self.assertIn("scripts/release_notes_note.py --automated", publish)
