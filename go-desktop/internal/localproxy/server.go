@@ -21,6 +21,8 @@ type Server struct {
 	http      *http.Server
 	transport *http.Transport
 	dial      Dialer
+	ctx       context.Context
+	cancel    context.CancelFunc
 	mu        sync.Mutex
 	closed    bool
 	active    map[net.Conn]struct{}
@@ -36,7 +38,8 @@ func Listen(port int, dial Dialer) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{listener: listener, dial: dial, active: make(map[net.Conn]struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Server{listener: listener, dial: dial, ctx: ctx, cancel: cancel, active: make(map[net.Conn]struct{})}
 	s.transport = &http.Transport{
 		Proxy:                 nil,
 		DisableCompression:    true,
@@ -60,6 +63,7 @@ func (s *Server) Close() error {
 		return nil
 	}
 	s.closed = true
+	s.cancel()
 	for conn := range s.active {
 		_ = conn.Close()
 	}
@@ -262,7 +266,13 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid destination", http.StatusBadRequest)
 		return
 	}
-	remote, err := s.dialContext(r.Context(), "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	// The client may half-close its sending side before CONNECT completes.
+	// net/http can cancel the request context on that EOF, although the
+	// client is still waiting for the response. Tie this dial to server
+	// shutdown and a deadline instead; never leave it running indefinitely.
+	ctx, cancel := context.WithTimeout(s.ctx, 15*time.Second)
+	remote, err := s.dialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	cancel()
 	if err != nil {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
