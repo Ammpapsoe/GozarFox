@@ -2,6 +2,7 @@ package tundev
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"time"
@@ -128,16 +129,16 @@ func configure(cfg *Config) error {
 	}
 	cfg.windowsIndex = itoa(int(index))
 	if err := addInterfaceAddress(index, addressV4()); err != nil {
-		return err
+		return fmt.Errorf("assigning %s to %s failed: %w", addressV4(), cfg.Interface, err)
 	}
 	if err := waitWindowsReady(cfg.Interface); err != nil {
-		return err
+		return fmt.Errorf("waiting for %s to come up failed: %w", cfg.Interface, err)
 	}
 	// The metric is set before the routes, otherwise Windows may rank the
 	// physical adapter's default above the tunnel for the moment between the
 	// two calls and a burst of traffic escapes unencrypted.
 	if err := setInterfaceMetric(index, false, 1); err != nil {
-		return err
+		return fmt.Errorf("setting the interface metric failed: %w", err)
 	}
 	// The resolver is the proxy's own DNS listener. Setting it on the interface
 	// is what makes applications that read the OS resolver (rather than the
@@ -168,13 +169,13 @@ func configure(cfg *Config) error {
 			continue
 		}
 		if err := addHostRoute(uint32(gateIndexValue), keep, nextHop, 1); err != nil {
-			return err
+			return fmt.Errorf("pinning %s outside the tunnel failed: %w", keep, err)
 		}
 		cfg.AddedKeep = append(cfg.AddedKeep, keep)
 	}
 	for slot, prefix := range splitV4 {
 		if err := addRoute(index, prefix, 0); err != nil {
-			return err
+			return fmt.Errorf("adding the %s route failed: %w", prefix, err)
 		}
 		cfg.Routes[slot] = true
 	}
