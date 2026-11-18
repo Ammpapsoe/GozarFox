@@ -133,6 +133,48 @@ class FoxUdpAssociateTest {
     }
 
     @Test
+    fun lanBypassSendsUdpFromTheDeviceNotThroughTheTunnel() {
+        // With LAN bypass on, a datagram to a local address must leave from the
+        // device and never open a relay pipe. A loopback sink stands in for the
+        // LAN host so the test does not need a second machine.
+        val sink = DatagramSocket(0, InetAddress.getByName("127.0.0.1"))
+        sink.soTimeout = 3000
+        val relayed = LinkedBlockingQueue<String>()
+        val previous = FoxRoute.bypassLan
+        FoxRoute.bypassLan = true
+        val (association, socket) = relay(
+            bridge = null,
+            openUdp = { host, port -> relayed.offer("$host:$port"); null }
+        )
+        val client = DatagramSocket()
+        try {
+            val target = byteArrayOf(127, 0, 0, 1)
+            val packet = socksDatagram(0x01, target, sink.localPort, "hello-lan".toByteArray())
+            client.send(DatagramPacket(packet, packet.size, InetAddress.getByName("127.0.0.1"), socket.localPort))
+            val buffer = ByteArray(512)
+            val incoming = DatagramPacket(buffer, buffer.size)
+            sink.receive(incoming)
+            val got = incoming.data.copyOfRange(incoming.offset, incoming.offset + incoming.length)
+            assertEquals("hello-lan", String(got))
+            assertEquals("a LAN datagram must not open a relay flow", null, relayed.poll())
+            // And the answer must come back to the SOCKS peer with the LAN
+            // address as its source, exactly like a relayed datagram.
+            sink.send(DatagramPacket("pong".toByteArray(), 4, incoming.address, incoming.port))
+            client.soTimeout = 3000
+            val back = ByteArray(512)
+            val answer = DatagramPacket(back, back.size)
+            client.receive(answer)
+            val data = answer.data.copyOfRange(answer.offset, answer.offset + answer.length)
+            assertArrayEquals(target, data.copyOfRange(4, 8))
+        } finally {
+            FoxRoute.bypassLan = previous
+            client.close()
+            sink.close()
+            association.close()
+        }
+    }
+
+    @Test
     fun aBrowserLoadKeepsEveryFlowInsteadOfEvictingTheOldest() {
         // 64 flows used to be the ceiling, and passing it evicted an in-flight
         // flow; a single browser on QUIC opens more than that. 200 distinct

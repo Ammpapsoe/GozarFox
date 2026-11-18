@@ -3,6 +3,7 @@ package com.gozar
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.SocketAddress
 import java.net.SocketTimeoutException
 import java.util.concurrent.ArrayBlockingQueue
@@ -56,6 +57,8 @@ internal class FoxUdpAssociate(
         private const val BYTES_CAP = 8L * 1024 * 1024
         private const val MAX_ASSOCIATIONS = 256
         private const val IDLE_MS = 90_000L
+        /** Largest UDP payload a single datagram can carry over IPv4. */
+        private const val MAX_DATAGRAM = 65_507
         private const val SWEEP_MS = 5_000L
         private val open = AtomicLong(0)
 
@@ -72,6 +75,8 @@ internal class FoxUdpAssociate(
 
     private val lock = Any()
     private val flows = LinkedHashMap<String, UdpFlow>()
+    /** Direct LAN sockets, closed with the association so none outlive it. */
+    private val lanes = HashMap<DatagramSocket, ByteArray>()
     private val bytesQueued = AtomicLong(0)
     @Volatile private var peer: SocketAddress? = null
     private val running = AtomicBoolean(false)
@@ -86,6 +91,14 @@ internal class FoxUdpAssociate(
     override fun close() {
         if (!running.getAndSet(false)) return
         release()
+        val open = synchronized(lock) {
+            val snapshot = lanes.keys.toList()
+            lanes.clear()
+            snapshot
+        }
+        for (direct in open) {
+            try { direct.close() } catch (_: Exception) { }
+        }
         try { socket.close() } catch (_: Exception) { }
         val snapshot = synchronized(lock) {
             val copy = flows.values.toList()
@@ -167,6 +180,18 @@ internal class FoxUdpAssociate(
             bridge.answer(payload) { answer -> sendSocks(answer, replyHeader) }
             return
         }
+        // A LAN destination that the user asked to bypass goes out from the
+        // device itself, the same way TCP does (FoxRoute.direct). UDP had no
+        // such path: LAN bypass was TCP only, so casting, local discovery and
+        // a NAS on the same Wi-Fi failed with the tunnel up even though the
+        // setting was on. The datagram is sent on an ordinary socket bound to
+        // the real interface and the answer comes back through the same
+        // socket; if the socket cannot be opened the flow falls through to the
+        // relay, so this never weakens the tunnel's fail-closed behaviour.
+        if (lanDirect(host)) {
+            val direct = sendDirect(payload, host, port, atyp, addressBytes)
+            if (direct) return
+        }
         val flow = synchronized(lock) {
             val key = "$host:$port"
             flows[key]?.let { return@synchronized it }
@@ -189,6 +214,81 @@ internal class FoxUdpAssociate(
         out[out.size - 2] = (port ushr 8).toByte()
         out[out.size - 1] = port.toByte()
         return out
+    }
+
+    /** True only for a LAN address while the user keeps LAN bypass enabled. */
+    private fun lanDirect(host: String): Boolean =
+        FoxRoute.bypassLan && FoxRoute.isLan(host) && !stale()
+
+    /**
+     * Sends one datagram from the device itself and relays the answer back to
+     * the SOCKS peer. Returns false when no socket could be opened, so the
+     * caller can fall back to the tunnel rather than dropping the datagram.
+     */
+    private fun sendDirect(
+        payload: ByteArray,
+        host: String,
+        port: Int,
+        atyp: Int,
+        addressBytes: ByteArray
+    ): Boolean {
+        if (payload.size > 65507) return false
+        val target = try {
+            InetSocketAddress(InetAddress.getByName(host), port)
+        } catch (_: Exception) {
+            return false
+        }
+        val direct = try {
+            DatagramSocket()
+        } catch (_: Exception) {
+            return false
+        }
+        val header = replyHeader(atyp, addressBytes, port)
+        var registered = false
+        synchronized(lock) {
+            if (running.get()) {
+                lanes[direct] = header
+                registered = true
+            }
+        }
+        if (!registered) {
+            try { direct.close() } catch (_: Exception) { }
+            return false
+        }
+        try {
+            direct.send(DatagramPacket(payload, payload.size, target))
+        } catch (_: Exception) {
+            forgetDirect(direct)
+            return false
+        }
+        thread(isDaemon = true, name = "fox-udp-lan") {
+            val buffer = ByteArray(MAX_DATAGRAM)
+            try {
+                while (running.get()) {
+                    direct.soTimeout = IDLE_MS.toInt()
+                    val incoming = DatagramPacket(buffer, buffer.size)
+                    try {
+                        direct.receive(incoming)
+                    } catch (_: Exception) {
+                        return@thread
+                    }
+                    val answer = incoming.data.copyOfRange(
+                        incoming.offset,
+                        incoming.offset + incoming.length
+                    )
+                    count?.invoke(false, answer.size.toLong())
+                    sendSocks(answer, header)
+                }
+            } finally {
+                forgetDirect(direct)
+            }
+        }
+        return true
+    }
+
+    private fun forgetDirect(direct: DatagramSocket) {
+        synchronized(lock) { lanes.remove(direct) }
+        try { direct.close() } catch (_: Exception) { }
     }
 
     private fun sendSocks(payload: ByteArray, replyHeader: ByteArray) {

@@ -179,8 +179,10 @@ func (m *Manager) choice() (bool, bool) {
 	case m.h3Score.samples == 0:
 		return m.count%8 == 0, true
 	}
-	preferH3 := m.h3Score.average < m.h2Score.average*0.8
+	preferH3 := m.h3Score.average <= m.h2Score.average*1.1
 	if m.count%16 == 0 {
+		// A periodic probe so the two averages stay comparable instead of
+		// freezing on whichever protocol was measured first.
 		return !preferH3, true
 	}
 	return preferH3, true

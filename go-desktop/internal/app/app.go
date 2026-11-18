@@ -127,6 +127,17 @@ func New(version string) *App {
 	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
 	relaytransport.RestoreCache(cfg.RelayCache, time.Now())
 	go created.sampler()
+	// A previous run that was killed rather than closed leaves its firewall
+	// rules behind, and on Windows that means the whole machine is offline.
+	// Clearing them is unconditional and cheap: disabling an absent kill switch
+	// is a no-op on every platform.
+	go func() {
+		if found, err := killswitch.Sweep(); found && err == nil {
+			// Nothing else reports this, and it explains a start that is
+			// briefly offline: the rules are being removed, not reinstalled.
+			created.setStage("")
+		}
+	}()
 	return created
 }
 
