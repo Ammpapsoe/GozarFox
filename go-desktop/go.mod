@@ -1,6 +1,6 @@
 module github.com/bardia049b-stack/Gozar1/go-desktop
 
-go 1.24
+go 1.26
 
 require (
 	github.com/quic-go/quic-go v0.51.0

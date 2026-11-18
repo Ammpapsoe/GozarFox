@@ -34,7 +34,7 @@ jobs:
           GOZAR_LIST_KEY_FILE="$key" bash tools/sign-ir-domains.sh packaging/ir-domains.txt packaging/ir-domains.txt.sig
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.24.6'
+          go-version: '1.26.11'
       - name: Verify the signature with the Go verifier
         run: |
           set -euo pipefail
