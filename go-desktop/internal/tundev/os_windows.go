@@ -215,7 +215,19 @@ func restore(cfg *Config) {
 	// disconnect, and CreateIpForwardEntry2 needs a row that includes the protocol
 	// to find the entry again.
 	if gateIndex, err := atoi(cfg.windowsIndex); err == nil {
+		nextHop := netip.Addr{}
+		if cfg.windowsGateway != "" {
+			nextHop = netip.MustParseAddr(cfg.windowsGateway)
+		}
 		for _, keep := range cfg.AddedKeep {
+			_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), nextHop)
+			// DeleteIpForwardEntry2 matches on the whole row, and an entry that
+			// does not match exactly is reported as not found and left in place.
+			// The next hop above is the one the route was created with, but a
+			// delete by prefix alone is tried too: whoever added the route last
+			// (a previous run, an operator, the app before a restart) may have
+			// used a different gateway, and a stale pin means the proxy stays
+			// unreachable after the tunnel is gone.
 			_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), netip.Addr{})
 		}
 	}
