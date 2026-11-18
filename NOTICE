@@ -48,10 +48,7 @@ License: Apache License 2.0; see HPACK-LICENSE.txt.
 
 Desktop protocol reference
 --------------------------
-The account, Fastly challenge and tunnel protocols were checked against armanlife/firefox-vpn-client.
-The desktop challenge flow also follows the existing Android FoxShield implementation.
-Source: https://github.com/armanlife/firefox-vpn-client
-Upstream license: GNU General Public License, version 3.
+The desktop challenge flow follows the existing Android FoxShield implementation.
 
 Wintun
 ------
