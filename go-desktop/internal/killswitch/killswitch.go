@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -110,7 +109,11 @@ func tempFile(pattern, content string) (string, error) {
 func commandOutput(name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	// quiet, not exec: this used to be the one raw exec left on the Windows
+	// path, and a raw exec of powershell.exe opens a console window that
+	// flashes over the app on every start. See sweep_windows.go for why this
+	// function is now only reached when there is something to clean up.
+	cmd := quiet.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%s: %v: %s", name, err, strings.TrimSpace(string(out)))

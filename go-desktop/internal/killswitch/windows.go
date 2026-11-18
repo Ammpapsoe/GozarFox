@@ -28,7 +28,10 @@ func windowsRules(cfg Config) string {
 	b.WriteString("$ErrorActionPreference='Stop'\n")
 	b.WriteString("Get-NetFirewallRule -DisplayName 'Gozar-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule\n")
 	b.WriteString("$previous = Get-NetFirewallProfile | ForEach-Object { $_.Name + '=' + $_.DefaultOutboundAction }\n")
-	b.WriteString("$previous -join ',' | Set-Content -Path (Join-Path $env:TEMP 'gozar-killswitch-previous.txt') -Encoding ASCII\n")
+	// The path comes from Go, not from $env:TEMP: when the two sides computed
+	// it separately they disagreed (Go read C:\Windows\Temp, the script wrote
+	// the user's %TEMP%), and the sweep could never see the marker.
+	b.WriteString("$previous -join ',' | Set-Content -Path " + psQuote(markerPath()) + " -Encoding ASCII\n")
 	b.WriteString("New-NetFirewallRule -DisplayName 'Gozar-Tunnel' -Direction Outbound -Action Allow -InterfaceAlias " + psQuote(cfg.Interface) + " -Profile Any | Out-Null\n")
 	v4, v6 := proxyLists(cfg)
 	var proxy []string
@@ -70,9 +73,12 @@ func windowsRules(cfg Config) string {
 func windowsEnableScript(cfg Config) string { return windowsRules(cfg) }
 
 func windowsDisableScript() string {
-	return `$ErrorActionPreference='Stop'
+	return strings.ReplaceAll(windowsDisableTemplate, "@MARKERPATH@", psQuote(markerPath()))
+}
+
+const windowsDisableTemplate = `$ErrorActionPreference='Stop'
 Get-NetFirewallRule -DisplayName 'Gozar-*' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-$path = Join-Path $env:TEMP 'gozar-killswitch-previous.txt'
+$path = @MARKERPATH@
 $previous = @{}
 if (Test-Path $path) {
   (Get-Content $path -Raw) -split ',' | ForEach-Object {
@@ -87,7 +93,6 @@ foreach ($profile in @('Domain','Private','Public')) {
   Set-NetFirewallProfile -Profile $profile -DefaultOutboundAction $action
 }
 `
-}
 
 // runPowerShellScript hands the rules to PowerShell through a temporary
 // script file. Passing them with -Command put the whole Iranian prefix
@@ -115,4 +120,4 @@ func disableWindows() error {
 }
 
 func enableOS(cfg Config) error { return enableWindows(cfg) }
-func disableOS() error { return disableWindows() }
+func disableOS() error          { return disableWindows() }
