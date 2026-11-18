@@ -96,4 +96,43 @@ class HevConfigTest {
     fun `ledger file name stays in the app cache directory scope`() {
         assertEquals("hev-socks5-config.yaml", HevEngine.CONFIG_FILE)
     }
+
+    /**
+     * 1.18.0 shipped a fix that relied on `writeText` restoring the mode of a
+     * file an older build had left owner-unreadable. It does not: `FileOutputStream`
+     * truncates the existing inode and leaves its mode alone, so every device
+     * that had ever run 1.17.x kept failing to start the engine and reported
+     * "Android refused to open the tunnel device". This pins the repair.
+     */
+    @Test
+    fun `an owner-unreadable config left by an older build is repaired`() {
+        val directory = createTempDir("hev-stale")
+        val file = File(directory, HevEngine.CONFIG_FILE)
+        val document = HevConfig.document(1280, 10810, credential)
+
+        file.writeText("tunnel:\n")
+        assertTrue(file.setReadable(false, false))
+        assertFalse(file.canRead())
+
+        // What HevEngine.start does before handing the path to the engine.
+        file.writeText(document)
+        assertFalse("writeText alone does not repair the mode", file.canRead())
+        assertTrue(file.setReadable(true, true))
+        assertTrue("repair makes the engine's fopen succeed", file.canRead())
+        assertEquals(document, file.readText())
+    }
+
+    @Test
+    fun `a config that cannot be repaired is replaced rather than reused`() {
+        val directory = createTempDir("hev-dead")
+        val file = File(directory, HevEngine.CONFIG_FILE)
+        file.writeText("stale")
+        file.setReadable(false, false)
+        // Deleting is always allowed for the owning app, and a fresh file is
+        // created with the editor's owner-only 0600.
+        file.delete()
+        assertFalse(file.exists())
+        file.writeText(HevConfig.document(1280, 10810, credential))
+        assertTrue(file.canRead())
+    }
 }

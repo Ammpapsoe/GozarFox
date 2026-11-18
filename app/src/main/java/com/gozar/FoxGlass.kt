@@ -13,8 +13,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal data class GlassViewConfig(
     val cornerRadiusPx: Float = 28f,
     val tint: Int = REGULAR_TINT,
-    val bevelWidthPx: Float = 0f,
-    val refractionHeightPx: Float = 0f,
+    /**
+     * Width of the refractive rim, px. The library defaults to 48 and clamps to
+     * 2..200; the lens pipeline also caps it at 30% of the surface's shorter
+     * side, so a tall narrow row gets a proportionally thin rim on its own.
+     * A rim of a few px (what an earlier revision passed) is invisible: the
+     * refraction and the specular highlight both live inside this band, and
+     * with no band the surface reads as a flat translucent rectangle.
+     */
+    val bevelWidthPx: Float = 48f,
+    /** How far the rim's sampling point is pulled inward, px. Library default 160. */
+    val refractionHeightPx: Float = 160f,
     val dispersion: Float = 0.10f,
     val sensorHighlight: Boolean = false,
     /** Keep the container's own background as the thing the glass refracts. */
@@ -168,15 +177,23 @@ internal object FoxGlass {
      * place in this app with enough detail for refraction to read.
      */
     fun sheet(dialog: BottomSheetDialog, config: GlassViewConfig): Boolean {
-        if (!available()) return false
         return try {
             val frame = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet) as? ViewGroup
                 ?: return false
             if (frame.getTag(R.id.glass_host) == true) return true
+            if (!available()) {
+                // No glass on this device (x86 has no native kernels). Keep a
+                // rounded top instead of the hard rectangle the M3 background
+                // would otherwise become once the sheet is made transparent.
+                frame.setBackgroundResource(R.drawable.sheet_surface)
+                return false
+            }
             frame.background = null
             frame.clipChildren = false
             // The sheet content is a single child (the inflated layout); wrap it.
-            wrap(frame, config) != null
+            val wrapped = wrap(frame, config) != null
+            if (!wrapped) frame.setBackgroundResource(R.drawable.sheet_surface)
+            wrapped
         } catch (_: Throwable) {
             false
         }
@@ -193,6 +210,9 @@ internal object FoxGlass {
         glass.dispersionStrength = config.dispersion
         glass.downsampleScale = 2
         glass.collectFrameStats = false
+        // A rim whose compression band has no softening draws a hard line on a
+        // high-contrast backdrop; a few px turns it into the gradient iOS shows.
+        glass.edgeSoftness = 3f
         if (config.bevelWidthPx > 0f) glass.bevelWidth = config.bevelWidthPx
         if (config.refractionHeightPx > 0f) glass.refractionHeight = config.refractionHeightPx
         return glass

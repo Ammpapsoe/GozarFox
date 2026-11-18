@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Top-rounded surface for the server sheet.
+
+  The M3 bottom sheet background is switched off in FoxGlass.sheet() so that
+  glass can take its place; without glass (x86, or any device where the native
+  kernels are absent) the sheet fell back to a hard rectangle. Every such
+  fallback now lands on this drawable instead, so the sheet has the same 28dp
+  top corners either way and never shows a sharp edge.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners
+        android:topLeftRadius="@dimen/sheet_radius"
+        android:topRightRadius="@dimen/sheet_radius" />
+    <solid android:color="?attr/colorSurfaceContainerLow" />
+</shape>

@@ -39,6 +39,19 @@ internal object HevEngine {
             // owner read bit too, and the native engine then cannot open its
             // own configuration and exits before touching the tun device.
             file.writeText(document)
+            // writeText reuses an existing file and leaves its mode alone, so
+            // a file left owner-unreadable by an older build keeps failing
+            // even though this build writes it correctly. Repair the mode, and
+            // delete the file outright if the mode cannot be repaired; a stale
+            // credential-bearing file is not worth keeping.
+            if (!file.canRead()) {
+                file.setReadable(true, true)
+                if (!file.canRead()) {
+                    file.delete()
+                    file.writeText(document)
+                }
+            }
+            if (!file.canRead()) return false
         } catch (_: Exception) {
             return false
         }

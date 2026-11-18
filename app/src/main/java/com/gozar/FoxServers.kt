@@ -50,7 +50,16 @@ object FoxServers {
                     dialog.dismiss()
                     onPick()
                 }
-                list.addView(glassRow(host, row, servers.size, list.childCount) ?: row)
+                val view = glassRow(host, row, servers.size, list.childCount) ?: row
+                if (view === row) {
+                    // No glass here: the row still needs its own gap so the
+                    // rounded corners of neighbouring cards stay visible.
+                    (row.layoutParams as? LinearLayout.LayoutParams)?.apply {
+                        topMargin = (FoxGlass.dp(host, 3f)).toInt()
+                        bottomMargin = (FoxGlass.dp(host, 3f)).toInt()
+                    }
+                }
+                list.addView(view)
             }
         }
 
@@ -94,15 +103,24 @@ object FoxServers {
                 index == total - 1 -> LiquidGlassListItem.Position.LAST
                 else -> LiquidGlassListItem.Position.MIDDLE
             }
+            // Detach first: contentView's setter removes the value from its
+            // current parent, and that parent is the item itself once the value
+            // has been stored. Doing it the other way round pulled the row back
+            // out of the item and every server rendered as an empty glass bar.
+            (row.parent as? ViewGroup)?.removeView(row)
             item.contentView = row
             item.enableDynamicBackground = true
             item.glassTint = GlassViewConfig.REGULAR_TINT
             item.layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                // A 1dp gap keeps neighbouring glass rims from touching; the
+                // library draws each row's rim inside its own bounds.
+                topMargin = (FoxGlass.dp(host, 1f)).toInt()
+                bottomMargin = (FoxGlass.dp(host, 1f)).toInt()
+            }
             item.setOnClickListener { row.performClick() }
-            (row.parent as? ViewGroup)?.removeView(row)
             item
         } catch (_: Throwable) {
             null
@@ -113,11 +131,12 @@ object FoxServers {
     private fun glassSheet(dialog: BottomSheetDialog, view: View) {
         try {
             FoxGlass.sheet(dialog, GlassViewConfig(
-                cornerRadiusPx = FoxGlass.dp(view.context, FoxGlass.PANEL_RADIUS_DP),
+                cornerRadiusPx = FoxGlass.dp(view.context, 24f),
                 tint = GlassViewConfig.REGULAR_TINT,
-                bevelWidthPx = FoxGlass.dp(view.context, 28f),
-                refractionHeightPx = FoxGlass.dp(view.context, 16f),
-                dispersion = 0.12f,
+                bevelWidthPx = FoxGlass.dp(view.context, 40f),
+                refractionHeightPx = FoxGlass.dp(view.context, 120f),
+                dispersion = 0.10f,
+                sensorHighlight = true,
                 keepBackdrop = true
             ))
         } catch (_: Throwable) {
