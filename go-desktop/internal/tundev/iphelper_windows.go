@@ -381,8 +381,11 @@ type dnsInterfaceSettings struct {
 }
 
 const (
-	dnsSettingVersion    = 1
-	dnsSettingNameServer = 1 // DNS_SETTING_NAMESERVER
+	dnsSettingVersion = 1 // DNS_INTERFACE_SETTINGS_VERSION1
+	// DNS_SETTING_NAMESERVER is 0x0002 in netioapi.h, not 1: 0x0001 is
+	// DNS_SETTING_IPV6, and passing an IPv4 address under that flag makes
+	// Windows reject the whole call with ERROR_INVALID_PARAMETER.
+	dnsSettingNameServer = 0x0002
 )
 
 // setInterfaceDNS points the tunnel interface at one resolver. It is the
