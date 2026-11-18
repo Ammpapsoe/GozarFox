@@ -52,6 +52,7 @@ var (
 	procSetIpInterfaceEntry         = modiphlpapi.NewProc("SetIpInterfaceEntry")
 	procGetIpInterfaceEntry         = modiphlpapi.NewProc("GetIpInterfaceEntry")
 	procGetIpForwardTable2          = modiphlpapi.NewProc("GetIpForwardTable2")
+	procSetInterfaceDnsSettings     = modiphlpapi.NewProc("SetInterfaceDnsSettings")
 	procFreeMibTable                = modiphlpapi.NewProc("FreeMibTable")
 )
 
@@ -361,4 +362,61 @@ func freeIpForwardTable(table *mibIpForwardTable2) {
 	if table != nil {
 		procFreeMibTable.Call(uintptr(unsafe.Pointer(table)))
 	}
+}
+
+// DNS_INTERFACE_SETTINGS, as documented for SetInterfaceDnsSettings. Only the
+// name-server field is used; the rest must be present because Windows reads the
+// whole struct, and Version tells it which fields are meaningful.
+type dnsInterfaceSettings struct {
+	Version             uint32
+	Flags               uint64
+	Domain              *uint16
+	NameServer          *uint16
+	SearchList          *uint16
+	RegistrationEnabled uint32
+	RegisterAdapterName uint32
+	EnableLLMNR         uint32
+	QueryAdapterName    uint32
+	ProfileNameServer   *uint16
+}
+
+const (
+	dnsSettingVersion    = 1
+	dnsSettingNameServer = 1 // DNS_SETTING_NAMESERVER
+)
+
+// setInterfaceDNS points the tunnel interface at one resolver. It is the
+// structured replacement for `netsh interface ipv4 set dnsservers`. The
+// interface is identified by LUID, which is the key the API expects; the index
+// used by the route calls is not accepted here.
+func setInterfaceDNS(index uint32, server netip.Addr) error {
+	luid, err := interfaceLUID(index)
+	if err != nil {
+		return err
+	}
+	text, err := windows.UTF16PtrFromString(server.String())
+	if err != nil {
+		return err
+	}
+	settings := dnsInterfaceSettings{
+		Version:    dnsSettingVersion,
+		Flags:      dnsSettingNameServer,
+		NameServer: text,
+	}
+	if code, _, _ := procSetInterfaceDnsSettings.Call(
+		uintptr(unsafe.Pointer(&luid)),
+		uintptr(unsafe.Pointer(&settings)),
+	); code != 0 {
+		return windows.Errno(code)
+	}
+	return nil
+}
+
+// interfaceLUID converts an interface index to the LUID the DNS API needs.
+func interfaceLUID(index uint32) (uint64, error) {
+	row := windows.MibIfRow2{InterfaceIndex: index}
+	if err := windows.GetIfEntry2Ex(windows.MibIfEntryNormalWithoutStatistics, &row); err != nil {
+		return 0, err
+	}
+	return row.InterfaceLuid, nil
 }

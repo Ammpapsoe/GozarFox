@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -86,6 +87,13 @@ func waitWindowsReady(name string) error {
 	for time.Now().Before(deadline) {
 		link := windows.MibIfRow2{InterfaceIndex: index}
 		address := windows.MibUnicastIpAddressRow{InterfaceIndex: index}
+		// GetUnicastIpAddressEntry looks the row up by interface *and* address,
+		// so the address has to be filled in before the call. Leaving it zero
+		// asks about 0.0.0.0, which never exists, and the probe then waited the
+		// full twelve seconds and failed even though the interface was ready.
+		ipv4 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&address.Address))
+		ipv4.Family = windows.AF_INET
+		ipv4.Addr = [4]byte{10, 111, 0, 2}
 		linkErr := windows.GetIfEntry2Ex(windows.MibIfEntryNormalWithoutStatistics, &link)
 		addrErr := windows.GetUnicastIpAddressEntry(&address)
 		if addrErr == nil && address.DadState == windows.IpDadStateDuplicate {
@@ -130,6 +138,16 @@ func configure(cfg *Config) error {
 	// two calls and a burst of traffic escapes unencrypted.
 	if err := setInterfaceMetric(index, false, 1); err != nil {
 		return err
+	}
+	// The resolver is the proxy's own DNS listener. Setting it on the interface
+	// is what makes applications that read the OS resolver (rather than the
+	// VPN's) use the tunnel instead of the carrier's DNS.
+	if cfg.DNS != "" {
+		if address, err := netip.ParseAddr(cfg.DNS); err == nil {
+			if err := setInterfaceDNS(index, address); err != nil {
+				return err
+			}
+		}
 	}
 	gate, gateIndex := gateway()
 	if gate == "" || gateIndex == "" {
