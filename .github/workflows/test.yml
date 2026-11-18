@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      skip_graphics_tests:
+        description: Skip desktop UI tests for an explicitly approved expedited run
+        required: false
+        type: boolean
+        default: false
       android_recovery_emulator:
         description: Run the Android upgrade and forward-recovery emulator scenario
         required: false
@@ -170,6 +175,7 @@ jobs:
           fi
 
   desktop-ui:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
