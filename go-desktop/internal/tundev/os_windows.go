@@ -197,39 +197,31 @@ func restore(cfg *Config) {
 	if err == nil {
 		for slot, prefix := range splitV4 {
 			if cfg.Routes[slot] {
-				_ = removeRoute(index, prefix, netip.Addr{})
+				_ = removeMatchingRoutes(index, prefix)
 				cfg.Routes[slot] = false
 			}
 		}
 		for slot, prefix := range splitV6 {
 			if cfg.RoutesV6[slot] {
-				_ = removeRoute(index, prefix, netip.Addr{})
+				_ = removeMatchingRoutes(index, prefix)
 				cfg.RoutesV6[slot] = false
 			}
 		}
 	}
-	// The keep routes live on the physical interface. They are matched by the
-	// route protocol this package sets when it creates them (MIB_IPPROTO_NETMGMT,
-	// "static" to Windows), not by their next hop: `route delete <host> mask ...
-	// <gateway>` used to miss whenever DHCP renewed the lease between connect and
-	// disconnect, and CreateIpForwardEntry2 needs a row that includes the protocol
-	// to find the entry again.
-	if gateIndex, err := atoi(cfg.windowsIndex); err == nil {
-		nextHop := netip.Addr{}
-		if cfg.windowsGateway != "" {
-			nextHop = netip.MustParseAddr(cfg.windowsGateway)
+	// Keep routes live on the physical interface. The table is swept rather than
+	// a remembered row rebuilt, because DeleteIpForwardEntry2 matches the whole
+	// row and a route left behind outlives the tunnel: the pinned host stays
+	// unreachable afterwards, with no way for the user to notice. Both the rows
+	// this session added and any rows for the same hosts left by an earlier run
+	// are removed.
+	for _, keep := range cfg.AddedKeep {
+		_ = removeMatchingRoutes(0, netip.PrefixFrom(keep, keep.BitLen()))
+	}
+	for _, keep := range cfg.Keep {
+		if !keep.Is4() {
+			continue
 		}
-		for _, keep := range cfg.AddedKeep {
-			_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), nextHop)
-			// DeleteIpForwardEntry2 matches on the whole row, and an entry that
-			// does not match exactly is reported as not found and left in place.
-			// The next hop above is the one the route was created with, but a
-			// delete by prefix alone is tried too: whoever added the route last
-			// (a previous run, an operator, the app before a restart) may have
-			// used a different gateway, and a stale pin means the proxy stays
-			// unreachable after the tunnel is gone.
-			_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), netip.Addr{})
-		}
+		_ = removeMatchingRoutes(0, netip.PrefixFrom(keep, keep.BitLen()))
 	}
 	cfg.AddedKeep = nil
 	cfg.windowsGateway, cfg.windowsIndex = "", ""

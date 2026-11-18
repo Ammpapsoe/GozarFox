@@ -273,6 +273,49 @@ func addHostRoute(index uint32, host netip.Addr, nextHop netip.Addr, metric uint
 	return nil
 }
 
+// removeMatchingRoutes deletes every route whose destination prefix is
+// `destination`, optionally restricted to one interface index (0 = any).
+//
+// This is the only reliable way to delete a route with this API.
+// DeleteIpForwardEntry2 matches the whole MIB_IPFORWARD_ROW2, and a row that
+// differs in any member — next hop, protocol, metric — is reported as "not
+// found" and left in place, so a caller that reconstructs the row from memory
+// has to reproduce every field exactly. Reading the real rows out of the table
+// and handing them back removes that guesswork entirely.
+func removeMatchingRoutes(index uint32, destination netip.Prefix) error {
+	table, err := forwardTable2()
+	if err != nil {
+		return err
+	}
+	defer freeIpForwardTable(table)
+	var firstErr error
+	removed := 0
+	want := destination.Masked()
+	for _, row := range forwardRows(table) {
+		if int(row.DestinationPrefix.PrefixLength) != want.Bits() {
+			continue
+		}
+		if addrOf(row.DestinationPrefix.Prefix) != want.Addr() {
+			continue
+		}
+		if index != 0 && row.InterfaceIndex != index {
+			continue
+		}
+		exact := row
+		if err := deleteRoute(&exact); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		removed++
+	}
+	if removed == 0 && firstErr == nil {
+		return errors.New("no route matched " + destination.String())
+	}
+	return firstErr
+}
+
 func removeRoute(index uint32, destination netip.Prefix, nextHop netip.Addr) error {
 	row := forwardRow(index, destination, 0)
 	if nextHop.IsValid() {
