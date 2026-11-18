@@ -86,8 +86,19 @@ type ipAddressPrefix struct {
 }
 
 // SOCKADDR_INET: the union of SOCKADDR_IN and SOCKADDR_IN6. SOCKADDR_IN6 is the
-// larger of the two at 28 bytes, so the union is 28 bytes and the layout below
-// matches SOCKADDR_IN6 field for field.
+// larger of the two at 28 bytes, so the union is 28 bytes and the field layout
+// below matches SOCKADDR_IN6.
+//
+// The two views do not agree on where the address lives, which is the trap:
+//
+//	SOCKADDR_IN  { family, port, addr[4], zero[8] }        -> addr at byte 4
+//	SOCKADDR_IN6 { family, port, flowinfo, addr[16], scope } -> addr at byte 8
+//
+// So an IPv4 address belongs in Port+Flowinfo (bytes 4..7) and an IPv6 address
+// in Addr (bytes 8..23). Writing an IPv4 address into Addr instead leaves
+// sin_addr zero and puts the bytes in sin_zero, which IP Helper rejects with
+// ERROR_INVALID_PARAMETER ("The parameter is incorrect") rather than anything
+// that names the field.
 type rawSockaddrInet struct {
 	Family   uint16
 	Port     uint16
@@ -161,11 +172,14 @@ var (
 func sockaddrOf(addr netip.Addr) rawSockaddrInet {
 	var s rawSockaddrInet
 	if addr.Is4() {
+		// sin_family, sin_port, sin_addr: the address starts at byte 4.
 		s.Family = syscall.AF_INET
 		v4 := addr.As4()
-		copy(s.Addr[:4], v4[:])
+		s.Port = uint16(v4[0])<<8 | uint16(v4[1])
+		s.Flowinfo = uint32(v4[2])<<24 | uint32(v4[3])<<16
 		return s
 	}
+	// sin6_family, sin6_port, sin6_flowinfo, sin6_addr: address at byte 8.
 	s.Family = syscall.AF_INET6
 	v6 := addr.As16()
 	copy(s.Addr[:], v6[:])
