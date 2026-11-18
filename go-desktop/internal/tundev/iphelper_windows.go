@@ -124,8 +124,13 @@ type mibUnicastIpAddressRow struct {
 	CreationTimeStamp  int64
 }
 
-// MIB_IPINTERFACE_ROW. Only the fields the tunnel touches are named; the rest
-// exist to keep the layout aligned with the C struct.
+// MIB_IPINTERFACE_ROW, spelled out in full.
+//
+// Truncating this one is a trap: x/sys declares only the first two members, so
+// a row built from that declaration is 80 bytes where Windows expects 176, and
+// SetIpInterfaceEntry reads past the end of the struct and answers
+// ERROR_INVALID_PARAMETER. The size assertion below is the guard against
+// repeating that, and it is what caught this.
 type mibIpInterfaceRow struct {
 	Family                               uint16
 	InterfaceLuid                        uint64
@@ -159,6 +164,9 @@ type mibIpInterfaceRow struct {
 	SupportsNeighborDiscovery            uint8
 	SupportsRouterDiscovery              uint8
 	ReachableTime                        uint32
+	TransmitOffload                      uint32
+	ReceiveOffload                       uint32
+	DisableDefaultRoutes                 uint8
 }
 
 // The published sizes of the three structures on every Windows targeted by the
@@ -167,7 +175,7 @@ var (
 	_ [unsafe.Sizeof(mibIpForwardRow2{})]byte       = [104]byte{}
 	_ [unsafe.Sizeof(ipAddressPrefix{})]byte        = [32]byte{}
 	_ [unsafe.Sizeof(mibUnicastIpAddressRow{})]byte = [80]byte{}
-	_ [unsafe.Sizeof(mibIpInterfaceRow{})]byte      = [168]byte{}
+	_ [unsafe.Sizeof(mibIpInterfaceRow{})]byte      = [176]byte{}
 )
 
 // sockaddrOf builds a SOCKADDR_INET for addr.
