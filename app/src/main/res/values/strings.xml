@@ -510,4 +510,5 @@ AGPL-3.0-or-later</string>
     <string name="web_stage_solve">Solving the challenge: %1$d%%</string>
     <string name="web_stage_cookie">Fetching your pass: %1$d%%</string>
     <string name="web_challenge_patience">This is taking a while — please keep waiting…</string>
+    <string name="splash_memorial">In memory of those killed on 18 and 19 Dey</string>
 </resources>

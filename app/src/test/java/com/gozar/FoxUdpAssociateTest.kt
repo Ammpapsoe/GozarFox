@@ -133,6 +133,38 @@ class FoxUdpAssociateTest {
     }
 
     @Test
+    fun aBrowserLoadKeepsEveryFlowInsteadOfEvictingTheOldest() {
+        // 64 flows used to be the ceiling, and passing it evicted an in-flight
+        // flow; a single browser on QUIC opens more than that. 200 distinct
+        // destinations must all keep their pipe.
+        val pipes = LinkedBlockingQueue<Pair<String, FakeDatagramPipe>>()
+        val (association, socket) = relay(
+            bridge = null,
+            openUdp = { host, port ->
+                FakeDatagramPipe().also { pipes.offer("$host:$port" to it) }
+            }
+        )
+        val client = DatagramSocket()
+        try {
+            repeat(200) { index ->
+                val address = byteArrayOf(203.toByte(), 0, 113.toByte(), (index + 1).toByte())
+                val packet = socksDatagram(0x01, address, 443, byteArrayOf(index.toByte()))
+                client.send(DatagramPacket(packet, packet.size, InetAddress.getByName("127.0.0.1"), socket.localPort))
+            }
+            val opened = HashSet<String>()
+            val deadline = System.currentTimeMillis() + 10_000
+            while (opened.size < 200 && System.currentTimeMillis() < deadline) {
+                val next = pipes.poll(1, TimeUnit.SECONDS) ?: continue
+                opened.add(next.first)
+            }
+            assertEquals("every flow must be opened while the cap is 512", 200, opened.size)
+        } finally {
+            client.close()
+            association.close()
+        }
+    }
+
+    @Test
     fun staleAttemptsDropDnsAndRelayTraffic() {
         val resolver = FoxResolver(0, { _, q -> answer(q, byteArrayOf(1, 2, 3, 4)) }, endpoints = listOf("synthetic"))
         val bridge = FoxDnsBridge(resolver, 1280) { FoxDnsScope("test") { false } } // always stale

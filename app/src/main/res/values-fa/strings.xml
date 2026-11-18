@@ -509,4 +509,5 @@ AGPL-3.0-or-later</string>
     <string name="web_stage_solve">در حال حل چالش: %1$d٪</string>
     <string name="web_stage_cookie">در حال دریافت کوکی: %1$d٪</string>
     <string name="web_challenge_patience">کمی طول کشیده است — لطفاً صبر کنید…</string>
+    <string name="splash_memorial">به یاد کشته‌شدگان ۱۸ و ۱۹ دی</string>
 </resources>

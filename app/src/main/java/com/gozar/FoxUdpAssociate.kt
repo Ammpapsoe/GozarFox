@@ -45,7 +45,13 @@ internal class FoxUdpAssociate(
 ) : AutoCloseable {
 
     companion object {
-        private const val MAX_FLOWS = 64
+        // 64 flows per association was the tightest UDP limit in the app: a
+        // browser on QUIC alone opens 20-30, a game adds its discovery and
+        // voice sockets, and Telegram keeps several. Past the cap the oldest
+        // flow was evicted mid-transfer, which reads as media that stalls and
+        // then restarts. The eviction stays (it is the memory bound) but the
+        // ceiling now sits where a busy phone actually operates.
+        private const val MAX_FLOWS = 512
         private const val QUEUE = 32
         private const val BYTES_CAP = 8L * 1024 * 1024
         private const val MAX_ASSOCIATIONS = 256

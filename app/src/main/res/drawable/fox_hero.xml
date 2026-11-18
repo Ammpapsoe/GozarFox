@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The connect panel is a card like any other. It used to be the only surface
+     painted with its own white-to-#E4EAF4 gradient, which read as a lighter,
+     bluer block against the translucency the server rows and the bottom bar
+     use. It now takes exactly the same fill and the same 1dp edge as
+     @drawable/row_card, so transparency matches the rest of the screen; only
+     the corner radius stays larger because it is the hero panel. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <corners android:radius="@dimen/card_radius" />
-    <gradient
-        android:angle="135"
-        android:endColor="@color/hero_end"
-        android:startColor="@color/hero_start" />
+    <solid android:color="@color/frost_row" />
+    <stroke android:width="1dp" android:color="@color/frost_edge" />
 </shape>

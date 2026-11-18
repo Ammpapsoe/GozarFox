@@ -42,10 +42,26 @@ type h3Session struct {
 // haul relay into a stall for the whole tunnel; that matches the report of very
 // low throughput and downloads that never start. Spreading connections across
 // more sessions keeps every flow on a socket with fewer neighbours.
+//
+// The first attempt at that fix capped the manager at eight sessions of eight
+// streams, which bounds the tunnel at 64 concurrent TCP flows. A single browser
+// tab opens three to six, and the DNS and control traffic share the same pool,
+// so once 64 flows are live `h2Client` stops creating sessions and new
+// connections wait for the oldest one to close. That is the "some apps freeze
+// until a page finishes loading" report. Both numbers are raised to a size that
+// keeps per-socket neighbourhoods small without capping the tunnel: 128 sessions
+// of 16 streams is 2048 flows, far past anything a phone or desktop opens, so
+// the limit is a backstop against a leak rather than a working limit.
 const (
-	h2StreamsPerSession = 8
-	h2SessionLimit      = 8
+	h2StreamsPerSession = 16
+	h2SessionLimit      = 128
 )
+
+// H2FlowBudget is the number of concurrent HTTP/2 streams the sessioning policy
+// admits. It is exported so a test can assert that the ceiling is a backstop
+// rather than a working limit: at 8x8 (64 flows) a single browser tab could
+// fill the tunnel and new connections then waited for an old one to close.
+func H2FlowBudget() int { return h2StreamsPerSession * h2SessionLimit }
 
 type Manager struct {
 	target    Target

@@ -1,11 +1,10 @@
 package tundev
 
 import (
-	"net/netip"
 	"errors"
 	"net"
+	"net/netip"
 	"time"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -24,117 +23,177 @@ func isWindowsAdmin() bool {
 	return err == nil && member
 }
 
+// gateway returns the current default next hop and the interface index it lives
+// on. Both come from the IP Helper table instead of `route print`, so the
+// values do not depend on the console code page or on parsing localised text.
 func gateway() (string, string) {
-	out, err := command("route", "print", "-4", "0.0.0.0")
-	if err != nil {
-		return "", ""
-	}
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return "", ""
 	}
-	indexes := make(map[string]int)
+	byIndex := make(map[uint32]bool, len(interfaces))
 	for _, iface := range interfaces {
-		addresses, err := iface.Addrs()
-		if err != nil {
+		byIndex[uint32(iface.Index)] = true
+	}
+	table, err := forwardTable2()
+	if err != nil {
+		return "", ""
+	}
+	defer freeIpForwardTable(table)
+	var best *mibIpForwardRow2
+	for _, row := range forwardRows(table) {
+		// The default route is the one whose destination is a /0 prefix.
+		if row.DestinationPrefix.PrefixLength != 0 {
 			continue
 		}
-		for _, address := range addresses {
-			candidate, _, err := net.ParseCIDR(address.String())
-			if err == nil && candidate.To4() != nil {
-				indexes[candidate.String()] = iface.Index
-			}
+		if row.NextHop.Family != windows.AF_INET {
+			continue
+		}
+		if !byIndex[row.InterfaceIndex] {
+			continue
+		}
+		candidate := row
+		if best == nil || candidate.Metric < best.Metric {
+			best = &candidate
 		}
 	}
-	return windowsDefaultRoute(out, indexes)
+	if best == nil {
+		return "", ""
+	}
+	nextHop := netip.AddrFrom4([4]byte{
+		best.NextHop.Addr[0], best.NextHop.Addr[1], best.NextHop.Addr[2], best.NextHop.Addr[3],
+	})
+	if !nextHop.IsValid() || nextHop.IsUnspecified() {
+		return "", ""
+	}
+	return nextHop.String(), itoa(int(best.InterfaceIndex))
+}
+
+func interfaceIndex(name string) (uint32, error) {
+	iface, err := net.InterfaceByName(name)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(iface.Index), nil
 }
 
 func waitWindowsReady(name string) error {
+	index, err := interfaceIndex(name)
+	if err != nil {
+		return err
+	}
 	deadline := time.Now().Add(12 * time.Second)
 	for time.Now().Before(deadline) {
-		iface, err := net.InterfaceByName(name)
-		if err == nil {
-			link := windows.MibIfRow2{InterfaceIndex: uint32(iface.Index)}
-			address := windows.MibUnicastIpAddressRow{InterfaceIndex: uint32(iface.Index)}
-			ipv4 := (*windows.RawSockaddrInet4)(unsafe.Pointer(&address.Address))
-			ipv4.Family = windows.AF_INET
-			ipv4.Addr = [4]byte{10, 111, 0, 2}
-			linkErr := windows.GetIfEntry2Ex(windows.MibIfEntryNormalWithoutStatistics, &link)
-			addrErr := windows.GetUnicastIpAddressEntry(&address)
-			if addrErr == nil && address.DadState == windows.IpDadStateDuplicate {
-				return errors.New("the tunnel address conflicts with another network interface")
-			}
-			if linkErr == nil && link.OperStatus == windows.IfOperStatusUp && addrErr == nil && address.DadState == windows.IpDadStatePreferred {
-				return nil
-			}
+		link := windows.MibIfRow2{InterfaceIndex: index}
+		address := windows.MibUnicastIpAddressRow{InterfaceIndex: index}
+		linkErr := windows.GetIfEntry2Ex(windows.MibIfEntryNormalWithoutStatistics, &link)
+		addrErr := windows.GetUnicastIpAddressEntry(&address)
+		if addrErr == nil && address.DadState == windows.IpDadStateDuplicate {
+			return errors.New("the tunnel address conflicts with another network interface")
+		}
+		if linkErr == nil && link.OperStatus == windows.IfOperStatusUp && addrErr == nil && address.DadState == windows.IpDadStatePreferred {
+			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
 	return errors.New("the Windows tunnel interface did not become ready")
 }
 
+var (
+	splitV4 = [2]netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/1"),
+		netip.MustParsePrefix("128.0.0.0/1"),
+	}
+	splitV6 = [2]netip.Prefix{
+		netip.MustParsePrefix("::/1"),
+		netip.MustParsePrefix("8000::/1"),
+	}
+)
+
 func configure(cfg *Config) error {
 	if !isWindowsAdmin() {
 		return errors.New("the tunnel needs administrator rights")
 	}
-	if err := mustRun("netsh", "interface", "ipv4", "set", "address", "name="+cfg.Interface,
-		"static", Address.String(), "255.255.255.255"); err != nil {
+	index, err := interfaceIndex(cfg.Interface)
+	if err != nil {
+		return err
+	}
+	cfg.windowsIndex = itoa(int(index))
+	if err := addInterfaceAddress(index, addressV4()); err != nil {
 		return err
 	}
 	if err := waitWindowsReady(cfg.Interface); err != nil {
 		return err
 	}
-	if err := mustRun("netsh", "interface", "ipv4", "set", "dnsservers", "name="+cfg.Interface,
-		"static", cfg.DNS, "primary"); err != nil {
+	// The metric is set before the routes, otherwise Windows may rank the
+	// physical adapter's default above the tunnel for the moment between the
+	// two calls and a burst of traffic escapes unencrypted.
+	if err := setInterfaceMetric(index, false, 1); err != nil {
 		return err
 	}
-	gate, index := gateway()
-	if gate == "" || index == "" {
+	gate, gateIndex := gateway()
+	if gate == "" || gateIndex == "" {
 		return errors.New("no usable default gateway")
 	}
-	cfg.windowsGateway, cfg.windowsIndex = gate, index
+	cfg.windowsGateway = gate
+	nextHop := netip.MustParseAddr(gate)
+	gateIndexValue, err := atoi(gateIndex)
+	if err != nil {
+		return errors.New("no usable default gateway")
+	}
 	for _, keep := range cfg.Keep {
-		if err := mustRun("route", "add", keep.String(), "mask", "255.255.255.255", gate, "metric", "1", "if", index); err != nil {
+		if !keep.Is4() {
+			continue
+		}
+		if err := addHostRoute(uint32(gateIndexValue), keep, nextHop, 1); err != nil {
 			return err
 		}
 		cfg.AddedKeep = append(cfg.AddedKeep, keep)
 	}
-	if err := mustRun("netsh", "interface", "ipv4", "set", "interface", cfg.Interface, "metric=1"); err != nil {
-		return err
+	for slot, prefix := range splitV4 {
+		if err := addRoute(index, prefix, 0); err != nil {
+			return err
+		}
+		cfg.Routes[slot] = true
 	}
-	if err := mustRun("netsh", "interface", "ipv4", "add", "route", "0.0.0.0/1", cfg.Interface); err != nil {
-		return err
-	}
-	cfg.Routes[0] = true
-	if err := mustRun("netsh", "interface", "ipv4", "add", "route", "128.0.0.0/1", cfg.Interface); err != nil {
-		return err
-	}
-	cfg.Routes[1] = true
-	for index, prefix := range [2]string{"::/1", "8000::/1"} {
-		if err := blackhole6("netsh", "interface", "ipv6", "add", "route", prefix, cfg.Interface); err == nil {
-			cfg.RoutesV6[index] = true
+	// IPv6 is blackholed rather than tunnelled: the local network is IPv4 only
+	// for the relay, and leaving v6 at its default would leak every AAAA
+	// connection around the tunnel. A /1 pair outranks the real default route
+	// without deleting it, so restore is exact.
+	for slot, prefix := range splitV6 {
+		if err := addRoute(index, prefix, 0); err == nil {
+			cfg.RoutesV6[slot] = true
 		}
 	}
 	return nil
 }
 
 func restore(cfg *Config) {
-	if cfg.Routes[0] {
-		mustRun("netsh", "interface", "ipv4", "delete", "route", "0.0.0.0/1", cfg.Interface)
-		cfg.Routes[0] = false
-	}
-	if cfg.Routes[1] {
-		mustRun("netsh", "interface", "ipv4", "delete", "route", "128.0.0.0/1", cfg.Interface)
-		cfg.Routes[1] = false
-	}
-	for index, prefix := range [2]string{"::/1", "8000::/1"} {
-		if cfg.RoutesV6[index] {
-			mustRun("netsh", "interface", "ipv6", "delete", "route", prefix, cfg.Interface)
-			cfg.RoutesV6[index] = false
+	index, err := interfaceIndex(cfg.Interface)
+	if err == nil {
+		for slot, prefix := range splitV4 {
+			if cfg.Routes[slot] {
+				_ = removeRoute(index, prefix, netip.Addr{})
+				cfg.Routes[slot] = false
+			}
+		}
+		for slot, prefix := range splitV6 {
+			if cfg.RoutesV6[slot] {
+				_ = removeRoute(index, prefix, netip.Addr{})
+				cfg.RoutesV6[slot] = false
+			}
 		}
 	}
-	for _, keep := range cfg.AddedKeep {
-		mustRun("route", "delete", keep.String(), "mask", "255.255.255.255", cfg.windowsGateway, "if", cfg.windowsIndex)
+	// The keep routes live on the physical interface and are matched by their
+	// next hop, which is the value they were created with. This is why the
+	// gateway is stored instead of re-read: a DHCP renewal between connect and
+	// disconnect must not strand them.
+	if nextHop := cfg.windowsGateway; nextHop != "" {
+		if gateIndex, err := atoi(cfg.windowsIndex); err == nil {
+			for _, keep := range cfg.AddedKeep {
+				_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), netip.MustParseAddr(nextHop))
+			}
+		}
 	}
 	cfg.AddedKeep = nil
 	cfg.windowsGateway, cfg.windowsIndex = "", ""
@@ -142,10 +201,7 @@ func restore(cfg *Config) {
 
 func privileged() bool { return isWindowsAdmin() }
 
-func keep(cfg *Config, address netip.Addr) error {
-	if !address.Is4() {
-		return errors.New("direct split currently supports IPv4")
-	}
+func keepOther(cfg *Config, address netip.Addr) error {
 	if cfg.windowsGateway == "" || cfg.windowsIndex == "" {
 		return errors.New("no usable default gateway")
 	}
@@ -154,9 +210,19 @@ func keep(cfg *Config, address netip.Addr) error {
 			return nil
 		}
 	}
-	if err := mustRun("route", "add", address.String(), "mask", "255.255.255.255", cfg.windowsGateway, "metric", "1", "if", cfg.windowsIndex); err != nil {
+	index, err := atoi(cfg.windowsIndex)
+	if err != nil {
+		return errors.New("no usable default gateway")
+	}
+	if err := addHostRoute(uint32(index), address, netip.MustParseAddr(cfg.windowsGateway), 1); err != nil {
 		return err
 	}
 	cfg.AddedKeep = append(cfg.AddedKeep, address)
 	return nil
+}
+
+// keep pins one address outside the tunnel. IPv6 addresses are accepted now
+// because routing them is no longer done with `route add`.
+func keep(cfg *Config, address netip.Addr) error {
+	return keepOther(cfg, address)
 }

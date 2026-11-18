@@ -11,9 +11,27 @@ import (
 )
 
 const (
-	maxDatagramFlows = 128
+	// maxDatagramFlows bounds concurrent UDP flows. 128 was too low for a
+	// normal phone: one Telegram call plus media preloading, a game and its
+	// voice chat, and the QUIC probes of two browser tabs exceed it, and every
+	// flow past the cap is refused with an ICMP unreachable instead of being
+	// queued. 512 covers a busy session while still bounding memory: each flow
+	// costs one goroutine pair and one 64 KiB read buffer, so the cap is the
+	// difference between ~64 MiB worst case and a runaway process.
+	maxDatagramFlows = 512
 	datagramIdle     = 90 * time.Second
+	// datagramBuffer is the largest UDP payload plus headroom. It is pooled
+	// because a flow that only ever exchanges a few hundred bytes still paid
+	// for a full 64 KiB slice on every open.
+	datagramBuffer = 65535
 )
+
+var datagramPool = sync.Pool{
+	New: func() any {
+		buffer := make([]byte, datagramBuffer)
+		return &buffer
+	},
+}
 
 // datagramFlow prevents a delayed upstream open from escaping Stop. The local
 // endpoint is owned immediately; a remote stream may be attached only while
@@ -152,7 +170,9 @@ func (e *Engine) relayDatagrams(flow *datagramFlow, host string, port int) {
 	done := make(chan struct{}, 2)
 	go func() {
 		defer func() { done <- struct{}{} }()
-		buffer := make([]byte, 65535)
+		held := datagramPool.Get().(*[]byte)
+		defer datagramPool.Put(held)
+		buffer := *held
 		for {
 			if flow.local.SetReadDeadline(time.Now().Add(datagramIdle)) != nil {
 				return

@@ -15,6 +15,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
@@ -29,9 +30,36 @@ const mtu = 1600
 
 // Copy buffers. A 32 KiB buffer cannot keep a long-haul TCP flow saturated:
 // the sender stalls while userspace copies, so the receive window never fills
-// and throughput stays far below the link. 64 KiB per direction is what a
-// loopback copy needs to stay out of the way on a typical desktop.
-const relayBuffer = 64 * 1024
+// and throughput stays far below the link. 64 KiB per direction was the old
+// value and still capped a fast relay: on a 200 Mbit path a 64 KiB copy turn
+// makes the pump wait for the kernel more often than it moves data. 128 KiB
+// keeps two full 64 KiB window updates in flight per turn, which is the size
+// where loopback copies stop showing up in profiles.
+const relayBuffer = 128 * 1024
+
+// relayPool recycles the copy buffers. Every relayed connection allocated one
+// 128 KiB slice per direction and dropped it on close, so a browser opening and
+// closing hundreds of flows churned tens of megabytes through the collector.
+// The pool keeps that allocation out of the steady state; a buffer is always
+// put back with its full length, never a truncated slice.
+var relayPool = sync.Pool{
+	New: func() any {
+		buffer := make([]byte, relayBuffer)
+		return &buffer
+	},
+}
+
+func takeRelayBuffer() *[]byte {
+	return relayPool.Get().(*[]byte)
+}
+
+func putRelayBuffer(buffer *[]byte) {
+	if cap(*buffer) < relayBuffer {
+		return
+	}
+	*buffer = (*buffer)[:relayBuffer]
+	relayPool.Put(buffer)
+}
 
 func setTCP[T any](created *stack.Stack, value T) error {
 	if err := created.SetTransportProtocolOption(tcp.ProtocolNumber, any(&value).(tcpip.SettableTransportProtocolOption)); err != nil {
@@ -131,8 +159,14 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 	if err != nil {
 		return nil, err
 	}
+	// IPv6 is a first-class protocol here, not an afterthought. The tunnel used
+	// to run IPv4 only, so every application that prefers IPv6 (modern browsers
+	// do, over Happy Eyeballs) either fell back after a timeout or, worse, had
+	// its AAAA connection silently swallowed: the v6 SYN reached the device,
+	// the stack had no protocol to parse it, and the packet died. That is the
+	// "some sites load for ten seconds then give up" report.
 	created := stack.New(stack.Options{
-		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
+		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocolCUBIC, udp.NewProtocol},
 	})
 	if err := tuneTCP(created); err != nil {
@@ -162,8 +196,21 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 		device.Close()
 		return nil, errors.New(err.String())
 	}
+	// A unique-local address for the v6 side of the same interface. Spoofing is
+	// already enabled for the NIC, so outbound flows may use any source the
+	// application picked; this address only has to exist for the stack to
+	// answer neighbour solicitation and to give the route table a valid source.
+	if err := created.AddProtocolAddress(1, tcpip.ProtocolAddress{
+		Protocol:          ipv6.ProtocolNumber,
+		AddressWithPrefix: tcpip.AddrFrom16([16]byte{0xfd, 0x00, 0x0d, 0x11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2}).WithPrefix(),
+	}, stack.AddressProperties{}); err != nil {
+		device.Close()
+		created.Close()
+		return nil, errors.New(err.String())
+	}
 	created.SetRouteTable([]tcpip.Route{
 		{Destination: header.IPv4EmptySubnet, NIC: 1},
+		{Destination: header.IPv6EmptySubnet, NIC: 1},
 	})
 
 	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver, udpDial: udpDial}
@@ -282,7 +329,9 @@ func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
 }
 
 func copyMetered(dst io.Writer, src io.Reader, counter *atomic.Int64) error {
-	buffer := make([]byte, relayBuffer)
+	held := takeRelayBuffer()
+	defer putRelayBuffer(held)
+	buffer := *held
 	for {
 		count, readErr := src.Read(buffer)
 		for offset := 0; offset < count; {

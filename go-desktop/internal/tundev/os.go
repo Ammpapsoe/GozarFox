@@ -94,6 +94,15 @@ func mustRun(name string, args ...string) error {
 
 func itoa(value int) string { return strconv.Itoa(value) }
 
+func atoi(text string) (int, error) { return strconv.Atoi(text) }
+
+// addressV4 is the tunnel address as a netip value. The tcpip.Address exported
+// by tundev predates the netip conversion and is still used by the other
+// platforms' command builders; the Windows IP Helper path needs the netip form.
+func addressV4() netip.Addr {
+	return netip.AddrFrom4([4]byte{10, 111, 0, 2})
+}
+
 func blackhole6(name string, args ...string) error {
 	_, err := command(name, args...)
 	return err
