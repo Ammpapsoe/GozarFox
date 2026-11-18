@@ -208,15 +208,15 @@ func restore(cfg *Config) {
 			}
 		}
 	}
-	// The keep routes live on the physical interface and are matched by their
-	// next hop, which is the value they were created with. This is why the
-	// gateway is stored instead of re-read: a DHCP renewal between connect and
-	// disconnect must not strand them.
-	if nextHop := cfg.windowsGateway; nextHop != "" {
-		if gateIndex, err := atoi(cfg.windowsIndex); err == nil {
-			for _, keep := range cfg.AddedKeep {
-				_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), netip.MustParseAddr(nextHop))
-			}
+	// The keep routes live on the physical interface. They are matched by the
+	// route protocol this package sets when it creates them (MIB_IPPROTO_NETMGMT,
+	// "static" to Windows), not by their next hop: `route delete <host> mask ...
+	// <gateway>` used to miss whenever DHCP renewed the lease between connect and
+	// disconnect, and CreateIpForwardEntry2 needs a row that includes the protocol
+	// to find the entry again.
+	if gateIndex, err := atoi(cfg.windowsIndex); err == nil {
+		for _, keep := range cfg.AddedKeep {
+			_ = removeRoute(uint32(gateIndex), netip.PrefixFrom(keep, keep.BitLen()), netip.Addr{})
 		}
 	}
 	cfg.AddedKeep = nil
