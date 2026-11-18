@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       login_ui:
-        description: Boot an emulator and capture the sign-in screens
+        description: Boot an emulator and capture the sign-in screens (optional, never gates a release)
         required: false
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
