@@ -114,34 +114,46 @@ class _WindscribeHomeState extends State<WindscribeHome>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(children: [
-      const Positioned.fill(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [navyTop, navyBottom],
+    return LayoutBuilder(builder: (context, constraints) {
+      // Keep the mode choices and power button usable at the minimum window
+      // size; details can scroll instead of overflowing in connected/error states.
+      final buttonHeight = (constraints.maxHeight - 250).clamp(72.0, 176.0);
+      return Stack(children: [
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [navyTop, navyBottom],
+              ),
             ),
           ),
         ),
-      ),
-      Column(children: [
-        _header(),
-        const SizedBox(height: 6),
-        _cityAndStatus(),
-        _connectionModes(),
-        Expanded(child: Center(child: _connectButton())),
-        _infoPanel(),
-        if (widget.fault.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-            child: ErrorText(widget.fault),
+        Positioned.fill(
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(children: [
+                _header(),
+                const SizedBox(height: 6),
+                _cityAndStatus(),
+                _connectionModes(),
+                SizedBox(height: buttonHeight, child: Center(child: _connectButton())),
+                _infoPanel(),
+                if (widget.fault.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+                    child: ErrorText(widget.fault),
+                  ),
+                _bottomRow(),
+                const SizedBox(height: 14),
+              ]),
+            ),
           ),
-        _bottomRow(),
-        const SizedBox(height: 14),
-      ]),
-    ]);
+        ),
+      ]);
+    });
   }
 
   Widget _header() => Padding(
@@ -258,10 +270,14 @@ class _WindscribeHomeState extends State<WindscribeHome>
                     fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 10),
-              Text(
-                widget.protocolText,
-                textDirection: TextDirection.ltr,
-                style: const TextStyle(color: Color(0x80DFEEFF), fontSize: 11),
+              Flexible(
+                child: Text(
+                  widget.protocolText,
+                  textDirection: TextDirection.ltr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0x80DFEEFF), fontSize: 11),
+                ),
               ),
             ]),
           ],
