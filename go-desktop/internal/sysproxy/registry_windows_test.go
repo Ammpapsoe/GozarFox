@@ -6,15 +6,20 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"golang.org/x/sys/windows/registry"
 )
 
+var isolatedKeySequence atomic.Uint64
+
 func isolatedRegistry(t *testing.T) registryProxyStore {
 	t.Helper()
-	path := fmt.Sprintf(`Software\Gozar-Proxy-Test-%d-%d`, os.Getpid(), time.Now().UnixNano())
+	// Windows clock resolution is insufficient to distinguish two keys created
+	// in the same tick; the process-local sequence prevents collisions.
+	path := fmt.Sprintf(`Software\Gozar-Proxy-Test-%d-%d-%d`, os.Getpid(), time.Now().UnixNano(), isolatedKeySequence.Add(1))
 	key, existed, err := registry.CreateKey(registry.CURRENT_USER, path, registry.ALL_ACCESS)
 	if err != nil {
 		t.Fatal(err)
