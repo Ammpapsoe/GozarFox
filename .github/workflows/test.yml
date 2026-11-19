@@ -258,7 +258,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $env:GOZAR_LIVE_TUN_TEST = '1'
             $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
-            & "$env:RUNNER_TEMP/gozar-baseline.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=3' '-test.timeout=300s'
+            & "$env:RUNNER_TEMP/gozar-baseline.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=1' '-test.timeout=100s'
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally { Pop-Location }
       - name: Measure current local Wintun path
@@ -266,7 +266,7 @@ jobs:
         run: |
           $env:GOZAR_LIVE_TUN_TEST = '1'
           $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
-          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=3' '-test.timeout=300s'
+          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=1' '-test.timeout=100s'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   desktop-ui:

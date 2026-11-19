@@ -45,7 +45,7 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 			return
 		}
 		defer conn.Close()
-		_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(35 * time.Second))
 		incoming := sha256.New()
 		if _, err := io.CopyN(incoming, conn, int64(len(payload))); err != nil {
 			peerDone <- err
@@ -55,6 +55,7 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 			peerDone <- fmt.Errorf("upload digest mismatch")
 			return
 		}
+		_ = conn.SetWriteDeadline(time.Now().Add(35 * time.Second))
 		if _, err := conn.Write([]byte{0xa5}); err != nil {
 			peerDone <- err
 			return
@@ -86,7 +87,8 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	started := time.Now()
 	written, err := io.Copy(conn, bytes.NewReader(payload))
 	if err != nil || written != int64(len(payload)) {
@@ -98,12 +100,16 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 		t.Fatalf("upload acknowledgement: %x, %v", ack, err)
 	}
 	upload := time.Since(started)
+	downCount, upCount := e.Counters()
+	t.Logf("upload and peer acknowledgement: %d bytes in %s; engine up=%d down=%d", written, upload, upCount, downCount)
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	started = time.Now()
 	incoming := sha256.New()
 	read, err := io.CopyN(incoming, conn, int64(len(payload)))
 	download := time.Since(started)
 	if err != nil || read != int64(len(payload)) || !bytes.Equal(incoming.Sum(nil), digest[:]) {
-		t.Fatalf("download: %d bytes, %v, digest matches=%t", read, err, bytes.Equal(incoming.Sum(nil), digest[:]))
+		downCount, upCount = e.Counters()
+		t.Fatalf("download: %d bytes in %s, %v, digest matches=%t; engine up=%d down=%d", read, download, err, bytes.Equal(incoming.Sum(nil), digest[:]), upCount, downCount)
 	}
 	if err := <-peerDone; err != nil {
 		t.Fatal(err)
