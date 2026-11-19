@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      fakedns_only:
+        description: Run only focused FakeDNS tests (with system_proxy_only)
+        required: false
+        type: boolean
+        default: false
       windows_live_tun:
         description: Run the privileged Windows kernel TUN integration test
         required: false
@@ -278,7 +283,7 @@ jobs:
 
 
   focused-system-proxy:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && !inputs.fakedns_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -314,8 +319,22 @@ jobs:
           go test -tags proxyexperiment ./internal/sysproxy -run '^(TestWinINetRealRoundTrip|TestLANExperimentTransaction|TestLANExperimentRegistryJournal|TestLANExperimentRealCrash|TestLANExperimentAncillaryOptions|TestLANExperimentRealWatchdog)$' -count=1 -v
           go test -tags proxyexperiment ./internal/app -run '^TestSystemProxyExperimentalAppIntegration$' -count=1 -v
 
+  focused-fakedns:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test FakeDNS mapping, journal and UDP
+        working-directory: go-desktop
+        run: go test ./internal/engine -run '^(TestFakeDNS|TestJournalFakeDNS)' -count=1
+
   focused-mode-ui:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && !inputs.fakedns_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
