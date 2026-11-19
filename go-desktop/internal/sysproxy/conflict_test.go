@@ -23,6 +23,42 @@ func (s *changeDuringApply) Read(name string) (ProxyValue, error) {
 	return s.memoryProxyStore.Read(name)
 }
 
+// Simulate an external writer immediately after the first restore mutation.
+// The subsequent pre-write scan must detect it and preserve the journal.
+type changeDuringRestore struct {
+	*memoryProxyStore
+	armed bool
+}
+
+func (s *changeDuringRestore) Write(name string, value ProxyValue) error {
+	if err := s.memoryProxyStore.Write(name, value); err != nil {
+		return err
+	}
+	if s.armed && name == "ProxyEnable" && value == number(0) {
+		s.armed = false
+		s.values["ProxyServer"] = text("external-restore.example:8123")
+	}
+	return nil
+}
+
+func TestRecoveryDetectsExternalChangeDuringRestore(t *testing.T) {
+	store := &changeDuringRestore{memoryProxyStore: newMemoryProxy()}
+	journal := &memoryJournal{}
+	if err := activateProxy(store, journal, 10810); err != nil {
+		t.Fatal(err)
+	}
+	store.armed = true
+	if err := recoverProxy(store, journal); err == nil || !strings.Contains(err.Error(), "changed externally during restore") {
+		t.Fatalf("expected restore conflict, got %v", err)
+	}
+	if got := store.values["ProxyServer"]; got != text("external-restore.example:8123") {
+		t.Fatalf("external value overwritten: %#v", got)
+	}
+	if journal.snapshot == nil {
+		t.Fatal("journal lost during conflicting restore")
+	}
+}
+
 func TestActivationDetectsExternalChangeAfterCapture(t *testing.T) {
 	store := newMemoryProxy()
 	snapshot, err := captureProxy(store, 10810)

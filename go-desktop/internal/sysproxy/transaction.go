@@ -157,16 +157,53 @@ func restoreProxy(store proxyStore, snapshot ProxySnapshot) error {
 		}
 		current[name] = value
 	}
-	// Never temporarily route through a target that is being restored.
-	if current["ProxyEnable"] != number(0) {
-		if err := store.Write("ProxyEnable", number(0)); err != nil {
+	// Recheck every captured value before each mutation. A non-cooperating
+	// writer can still race between a read and a write: Windows registry has
+	// no atomic compare-and-swap across these values. Report any observed
+	// conflict and retain the journal rather than silently overwrite it.
+	check := func() error {
+		for _, name := range proxyNames {
+			value, err := store.Read(name)
+			if err != nil {
+				return err
+			}
+			if value != current[name] {
+				return fmt.Errorf("proxy setting %s changed externally during restore", name)
+			}
+		}
+		return nil
+	}
+	write := func(name string, value ProxyValue) error {
+		if current[name] == value {
+			return nil
+		}
+		if err := check(); err != nil {
 			return err
 		}
+		if err := store.Write(name, value); err != nil {
+			return err
+		}
+		current[name] = value
+		return nil
+	}
+	alreadyRestored := true
+	for _, name := range proxyNames {
+		if current[name] != snapshot.Previous[name] {
+			alreadyRestored = false
+			break
+		}
+	}
+	if alreadyRestored {
+		return check()
+	}
+	// Never temporarily route through a target that is being restored.
+	if err := write("ProxyEnable", number(0)); err != nil {
+		return err
 	}
 	for _, name := range []string{"ProxyServer", "ProxyOverride", "AutoConfigURL", "AutoDetect", "ProxyEnable"} {
-		if err := store.Write(name, snapshot.Previous[name]); err != nil {
+		if err := write(name, snapshot.Previous[name]); err != nil {
 			return err
 		}
 	}
-	return nil
+	return check()
 }
