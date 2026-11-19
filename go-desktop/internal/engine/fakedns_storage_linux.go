@@ -12,16 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	dnsLockName       = ".fakedns-owner-v1"
-	dnsMarkerName     = ".fakedns-initialized-v1"
-	dnsDirectoryName  = "fakedns-v1"
-	dnsHistoryName    = "history"
-	dnsCheckpointName = "checkpoint"
-)
-
-var dnsMarker = []byte("GozarFox FakeDNS initialized v1\n")
-
 // linuxDNSStorage holds the advisory lock and open journal files until Close.
 // It is currently a building block, not attached to a production TUN session.
 // Permissions prevent other users reading browsing history; they do not defend
