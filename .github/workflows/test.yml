@@ -353,7 +353,7 @@ jobs:
         env:
           GOZAR_LIVE_TUN_TEST: '1'
           GOZAR_FAKEDNS_PRODUCTION_STORAGE_TEST: '1'
-        run: go test ./internal/engine -run '^TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage)$' -count=1 -v -timeout=120s
+        run: go test ./internal/engine -run '^(TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage)|TestDNSRealLiveKernelReconnect)$' -count=1 -v -timeout=120s
       - name: Check machine identity across two Windows administrator accounts
         working-directory: go-desktop
         shell: pwsh
@@ -444,7 +444,7 @@ jobs:
             mount --bind "$temp" /etc/resolv.conf
             mount --bind "$varlib" /var/lib
             ip link set lo up
-            "$TEST_BINARY" -test.v -test.run="^TestFakeDNS(LiveKernelReconnect|ProductionLinuxStorage)$" -test.timeout=120s
+            "$TEST_BINARY" -test.v -test.run="^(TestFakeDNS(LiveKernelReconnect|ProductionLinuxStorage)|TestDNSRealLiveKernelReconnect)$" -test.timeout=120s
           '
 
   focused-mode-ui:
