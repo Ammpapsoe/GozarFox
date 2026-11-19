@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -58,6 +59,13 @@ func TestFakeDNSWindowsProductionStarterLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(e.Stop)
+	// Confirm the setting on the live adapter, not merely an API success.
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$a = Get-DnsClientServerAddress -InterfaceAlias Gozar -AddressFamily IPv4; if ($a.ServerAddresses -notcontains '1.1.1.1') { throw \"Gozar DNS is not configured: $($a.ServerAddresses)\" }; Write-Output $a.ServerAddresses")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tunnel adapter DNS verification failed: %v: %s", err, out)
+	} else {
+		t.Logf("live tunnel adapter DNS: %s", out)
+	}
 	conn, err := net.DialTimeout("udp4", net.JoinHostPort(dnsproxy.Address, "53"), 5*time.Second)
 	if err != nil {
 		t.Fatal(err)

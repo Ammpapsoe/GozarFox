@@ -149,18 +149,19 @@ func configure(cfg *Config) error {
 	// adapters and third-party network filters refuse it), and blocking a
 	// working tunnel over a preference is the wrong trade.
 	_ = setInterfaceMetric(index, false, 1)
-	// The resolver is the proxy's own DNS listener. Setting it on the interface
-	// is what makes applications that read the OS resolver (rather than the
-	// VPN's) use the tunnel instead of the carrier's DNS.
-	//
-	// A failure here is not fatal. If the API is missing on this build, or the
-	// adapter refuses the row (some third-party LSPs and metered-connection
-	// policies do), the interface resolver simply stays unset and the proxy's
-	// own DNS listener still answers: a connection that works without the OS
-	// resolver is better than a connect that aborts over a name server.
+	// A silently unset resolver can send DNS to another interface. Fail closed
+	// rather than present the tunnel as configured when this operation fails.
 	if cfg.DNS != "" {
-		if address, err := netip.ParseAddr(cfg.DNS); err == nil {
-			_, _ = setInterfaceDNS(index, address)
+		address, err := netip.ParseAddr(cfg.DNS)
+		if err != nil {
+			return fmt.Errorf("invalid tunnel DNS address: %w", err)
+		}
+		supported, err := setInterfaceDNS(index, address)
+		if err != nil {
+			return fmt.Errorf("setting tunnel DNS failed: %w", err)
+		}
+		if !supported {
+			return errors.New("setting tunnel DNS is not supported on this Windows version or architecture")
 		}
 	}
 	gate, gateIndex := gateway()

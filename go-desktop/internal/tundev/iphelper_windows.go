@@ -35,6 +35,7 @@ package tundev
 import (
 	"errors"
 	"net/netip"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -489,10 +490,15 @@ const (
 // 10 before 1903 and Windows Server 2019 — so the caller can fall back instead
 // of failing the connection over a name server.
 func setInterfaceDNS(index uint32, server netip.Addr) (bool, error) {
+	// The struct-by-value calling convention differs on Windows ARM64 and
+	// 32-bit. Never pass an x64-style pointer there without ABI validation.
+	if runtime.GOARCH != "amd64" {
+		return false, nil
+	}
 	if err := procSetInterfaceDnsSettings.Find(); err != nil {
 		return false, nil
 	}
-	luid, err := interfaceLUID(index)
+	guid, err := interfaceGUID(index)
 	if err != nil {
 		return true, err
 	}
@@ -506,7 +512,7 @@ func setInterfaceDNS(index uint32, server netip.Addr) (bool, error) {
 		NameServer: text,
 	}
 	if code, _, callErr := procSetInterfaceDnsSettings.Call(
-		uintptr(unsafe.Pointer(&luid)),
+		uintptr(unsafe.Pointer(&guid)),
 		uintptr(unsafe.Pointer(&settings)),
 	); code != 0 {
 		return true, windows.Errno(code)
@@ -518,11 +524,13 @@ func setInterfaceDNS(index uint32, server netip.Addr) (bool, error) {
 	return true, nil
 }
 
-// interfaceLUID converts an interface index to the LUID the DNS API needs.
-func interfaceLUID(index uint32) (uint64, error) {
+// interfaceGUID retrieves the GUID expected by SetInterfaceDnsSettings.
+// Passing a LUID in its place returns an error and leaves the adapter without
+// DNS. On Windows x64 the 16-byte GUID value is passed by address by the ABI.
+func interfaceGUID(index uint32) (windows.GUID, error) {
 	row := windows.MibIfRow2{InterfaceIndex: index}
 	if err := windows.GetIfEntry2Ex(windows.MibIfEntryNormalWithoutStatistics, &row); err != nil {
-		return 0, err
+		return windows.GUID{}, err
 	}
-	return row.InterfaceLuid, nil
+	return row.InterfaceGuid, nil
 }
