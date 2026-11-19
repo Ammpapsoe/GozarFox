@@ -60,10 +60,10 @@ func TestSystemProxyExperimentalAppIntegration(t *testing.T) {
 	if err != nil || got != want || !state.Live {
 		t.Fatalf("app failed to apply LAN proxy: %#v, %v", got, err)
 	}
-	// This tests the app's real local proxy and lifecycle, but uses an explicit
-	// proxy client and a fake local relay, not a Mozilla account or WinINet
-	// auto-detection of proxy settings.
+	// Both an explicit client and a WinINet PRECONFIG client use the real
+	// local listener; the remote Mozilla relay is still a local test double.
 	exerciseProxyLifecycleTraffic(t, state.Port)
+	exerciseSystemWinINetTraffic(t)
 	if err := current.Disconnect(); err != nil {
 		t.Fatal(err)
 	}
