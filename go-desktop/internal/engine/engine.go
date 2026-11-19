@@ -2,7 +2,6 @@ package engine
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/netip"
 	"runtime"
@@ -177,22 +176,17 @@ func StartSplitUDP(proxyHost string, dial, direct Dialer, protect []netip.Addr, 
 	return startUDP(proxyHost, dial, protect, nil, direct, split, udpDial)
 }
 
-// StartSplitUDPWithFakeDNS opens the machine-wide namespace before installing
-// tunnel routes. Failure is fatal; it never resets or falls back to real DNS.
-// Storage errors are reported to the application without falling back.
+// ErrFakeDNSUnsafeNamespace prevents accidental activation while other VPNs or
+// applications can retain indistinguishable addresses from the same range.
+var ErrFakeDNSUnsafeNamespace = errors.New("FakeDNS disabled: shared synthetic address identity is not safe")
+
+// StartSplitUDPWithFakeDNS is intentionally unavailable in production. A
+// machine-wide journal keeps Gozar allocations stable, but cannot identify
+// answers cached from other independently allocated namespaces. Fail before
+// provisioning files or changing the network; do not silently fall back here.
+// Isolated tests exercise the implementation through startUDPManaged instead.
 func StartSplitUDPWithFakeDNS(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
-	if !tundev.Privileged() {
-		return nil, errors.New("the tunnel needs administrator rights")
-	}
-	var directName func(string) bool
-	if split != nil {
-		directName = split.Direct
-	}
-	fake, owner, err := openProductionMachineFakeDNS(directName)
-	if err != nil {
-		return nil, fmt.Errorf("FakeDNS storage unavailable: %w", err)
-	}
-	return startUDPManaged(proxyHost, dial, protect, nil, direct, split, udpDial, fake, owner)
+	return nil, ErrFakeDNSUnsafeNamespace
 }
 
 func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules) (*Engine, error) {
