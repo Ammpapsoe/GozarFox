@@ -98,6 +98,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_FRONTEND_COMMON}/locations/model/proxymodels/sortedlocations_proxymodel.cpp
     ${WS_FRONTEND_COMMON}/locations/model/proxymodels/staticips_proxymodel.cpp)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+  target_compile_definitions(upstream_background_test PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
