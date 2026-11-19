@@ -70,6 +70,7 @@ class CoreState {
     this.exit = '',
     this.device = '',
     this.needsAdmin = false,
+    this.port = 0,
     this.limit = 0,
     this.remaining = 0,
     this.rateDown = 0,
@@ -98,6 +99,7 @@ class CoreState {
   final String exit;
   final String device;
   final bool needsAdmin;
+  final int port;
   final int limit;
   final int remaining;
   final int rateDown;
@@ -134,6 +136,7 @@ class CoreState {
       exit: json['exit'] as String? ?? '',
       device: json['device'] as String? ?? '',
       needsAdmin: json['needs_admin'] as bool? ?? false,
+      port: (json['port'] as num?)?.toInt() ?? 0,
       limit: (json['limit'] as num?)?.toInt() ?? 0,
       remaining: (json['remaining'] as num?)?.toInt() ?? 0,
       rateDown: (json['rate_down'] as num?)?.toInt() ?? 0,

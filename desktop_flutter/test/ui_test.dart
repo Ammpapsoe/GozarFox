@@ -26,6 +26,7 @@ class FakeCore extends Core {
   String theme = 'system';
   bool recents = false;
   String mode = 'tun';
+  int port = 0;
   bool warpUdp = false;
   Map<String, dynamic>? lastWarp;
   List<String> chain = [];
@@ -81,6 +82,7 @@ class FakeCore extends Core {
         remaining: remaining,
         exit: exit,
         device: device,
+        port: port,
         accounts: saved
             .map((email) => SavedAccount(
                 id: 'email:$email',
@@ -373,6 +375,27 @@ void main() {
     expect(core.mode, 'proxy-only');
     expect(core.requests, contains('mode'));
     expect(core.requests, isNot(contains('connect')));
+  });
+
+  testWidgets('connection mode shows the active local proxy address', (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = FakeCore(signedIn: true, language: 'en')
+      ..mode = 'proxy-only'
+      ..port = 23456
+      ..live = true;
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(_settingsGear());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connection'));
+    await tester.pumpAndSettle();
+    expect(find.text('Proxy only · 127.0.0.1:23456'), findsOneWidget);
+    expect(CoreState.fromJson({'port': 23456}).port, 23456);
   });
 
   testWidgets('server selection uses the chosen host', (tester) async {

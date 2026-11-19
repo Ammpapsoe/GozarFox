@@ -1436,8 +1436,13 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     }
     if (_settingsSection == 'connection') {
       return Column(children: [
-        _settingTile(Icons.hub_outlined, words.connectionMode,
-            _modeLabel(_state.mode), _busy ? null : () => unawaited(_chooseConnectionMode())),
+        _settingTile(
+            Icons.hub_outlined,
+            words.connectionMode,
+            _state.live && _state.mode == 'proxy-only' && _state.port > 0
+                ? '${_modeLabel(_state.mode)} · 127.0.0.1:${_state.port}'
+                : _modeLabel(_state.mode),
+            _busy ? null : () => unawaited(_chooseConnectionMode())),
         Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: SwitchListTile(
