@@ -22,6 +22,7 @@ bool CoreBridge::start(const QString &corePath) {
     if (process_.state() != QProcess::NotRunning || corePath.isEmpty()) return false;
     buffer_.clear();
     stopping_ = false;
+    protocolFault_ = false;
     process_.start(corePath, {QStringLiteral("--rpc")});
     return true;
 }
@@ -44,13 +45,16 @@ qint64 CoreBridge::request(const QString &method, const QJsonObject &params) {
 }
 
 void CoreBridge::readOutput() {
+    if (protocolFault_) {
+        process_.readAllStandardOutput();
+        return;
+    }
     buffer_.append(process_.readAllStandardOutput());
     for (;;) {
         const qsizetype end = buffer_.indexOf('\n');
         if (end < 0) break;
         if (end > kMaxLine) {
-            emit transportError(QStringLiteral("core reply too large"));
-            process_.kill();
+            protocolFailure(QStringLiteral("core reply too large"));
             return;
         }
         const QByteArray line = buffer_.left(end);
@@ -58,33 +62,41 @@ void CoreBridge::readOutput() {
         QJsonParseError error;
         const QJsonDocument doc = QJsonDocument::fromJson(line, &error);
         if (error.error != QJsonParseError::NoError || !doc.isObject()) {
-            emit transportError(QStringLiteral("invalid core reply"));
-            process_.kill();
+            protocolFailure(QStringLiteral("invalid core reply"));
             return;
         }
         const QJsonObject response = doc.object();
         const QJsonValue value = response.value(QStringLiteral("id"));
         if (!value.isDouble()) {
-            emit transportError(QStringLiteral("core reply has no request id"));
-            process_.kill();
+            protocolFailure(QStringLiteral("core reply has no request id"));
             return;
         }
         const qint64 id = value.toInteger(-1);
         if (!pending_.remove(id)) continue; // late, duplicate, or unsolicited reply
         emit reply(id, response);
     }
-    if (buffer_.size() > kMaxLine) {
-        emit transportError(QStringLiteral("core reply too large"));
-        process_.kill();
-    }
+    if (buffer_.size() > kMaxLine)
+        protocolFailure(QStringLiteral("core reply too large"));
+}
+
+void CoreBridge::protocolFailure(const QString &message) {
+    if (protocolFault_) return;
+    protocolFault_ = true;
+    buffer_.clear();
+    emit transportError(message);
+    // A malformed response must not force-kill a core that may own routes or
+    // proxy settings. Ask it to shut down and close stdin to allow cleanup.
+    shutdown();
 }
 
 void CoreBridge::shutdown() {
     if (!running()) return;
     const qint64 id = request(QStringLiteral("quit"));
-    if (id < 0) { process_.kill(); return; }
+    if (protocolFault_ && id >= 0) pending_.remove(id);
+    // If writing quit failed, EOF still lets the core's normal RPC loop exit.
     stopping_ = true;
     process_.closeWriteChannel();
+    if (id < 0) emit transportError(QStringLiteral("could not send core shutdown request"));
     // Teardown can involve platform routes and system proxy restoration.
     // Do not kill the core on a timer while it may still be cleaning up.
     QTimer::singleShot(45000, this, [this] {
@@ -114,7 +126,11 @@ void CoreBridge::onError(QProcess::ProcessError error) {
         emit transportError(QStringLiteral("core failed to start"));
         emit stopped();
     } else if (error == QProcess::WriteError || error == QProcess::ReadError) {
-        emit transportError(QStringLiteral("core communication failed"));
-        process_.kill();
+        if (!stopping_) {
+            protocolFault_ = true;
+            stopping_ = true;
+            emit transportError(QStringLiteral("core communication failed"));
+            process_.closeWriteChannel();
+        }
     }
 }

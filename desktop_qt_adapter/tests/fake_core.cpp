@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFile>
 #include <cstdio>
 
 int main(int argc, char **argv) {
@@ -22,7 +23,15 @@ int main(int argc, char **argv) {
         const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';
         std::fwrite(bytes.constData(), 1, size_t(bytes.size()), stdout);
         std::fflush(stdout);
-        if (method == "quit") return 0;
+        if (method == "quit") {
+            const QString markerPath = qEnvironmentVariable("FAKE_CORE_QUIT_MARKER");
+            if (!markerPath.isEmpty()) {
+                QFile marker(markerPath);
+                if (!marker.open(QIODevice::WriteOnly)) return 4;
+                marker.write("quit received");
+            }
+            return 0;
+        }
     }
     return 0;
 }

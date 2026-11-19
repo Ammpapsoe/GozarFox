@@ -30,9 +30,11 @@ private slots:
 
 private:
     void failPending(const QString &message);
+    void protocolFailure(const QString &message);
     QProcess process_;
     QByteArray buffer_;
     QSet<qint64> pending_;
     qint64 nextId_ = 0;
     bool stopping_ = false;
+    bool protocolFault_ = false;
 };

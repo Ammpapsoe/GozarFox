@@ -1,5 +1,7 @@
 #include "corebridge.h"
 #include <QSignalSpy>
+#include <QTemporaryDir>
+#include <QFile>
 #include <QtTest>
 
 class CoreBridgeTest : public QObject {
@@ -40,12 +42,18 @@ void CoreBridgeTest::crashFailsPending() {
 }
 
 void CoreBridgeTest::malformedReplyFailsClosed() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString marker = dir.filePath(QStringLiteral("quit-marker"));
+    qputenv("FAKE_CORE_QUIT_MARKER", marker.toUtf8());
     CoreBridge core;
     QSignalSpy ready(&core, &CoreBridge::ready), errors(&core, &CoreBridge::transportError), failed(&core, &CoreBridge::failed), stopped(&core, &CoreBridge::stopped);
     QVERIFY(core.start(fakeCore())); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
     QVERIFY(core.request("invalid") > 0);
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
     QCOMPARE(errors.size(), 1); QCOMPARE(failed.size(), 1);
+    QVERIFY2(QFile::exists(marker), "core must receive quit instead of being killed");
+    qunsetenv("FAKE_CORE_QUIT_MARKER");
 }
 
 void CoreBridgeTest::missingExecutable() {
