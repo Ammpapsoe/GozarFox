@@ -11,6 +11,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 // Emulates the public contract of the original window. The actual window
@@ -35,6 +36,7 @@ private slots:
     void serverAndSettingsUseCoreResponses();
     void originalWindowPublicApiBindingWithFakeWindow();
     void originalWindowConnectWithFakeCore();
+    void originalWindowReadsRealCoreState();
     void cleanupTestCase();
 };
 
@@ -232,6 +234,38 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::originalWindowReadsRealCoreState() {
+    const QString corePath = qEnvironmentVariable("GOZAR_CI_TEST_CORE");
+    if (corePath.isEmpty()) QSKIP("real core path not configured");
+    QTemporaryDir isolated;
+    QVERIFY(isolated.isValid());
+    const QByteArray configDir = isolated.path().toUtf8();
+    qputenv("HOME", configDir);
+    qputenv("XDG_CONFIG_HOME", configDir);
+    qputenv("APPDATA", configDir);
+    qputenv("LOCALAPPDATA", configDir);
+    qputenv("USERPROFILE", configDir);
+    Preferences preferences;
+    PreferencesHelper helper;
+    QGraphicsScene scene;
+    auto *window = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
+    scene.addItem(window);
+    window->setClickable(false); // no unsupported controls in this smoke test
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    bindOriginalHomeWindow(window, &binder);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(bridge.start(corePath));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 10000);
+    const auto state = states.last().at(0).toJsonObject();
+    QCOMPARE(state.value("version").toString(), QStringLiteral("1.19.0"));
+    QVERIFY(!state.value("signed_in").toBool());
+    QVERIFY(!state.value("live").toBool());
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 10000);
 }
 
 void UpstreamBackgroundTest::cleanupTestCase() {

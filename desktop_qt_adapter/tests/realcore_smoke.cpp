@@ -15,6 +15,10 @@ void RealCoreSmoke::stateAndQuit() {
     QVERIFY(isolated.isValid());
     qputenv("HOME", isolated.path().toUtf8());
     qputenv("XDG_CONFIG_HOME", isolated.path().toUtf8());
+    // Windows Go uses AppData for UserConfigDir; isolate it as well.
+    qputenv("APPDATA", isolated.path().toUtf8());
+    qputenv("LOCALAPPDATA", isolated.path().toUtf8());
+    qputenv("USERPROFILE", isolated.path().toUtf8());
     CoreBridge bridge;
     QSignalSpy ready(&bridge, &CoreBridge::ready), replies(&bridge, &CoreBridge::reply), stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_TEST_REAL_CORE")));
