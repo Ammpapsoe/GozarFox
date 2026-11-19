@@ -35,6 +35,12 @@ jobs:
           version: '6.8.3'
           host: ${{ matrix.qt_host }}
           cache: true
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
       - name: Build unchanged Gozar core
         shell: bash
         working-directory: go-desktop
@@ -54,6 +60,17 @@ jobs:
       - name: Build
         shell: bash
         run: cmake --build "${RUNNER_TEMP}/qt-check" --config Release --parallel 2
-      - name: Run tests
+      - name: Run consolidated integration check
         shell: bash
-        run: ctest --test-dir "${RUNNER_TEMP}/qt-check" -C Release --output-on-failure
+        run: |
+          set -euo pipefail
+          ctest --test-dir "${RUNNER_TEMP}/qt-check" -C Release --output-on-failure
+          fake="${RUNNER_TEMP}/qt-check/fake_core"
+          if [[ "${RUNNER_OS}" == Windows ]]; then
+            fake="${RUNNER_TEMP}/qt-check/Release/fake_core.exe"
+          fi
+          export GOZAR_HANDOFF_TEST_CORE="$fake"
+          cd desktop_flutter
+          flutter pub get
+          flutter analyze
+          flutter test --no-pub test/ui_test.dart test/core_handoff_test.dart

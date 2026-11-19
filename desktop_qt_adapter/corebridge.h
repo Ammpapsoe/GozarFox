@@ -23,6 +23,10 @@ signals:
     void failed(qint64 id, const QString &message);
     void transportError(const QString &message);
     void stopped();
+    // True only when quit was acknowledged without an error, the core
+    // reported neither live nor connecting, and the process exited normally.
+    // This is the core's report, not independent proof of OS cleanup.
+    void shutdownFinished(bool acknowledged, const QString &reason);
 
 private slots:
     void readOutput();
@@ -36,6 +40,9 @@ private:
     QByteArray buffer_;
     QSet<qint64> pending_;
     qint64 nextId_ = 0;
+    qint64 quitId_ = -1;
+    bool quitRequested_ = false;
+    bool quitAcknowledged_ = false;
     bool stopping_ = false;
     bool protocolFault_ = false;
 };

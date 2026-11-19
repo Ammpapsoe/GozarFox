@@ -55,6 +55,7 @@ private:
     qint64 serversId_ = -1;
     QTimer refreshTimer_;
     bool stateKnown_ = false;
+    bool stopAcknowledged_ = false;
     bool signedIn_ = false;
     bool live_ = false;
     bool connecting_ = false;

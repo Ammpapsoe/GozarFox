@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
     QJsonArray chain;
     bool killSwitch = false;
     bool live = false;
+    const bool quitError = qEnvironmentVariableIsSet("FAKE_CORE_QUIT_ERROR");
     while (std::fgets(line, sizeof(line), stdin)) {
         const auto request = QJsonDocument::fromJson(line).object();
         const auto method = request.value("method").toString();
@@ -27,13 +28,14 @@ int main(int argc, char **argv) {
         const QJsonObject params = request.value("params").toObject();
         if (method == "server") countryCode = params.value("code").toString();
         if (method == "connect") live = true;
-        if (method == "disconnect") live = false;
+        if (method == "disconnect" || method == "quit") live = false;
         if (method == "mode") mode = params.value("mode").toString();
         if (method == "kill_switch") killSwitch = params.value("enabled").toBool();
         if (method == "language") language = params.value("language").toString();
         if (method == "theme") theme = params.value("theme").toString();
         if (method == "recents") recents = params.value("enabled").toBool();
         QString error;
+        if (method == "quit" && quitError) error = QStringLiteral("cleanup failed");
         if (method == "warp_udp") {
             if (params.value("enabled").toBool() && !params.value("consent").toBool())
                 error = QStringLiteral("Cloudflare WARP terms must be accepted");

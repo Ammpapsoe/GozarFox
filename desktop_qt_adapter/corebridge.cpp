@@ -2,6 +2,7 @@
 
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QPointer>
 #include <QTimer>
 #include <limits>
 
@@ -53,6 +54,9 @@ bool CoreBridge::start(const QString &corePath) {
     buffer_.clear();
     stopping_ = false;
     protocolFault_ = false;
+    quitId_ = -1;
+    quitRequested_ = false;
+    quitAcknowledged_ = false;
     process_->start(corePath, {QStringLiteral("--rpc")});
     return true;
 }
@@ -103,7 +107,19 @@ void CoreBridge::readOutput() {
         }
         const qint64 id = value.toInteger(-1);
         if (!pending_.remove(id)) continue; // late, duplicate, or unsolicited reply
+        if (quitRequested_ && id == quitId_) {
+            const QJsonValue errorValue = response.value(QStringLiteral("error"));
+            const QJsonValue stateValue = response.value(QStringLiteral("state"));
+            const QJsonObject state = stateValue.toObject();
+            quitAcknowledged_ = (errorValue.isUndefined() || (errorValue.isString() && errorValue.toString().isEmpty())) &&
+                stateValue.isObject() && state.value(QStringLiteral("live")).isBool() &&
+                !state.value(QStringLiteral("live")).toBool() &&
+                state.value(QStringLiteral("connecting")).isBool() &&
+                !state.value(QStringLiteral("connecting")).toBool();
+        }
+        QPointer<CoreBridge> alive(this);
         emit reply(id, response);
+        if (!alive) return;
     }
     if (buffer_.size() > kMaxLine)
         protocolFailure(QStringLiteral("core reply too large"));
@@ -113,7 +129,9 @@ void CoreBridge::protocolFailure(const QString &message) {
     if (protocolFault_) return;
     protocolFault_ = true;
     buffer_.clear();
+    QPointer<CoreBridge> alive(this);
     emit transportError(message);
+    if (!alive) return;
     // A malformed response must not force-kill a core that may own routes or
     // proxy settings. Ask it to shut down and close stdin to allow cleanup.
     shutdown();
@@ -121,12 +139,18 @@ void CoreBridge::protocolFailure(const QString &message) {
 
 void CoreBridge::shutdown() {
     if (!running()) return;
+    quitRequested_ = true;
     const qint64 id = request(QStringLiteral("quit"));
+    quitId_ = id;
     if (protocolFault_ && id >= 0) pending_.remove(id);
     // If writing quit failed, EOF still lets the core's normal RPC loop exit.
     stopping_ = true;
     process_->closeWriteChannel();
-    if (id < 0) emit transportError(QStringLiteral("could not send core shutdown request"));
+    if (id < 0) {
+        QPointer<CoreBridge> alive(this);
+        emit transportError(QStringLiteral("could not send core shutdown request"));
+        if (!alive) return;
+    }
     // Teardown can involve platform routes and system proxy restoration.
     // Do not kill the core on a timer while it may still be cleaning up.
     QTimer::singleShot(45000, this, [this] {
@@ -138,28 +162,46 @@ void CoreBridge::shutdown() {
 void CoreBridge::failPending(const QString &message) {
     const auto ids = pending_;
     pending_.clear();
-    for (const auto id : ids) emit failed(id, message);
+    QPointer<CoreBridge> alive(this);
+    for (const auto id : ids) {
+        emit failed(id, message);
+        if (!alive) return;
+    }
 }
 
 void CoreBridge::onFinished(int exitCode, QProcess::ExitStatus status) {
-    Q_UNUSED(exitCode);
-    Q_UNUSED(status);
+    QPointer<CoreBridge> alive(this);
     readOutput();
+    if (!alive) return;
+    const bool requested = quitRequested_;
+    const bool confirmed = requested && !protocolFault_ && quitAcknowledged_ &&
+        status == QProcess::NormalExit && exitCode == 0;
     failPending(QStringLiteral("core process exited"));
+    if (!alive) return;
     stopping_ = false;
+    if (requested) {
+        emit shutdownFinished(confirmed, confirmed ? QString() :
+            QStringLiteral("core shutdown was not confirmed"));
+        if (!alive) return;
+    }
     emit stopped();
 }
 
 void CoreBridge::onError(QProcess::ProcessError error) {
     if (error == QProcess::FailedToStart) {
+        QPointer<CoreBridge> alive(this);
         failPending(QStringLiteral("core failed to start"));
+        if (!alive) return;
         emit transportError(QStringLiteral("core failed to start"));
+        if (!alive) return;
         emit stopped();
     } else if (error == QProcess::WriteError || error == QProcess::ReadError) {
         if (!stopping_) {
             protocolFault_ = true;
             stopping_ = true;
+            QPointer<CoreBridge> alive(this);
             emit transportError(QStringLiteral("core communication failed"));
+            if (!alive) return;
             process_->closeWriteChannel();
         }
     }

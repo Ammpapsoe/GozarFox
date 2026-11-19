@@ -35,11 +35,16 @@ lifecycle, reliable disconnect and cleanup under transport failures, shared
 Flutter login state/process ownership, platform packaging and behaviour are
 not integrated. Credentials must not be logged or passed on the command line.
 A fallback lets a running core finish asynchronously if its bridge is destroyed,
-instead of killing it immediately; the application still needs to request
-shutdown and await the `stopped` signal before exiting or handing off ownership.
-That fallback alone does not guarantee successful cleanup after a crash or
-when the event loop exits. The included fake core is only for tests and must
-never ship as the real core.
+instead of killing it immediately. Experimental `shutdownFinished` requires a
+successful quit response with disconnected state and a normal process exit; its
+positive result reflects the core's report, not independent verification of OS
+cleanup. The Dart `prepareUiHandoff` guard likewise refuses connected or unknown
+states and waits for quit acknowledgement and process exit. These are unverified
+integration work and are not wired to the Flutter screen or a Qt launcher. A
+caller must not launch the next owner on an unconfirmed result. The fallback
+alone does not guarantee successful cleanup after a crash or when the event loop
+exits. The included fake core is only for tests and must never ship as the real
+core.
 
 Build the isolated transport tests (Qt 6 Core and Test, CMake, compiler):
 
@@ -86,8 +91,10 @@ identifier collisions, ambiguous hostname targets, and clears stale choices on
 malformed snapshots. GitHub Actions exercised the original `LocationsWindow`
 and original location model using a simulated core on Windows, Linux and macOS.
 Other tabs, automatic best-server selection and persisted favorites are not
-integrated by this test. `bindOriginalPowerControl` is an experimental adapter
-for the original power button: it disables it when the core state is unknown,
+integrated by this test. `bindOriginalLocationsNavigation` is an unverified
+adapter for the original MainWindowController expansion/collapse API; it has not
+been exercised with the real controller. `bindOriginalPowerControl` is an
+experimental adapter for the original power button: it disables it when the core state is unknown,
 signed out or changing. Install it after any call to the original window's
 `setClickable`, which controls every button. It does not integrate or sanitize
 the other upstream controls, and it must not yet be shipped with a real VPN.

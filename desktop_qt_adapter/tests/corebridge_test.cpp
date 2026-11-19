@@ -8,6 +8,7 @@ class CoreBridgeTest : public QObject {
     Q_OBJECT
 private slots:
     void multipleRequests();
+    void quitFailureIsNotConfirmed();
     void crashFailsPending();
     void malformedReplyFailsClosed();
     void destructionDoesNotKillCleanup();
@@ -20,6 +21,7 @@ static QString fakeCore() { return qEnvironmentVariable("GOZAR_FAKE_CORE"); }
 void CoreBridgeTest::multipleRequests() {
     CoreBridge core;
     QSignalSpy ready(&core, &CoreBridge::ready), replies(&core, &CoreBridge::reply), stopped(&core, &CoreBridge::stopped);
+    QSignalSpy shutdown(&core, &CoreBridge::shutdownFinished);
     QVERIFY(core.start(fakeCore()));
     QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
     const auto first = core.request("state");
@@ -32,6 +34,23 @@ void CoreBridgeTest::multipleRequests() {
     core.shutdown();
     QCOMPARE(core.request("connect"), qint64(-1));
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+    QCOMPARE(shutdown.size(), 1);
+    QVERIFY(shutdown.first().at(0).toBool());
+}
+
+void CoreBridgeTest::quitFailureIsNotConfirmed() {
+    qputenv("FAKE_CORE_QUIT_ERROR", "1");
+    CoreBridge core;
+    QSignalSpy ready(&core, &CoreBridge::ready), stopped(&core, &CoreBridge::stopped);
+    QSignalSpy shutdown(&core, &CoreBridge::shutdownFinished);
+    QVERIFY(core.start(fakeCore()));
+    QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
+    qunsetenv("FAKE_CORE_QUIT_ERROR");
+    core.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+    QCOMPARE(shutdown.size(), 1);
+    QVERIFY(!shutdown.first().at(0).toBool());
+    QVERIFY(!shutdown.first().at(1).toString().isEmpty());
 }
 
 void CoreBridgeTest::crashFailsPending() {

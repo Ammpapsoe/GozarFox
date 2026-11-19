@@ -21,6 +21,7 @@ void RealCoreSmoke::stateAndQuit() {
     qputenv("USERPROFILE", isolated.path().toUtf8());
     CoreBridge bridge;
     QSignalSpy ready(&bridge, &CoreBridge::ready), replies(&bridge, &CoreBridge::reply), stopped(&bridge, &CoreBridge::stopped);
+    QSignalSpy shutdown(&bridge, &CoreBridge::shutdownFinished);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_TEST_REAL_CORE")));
     QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 10000);
     const qint64 id = bridge.request("state");
@@ -35,6 +36,8 @@ void RealCoreSmoke::stateAndQuit() {
     QCOMPARE(state.value("live").toBool(), false);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 10000);
+    QCOMPARE(shutdown.size(), 1);
+    QVERIFY(shutdown.first().at(0).toBool());
 }
 int main(int argc, char **argv) {
     if (argc != 2) return 2;

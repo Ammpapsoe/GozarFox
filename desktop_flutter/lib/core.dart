@@ -209,6 +209,8 @@ class CoreReply {
   const CoreReply({
     this.state,
     this.error,
+    this.stateVerified = false,
+    this.errorVerified = false,
     this.needsCode = false,
     this.unverified = false,
     this.proxyAddress,
@@ -220,6 +222,12 @@ class CoreReply {
 
   final CoreState? state;
   final String? error;
+
+  /// Whether the safety-critical state and error fields were structurally
+  /// valid in the original RPC response. Used for process ownership handoff;
+  /// default CoreState values are never sufficient to prove disconnection.
+  final bool stateVerified;
+  final bool errorVerified;
   final bool needsCode;
 
   /// The browser sign-in's session is not confirmed by Mozilla yet: the page
@@ -240,6 +248,11 @@ class CoreReply {
     return CoreReply(
       state: state is Map<String, dynamic> ? CoreState.fromJson(state) : null,
       error: error is String && error.isNotEmpty ? error : null,
+      stateVerified: state is Map<String, dynamic> &&
+          state['signed_in'] is bool &&
+          state['live'] is bool &&
+          state['connecting'] is bool,
+      errorVerified: error == null || error is String,
       needsCode: result is Map && result['needs_code'] == true,
       unverified: result is Map && result['unverified'] == true,
       proxyAddress: result is Map && result['address'] is String
@@ -261,16 +274,29 @@ class CoreReply {
   }
 }
 
+/// Outcome of preparing the existing core for a future UI handoff. A ready
+/// result means the core reported successful cleanup and exited normally; it
+/// does not independently prove that the operating system restored every route.
+enum CoreHandoffResult { ready, busy, signedOut, connected, unconfirmed }
+
 class Core {
+  Core({String? executablePath}) : _executablePath = executablePath;
+
+  final String? _executablePath;
   Process? _process;
   int _nextId = 0;
   bool _stopping = false;
+  bool _handoffInProgress = false;
   final Map<int, Completer<CoreReply>> _pending = {};
   void Function()? onExit;
 
   bool get running => _process != null;
 
   String? _findBinary() {
+    final explicit = _executablePath;
+    if (explicit != null) {
+      return explicit.isNotEmpty && File(explicit).existsSync() ? explicit : null;
+    }
     final override = Platform.environment['GOZAR_CORE'];
     if (override != null &&
         override.isNotEmpty &&
@@ -321,9 +347,13 @@ class Core {
     }
   }
 
-  Future<CoreReply> call(String method, [Map<String, dynamic>? params]) async {
+  Future<CoreReply> call(String method, [Map<String, dynamic>? params]) =>
+      _call(method, params);
+
+  Future<CoreReply> _call(String method, Map<String, dynamic>? params,
+      {bool handoff = false, bool markStopping = false, Duration? timeout}) async {
     final process = _process;
-    if (process == null || _stopping) {
+    if (process == null || _stopping || (_handoffInProgress && !handoff)) {
       throw StateError('core not running');
     }
     final id = ++_nextId;
@@ -331,15 +361,62 @@ class Core {
     _pending[id] = waiter;
     final message = <String, dynamic>{'id': id, 'method': method};
     if (params != null) message['params'] = params;
+    if (markStopping) _stopping = true;
     try {
       process.stdin.writeln(jsonEncode(message));
       await process.stdin.flush();
-      final timeout = method == 'download_update'
-          ? const Duration(minutes: 16)
-          : const Duration(seconds: 180);
-      return await waiter.future.timeout(timeout);
+      final limit = timeout ??
+          (method == 'download_update'
+              ? const Duration(minutes: 16)
+              : const Duration(seconds: 180));
+      return await waiter.future.timeout(limit);
     } finally {
       _pending.remove(id);
+    }
+  }
+
+  /// Experimental prerequisite for transferring ownership to another UI.
+  /// This does not launch another process. A caller must launch nothing unless
+  /// it receives [CoreHandoffResult.ready]. Credentials remain in the core's
+  /// existing storage and are never passed on a command line.
+  Future<CoreHandoffResult> prepareUiHandoff() async {
+    final process = _process;
+    if (process == null || _stopping) return CoreHandoffResult.unconfirmed;
+    if (_handoffInProgress || _pending.isNotEmpty) {
+      return CoreHandoffResult.busy;
+    }
+    _handoffInProgress = true;
+    try {
+      final stateReply = await _call('state', null,
+          handoff: true, timeout: const Duration(seconds: 10));
+      final state = stateReply.state;
+      if (_stopping || _process != process || !stateReply.stateVerified ||
+          !stateReply.errorVerified || stateReply.error != null || state == null) {
+        return CoreHandoffResult.unconfirmed;
+      }
+      if (!state.signedIn) return CoreHandoffResult.signedOut;
+      if (state.live || state.connecting) return CoreHandoffResult.connected;
+
+      // Only the owning process requests quit. Never kill it on a timeout:
+      // OS proxy and tunnel cleanup can require time.
+      final quitReply = await _call('quit', null,
+          handoff: true,
+          markStopping: true,
+          timeout: const Duration(seconds: 45));
+      final after = quitReply.state;
+      if (!quitReply.stateVerified || !quitReply.errorVerified ||
+          quitReply.error != null || after == null || after.live || after.connecting) {
+        return CoreHandoffResult.unconfirmed;
+      }
+      final exitCode = await process.exitCode.timeout(const Duration(seconds: 10));
+      return exitCode == 0
+          ? CoreHandoffResult.ready
+          : CoreHandoffResult.unconfirmed;
+    } on Object {
+      // Errors and timeouts are not permission to start a second owner.
+      return CoreHandoffResult.unconfirmed;
+    } finally {
+      if (!_stopping) _handoffInProgress = false;
     }
   }
 

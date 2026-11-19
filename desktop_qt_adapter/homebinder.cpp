@@ -8,7 +8,13 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
     // The full upstream ConnectWindowItem owns its widgets privately. A
     // headless binder can drive that window through its public API instead.
     Q_ASSERT(core);
-    connect(core, &CoreBridge::ready, this, &HomeBinder::refresh);
+    connect(core, &CoreBridge::ready, this, [this] {
+        stopAcknowledged_ = false;
+        refresh();
+    });
+    connect(core, &CoreBridge::shutdownFinished, this, [this](bool acknowledged, const QString &) {
+        stopAcknowledged_ = acknowledged;
+    });
     connect(core, &CoreBridge::reply, this, &HomeBinder::handleReply);
     connect(core, &CoreBridge::failed, this, &HomeBinder::handleFailure);
     connect(core, &CoreBridge::stopped, this, &HomeBinder::coreStopped);
@@ -57,14 +63,28 @@ void HomeBinder::loadServers() {
 }
 
 void HomeBinder::sendMutation(const QString &method, const QJsonObject &params) {
-    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_ || connecting_ || mutatingId_ >= 0) return;
+    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_) {
+        emit error(tr("The core is unavailable or its state is unknown."));
+        return;
+    }
+    if (connecting_ || mutatingId_ >= 0) {
+        emit error(tr("Wait until the current operation finishes."));
+        return;
+    }
     mutatingId_ = core_->request(method, params);
     if (mutatingId_ < 0) emit error(QStringLiteral("cannot send core request"));
     setEnabled();
 }
 
 void HomeBinder::toggleConnection() {
-    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_ || mutatingId_ >= 0 || connecting_) return;
+    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_) {
+        emit error(tr("The core is unavailable or its state is unknown."));
+        return;
+    }
+    if (mutatingId_ >= 0 || connecting_) {
+        emit error(tr("Wait until the current operation finishes."));
+        return;
+    }
     const bool disconnect = live_;
     const auto id = core_->request(disconnect ? QStringLiteral("disconnect") : QStringLiteral("connect"));
     if (id < 0) { emit error(QStringLiteral("cannot send connection request")); return; }
@@ -74,12 +94,22 @@ void HomeBinder::toggleConnection() {
 }
 
 void HomeBinder::selectServer(const QString &host, const QString &countryCode) {
-    if (live_) return;
+    if (live_) {
+        emit error(tr("Disconnect before changing the server."));
+        return;
+    }
     sendMutation(QStringLiteral("server"), {{QStringLiteral("host"), host}, {QStringLiteral("code"), countryCode}});
 }
 
 void HomeBinder::setMode(const QString &mode) {
-    if (live_ || (mode != QLatin1String("tun") && mode != QLatin1String("proxy-only") && mode != QLatin1String("system-proxy"))) return;
+    if (live_) {
+        emit error(tr("Disconnect before changing the connection mode."));
+        return;
+    }
+    if (mode != QLatin1String("tun") && mode != QLatin1String("proxy-only") && mode != QLatin1String("system-proxy")) {
+        emit error(tr("Unsupported connection mode."));
+        return;
+    }
     sendMutation(QStringLiteral("mode"), {{QStringLiteral("mode"), mode}});
 }
 
@@ -105,7 +135,10 @@ void HomeBinder::setWarpUdp(bool enabled, bool consent) {
 }
 
 void HomeBinder::setChain(const QJsonArray &hops) {
-    if (live_) return;
+    if (live_) {
+        emit error(tr("Disconnect before changing the proxy chain."));
+        return;
+    }
     sendMutation(QStringLiteral("chain"), {{QStringLiteral("hops"), hops}});
 }
 
@@ -177,5 +210,7 @@ void HomeBinder::coreStopped() {
     mutatingId_ = stateId_ = serversId_ = -1;
     setEnabled();
     // Never claim the tunnel disconnected solely because its controller died.
-    emit error(QStringLiteral("core process stopped; connection state unknown"));
+    if (!stopAcknowledged_)
+        emit error(QStringLiteral("core process stopped; connection state unknown"));
+    stopAcknowledged_ = false;
 }

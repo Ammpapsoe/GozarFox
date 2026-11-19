@@ -4,6 +4,7 @@
 #include "languagecontroller.h"
 #include "originalhomebinding.h"
 #include "originalpowerbinding.h"
+#include "originalnavigationbinding.h"
 #include "originallocationsbinding.h"
 #include "originallocationcontrols.h"
 #include "connectwindow/background.h"
@@ -38,6 +39,23 @@ public:
     void click() { emit connectClick(); }
 signals:
     void connectClick();
+};
+
+// Test-only controller stand-in; the production adapter invokes the original
+// MainWindowController API, but this scenario does not instantiate it.
+class FakeNavigationController : public QObject {
+public:
+    enum WINDOW_ID { WINDOW_ID_CONNECT, WINDOW_ID_OTHER };
+    explicit FakeNavigationController(ConnectWindow::ConnectWindowItem *home) : home_(home) {}
+    ConnectWindow::ConnectWindowItem *getConnectWindow() { return home_; }
+    WINDOW_ID currentWindow() const { return current_; }
+    bool isLocationsExpanded() const { return expanded_; }
+    void expandLocations() { expanded_ = true; }
+    void collapseLocations() { expanded_ = false; }
+    WINDOW_ID current_ = WINDOW_ID_CONNECT;
+private:
+    ConnectWindow::ConnectWindowItem *home_;
+    bool expanded_ = false;
 };
 
 class UpstreamBackgroundTest : public QObject {
@@ -298,6 +316,8 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     window.show();
     bindOriginalLocations(&window, &manager, &binder, &catalog);
     bindOriginalLocationControls(home, &window, &binder);
+    FakeNavigationController navigation(home);
+    bindOriginalLocationsNavigation(&navigation, &binder);
     QSignalSpy errors(&binder, &HomeBinder::error);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy selections(&window, &LocationsWindow::selected);
@@ -332,6 +352,13 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     const int errorCount = errors.size();
     emit home->locationTabClicked(LOCATION_TAB_STATIC_IPS_LOCATIONS);
     QCOMPARE(errors.size(), errorCount + 1);
+    emit home->locationsClick();
+    QVERIFY(navigation.isLocationsExpanded());
+    emit home->locationsClick();
+    QVERIFY(!navigation.isLocationsExpanded());
+    navigation.current_ = FakeNavigationController::WINDOW_ID_OTHER;
+    emit home->locationsClick();
+    QVERIFY(!navigation.isLocationsExpanded());
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }
