@@ -18,7 +18,7 @@ func TestLANExperimentSessionChild(t *testing.T) {
 		t.Skip("child helper only")
 	}
 	requireDisposableLAN(t)
-	session, err := startExperimentalLANSession(context.Background(), 23456)
+	session, err := StartExperimentalLANSession(context.Background(), 23456)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestLANExperimentRealWatchdog(t *testing.T) {
 		t.Fatalf("unexpected existing LAN journal: %v", err)
 	}
 	// First test an orderly live session with the actual watchdog child.
-	session, err := startExperimentalLANSession(context.Background(), 23456)
+	session, err := StartExperimentalLANSession(context.Background(), 23456)
 	if err != nil {
 		t.Fatal(err)
 	}

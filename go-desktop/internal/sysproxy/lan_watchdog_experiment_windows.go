@@ -14,7 +14,7 @@ import (
 
 // Experimental lifecycle only. No application entry point calls this code;
 // the child mode is provided solely by the disposable runner test executable.
-func runExperimentalLANWatchdog() error {
+func RunExperimentalLANWatchdog() error {
 	b, err := openWindowsBackend()
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func (s *experimentalLANSession) Close() error {
 	return s.err
 }
 
-func startExperimentalLANSession(ctx context.Context, port int) (io.Closer, error) {
+func StartExperimentalLANSession(ctx context.Context, port int) (io.Closer, error) {
 	if ctx == nil {
 		return nil, errors.New("missing session context")
 	}

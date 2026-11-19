@@ -24,7 +24,7 @@ import (
 // test executable the same internal entry point; no real account is used.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == "--internal-lan-proxy-watchdog" {
-		if err := runExperimentalLANWatchdog(); err != nil {
+		if err := RunExperimentalLANWatchdog(); err != nil {
 			os.Exit(1)
 		}
 		os.Exit(0)
