@@ -58,8 +58,18 @@ func (f *fakeDNS) lookup(address netip.Addr) (string, bool, bool) {
 }
 
 func fakeDomain(s string) bool {
-	if len(s) == 0 || len(s) > 253 || !strings.Contains(s, ".") ||
-		strings.HasSuffix(s, ".local") || strings.HasSuffix(s, ".home.arpa") {
+	if len(s) == 0 || len(s) > 253 || !strings.Contains(s, ".") {
+		return false
+	}
+	// Special-use local names and Windows' DNS connectivity check must not
+	// receive fabricated public addresses. Leave them to the real resolver;
+	// do not hard-code a provider address that may change over time.
+	for _, suffix := range []string{"localhost", "local", "home.arpa"} {
+		if s == suffix || strings.HasSuffix(s, "."+suffix) {
+			return false
+		}
+	}
+	if s == "dns.msftncsi.com" {
 		return false
 	}
 	for _, label := range strings.Split(s, ".") {

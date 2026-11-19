@@ -68,6 +68,9 @@ func TestFakeDNSPassesDirectAndOtherQuestions(t *testing.T) {
 	}{
 		{"example.ir", dnsmessage.TypeA}, {"printer.local", dnsmessage.TypeA}, {"host.home.arpa", dnsmessage.TypeA},
 		{"example.org", dnsmessage.TypeMX}, {"printer", dnsmessage.TypeA},
+		{"localhost", dnsmessage.TypeA}, {"service.localhost", dnsmessage.TypeA},
+		{"home.arpa", dnsmessage.TypeA}, {"dns.msftncsi.com", dnsmessage.TypeA},
+		{"dns.msftncsi.com", dnsmessage.TypeAAAA},
 	} {
 		if _, handled, err := f.answer(fakeQuery(t, tc.host, tc.typ)); handled || err != nil {
 			t.Errorf("%s %v: handled=%t err=%v", tc.host, tc.typ, handled, err)
