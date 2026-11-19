@@ -123,23 +123,19 @@ func (f *fakeDNS) address(name string) (netip.Addr, error) {
 	return address, nil
 }
 
-// answer handles ordinary A and AAAA questions for proxied domains only.
-// Direct split-tunnel domains, DNSSEC requests and other record types continue
-// to the real resolver; a fabricated answer must not claim DNSSEC validation.
+// answer handles only plain recursive A and AAAA questions for proxied
+// domains. Queries carrying EDNS, DNSSEC signalling, additional records or
+// unusual flags must go unchanged to the real resolver: silently dropping
+// options or authentication requirements could violate the client's protocol.
 // The boolean says whether the query was handled, including allocation errors.
 func (f *fakeDNS) answer(query []byte) ([]byte, bool, error) {
 	var message dnsmessage.Message
-	if err := message.Unpack(query); err != nil || message.Response || message.OpCode != 0 || len(message.Questions) != 1 {
+	if err := message.Unpack(query); err != nil || message.Response || message.OpCode != 0 || !message.RecursionDesired || message.Authoritative || message.Truncated || message.RecursionAvailable || message.AuthenticData || message.CheckingDisabled || message.RCode != dnsmessage.RCodeSuccess || len(message.Questions) != 1 || len(message.Answers) != 0 || len(message.Authorities) != 0 || len(message.Additionals) != 0 {
 		return nil, false, nil
 	}
 	q := message.Questions[0]
 	if q.Class != dnsmessage.ClassINET || (q.Type != dnsmessage.TypeA && q.Type != dnsmessage.TypeAAAA) {
 		return nil, false, nil
-	}
-	for _, extra := range message.Additionals {
-		if extra.Header.Type == dnsmessage.TypeOPT && extra.Header.TTL&0x8000 != 0 {
-			return nil, false, nil
-		}
 	}
 	name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
 	if !fakeDomain(name) || (f.direct != nil && f.direct(name)) {

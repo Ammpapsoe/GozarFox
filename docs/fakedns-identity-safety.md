@@ -23,9 +23,20 @@ against another implementation allocating the same address independently, or
 against complete coordinated deletion/rollback of its own persistent state.
 `TestFakeDNSForeignCachedAddressCanAliasKnownIdentity` models a foreign cached
 address colliding with a known Gozar allocation and shows both TCP and UDP
-using the wrong identity. This intentionally passing test documents the
-problem, not its resolution. `TestFakeDNSProductionEntryPointIsFailClosed`
-verifies that the public production starter refuses activation.
+using the wrong identity. `TestFakeDNSForeignCollisionLiveKernelDemonstration`
+also checks the same ambiguity through a genuine disposable OS TUN and local
+TCP/UDP peers. It explicitly models a retained address: it does not prove an
+OS, browser, or ArmanLife actually cached that address. These intentionally
+passing demonstration tests document the problem, not its resolution.
+`TestFakeDNSProductionEntryPointIsFailClosed` verifies that the public
+production starter refuses activation.
+
+The prototype synthesizes only plain recursive A/AAAA questions. Queries with
+EDNS (including DNSSEC DO and options), AD/CD signalling, unusual sections or
+flags are forwarded unchanged to the existing resolver rather than silently
+stripping protocol information. This is conservative compatibility, not
+full EDNS support and not a fix for foreign-namespace collisions. TCP and UDP
+client DNS may therefore receive real-IP answers for those queries.
 
 ## Why simple mitigations are insufficient
 
