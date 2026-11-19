@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      android_native_pipeline_probe:
+        description: Compare standard and pipelined SOCKS on native hev in an isolated Linux namespace
+        required: false
+        type: boolean
+        default: false
       build_warp_live_probe:
         description: Build the opt-in Linux WARP live diagnostic (no credentials used in CI)
         required: false
@@ -36,6 +41,30 @@ permissions:
   contents: read
 
 jobs:
+  android-native-pipeline-probe:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_native_pipeline_probe }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile vendored native engine and fd harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/app/src/main/jni/hev-socks5-tunnel"
+          make -C "$root" static -j2
+          gcc -O2 -Wall -Werror "$GITHUB_WORKSPACE/tools/hev_fd_probe.c" \
+            -Wl,--start-group "$root/bin/libhev-socks5-tunnel.a" \
+            "$root/third-part/yaml/bin/libyaml.a" "$root/third-part/lwip/bin/liblwip.a" \
+            "$root/third-part/hev-task-system/bin/libhev-task-system.a" -Wl,--end-group \
+            -pthread -o "$RUNNER_TEMP/hev-fd-probe"
+      - name: Exercise TCP, UDP and authentication in a disposable namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/net/tun ]; then sudo mkdir -p /dev/net; sudo mknod /dev/net/tun c 10 200; fi
+          sudo unshare --net --fork -- python3 tools/hev_pipeline_probe.py "$RUNNER_TEMP/hev-fd-probe"
+
   build-kotlin-warp-live-probe:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_kotlin_warp_live_probe }}
     runs-on: ubuntu-latest
