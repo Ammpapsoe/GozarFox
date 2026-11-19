@@ -5,6 +5,7 @@
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
 #include "connectwindow/connectwindowitem.h"
+#include "locations/locationsmodel_manager.h"
 #include "graphicresources/imageresourcessvg.h"
 #include <QApplication>
 #include <QGraphicsScene>
@@ -12,6 +13,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QSignalSpy>
+#include <QSettings>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -29,19 +31,13 @@ signals:
     void connectClick();
 };
 
-// Contract stand-ins for locations; they do not replace the upstream UI.
+// Stand-in for a locations window; model and manager are original upstream code.
 class FakeLocationsWindow : public QObject {
     Q_OBJECT
 public:
     void choose(const LocationID &id) { emit selected(id); }
 signals:
     void selected(const LocationID &id);
-};
-class FakeLocationsManager : public QObject {
-    Q_OBJECT
-public:
-    QVector<types::Location> entries;
-    void updateLocations(const LocationID &, const QVector<types::Location> &items) { entries = items; }
 };
 
 class UpstreamBackgroundTest : public QObject {
@@ -269,19 +265,27 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QVERIFY(catalog.locations().isEmpty());
     QVERIFY(!catalog.selection(caId, &choice));
 
+    QTemporaryDir settingsDir;
+    QVERIFY(settingsDir.isValid());
+    QCoreApplication::setOrganizationName(QStringLiteral("GozarQtTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("GozarQtTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
     FakeLocationsWindow window;
-    FakeLocationsManager manager;
+    gui_locations::LocationsModelManager manager;
     bindOriginalLocations(&window, &manager, &binder, &catalog);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     binder.loadServers();
-    QTRY_COMPARE_WITH_TIMEOUT(manager.entries.size(), 1, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(manager.locationsModel()->rowCount(), 1, 5000);
+    const auto selectedId = catalog.locations().at(0).cities.at(0).id;
+    QVERIFY(manager.getIndexByLocationId(selectedId).isValid());
     states.clear();
-    window.choose(manager.entries.at(0).cities.at(0).id);
+    window.choose(selectedId);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     bridge.shutdown();

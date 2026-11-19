@@ -30,7 +30,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   if(NOT BUILD_TESTING OR NOT EXISTS "${WINDSCRIBE_ROOT}/src/client/frontend/gui/images.qrc")
     message(FATAL_ERROR "BUILD_TESTING and WINDSCRIBE_ROOT are required")
   endif()
-  find_package(Qt6 REQUIRED COMPONENTS Widgets Svg)
+  find_package(Qt6 REQUIRED COMPONENTS Widgets Svg Network)
   set(CMAKE_AUTORCC ON)
   set(WS_GUI "${WINDSCRIBE_ROOT}/src/client/frontend/gui")
   set(WS_COMMON "${WINDSCRIBE_ROOT}/src/client/client-common")
@@ -82,9 +82,23 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/ipaddressitem/ipaddressitem.cpp
     ${WS_GUI}/connectwindow/ipaddressitem/numberitem.cpp
     ${WS_GUI}/connectwindow/ipaddressitem/numberspixmap.cpp
-    ${WS_GUI}/connectwindow/ipaddressitem/octetitem.cpp)
-  target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
-  target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Test)
+    ${WS_GUI}/connectwindow/ipaddressitem/octetitem.cpp
+    ${WS_COMMON}/types/location.cpp
+    ${WS_COMMON}/utils/simplecrypt.cpp ${WS_COMMON}/utils/networkingvalidation.cpp
+    ${WS_FRONTEND_COMMON}/locations/locationsmodel_manager.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/favoritelocationsstorage.cpp
+    tests/upstream_renamedlocations.cpp ${WS_FRONTEND_COMMON}/locations/model/renamedlocationsstorage.h
+    tests/upstream_locationsmodel.cpp ${WS_FRONTEND_COMMON}/locations/model/locationsmodel.h
+    ${WS_FRONTEND_COMMON}/locations/model/locationsmodel_utils.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/locationitem.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/cities_proxymodel.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/customconfigs_proxymodel.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/favoritecities_proxymodel.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/sortedcities_proxymodel.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/sortedlocations_proxymodel.cpp
+    ${WS_FRONTEND_COMMON}/locations/model/proxymodels/staticips_proxymodel.cpp)
+  target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+  target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
   add_library(original_window_header_compile OBJECT
