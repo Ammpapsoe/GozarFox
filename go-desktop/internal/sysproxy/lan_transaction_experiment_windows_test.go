@@ -109,7 +109,7 @@ func TestLANExperimentTransaction(t *testing.T) {
 
 func TestLANExperimentRegistryJournal(t *testing.T) {
 	key := isolatedRegistry(t)
-	j := experimentalLANJournal{registryJournal{key: key.key}}
+	j := lanRegistryJournal{registryJournal{key: key.key}}
 	s := lanSnapshot{Version: 1, Port: 23456, Previous: LANProxySettings{Flags: 13, PAC: "https://pac.invalid"}, Applied: desiredLAN(23456)}
 	if err := j.SaveLAN(s); err != nil {
 		t.Fatal(err)

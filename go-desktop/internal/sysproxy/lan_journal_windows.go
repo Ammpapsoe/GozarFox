@@ -1,4 +1,4 @@
-//go:build windows && proxyexperiment
+//go:build windows
 
 package sysproxy
 
@@ -16,9 +16,9 @@ import (
 // Uses the existing ACL-protected key and flush primitive, but a separate
 // value/schema. A checksum detects corruption, not a malicious same-user edit.
 // Caller MUST hold the proxy ownership mutex throughout all operations.
-type experimentalLANJournal struct{ registryJournal }
+type lanRegistryJournal struct{ registryJournal }
 
-const lanJournalName = "LANProxyRecoveryExperimentV1"
+const lanJournalName = "LANProxyRecoveryV1"
 
 var lanJournalMagic = [8]byte{'G', 'Z', 'L', 'A', 'N', '0', '0', '1'}
 
@@ -67,7 +67,7 @@ func decodeLANJournal(data []byte) (*lanSnapshot, error) {
 	return &s, nil
 }
 
-func (j experimentalLANJournal) LoadLAN() (*lanSnapshot, error) {
+func (j lanRegistryJournal) LoadLAN() (*lanSnapshot, error) {
 	size, kind, err := j.key.GetValue(lanJournalName, nil)
 	if errors.Is(err, registry.ErrNotExist) {
 		return nil, nil
@@ -89,7 +89,7 @@ func (j experimentalLANJournal) LoadLAN() (*lanSnapshot, error) {
 	return decodeLANJournal(data)
 }
 
-func (j experimentalLANJournal) SaveLAN(s lanSnapshot) error {
+func (j lanRegistryJournal) SaveLAN(s lanSnapshot) error {
 	data, err := encodeLANJournal(s)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (j experimentalLANJournal) SaveLAN(s lanSnapshot) error {
 	return j.sync()
 }
 
-func (j experimentalLANJournal) ClearLAN() error {
+func (j lanRegistryJournal) ClearLAN() error {
 	if err := j.key.DeleteValue(lanJournalName); err != nil {
 		return err
 	}

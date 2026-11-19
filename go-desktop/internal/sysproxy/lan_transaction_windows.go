@@ -1,4 +1,4 @@
-//go:build windows && proxyexperiment
+//go:build windows
 
 package sysproxy
 
@@ -12,7 +12,7 @@ import (
 // The entire logical LAN setting is a single ownership unit. Windows exposes
 // no compare-and-swap for the set operation, so an uncooperative writer can
 // race the final check; the ownership mutex only coordinates our own processes.
-// These building blocks are experimental and are not connected to the app.
+// Restore and activation must run under the same per-user ownership lock.
 type lanStore interface {
 	ReadLAN() (LANProxySettings, error)
 	WriteLAN(LANProxySettings) error
@@ -138,7 +138,7 @@ func activateLAN(store lanStore, journal lanJournal, port int) error {
 	return nil
 }
 
-type experimentalLANStore struct{}
+type wininetLANStore struct{}
 
-func (experimentalLANStore) ReadLAN() (LANProxySettings, error) { return queryLANProxy() }
-func (experimentalLANStore) WriteLAN(p LANProxySettings) error  { return setExperimentalLANProxy(p) }
+func (wininetLANStore) ReadLAN() (LANProxySettings, error) { return queryLANProxy() }
+func (wininetLANStore) WriteLAN(p LANProxySettings) error  { return setLANProxy(p) }

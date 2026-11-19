@@ -1,4 +1,4 @@
-//go:build windows && proxyexperiment
+//go:build windows
 
 package sysproxy
 
@@ -11,10 +11,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// setExperimentalLANProxy is intentionally not a production implementation.
-// It has no crash journal, ownership check, or conflict protection. It is used
-// only by an explicitly opted-in test on a disposable Windows runner.
-func setExperimentalLANProxy(p LANProxySettings) error {
+// setLANProxy is a low-level mutator; callers must hold the ownership lock
+// and save the recovery journal before invoking it.
+func setLANProxy(p LANProxySettings) error {
 	if unsafe.Sizeof(uintptr(0)) != 8 {
 		return errors.New("WinINet per-connection setter requires 64-bit Windows")
 	}

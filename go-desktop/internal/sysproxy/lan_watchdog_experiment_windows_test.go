@@ -29,7 +29,7 @@ func TestLANExperimentSessionChild(t *testing.T) {
 
 func TestLANExperimentRealWatchdog(t *testing.T) {
 	requireDisposableLAN(t)
-	store := experimentalLANStore{}
+	store := wininetLANStore{}
 	original, err := store.ReadLAN()
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestLANExperimentRealWatchdog(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.Close()
-	j := experimentalLANJournal{b.journal}
+	j := lanRegistryJournal{b.journal}
 	if s, err := j.LoadLAN(); err != nil || s != nil {
 		t.Fatalf("unexpected existing LAN journal: %v", err)
 	}

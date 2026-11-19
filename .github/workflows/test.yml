@@ -11,11 +11,6 @@ on:
         required: false
         type: boolean
         default: false
-      system_proxy_experiment:
-        description: Run WinINet mutation experiment on disposable GitHub-hosted Windows only
-        required: false
-        type: boolean
-        default: false
       windows_live_tun:
         description: Run the privileged Windows kernel TUN integration test
         required: false
@@ -257,6 +252,15 @@ jobs:
       - name: Test proxy registry adapter in an isolated user key
         working-directory: go-desktop
         run: go test ./internal/sysproxy -count=1
+      - name: Test real WinINet lifecycle on disposable Windows runner
+        working-directory: go-desktop
+        shell: bash
+        env:
+          GOZAR_DISPOSABLE_WININET_TEST: '1'
+        run: |
+          set -euo pipefail
+          go test -tags proxyexperiment ./internal/sysproxy -run '^(TestWinINetRealRoundTrip|TestLANExperimentTransaction|TestLANExperimentRegistryJournal|TestLANExperimentRealCrash|TestLANExperimentAncillaryOptions|TestLANExperimentRealWatchdog)$' -count=1 -v
+          go test -tags proxyexperiment ./internal/app -run '^TestSystemProxyExperimentalAppIntegration$' -count=1 -v
 
   windows-mode-contract:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
@@ -298,8 +302,8 @@ jobs:
           if [ "${{ runner.os }}" = Linux ]; then
             go test -race ./internal/sysproxy ./internal/localproxy ./internal/app ./internal/rpc -count=1
           fi
-      - name: Experiment with real WinINet settings (disposable runner only)
-        if: ${{ runner.os == 'Windows' && inputs.system_proxy_experiment }}
+      - name: Test real WinINet settings (disposable runner only)
+        if: ${{ runner.os == 'Windows' }}
         working-directory: go-desktop
         env:
           GOZAR_DISPOSABLE_WININET_TEST: '1'
@@ -310,7 +314,7 @@ jobs:
           go test -tags proxyexperiment ./internal/app -run '^TestSystemProxyExperimentalAppIntegration$' -count=1 -v
 
   focused-mode-ui:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.system_proxy_experiment }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:

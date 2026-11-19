@@ -1,4 +1,4 @@
-//go:build !windows || !proxyexperiment
+//go:build !windows
 
 package sysproxy
 

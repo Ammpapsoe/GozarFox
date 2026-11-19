@@ -64,9 +64,9 @@ class Words {
   String get modeProxyOnlyDetail => pick(
       'برنامه‌ها باید دستی به پراکسی محلی وصل شوند؛ فقط HTTP و CONNECT.',
       'Apps must use the local proxy manually; HTTP and CONNECT only.');
-  String get modeSystemProxyPending => pick(
-      'در حال آماده‌سازی؛ هنوز فعال نیست.',
-      'Under development; not available yet.');
+  String get modeSystemProxyDetail => pick(
+      'آزمایشی، فقط ویندوز؛ برنامه‌های سازگار با پراکسی سیستم را پوشش می‌دهد.',
+      'Experimental, Windows only; applies to apps using the system proxy.');
   String get displaySettings => pick('شخصی‌سازی', 'Personalization');
   String get generalSettings => pick('عمومی', 'General');
   String get accountSectionDetail =>

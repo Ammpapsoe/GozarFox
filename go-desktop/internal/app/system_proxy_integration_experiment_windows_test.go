@@ -12,10 +12,10 @@ import (
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/sysproxy"
 )
 
-// The experimental watchdog launches the current executable. No production
-// app entry point or production starter is enabled by this test.
+// The production watchdog launches the current executable; route its child
+// entry point to the same recovery function used by the main application.
 func TestMain(m *testing.M) {
-	if len(os.Args) == 2 && os.Args[1] == "--internal-lan-proxy-watchdog" {
+	if len(os.Args) == 2 && os.Args[1] == "--internal-proxy-watchdog" {
 		if err := sysproxy.RunExperimentalLANWatchdog(); err != nil {
 			os.Exit(1)
 		}
@@ -50,7 +50,6 @@ func TestSystemProxyExperimentalAppIntegration(t *testing.T) {
 	if err := current.SetMode(config.ModeSystemProxy); err != nil {
 		t.Fatal(err)
 	}
-	current.systemProxyStart = sysproxy.StartExperimentalLANSession
 	if err := current.Connect(); err != nil {
 		t.Fatal(err)
 	}

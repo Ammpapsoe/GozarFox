@@ -34,8 +34,8 @@ func TestLANExperimentCrashChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer key.Close()
-	j := experimentalLANJournal{registryJournal{key: key}}
-	store := experimentalLANStore{}
+	j := lanRegistryJournal{registryJournal{key: key}}
+	store := wininetLANStore{}
 	previous, err := store.ReadLAN()
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +66,7 @@ func TestLANExperimentCrashChild(t *testing.T) {
 
 func TestLANExperimentRealCrash(t *testing.T) {
 	requireDisposableLAN(t)
-	store := experimentalLANStore{}
+	store := wininetLANStore{}
 	original, err := store.ReadLAN()
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestLANExperimentRealCrash(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer reopened.Close()
-			j := experimentalLANJournal{registryJournal{key: reopened}}
+			j := lanRegistryJournal{registryJournal{key: reopened}}
 			if s, err := j.LoadLAN(); err != nil || s == nil || s.Previous != before {
 				t.Fatalf("journal not durable: %#v, %v", s, err)
 			}

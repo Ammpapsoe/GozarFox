@@ -710,9 +710,9 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
             ),
             RadioListTile<String>(
               title: Text(words.modeSystemProxy),
-              subtitle: Text(words.modeSystemProxyPending),
+              subtitle: Text(words.modeSystemProxyDetail),
               value: 'system-proxy',
-              enabled: false,
+              enabled: Platform.isWindows,
             ),
           ]),
         ),

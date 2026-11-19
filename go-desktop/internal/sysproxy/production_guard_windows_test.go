@@ -40,10 +40,10 @@ func TestSystemProxyProductionGuardDoesNotChangeWindowsSettings(t *testing.T) {
 	}
 	beforeSettings := read(settingsKey)
 	beforeConnections := read(settingsKey + `\Connections`)
-	if session, err := StartSystemProxy(context.Background(), 10810); err == nil || session != nil {
-		t.Fatal("unsafe experimental backend unexpectedly enabled")
+	if session, err := StartSystemProxy(context.Background(), 0); err == nil || session != nil {
+		t.Fatal("invalid port unexpectedly enabled the system proxy")
 	}
 	if !reflect.DeepEqual(beforeSettings, read(settingsKey)) || !reflect.DeepEqual(beforeConnections, read(settingsKey+`\Connections`)) {
-		t.Fatal("blocked system proxy startup changed Windows settings")
+		t.Fatal("invalid system proxy startup changed Windows settings")
 	}
 }

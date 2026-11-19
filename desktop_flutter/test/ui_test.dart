@@ -367,7 +367,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Connection mode'));
     await tester.pumpAndSettle();
-    expect(find.text('Under development; not available yet.'), findsOneWidget);
+    expect(find.text('Experimental, Windows only; applies to apps using the system proxy.'), findsOneWidget);
     await tester.tap(find.text('Proxy only'));
     await tester.pumpAndSettle();
     expect(core.mode, 'proxy-only');

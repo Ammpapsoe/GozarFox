@@ -62,7 +62,7 @@ func setAncillaryLAN(p ancillaryLAN) error {
 
 func TestLANExperimentAncillaryOptions(t *testing.T) {
 	requireDisposableLAN(t)
-	store := experimentalLANStore{}
+	store := wininetLANStore{}
 	original, err := store.ReadLAN()
 	if err != nil {
 		t.Fatal(err)

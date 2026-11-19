@@ -131,7 +131,7 @@ func New(version string) *App {
 	} else {
 		cfg.Server = ""
 	}
-	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, fetchServers: fxa.Servers, geo: geo.Default()}
+	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, fetchServers: fxa.Servers, geo: geo.Default(), systemProxyStart: platformSystemProxyStart()}
 	created.servers, created.serversUntil = decodeServerCache(cfg.ServerCache, time.Now())
 	created.serversCached = len(created.servers) != 0
 	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
@@ -890,8 +890,8 @@ func (a *App) connectLocked() error {
 		a.mu.Unlock()
 		return err
 	}
-	// System proxy must remain disabled until transactional ownership and
-	// recovery are fully integrated. Never fall back to another mode.
+	// System proxy must never silently fall back to another mode on platforms
+	// without a supported transactional backend.
 	if plan.systemProxy && a.systemProxyStart == nil {
 		a.mu.Unlock()
 		return errors.New("system proxy mode is not implemented yet")

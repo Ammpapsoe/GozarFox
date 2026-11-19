@@ -1,4 +1,4 @@
-//go:build windows && proxyexperiment
+//go:build windows
 
 package sysproxy
 
@@ -12,9 +12,9 @@ import (
 	"time"
 )
 
-// Experimental lifecycle only. No application entry point calls this code;
-// the child mode is provided solely by the disposable runner test executable.
-func RunExperimentalLANWatchdog() error {
+// RunRecoveryWatchdog is the internal crash-recovery child. The caller
+// launches it before mutation and holds the ownership lock while connected.
+func RunRecoveryWatchdog() error {
 	b, err := openWindowsBackend()
 	if err != nil {
 		return err
@@ -27,12 +27,12 @@ func RunExperimentalLANWatchdog() error {
 	}
 	return serveRecoveryWatchdog(os.Stdin, os.Stdout, func() error {
 		return b.lock(context.Background(), func(bool) error {
-			return recoverLAN(experimentalLANStore{}, experimentalLANJournal{b.journal})
+			return recoverLAN(wininetLANStore{}, lanRegistryJournal{b.journal})
 		})
 	})
 }
 
-type experimentalLANSession struct {
+type lanSession struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	watch    *recoveryWatchdog
@@ -42,8 +42,8 @@ type experimentalLANSession struct {
 	failures chan error
 }
 
-func (s *experimentalLANSession) Failures() <-chan error { return s.failures }
-func (s *experimentalLANSession) Close() error {
+func (s *lanSession) Failures() <-chan error { return s.failures }
+func (s *lanSession) Close() error {
 	s.once.Do(func() {
 		s.cancel()
 		<-s.done
@@ -53,21 +53,27 @@ func (s *experimentalLANSession) Close() error {
 	return s.err
 }
 
-func StartExperimentalLANSession(ctx context.Context, port int) (io.Closer, error) {
+func StartSystemProxy(ctx context.Context, port int) (io.Closer, error) {
 	if ctx == nil {
 		return nil, errors.New("missing session context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if port < 1 || port > 65535 {
+		return nil, errors.New("invalid proxy port")
 	}
 	b, err := openWindowsBackend()
 	if err != nil {
 		return nil, err
 	}
-	watch, err := launchWatchdog("--internal-lan-proxy-watchdog")
+	watch, err := launchWatchdog("--internal-proxy-watchdog")
 	if err != nil {
 		b.Close()
 		return nil, err
 	}
 	sessionCtx, cancel := context.WithCancel(ctx)
-	s := &experimentalLANSession{cancel: cancel, done: make(chan struct{}), watch: watch, backend: b, failures: make(chan error, 1)}
+	s := &lanSession{cancel: cancel, done: make(chan struct{}), watch: watch, backend: b, failures: make(chan error, 1)}
 	go func() { <-watch.done; cancel() }()
 	ready := make(chan struct{}, 1)
 	go func() {
@@ -83,7 +89,7 @@ func StartExperimentalLANSession(ctx context.Context, port int) (io.Closer, erro
 			if old != nil {
 				return errors.New("legacy proxy recovery journal exists")
 			}
-			store, journal := experimentalLANStore{}, experimentalLANJournal{b.journal}
+			store, journal := wininetLANStore{}, lanRegistryJournal{b.journal}
 			if err := activateLAN(store, journal, port); err != nil {
 				if recoveryErr := recoverLAN(store, journal); recoveryErr != nil {
 					return errors.Join(err, recoveryErr)

@@ -19,7 +19,7 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if err := setExperimentalLANProxy(original); err != nil {
+		if err := setLANProxy(original); err != nil {
 			t.Errorf("restore original LAN setting: %v", err)
 			return
 		}
@@ -43,7 +43,7 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := setExperimentalLANProxy(tc.value); err != nil {
+			if err := setLANProxy(tc.value); err != nil {
 				t.Fatal(err)
 			}
 			got, err := queryLANProxy()
@@ -54,10 +54,10 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 				t.Fatalf("logical LAN setting did not round-trip: got %#v, want %#v", got, tc.value)
 			}
 			manual := LANProxySettings{Flags: 3, Server: "127.0.0.1:23456", Bypass: "localhost;<local>"}
-			if err := setExperimentalLANProxy(manual); err != nil {
+			if err := setLANProxy(manual); err != nil {
 				t.Fatal(err)
 			}
-			if err := setExperimentalLANProxy(tc.value); err != nil {
+			if err := setLANProxy(tc.value); err != nil {
 				t.Fatal(err)
 			}
 			got, err = queryLANProxy()
@@ -68,13 +68,13 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 				t.Fatalf("logical LAN setting not restored: got %#v, want %#v", got, tc.value)
 			}
 			key := isolatedRegistry(t)
-			journal := experimentalLANJournal{registryJournal{key: key.key}}
-			store := experimentalLANStore{}
+			journal := lanRegistryJournal{registryJournal{key: key.key}}
+			store := wininetLANStore{}
 			if err := activateLAN(store, journal, 23456); err != nil {
 				t.Fatal(err)
 			}
 			other := LANProxySettings{Flags: 3, Server: "other.example:1234", Bypass: "localhost"}
-			if err := setExperimentalLANProxy(other); err != nil {
+			if err := setLANProxy(other); err != nil {
 				t.Fatal(err)
 			}
 			if err := recoverLAN(store, journal); err == nil {
@@ -87,7 +87,7 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 			if saved, err := journal.LoadLAN(); err != nil || saved == nil {
 				t.Fatalf("conflict lost journal: %v", err)
 			}
-			if err := setExperimentalLANProxy(desiredLAN(23456)); err != nil {
+			if err := setLANProxy(desiredLAN(23456)); err != nil {
 				t.Fatal(err)
 			}
 			if err := recoverLAN(store, journal); err != nil {
