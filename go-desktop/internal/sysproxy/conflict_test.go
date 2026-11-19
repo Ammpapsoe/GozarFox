@@ -59,6 +59,25 @@ func TestRecoveryDetectsExternalChangeDuringRestore(t *testing.T) {
 	}
 }
 
+type changeAfterNotification struct{ *memoryProxyStore }
+
+func (s changeAfterNotification) Commit() error {
+	delete(s.values, "AutoDetect")
+	return nil
+}
+
+func TestActivationRejectsPlatformChangeAfterNotification(t *testing.T) {
+	store := changeAfterNotification{newMemoryProxy()}
+	journal := &memoryJournal{}
+	err := activateProxy(store, journal, 10810)
+	if err == nil || !strings.Contains(err.Error(), "AutoDetect changed after notification") {
+		t.Fatalf("platform normalization was not rejected: %v", err)
+	}
+	if journal.snapshot == nil {
+		t.Fatal("backup not retained")
+	}
+}
+
 func TestActivationDetectsExternalChangeAfterCapture(t *testing.T) {
 	store := newMemoryProxy()
 	snapshot, err := captureProxy(store, 10810)

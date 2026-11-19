@@ -26,9 +26,12 @@ func runOwnedProxySession(ctx context.Context, lock proxyOwnership, store proxyS
 			return err
 		}
 		if err := activateProxy(store, journal, port); err != nil {
-			// Activation can have partially changed the registry, or a backup
-			// write may have failed ambiguously. Leave the journal intact for
-			// an explicit recovery attempt under the lock.
+			// The failed activation may have partially mutated the registry.
+			// Recover under the same lock when safe; conflict or ambiguity
+			// retains the durable journal and is reported to the caller.
+			if recoveryErr := recoverProxy(store, journal); recoveryErr != nil {
+				return errors.Join(err, fmt.Errorf("recover failed activation: %w", recoveryErr))
+			}
 			return err
 		}
 		defer func() {

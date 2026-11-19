@@ -19,6 +19,27 @@ type proxyJournal interface {
 // recovery before performing any other changes. The restore refuses to
 // overwrite values it recognises as externally changed, but its reads and
 // writes are not an atomic transaction against other programs.
+// commitProxyChanges notifies the platform only after the complete registry
+// transaction. The final read-back catches platform normalization or changes
+// made by another writer before the journal can be discarded.
+func commitProxyChanges(store proxyStore, expected map[string]ProxyValue) error {
+	if notifier, ok := store.(interface{ Commit() error }); ok {
+		if err := notifier.Commit(); err != nil {
+			return err
+		}
+	}
+	for _, name := range proxyNames {
+		value, err := store.Read(name)
+		if err != nil {
+			return err
+		}
+		if value != expected[name] {
+			return fmt.Errorf("proxy setting %s changed after notification", name)
+		}
+	}
+	return nil
+}
+
 func recoverProxy(store proxyStore, journal proxyJournal) error {
 	snapshot, err := journal.Load()
 	if err != nil {
@@ -29,6 +50,9 @@ func recoverProxy(store proxyStore, journal proxyJournal) error {
 	}
 	if err := restoreProxy(store, *snapshot); err != nil {
 		return fmt.Errorf("restore proxy backup: %w", err)
+	}
+	if err := commitProxyChanges(store, snapshot.Previous); err != nil {
+		return fmt.Errorf("notify restored proxy settings: %w", err)
 	}
 	if err := journal.Clear(); err != nil {
 		return fmt.Errorf("clear proxy backup: %w", err)
@@ -52,6 +76,9 @@ func activateProxy(store proxyStore, journal proxyJournal, port int) error {
 	}
 	if err := applyProxy(store, snapshot); err != nil {
 		return fmt.Errorf("activate proxy: %w", err)
+	}
+	if err := commitProxyChanges(store, desired(port)); err != nil {
+		return fmt.Errorf("notify activated proxy settings: %w", err)
 	}
 	return nil
 }

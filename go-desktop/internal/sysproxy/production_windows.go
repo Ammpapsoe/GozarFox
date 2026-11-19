@@ -41,12 +41,7 @@ type notifyingStore struct {
 	notify func() error
 }
 
-func (s notifyingStore) Write(name string, value ProxyValue) error {
-	if err := s.proxyStore.Write(name, value); err != nil {
-		return err
-	}
-	return s.notify()
-}
+func (s notifyingStore) Commit() error { return s.notify() }
 
 type windowsBackend struct {
 	store    proxyStore
