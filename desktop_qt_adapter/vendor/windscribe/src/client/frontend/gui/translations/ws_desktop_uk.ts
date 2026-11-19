@@ -1,0 +1,3242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="uk_UA">
+<context>
+    <name>AdvancedParametersDialog</name>
+    <message>
+        <source>Advanced Parameters</source>
+        <translation>Розширені налаштування</translation>
+    </message>
+    <message>
+        <source>Write your parameters here</source>
+        <translation>Напишіть свої параметри тут</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Очистити</translation>
+    </message>
+    <message>
+        <source>Ok</source>
+        <translation>Гаразд</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+</context>
+<context>
+    <name>CommonGraphics::EscapeButton</name>
+    <message>
+        <source>ESC</source>
+        <translation>ESC</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::ConnectWindowItem</name>
+    <message>
+        <source>Connection to Windscribe has been terminated. </source>
+        <translation>Підключення до Windscribe припинено. </translation>
+    </message>
+    <message>
+        <source> transferred in </source>
+        <translation> передано за </translation>
+    </message>
+    <message>
+        <source>Connected for </source>
+        <translation>Підключено </translation>
+    </message>
+    <message>
+        <source> transferred</source>
+        <translation> передано</translation>
+    </message>
+    <message>
+        <source>Firewall</source>
+        <translation>Брандмауер</translation>
+    </message>
+    <message>
+        <source>Blocks all connectivity in the event of a sudden disconnect</source>
+        <translation>Блокує всі підключення в разі раптового відключення</translation>
+    </message>
+    <message>
+        <source>Keeping the firewall on while disconnected may break internet connectivity</source>
+        <translation>Якщо тримати брандмауер увімкненим у відключеному стані, це може порушити підключення до Інтернету</translation>
+    </message>
+    <message>
+        <source>Favourite IP</source>
+        <translation>Улюблена IP-адреса</translation>
+    </message>
+    <message>
+        <source>Rotate IP</source>
+        <translation>Змінити IP</translation>
+    </message>
+    <message>
+        <source>FIREWALL</source>
+        <translation>БРАНДМАУЕР</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::LocationsButton</name>
+    <message>
+        <source>Locations</source>
+        <translation>Розташування</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::LocationsMenu</name>
+    <message>
+        <source>All</source>
+        <translation>Усі</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>Статичні IP-адреси</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Шукати</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Користувацькі конфігурації</translation>
+    </message>
+    <message>
+        <source>Favourites</source>
+        <translation>Улюблені</translation>
+    </message>
+</context>
+<context>
+    <name>CustomMenuWidget</name>
+    <message>
+        <source>Undo</source>
+        <translation>Відмінити</translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation>Повторити</translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation>Вирізати</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>Копіювати</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Вставити</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Вибрати все</translation>
+    </message>
+</context>
+<context>
+    <name>EmergencyConnectWindow::EmergencyConnectWindowItem</name>
+    <message>
+        <source>Emergency Connect</source>
+        <translation>Аварійне підключення</translation>
+    </message>
+    <message>
+        <source>Emergency connection failure. Try again?</source>
+        <translation>Аварійний збій підключення. Спробувати ще раз?</translation>
+    </message>
+    <message>
+        <source>Can&apos;t access Windscribe.com or login into the app on your restrictive network? Connect to the emergency server that unblocks all of Windscribe.</source>
+        <translation>Не можете отримати доступ до Windscribe.com або увійти в додаток у мережі з обмеженим доступом? Підключіться до аварійного сервера, який розблокує весь Windscribe.</translation>
+    </message>
+    <message>
+        <source>Connecting...</source>
+        <translation>Підключення...</translation>
+    </message>
+    <message>
+        <source>Disconnecting...</source>
+        <translation>Відключення...</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Підключити</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Від&apos;єднати</translation>
+    </message>
+</context>
+<context>
+    <name>EmergencyConnectWindow::TextLinkItem</name>
+    <message>
+        <source>Access for %1 Only</source>
+        <translation>Доступ лише для %1</translation>
+    </message>
+</context>
+<context>
+    <name>ExternalConfigWindow::ExternalConfigWindowItem</name>
+    <message>
+        <source>External Config Mode</source>
+        <translation>Режим зовнішньої конфігурації</translation>
+    </message>
+    <message>
+        <source>Use the Windscribe app without an account to connect to any OpenVPN or WireGuard server.</source>
+        <translation>Використовуйте додаток Windscribe без облікового запису для підключення до будь-якого сервера OpenVPN або WireGuard.</translation>
+    </message>
+    <message>
+        <source>Ok, got it!</source>
+        <translation>Гаразд, зрозумів!</translation>
+    </message>
+</context>
+<context>
+    <name>FreeTrafficNotificationController</name>
+    <message>
+        <source>You reached %1% of your free bandwidth allowance</source>
+        <translation>Ви досягли %1% від ліміту безкоштовного трафіку.</translation>
+    </message>
+</context>
+<context>
+    <name>GeneralMessageController</name>
+    <message>
+        <source>Ok</source>
+        <translation>Гаразд</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation>Так</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation>Ні</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+</context>
+<context>
+    <name>GeneralMessageWindow::GeneralMessageItem</name>
+    <message>
+        <source>Ignore Warnings</source>
+        <translation>Ігнорувати попередження</translation>
+    </message>
+    <message>
+        <source>Learn More</source>
+        <translation>Дізнатися більше</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Remember</source>
+        <translation>Запам&apos;ятати</translation>
+    </message>
+</context>
+<context>
+    <name>GuiLocations::LocationsTab</name>
+    <message>
+        <source>Choose the directory that contains custom configs you wish to display here</source>
+        <translation>Виберіть каталог, який містить користувацькі налаштування, які ви хочете відобразити тут</translation>
+    </message>
+    <message>
+        <source>Choose</source>
+        <translation>Вибрати</translation>
+    </message>
+    <message>
+        <source>The selected directory contains no custom configs</source>
+        <translation>Вибраний каталог не містить користувацьких налаштувань</translation>
+    </message>
+    <message>
+        <source>No locations found</source>
+        <translation>Локацій не знайдено</translation>
+    </message>
+    <message>
+        <source>Nothing to see here...</source>
+        <translation>Тут нема на що дивитися...</translation>
+    </message>
+    <message>
+        <source>You don&apos;t have any Static IPs</source>
+        <translation>У вас немає статичних IP-адрес</translation>
+    </message>
+    <message>
+        <source>No locations</source>
+        <translation>Немає локацій</translation>
+    </message>
+    <message>
+        <source>ALL LOCATIONS</source>
+        <translation>ВСІ ЛОКАЦІЇ</translation>
+    </message>
+    <message>
+        <source>FAVOURITES</source>
+        <translation>УЛЮБЛЕНІ</translation>
+    </message>
+    <message>
+        <source>STATIC IPs</source>
+        <translation>STATIC IP</translation>
+    </message>
+    <message>
+        <source>CUSTOM CONFIGs</source>
+        <translation>КАСТОМНІ КОНФІГУРАЦІЇ</translation>
+    </message>
+    <message>
+        <source>SEARCH</source>
+        <translation>ШУКАТИ</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Додати</translation>
+    </message>
+</context>
+<context>
+    <name>GuiLocations::StaticIPDeviceInfo</name>
+    <message>
+        <source>Add</source>
+        <translation>Додати</translation>
+    </message>
+</context>
+<context>
+    <name>LocalIPCServer</name>
+    <message>
+        <source>Malformed hydra profile command.</source>
+        <translation>Некоректна команда профілю hydra.</translation>
+    </message>
+    <message>
+        <source>Could not remove the hydra profile.</source>
+        <translation>Не вдалося видалити профіль hydra.</translation>
+    </message>
+    <message>
+        <source>Hydra profile removed.</source>
+        <translation>Профіль hydra видалено.</translation>
+    </message>
+    <message>
+        <source>No hydra profile imported.</source>
+        <translation>Профіль hydra не імпортовано.</translation>
+    </message>
+    <message>
+        <source>The imported hydra profile is not in use. %1</source>
+        <translation>Імпортований профіль hydra не використовується. %1</translation>
+    </message>
+    <message>
+        <source>Hydra profile %1:</source>
+        <translation>Профіль hydra %1:</translation>
+    </message>
+    <message>
+        <source>(unnamed)</source>
+        <translation>(без назви)</translation>
+    </message>
+    <message>
+        <source>It maps every location: all of them connect through your hydra server.</source>
+        <translation>Охоплює всі локації: усі вони підключаються через ваш сервер hydra.</translation>
+    </message>
+    <message>
+        <source>Connect to one of these locations to go through your hydra server; the others connect directly.</source>
+        <translation>Підключіться до однієї з цих локацій, щоб іти через ваш сервер hydra; решта підключаються напряму.</translation>
+    </message>
+</context>
+<context>
+    <name>LogViewer::LogViewerWindow</name>
+    <message>
+        <source>Word Wrap</source>
+        <translation>Перенесення слів</translation>
+    </message>
+    <message>
+        <source>Colour highlighting</source>
+        <translation>Виділення кольором</translation>
+    </message>
+    <message>
+        <source>Export to file...</source>
+        <translation>Експорт у файл...</translation>
+    </message>
+    <message>
+        <source>Save log</source>
+        <translation>Зберегти журнал</translation>
+    </message>
+    <message>
+        <source>Text files (*.txt)</source>
+        <translation>Текстові файли (*.txt)</translation>
+    </message>
+    <message>
+        <source>Export log</source>
+        <translation>Експортувати журнал</translation>
+    </message>
+    <message>
+        <source>Failed to export log.  Make sure you have the correct permissions.</source>
+        <translation>Не вдалося експортувати журнал.  Переконайтеся, що у вас є правильні дозволи.</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::CaptchaItem</name>
+    <message>
+        <source>Slide puzzle piece into place</source>
+        <translation>Посуньте шматочок пазла на місце</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::LoggingInWindowItem</name>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Complete Puzzle to continue</source>
+        <translation>Завершіть пазл, щоб продовжити</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::LoginWindowItem</name>
+    <message>
+        <source>Turn Off Firewall</source>
+        <translation>Вимкніть міжмережевий екран</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Увійти</translation>
+    </message>
+    <message>
+        <source>Emergency Connect is ON</source>
+        <translation>Аварійний зв&apos;язок увімкнено</translation>
+    </message>
+    <message>
+        <source>2FA Code</source>
+        <translation>Код 2FA</translation>
+    </message>
+    <message>
+        <source>Forgot password?</source>
+        <translation>Забули пароль?</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Стандарт</translation>
+    </message>
+    <message>
+        <source>Hashed</source>
+        <translation>Хешований</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Enter username</source>
+        <translation>Введіть ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation>Введіть пароль</translation>
+    </message>
+    <message>
+        <source>Hash</source>
+        <translation>Хеш</translation>
+    </message>
+    <message>
+        <source>Account Hash or upload file</source>
+        <translation>Хеш облікового запису або файл завантаження</translation>
+    </message>
+    <message>
+        <source>Select file for hash</source>
+        <translation>Виберіть файл для хешу</translation>
+    </message>
+    <message>
+        <source>All Files (*.*)</source>
+        <translation>Всі файли (*.*)</translation>
+    </message>
+    <message>
+        <source>No Internet Connectivity</source>
+        <translation>Немає підключення до Інтернету</translation>
+    </message>
+    <message>
+        <source>No API Connectivity</source>
+        <translation>Немає підключення до API</translation>
+    </message>
+    <message>
+        <source>Proxy requires authentication</source>
+        <translation>Проксі вимагає автентифікації</translation>
+    </message>
+    <message>
+        <source>Invalid API response, check your network</source>
+        <translation>Некоректна відповідь API — перевірте свою мережу</translation>
+    </message>
+    <message>
+        <source>Invalid API Endpoint</source>
+        <translation>Некоректна кінцева точка API</translation>
+    </message>
+    <message>
+        <source>...hmm are you sure this is correct?</source>
+        <translation>... Гм, ти впевнений, що це правильно?</translation>
+    </message>
+    <message>
+        <source>...Sorry, seems like it&apos;s wrong again</source>
+        <translation>... Вибачте, здається, це знову неправильно</translation>
+    </message>
+    <message>
+        <source>...hmm, try resetting your password!</source>
+        <translation>... Хмм, спробуй скинути пароль!</translation>
+    </message>
+    <message>
+        <source>Rate limited. Please wait before trying to login again.</source>
+        <translation>Перевищено ліміт запитів. Будь ласка, зачекайте перед повторним входом.</translation>
+    </message>
+    <message>
+        <source>Session is expired. Please login again</source>
+        <translation>Сесія закінчена. Будь ласка, увійдіть ще раз</translation>
+    </message>
+    <message>
+        <source>Your username should not be an email address. Please try again.</source>
+        <translation>Ваше ім&apos;я користувача не повинно бути електронною адресою. Будь ласка, спробуйте ще раз.</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::SignupWindowItem</name>
+    <message>
+        <source>Sign Up</source>
+        <translation>Реєстрація</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Стандарт</translation>
+    </message>
+    <message>
+        <source>Hashed</source>
+        <translation>Хешований</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Enter username</source>
+        <translation>Введіть ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation>Введіть пароль</translation>
+    </message>
+    <message>
+        <source>8 or more characters with at least one uppercase and lowercase(ie. &quot;Hello1234&quot;, &quot;Solyanka&quot;).</source>
+        <translation>8 або більше символів з принаймні однією великою та малою літерою (тобто &quot;Hello1234&quot;, &quot;Solyanka&quot;).</translation>
+    </message>
+    <message>
+        <source>Email (Optional)</source>
+        <translation>Електронна пошта (за бажанням)</translation>
+    </message>
+    <message>
+        <source>Enter email</source>
+        <translation>Введіть електронну пошту</translation>
+    </message>
+    <message>
+        <source>Voucher Code?</source>
+        <translation>Код ваучера?</translation>
+    </message>
+    <message>
+        <source>Voucher code (optional)</source>
+        <translation>Код ваучера (за бажанням)</translation>
+    </message>
+    <message>
+        <source>Referred By Someone?</source>
+        <translation>Хтось рекомендував?</translation>
+    </message>
+    <message>
+        <source>Referring username (optional)</source>
+        <translation>Посилання на ім&apos;я користувача (необов&apos;язково)</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Продовжити</translation>
+    </message>
+    <message>
+        <source>Hash</source>
+        <translation>Хеш</translation>
+    </message>
+    <message>
+        <source>Generate or browse file</source>
+        <translation>Генерація або перегляд файлу</translation>
+    </message>
+    <message>
+        <source>No personal info required. Account recovery is impossible.
+If you lose your account hash, it&apos;s gone forever and support cannot help you recover it.</source>
+        <translation>Особиста інформація не потрібна. Відновлення рахунку неможливе.
+Якщо ви втратите хеш акаунта, він зникне назавжди, і служба підтримки не допоможе вам його відновити.</translation>
+    </message>
+    <message>
+        <source>Select file for hash</source>
+        <translation>Виберіть файл для хешу</translation>
+    </message>
+    <message>
+        <source>All Files (*.*)</source>
+        <translation>Всі файли (*.*)</translation>
+    </message>
+    <message>
+        <source>Username must be at least 3 characters</source>
+        <translation>Ім&apos;я користувача має містити щонайменше 3 символи</translation>
+    </message>
+    <message>
+        <source>Your username should not be an email address.</source>
+        <translation>Ваше ім&apos;я користувача не повинно бути електронною адресою.</translation>
+    </message>
+    <message>
+        <source>Invalid email</source>
+        <translation>Неправильна адреса ел. пошти</translation>
+    </message>
+    <message>
+        <source>Invalid hash</source>
+        <translation>Некоректний хеш</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::WelcomeWindowItem</name>
+    <message>
+        <source>Emergency Connect</source>
+        <translation>Аварійне підключення</translation>
+    </message>
+    <message>
+        <source>External Config</source>
+        <translation>Зовнішня конфігурація</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Налаштування</translation>
+    </message>
+    <message>
+        <source>Turn Off Firewall</source>
+        <translation>Вимкнути брандмауер</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Get Started</source>
+        <translation>Початок роботи</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindow</name>
+    <message>
+        <source>Windscribe could not update your hosts file, which IKEv2 requires. Another program, such as antivirus or endpoint security software, may be blocking changes to it. Please try again, or use a different connection mode.</source>
+        <translation>Windscribe не вдалося оновити файл hosts, потрібний для IKEv2. Можливо, інша програма, наприклад антивірус або засіб захисту кінцевих точок, блокує його зміну. Спробуйте ще раз або скористайтеся іншим режимом підключення.</translation>
+    </message>
+    <message>
+        <source>Split Tunneling Stopped</source>
+        <translation>Роздільне тунелювання зупинено</translation>
+    </message>
+    <message>
+        <source>The split tunneling session ended unexpectedly. Please reconnect to retry. If this persists, please contact support.</source>
+        <translation>Сеанс роздільного тунелювання несподівано завершився. Будь ласка, підключіться знову, щоб повторити спробу. Якщо проблема повторюється, зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>Logging you in...</source>
+        <translation>Ви входите у систему...</translation>
+    </message>
+    <message>
+        <source>VPN is active</source>
+        <translation>VPN активний</translation>
+    </message>
+    <message>
+        <source>Rotating your MAC address will result in a disconnect event from the current network. Are you sure?</source>
+        <translation>Зміна MAC-адреси призведе до відключення від поточної мережі. Ви впевнені?</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size while connected. Please disconnect first.</source>
+        <translation>Не вдається визначити відповідний розмір пакета під час підключення. Будь ласка, спочатку відключіться.</translation>
+    </message>
+    <message>
+        <source>No Internet</source>
+        <translation>Немає інтернету</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size without internet. Check your connection.</source>
+        <translation>Неможливо визначити відповідний розмір пакета без Інтернету. Перевірте з&apos;єднання.</translation>
+    </message>
+    <message>
+        <source>Select Custom Config Folder</source>
+        <translation>Виберіть папку користувацьких конфігурацій</translation>
+    </message>
+    <message>
+        <source>Security Risk</source>
+        <translation>Ризик безпеки</translation>
+    </message>
+    <message>
+        <source>Enable Service?</source>
+        <translation>Увімкнути сервіс?</translation>
+    </message>
+    <message>
+        <source>Enable &quot;Base Filtering Engine&quot; service? This is required for Windscribe to function.</source>
+        <translation>Увімкнути сервіс &quot;Базовий движок фільтрації&quot;? Це необхідно для роботи Windscribe.</translation>
+    </message>
+    <message>
+        <source>Failed to Enable Service</source>
+        <translation>Не вдалося ввімкнути сервіс</translation>
+    </message>
+    <message>
+        <source>Could not start &apos;Base Filtering Engine&apos; service.  Please enable this service manually in Windows Services.</source>
+        <translation>Не вдалося запустити сервіс &apos;Базовий движок фільтрації&apos;. Будь ласка, увімкніть цей сервіс вручну y Cлужбах Windows.</translation>
+    </message>
+    <message>
+        <source>Failed to Start</source>
+        <translation>Не вдалося запустити</translation>
+    </message>
+    <message>
+        <source>SSL Error</source>
+        <translation>Помилка SSL</translation>
+    </message>
+    <message>
+        <source>Disconnected</source>
+        <translation>Відключено</translation>
+    </message>
+    <message>
+        <source>Import Hydra Profile</source>
+        <translation>Імпорт профілю Hydra</translation>
+    </message>
+    <message>
+        <source>Unable to import hydra profile</source>
+        <translation>Не вдалося імпортувати профіль hydra</translation>
+    </message>
+    <message>
+        <source>The imported hydra profile is not in use. %1</source>
+        <translation>Імпортований профіль hydra не використовується. %1</translation>
+    </message>
+    <message>
+        <source>The selected directory is writeable for other users. Custom configs in this directory may pose a potential security risk.</source>
+        <translation>Вибраний каталог можна писати для інших користувачів. Власні налаштування в цьому каталозі можуть становити потенційну загрозу безпеці.</translation>
+    </message>
+    <message>
+        <source>Installation Incomplete</source>
+        <translation>Встановлення незавершено</translation>
+    </message>
+    <message>
+        <source>Part of the Windscribe installation is missing.  Please download Windscribe and install it again.</source>
+        <translation>Частина інсталяції Windscribe відсутня.  Будь ласка, завантажте Windscribe і встановіть його знову.</translation>
+    </message>
+    <message>
+        <source>Proxy Gateway is unauthenticated</source>
+        <translation>Проксі-шлюз не автентифікований</translation>
+    </message>
+    <message>
+        <source>Your Proxy Gateway is enabled without authentication. Anyone on your local network, including untrusted networks like coffee-shop Wi-Fi, can route their traffic through your VPN. We strongly recommend setting credentials.</source>
+        <translation>Ваш проксі-шлюз увімкнено без автентифікації. Будь-хто у вашій локальній мережі, включаючи ненадійні мережі, як-от Wi-Fi у кав&apos;ярні, може спрямовувати свій трафік через ваш VPN. Ми настійно рекомендуємо встановлювати облікові дані.</translation>
+    </message>
+    <message>
+        <source>Go to Preferences</source>
+        <translation>Перейти до налаштувань</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Пізніше</translation>
+    </message>
+    <message>
+        <source>Trying Backup Endpoints...</source>
+        <translation>Пробую резервні кінцеві точки...</translation>
+    </message>
+    <message>
+        <source>SSL requests may be intercepted on your network. Ignoring SSL errors disables TLS certificate validation for this session: anyone able to intercept your traffic can then impersonate Windscribe and read or alter your data, and we can&apos;t guarantee your security while it&apos;s on. Ignore SSL errors?</source>
+        <translation>SSL-запити можуть бути перехоплені у вашій мережі. Ігнорування SSL-помилок відключає перевірку TLS-сертифіката для цієї сесії: будь-хто, хто зможе перехопити ваш трафік, може видавати себе за Windscribe і читати або змінювати ваші дані, і ми не можемо гарантувати вашу безпеку, поки він увімкнений. Ігнорувати помилки SSL?</translation>
+    </message>
+    <message>
+        <source>Connected to </source>
+        <translation>Підключено до </translation>
+    </message>
+    <message>
+        <source>You are now connected to Windscribe (%1).</source>
+        <translation>Тепер ви підключені до Windscribe (%1).</translation>
+    </message>
+    <message>
+        <source>Connection to Windscribe has been terminated.
+%1 transferred in %2</source>
+        <translation>З&apos;єднання з Windscribe припинено.
+%1 передано за %2</translation>
+    </message>
+    <message>
+        <source>Could not start Proxy Gateway</source>
+        <translation>Не вдалося запустити Proxy Gateway</translation>
+    </message>
+    <message>
+        <source>The configured port is in use. Please try a different port.</source>
+        <translation>Налаштований порт використовується. Будь ласка, спробуйте інший порт.</translation>
+    </message>
+    <message>
+        <source>An unknown error occurred.</source>
+        <translation>Сталася невідома помилка.</translation>
+    </message>
+    <message>
+        <source>Network Settings Interference</source>
+        <translation>Перешкоди мережевих налаштувань</translation>
+    </message>
+    <message>
+        <source>We&apos;ve detected that your network settings may interfere with Windscribe.  Please send us a debug log to troubleshoot.</source>
+        <translation>Ми виявили, що налаштування вашої мережі можуть заважати роботі Windscribe.  Будь ласка, надішліть нам журнал налагодження для усунення несправностей.</translation>
+    </message>
+    <message>
+        <source>Send Debug Log</source>
+        <translation>Надсилання журналу налагодження</translation>
+    </message>
+    <message>
+        <source>Set “%1” as preferred protocol?</source>
+        <translation>Встановити &quot;%1&quot; як бажаний протокол?</translation>
+    </message>
+    <message>
+        <source>Windscribe will always use this protocol to connect on this network in the future to avoid any interruptions.</source>
+        <translation>Windscribe завжди використовуватиме цей протокол для підключення до цієї мережі в майбутньому, щоб уникнути будь-яких перебоїв.</translation>
+    </message>
+    <message>
+        <source>Set as Preferred</source>
+        <translation>Встановити як бажаний</translation>
+    </message>
+    <message>
+        <source>Service Error</source>
+        <translation>Помилка сервісу</translation>
+    </message>
+    <message>
+        <source>MAC Spoofing Failed</source>
+        <translation>Підміна MAC не вдалася</translation>
+    </message>
+    <message>
+        <source>Your network adapter does not support MAC spoofing. Try a different adapter.</source>
+        <translation>Мережний адаптер не підтримує підміну MAC-адрес. Спробуйте інший адаптер.</translation>
+    </message>
+    <message>
+        <source>Could not spoof MAC address.  Please try a different network interface or contact support.</source>
+        <translation>Не вдалося підробити MAC-адресу.  Будь ласка, спробуйте інший мережевий інтерфейс або зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>Detection Error</source>
+        <translation>Помилка виявлення</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size due to an error. Please try again.</source>
+        <translation>Не вдається визначити відповідний розмір пакета через помилку. Будь ласка, спробуйте ще раз.</translation>
+    </message>
+    <message>
+        <source>This network hates us</source>
+        <translation>Ця мережа нас ненавидить</translation>
+    </message>
+    <message>
+        <source>We couldn’t connect you on this network. Send us your debug log so we can figure out what happened.</source>
+        <translation>Ми не змогли підключити вас до цієї мережі. Надішліть нам свій журнал налагодження, щоб ми могли з&apos;ясувати, що сталося.</translation>
+    </message>
+    <message>
+        <source>Your debug log has been received. Please contact support if you want assistance with this issue.</source>
+        <translation>Отримано журнал налагодження. Будь ласка, зверніться до служби підтримки, якщо вам потрібна допомога з цим питанням.</translation>
+    </message>
+    <message>
+        <source>Contact Support</source>
+        <translation>Зв&apos;язатися зі службою підтримки</translation>
+    </message>
+    <message>
+        <source>Auto-Update Failed</source>
+        <translation>Автооновлення не вдалося</translation>
+    </message>
+    <message>
+        <source>Could not download update.  Please try again or use a different network.</source>
+        <translation>Не вдалося завантажити оновлення.  Будь ласка, спробуйте ще раз або скористайтеся іншою мережею.</translation>
+    </message>
+    <message>
+        <source>Could not run updater (Error %1).  Please contact support</source>
+        <translation>Не вдалося запустити програму оновлення (помилка %1).  Будь ласка, зв&apos;яжіться зі службою підтримки</translation>
+    </message>
+    <message>
+        <source>Lost connection to the backend process.
+Recovering...</source>
+        <translation>Втрачено з&apos;єднання з бекенд-процесом.
+Відновлення...</translation>
+    </message>
+    <message>
+        <source>Select an application</source>
+        <translation>Оберіть програму</translation>
+    </message>
+    <message>
+        <source>The custom configuration could not be loaded.  Please check that it’s correct or contact support.</source>
+        <translation>Не вдалося завантажити користувацьку конфігурацію.  Будь ласка, перевірте правильність або зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>WireGuard adapter setup failed. Please wait one minute and try the connection again. If adapter setup fails again, please try restarting your computer.
+
+If the problem persists after a restart, please send a debug log and open a support ticket, then switch to a different connection mode.</source>
+        <translation>Не вдалося налаштувати адаптер WireGuard. Зачекайте одну хвилину та повторіть спробу підключення. Якщо настроювання адаптера знову не вдається, спробуйте перезавантажити комп&apos;ютер.
+
+Якщо проблема не зникає після перезапуску, надішліть журнал налагодження та відкрийте запит до служби підтримки, а потім перейдіть до іншого режиму підключення.</translation>
+    </message>
+    <message>
+        <source>VPN adapter setup failed. Please wait one minute and try the connection again. If the problem persists, please send a debug log and open a support ticket, then switch to a different connection mode.</source>
+        <translation>Налаштування VPN-адаптера не вдалося. Будь ласка, зачекайте одну хвилину і спробуйте з&apos;єднання ще раз. Якщо проблема залишиться, будь ласка, надішліть журнал налагодження та відкрийте заявку в службу підтримки, а потім переключіться на інший режим підключення.</translation>
+    </message>
+    <message>
+        <source>Windscribe could not generate the connection configuration. If this error persists, please send a debug log and open a support ticket.</source>
+        <translation>Windscribe не зміг згенерувати конфігурацію з&apos;єднання. Якщо ця помилка залишиться, будь ласка, надішліть журнал налагодження та відкрийте запит у службу підтримки.</translation>
+    </message>
+    <message>
+        <source>Can&apos;t reach your hydra server</source>
+        <translation>Немає зв&apos;язку з вашим сервером hydra</translation>
+    </message>
+    <message>
+        <source>Windscribe couldn&apos;t connect through the hydra server at %1. Check that it&apos;s running (hydra doctor), or remove the hydra profile in Preferences &gt; Connection to connect without it.</source>
+        <translation>Windscribe не вдалося підключитися через сервер hydra за адресою %1. Переконайтеся, що він працює (hydra doctor), або видаліть профіль hydra у розділі Налаштування &gt; Підключення, щоб підключатися без нього.</translation>
+    </message>
+    <message>
+        <source>Hydra needs WireGuard</source>
+        <translation>Для Hydra потрібен WireGuard</translation>
+    </message>
+    <message>
+        <source>This location is set to connect through your hydra server, which works with WireGuard only. Choose WireGuard or Auto, or remove the hydra profile in Preferences &gt; Connection.</source>
+        <translation>Ця локація підключається через ваш сервер hydra, який працює лише з WireGuard. Виберіть WireGuard або Auto чи видаліть профіль hydra у розділі Налаштування &gt; Підключення.</translation>
+    </message>
+    <message>
+        <source>The Remote Access Connection Manager (RasMan) service is not running and could not be started. This prevents IKEv2 from being used on this PC. Please try another connection mode or investigate why this core Windows service is unable to start.</source>
+        <translation>Сервіс Remote Access Connection Manager (RasMan) не працює і не може бути запущений. Це запобігає використанню IKEv2 на цьому ПК. Будь ласка, спробуйте інший режим підключення або з&apos;ясувати, чому цей основний сервіс Windows не може запуститися.</translation>
+    </message>
+    <message>
+        <source>An unexpected error occurred establishing the VPN connection (Error %1).  If this error persists, try using a different protocol or contact support.</source>
+        <translation>Сталася неочікувана помилка під час встановлення VPN-з&apos;єднання (помилка %1).  Якщо ця помилка не зникає, спробуйте скористатися іншим протоколом або зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>Connection Error</source>
+        <translation>Помилка підключення</translation>
+    </message>
+    <message>
+        <source>Reached Key Limit</source>
+        <translation>Досягнуто ліміту ключів</translation>
+    </message>
+    <message>
+        <source>You have reached your limit of WireGuard public keys. Do you want to delete your oldest key?</source>
+        <translation>Ви досягли свого ліміту публічних ключів WireGuard. Бажаєте видалити свій найстаріший ключ?</translation>
+    </message>
+    <message>
+        <source>The split tunneling feature could not be started, and has been disabled in Preferences.</source>
+        <translation>Не вдалося запустити функцію роздільного тунелювання, її було вимкнено в налаштуваннях.</translation>
+    </message>
+    <message>
+        <source>Unable to start custom DNS service.  Please ensure you don&apos;t have any other local DNS services running, or contact support.</source>
+        <translation>Не вдається запустити власний DNS сервіс. Будь ласка, переконайтеся, що у вас не запущені інші локальні DNS сервіси, або зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>JSON Files (*.json)</source>
+        <translation>Файли JSON (*.json)</translation>
+    </message>
+    <message>
+        <source>Unable to import preferences</source>
+        <translation>Не вдається імпортувати налаштування</translation>
+    </message>
+    <message>
+        <source>Preferences can only be imported when the app is disconnected. Please disconnect and try again.</source>
+        <translation>Налаштування можна імпортувати, лише коли програму від&apos;єднано. Будь ласка, від&apos;єднайте та повторіть спробу.</translation>
+    </message>
+    <message>
+        <source>The selected file&apos;s format is incorrect.</source>
+        <translation>Формат вибраного файлу неправильний.</translation>
+    </message>
+    <message>
+        <source>Export Preferences To</source>
+        <translation>Експортувати налаштування до</translation>
+    </message>
+    <message>
+        <source>Import Preferences From</source>
+        <translation>Імпортувати налаштування з</translation>
+    </message>
+    <message>
+        <source>Could not open file.</source>
+        <translation>Не вдалося відкрити файл.</translation>
+    </message>
+    <message>
+        <source>Unable to export preferences</source>
+        <translation>Не вдається експортувати налаштування</translation>
+    </message>
+    <message>
+        <source>Could not open file for writing.  Check your permissions and try again.</source>
+        <translation>Не вдалося відкрити файл для запису.  Перевірте дозволи та повторіть спробу.</translation>
+    </message>
+    <message>
+        <source>Enter Connection Credentials</source>
+        <translation>Введіть облікові дані з&apos;єднання</translation>
+    </message>
+    <message>
+        <source>Enter Private Key Password</source>
+        <translation>Введіть пароль приватного ключа</translation>
+    </message>
+    <message>
+        <source>Windscribe could not retrieve server configuration. Please try another protocol.</source>
+        <translation>Windscribe не зміг отримати конфігурацію сервера. Будь ласка, спробуйте інший протокол.</translation>
+    </message>
+    <message>
+        <source>IKEv2 connectivity is not available in MacOS Lockdown Mode. Please disable Lockdown Mode in System Settings or change your connection settings.</source>
+        <translation>Підключення IKEv2 недоступне в режимі блокування MacOS. Будь ласка, вимкніть режим блокування у Системних параметрах або змініть параметри з&apos;єднання.</translation>
+    </message>
+    <message>
+        <source>Rotating MAC Address</source>
+        <translation>Зміна MAC-адреси</translation>
+    </message>
+    <message>
+        <source>Wi-Fi is off</source>
+        <translation>Вимкнено Wi-Fi</translation>
+    </message>
+    <message>
+        <source>Could not start Secure Hotspot</source>
+        <translation>Не вдалося запустити безпечну точку доступу</translation>
+    </message>
+    <message>
+        <source>Your network adapter may not support this feature. It has been disabled in preferences.</source>
+        <translation>Можливо, мережний адаптер не підтримує цю функцію. Його було вимкнено в налаштуваннях.</translation>
+    </message>
+    <message>
+        <source>...hmm are you sure this is correct?</source>
+        <translation>... хм, ви впевнені, що це вірно?</translation>
+    </message>
+    <message>
+        <source>Windscribe has detected that Wi-Fi is currently turned off. To use Secure Hotspot, Wi-Fi must be turned on.</source>
+        <translation>Windscribe виявив, що Wi-Fi наразі вимкнено. Щоб використовувати безпечну точку доступу, потрібно ввімкнути Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Location Services is disabled</source>
+        <translation>Служби локації вимкнено</translation>
+    </message>
+    <message>
+        <source>Windscribe requires Location Services to determine your Wi-Fi SSID. If it is not enabled, per-network settings will apply to all Wi-Fi networks. Please enable Location Services and grant the permission to Windscribe in your System Settings.</source>
+        <translation>Windscribe вимагає від Служб локації визначити ваш SSID Wi-Fi. Якщо цю функцію не ввімкнено, налаштування для кожної мережі застосовуватимуться до всіх мереж Wi-Fi. Будь ласка, увімкніть Служби локації та надайте дозвіл Windscribe у ваших системних налаштуваннях.</translation>
+    </message>
+    <message>
+        <source>Windscribe requires Location Services to determine your Wi-Fi SSID. If it is not enabled, per-network settings will apply to all Wi-Fi networks. Please enable Location Services in your System Settings.</source>
+        <translation>Windscribe вимагає від Служб локації визначити ваш SSID Wi-Fi. Якщо цю функцію не ввімкнено, налаштування для кожної мережі застосовуватимуться до всіх мереж Wi-Fi. Будь ласка, увімкніть Служби локації у ваших системних налаштуваннях.</translation>
+    </message>
+    <message>
+        <source>  If you are on a restrictive network, please connect the VPN before trying the download again.</source>
+        <translation>  Якщо ви користуєтеся обмеженою мережею, будь ласка, підключіть VPN, перш ніж повторювати спробу завантаження.</translation>
+    </message>
+    <message>
+        <source>Your &quot;Connected DNS&quot; server is set to an OS default DNS server, which would result in a DNS leak.  It has been changed to Auto.</source>
+        <translation>Ваш «Підключений DNS-сервер» налаштовано на DNS-сервер ОС за замовчуванням, що призведе до витоку DNS.  Він був змінений на Auto.</translation>
+    </message>
+    <message>
+        <source>Invalid DNS Settings</source>
+        <translation>Невірні налаштування DNS</translation>
+    </message>
+    <message>
+        <source>System notifications are disabled</source>
+        <translation>Системні сповіщення вимкнено</translation>
+    </message>
+    <message>
+        <source>You have chosen to show notifications, but system notifications are disabled. Please enable system notifications in your System Settings.</source>
+        <translation>Ви вибрали відображення сповіщень, але системні сповіщення вимкнені. Будь ласка, увімкніть системні сповіщення у ваших Системних налаштуваннях.</translation>
+    </message>
+    <message>
+        <source>Error Starting Split Tunneling</source>
+        <translation>Помилка під час запуску роздільного тунелювання</translation>
+    </message>
+    <message>
+        <source>Export Location Names To</source>
+        <translation>Експортувати назви місцезнаходжень у</translation>
+    </message>
+    <message>
+        <source>Unable to export location names</source>
+        <translation>Не вдається експортувати назви місцеположень</translation>
+    </message>
+    <message>
+        <source>Import Location Names From</source>
+        <translation>Імпортуйте назви місцеположень з</translation>
+    </message>
+    <message>
+        <source>Unable to import location names</source>
+        <translation>Не вдається імпортувати назви місцеположень</translation>
+    </message>
+    <message>
+        <source>The split tunneling feature has been disabled because the Windscribe split tunnel extension is not enabled in System Settings.  To use this feature, please enable the extension in System Settings, and turn on the feature again.</source>
+        <translation>Функцію роздільного тунелювання було вимкнено, оскільки розширення розділеного тунелю Windscribe не увімкнено у Системних параметрах.  Щоб скористатися цією можливістю, будь ласка, увімкніть розширення у Системних параметрах і знову увімкніть цю функцію.</translation>
+    </message>
+    <message>
+        <source>Debug Log Sent!</source>
+        <translation>Журнал налагодження відправлено!</translation>
+    </message>
+    <message>
+        <source>Could not connect to the Windscribe service.  Windscribe will now exit.  Please contact support.</source>
+        <translation>Не вдалося підключитися до сервісу Windscribe.  Тепер Windscribe вийде.  Будь ласка, зверніться до служби підтримки.</translation>
+    </message>
+    <message>
+        <source>Lost connection to the Windscribe service.  Windscribe will now exit.  Send us a debug log so we can improve this.</source>
+        <translation>Втрачено з&apos;єднання з сервісом Windscribe.  Тепер Windscribe вийде.  Надішліть нам журнал налагодження, щоб ми могли покращити це.</translation>
+    </message>
+    <message>
+        <source>Local DNS server is not available</source>
+        <translation>Локальний DNS-сервер недоступний</translation>
+    </message>
+    <message>
+        <source>The local DNS server is not available.  Connected DNS has been set back to Auto.</source>
+        <translation>Локальний DNS-сервер недоступний.  Підключений DNS було знову встановлено в положення Авто.</translation>
+    </message>
+    <message>
+        <source>DNS Server Conflict</source>
+        <translation>Конфлікт DNS-сервера</translation>
+    </message>
+    <message>
+        <source>Unable to start custom DNS service - port 53 is already in use.  Would you like to change your Connected DNS to the local server?</source>
+        <translation>Не вдається запустити спеціальну службу DNS - порт 53 вже використовується.  Чи хотіли б ви змінити підключений DNS на локальний сервер?</translation>
+    </message>
+    <message>
+        <source>Could not pin IP</source>
+        <translation>Не вдалося закріпити IP</translation>
+    </message>
+    <message>
+        <source>We could not set your favourite IP for this location.  Try again later.</source>
+        <translation>Ми не змогли встановити вашу улюблену IP-адресу для цього місцезнаходження.  Повторіть спробу пізніше.</translation>
+    </message>
+    <message>
+        <source>Could not rotate IP</source>
+        <translation>Не вдалося змінити IP</translation>
+    </message>
+    <message>
+        <source>Try again later or go to our Status page for more info.</source>
+        <translation>Повторіть спробу пізніше або перейдіть на сторінку статусу, щоб дізнатися більше.</translation>
+    </message>
+    <message>
+        <source>Check Location Status</source>
+        <translation>Перевірте статус місцезнаходження</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <source>Manual connection mode failed</source>
+        <translation>Режим ручного підключення не справився</translation>
+    </message>
+    <message>
+        <source>We couldn’t connect you on this network. Automatic connection mode recommended for best results. Switch connection mode to Auto?</source>
+        <translation>Ми не змогли підключити тебе до цієї мережі. Рекомендується автоматичний режим підключення для найкращих результатів. Переключити режим підключення на Авто?</translation>
+    </message>
+    <message>
+        <source>Switch to Auto</source>
+        <translation>Перемикання на авто</translation>
+    </message>
+    <message>
+        <source>Creating your account...</source>
+        <translation>Створення акаунта...</translation>
+    </message>
+    <message>
+        <source>Cannot rotate MAC address while connected to VPN. Please disconnect first.</source>
+        <translation>Неможливо повернути MAC-адресу під час підключення до VPN. Будь ласка, спочатку від&apos;єднайтеся.</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindowController</name>
+    <message>
+        <source>Quit Windscribe?</source>
+        <translation>Вийти з Windscribe?</translation>
+    </message>
+    <message>
+        <source>Log Out of Windscribe?</source>
+        <translation>Вийти з облікового запису Windscribe?</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Вийти</translation>
+    </message>
+    <message>
+        <source>Log Out</source>
+        <translation>Вийти з системи</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+</context>
+<context>
+    <name>NewsFeedWindow::NewsFeedWindowItem</name>
+    <message>
+        <source>News Feed</source>
+        <translation>Стрічка новин</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationsController</name>
+    <message>
+        <source>WELCOME TO WINDSCRIBE</source>
+        <translation>ЛАСКАВО ПРОСИМО ДО WINDSCRIBE</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;You will find announcements and general Windscribe related news here. Perhaps even delicious cake, everyone loves cake!&lt;/p&gt;</source>
+        <translation>&lt;p&gt;Тут ви знайдете анонси та загальні новини, пов&apos;язані з Windscribe. Мабуть, ви навіть зможете знайти смачний торт, торт люблять всі!&lt;/p&gt;</translation>
+    </message>
+</context>
+<context>
+    <name>Preferences</name>
+    <message>
+        <source>Invalid DNS Settings</source>
+        <translation>Невірні налаштування DNS</translation>
+    </message>
+    <message>
+        <source>&apos;Connected DNS&apos; was not configured with a valid Upstream 1 (IP/DNS-over-HTTPS/TLS). DNS was reverted to ROBERT (default).</source>
+        <translation>&quot;Підключений DNS&quot; не налаштовано з дійсним вихідним кодом 1 (IP/DNS-over-HTTPS/TLS). DNS було повернуто до ROBERT (за замовчуванням).</translation>
+    </message>
+    <message>
+        <source>&apos;Connected DNS&apos; was not configured with a valid Upstream 2 (IP/DNS-over-HTTPS/TLS). DNS was reverted to ROBERT (default).</source>
+        <translation>Параметр &quot;Підключений DNS&quot; не було налаштовано з дійсним Upstream 2 (IP/DNS-over-HTTPS/TLS). DNS було повернуто до ROBERT (за замовчуванням).</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AboutWindowItem</name>
+    <message>
+        <source>About</source>
+        <translation>Про додаток</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Статус</translation>
+    </message>
+    <message>
+        <source>About Us</source>
+        <translation>Про нас</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>Політика конфіденційності</translation>
+    </message>
+    <message>
+        <source>Terms</source>
+        <translation>Умови</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>Блог</translation>
+    </message>
+    <message>
+        <source>Jobs</source>
+        <translation>Вакансії</translation>
+    </message>
+    <message>
+        <source>Software Licenses</source>
+        <translation>Ліцензії на програмне забезпечення</translation>
+    </message>
+    <message>
+        <source>Changelog</source>
+        <translation>Журнал змін</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AccountWindowItem</name>
+    <message>
+        <source>Login to view your account info</source>
+        <translation>Увійдіть, щоб переглянути інформацію про свій обліковий запис</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Обліковий запис</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Reset Date</source>
+        <translation>Дата скидання</translation>
+    </message>
+    <message>
+        <source>Data Left</source>
+        <translation>Залишилось даних</translation>
+    </message>
+    <message>
+        <source>Manage Account</source>
+        <translation>Керування обліковим записом</translation>
+    </message>
+    <message>
+        <source>Expiry Date</source>
+        <translation>Закінчення терміну дії</translation>
+    </message>
+    <message>
+        <source>ACCOUNT INFO</source>
+        <translation>ІНФОРМАЦІЯ ПРО ОБЛІКОВИЙ ЗАПИС</translation>
+    </message>
+    <message>
+        <source>PLAN INFO</source>
+        <translation>ІНФОРМАЦІЯ ПРО ПЛАН</translation>
+    </message>
+    <message>
+        <source>UPGRADE &gt;</source>
+        <translation>ПОКРАЩИТИ &gt;</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AdvancedWindowItem</name>
+    <message>
+        <source>Advanced Options</source>
+        <translation>Додаткові параметри</translation>
+    </message>
+    <message>
+        <source>Make advanced tweaks to the way the app functions.</source>
+        <translation>Внесіть розширені налаштування в роботу програми.</translation>
+    </message>
+    <message>
+        <source>Advanced Parameters</source>
+        <translation>Розширені параметри</translation>
+    </message>
+    <message>
+        <source>Prevents connections from dying (by time-out) by periodically pinging the server.</source>
+        <translation>Запобігає розриву з&apos;єднань (через тайм-аут) шляхом періодичного пінгування сервера.</translation>
+    </message>
+    <message>
+        <source>Client-Side Keepalive</source>
+        <translation>Keepalive на стороні клієнта</translation>
+    </message>
+    <message>
+        <source>Windscribe uses this DNS server to resolve addresses outside the VPN.</source>
+        <translation>Windscribe використовує цей DNS-сервер для визначення адрес за межами VPN.</translation>
+    </message>
+    <message>
+        <source>Warning: Using &quot;OS Default&quot; may sometimes cause DNS leaks during reconnects.</source>
+        <translation>Попередження: Використання &quot;OS Default&quot; іноді може спричинити витік DNS під час повторного підключення.</translation>
+    </message>
+    <message>
+        <source>App Internal DNS</source>
+        <translation>Внутрішній DNS додатку</translation>
+    </message>
+    <message>
+        <source>Select the DNS system service Windscribe enforces. Experienced users only.</source>
+        <translation>Виберіть службу системи DNS, яку використовуватиме Windscribe. Тільки для досвідчених користувачів.</translation>
+    </message>
+    <message>
+        <source>DNS Manager</source>
+        <translation>Менеджер DNS</translation>
+    </message>
+    <message>
+        <source>App Preferences</source>
+        <translation>Налаштування додатку</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Експорт</translation>
+    </message>
+    <message>
+        <source>Import</source>
+        <translation>Імпорт</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AntiCensorshipWindowItem</name>
+    <message>
+        <source>Anti-Censorship</source>
+        <translation>Антицензура</translation>
+    </message>
+    <message>
+        <source>These degrade performance, enable only if Windscribe doesn&apos;t connect normally.</source>
+        <translation>Вони погіршують продуктивність, вмикаються лише якщо Windscribe не підключається нормально.</translation>
+    </message>
+    <message>
+        <source>Protocol-level changes made to WireGuard, OpenVPN, and Stealth protocols.</source>
+        <translation>Зміни на рівні протоколу в протоколах WireGuard, OpenVPN та Stealth.</translation>
+    </message>
+    <message>
+        <source>Increases latency, but improves chances of being able to connect.</source>
+        <translation>Збільшує затримку, але підвищує шанси на підключення.</translation>
+    </message>
+    <message>
+        <source>Server Routing</source>
+        <translation>Маршрутизація серверів</translation>
+    </message>
+    <message>
+        <source>Large TLS</source>
+        <translation>Великий TLS</translation>
+    </message>
+    <message>
+        <source>Artificially enlarge TLS packets, helps to circumvent censorship in some cases. Adds extra TLS padding to all API requests.</source>
+        <translation>Штучне збільшення TLS-пакетів допомагає обійти цензуру в деяких випадках. Додає додаткову TLS-підкладку до всіх запитів API.</translation>
+    </message>
+    <message>
+        <source>Custom SNI Domain</source>
+        <translation>Користувацький домен SNI</translation>
+    </message>
+    <message>
+        <source>This setting applies to Stealth and Wstunnel protocols only.</source>
+        <translation>Це налаштування застосовується лише до протоколів Stealth і Wstunnel.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AppBackgroundGroup</name>
+    <message>
+        <source>App Background</source>
+        <translation>Фон програми</translation>
+    </message>
+    <message>
+        <source>Aspect Ratio Mode</source>
+        <translation>Режим співвідношення сторін</translation>
+    </message>
+    <message>
+        <source>When Disconnected</source>
+        <translation>При відключенні</translation>
+    </message>
+    <message>
+        <source>Flags</source>
+        <translation>Прапори</translation>
+    </message>
+    <message>
+        <source>Bundled</source>
+        <translation>Вбудований</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нічого</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Нестандартний</translation>
+    </message>
+    <message>
+        <source>When Connected</source>
+        <translation>При підключенні</translation>
+    </message>
+    <message>
+        <source>Select an image</source>
+        <translation>Виберіть зображення</translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation>Квадрат</translation>
+    </message>
+    <message>
+        <source>Palm</source>
+        <translation>Пальма</translation>
+    </message>
+    <message>
+        <source>Drip</source>
+        <translation>Крапельне</translation>
+    </message>
+    <message>
+        <source>Snow</source>
+        <translation>Сніг</translation>
+    </message>
+    <message>
+        <source>Ripple</source>
+        <translation>Хвильовий</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ConnectedDnsGroup</name>
+    <message>
+        <source>Connected DNS</source>
+        <translation>Підключений DNS</translation>
+    </message>
+    <message>
+        <source>Upstream 1</source>
+        <translation>Upstream 1</translation>
+    </message>
+    <message>
+        <source>IP/DNS-over-HTTPS/TLS</source>
+        <translation>IP/DNS-over-HTTPS/TLS</translation>
+    </message>
+    <message>
+        <source>Upstream 2</source>
+        <translation>Upstream 2</translation>
+    </message>
+    <message>
+        <source>Split DNS</source>
+        <translation>Розділити DNS</translation>
+    </message>
+    <message>
+        <source>Domains</source>
+        <translation>Домени</translation>
+    </message>
+    <message>
+        <source>DNS leak detected</source>
+        <translation>Виявлено витік DNS</translation>
+    </message>
+    <message>
+        <source>Using a LAN or local IP address for connected DNS will result in a DNS leak.  We strongly recommend using ROBERT or a public DNS server.</source>
+        <translation>Використання локальної мережі або локальної IP-адреси для підключеного DNS призведе до витоку DNS.  Ми настійно рекомендуємо використовувати ROBERT або публічний DNS-сервер.</translation>
+    </message>
+    <message>
+        <source>API Key</source>
+        <translation>Ключ API</translation>
+    </message>
+    <message>
+        <source>Failed to reach Control D API.</source>
+        <translation>Не вдалося дістатися до API контролю D.</translation>
+    </message>
+    <message>
+        <source>Please provide a valid Control D API Key.</source>
+        <translation>Будь ласка, надайте дійсний ключ API Control D.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ConnectionWindowItem</name>
+    <message>
+        <source>Allow LAN Traffic</source>
+        <translation>Дозволити LAN-трафік</translation>
+    </message>
+    <message>
+        <source>Terminate Sockets</source>
+        <translation>Завершення сокетів</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Підключення</translation>
+    </message>
+    <message>
+        <source>Exclusive</source>
+        <translation>Ексклюзивний</translation>
+    </message>
+    <message>
+        <source>Inclusive</source>
+        <translation>Інклюзивний</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Вимкнено</translation>
+    </message>
+    <message>
+        <source>Network Options</source>
+        <translation>Параметри мережі</translation>
+    </message>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Роздільне тунелювання</translation>
+    </message>
+    <message>
+        <source>Proxy Settings</source>
+        <translation>Налаштування проксі-сервера</translation>
+    </message>
+    <message>
+        <source>Connects to last used location when the app launches or joins a network.</source>
+        <translation>Підключається до останнього використаного місця розташування, коли програма запускається або приєднується до мережі.</translation>
+    </message>
+    <message>
+        <source>Auto-Connect</source>
+        <translation>Автопідключення</translation>
+    </message>
+    <message>
+        <source>Connection Mode</source>
+        <translation>Режим підключення</translation>
+    </message>
+    <message>
+        <source>Automatically choose the VPN protocol, or select one manually. NOTE: &quot;Preferred Protocol&quot; will override this setting.</source>
+        <translation>Автоматично вибрати протокол VPN або вибрати його вручну. ПРИМІТКА: &quot;Бажаний протокол&quot; замінить це налаштування.</translation>
+    </message>
+    <message>
+        <source>IP Stack</source>
+        <translation>IP стек</translation>
+    </message>
+    <message>
+        <source>Select the DNS server while connected to Windscribe.</source>
+        <translation>Виберіть DNS-сервер під час підключення до Windscribe.</translation>
+    </message>
+    <message>
+        <source>Allow access to local services and printers while connected to Windscribe.</source>
+        <translation>Дозволити доступ до локальних служб і принтерів під час підключення до Windscribe.</translation>
+    </message>
+    <message>
+        <source>Hydra Profile</source>
+        <translation>Профіль Hydra</translation>
+    </message>
+    <message>
+        <source>Import Profile</source>
+        <translation>Імпортувати профіль</translation>
+    </message>
+    <message>
+        <source>Remove Profile</source>
+        <translation>Видалити профіль</translation>
+    </message>
+    <message>
+        <source>All locations</source>
+        <translation>Усі локації</translation>
+    </message>
+    <message>
+        <source>Connect to Windscribe through a private hydra server you run. Applies to WireGuard.</source>
+        <translation>Підключайтеся до Windscribe через власний приватний сервер hydra. Застосовується до WireGuard.</translation>
+    </message>
+    <message>
+        <source>+1 more location</source>
+        <translation>+ще 1 локація</translation>
+    </message>
+    <message>
+        <source>+%1 more locations</source>
+        <translation>+ще локацій: %1</translation>
+    </message>
+    <message>
+        <source>Select this location to connect through your hydra server.</source>
+        <translation>Виберіть цю локацію, щоб підключитися через ваш сервер hydra.</translation>
+    </message>
+    <message>
+        <source>Select one of these locations to connect through your hydra server.</source>
+        <translation>Виберіть одну з цих локацій, щоб підключитися через ваш сервер hydra.</translation>
+    </message>
+    <message>
+        <source>Spoof your device&apos;s physical address (MAC address).</source>
+        <translation>Підмініть фізичну адресу пристрою (MAC-адресу).</translation>
+    </message>
+    <message>
+        <source>MAC spoofing requires NetworkManager to be installed and running.</source>
+        <translation>Підробка MAC вимагає встановлення та запуску NetworkManager.</translation>
+    </message>
+    <message>
+        <source>Close all active TCP sockets when the VPN tunnel is established.</source>
+        <translation>Закрити всі активні TCP-сокети після встановлення VPN-тунелю.</translation>
+    </message>
+    <message>
+        <source>Configure your TV, gaming console, or other devices that support proxy servers.</source>
+        <translation>Налаштуйте телевізор, ігрову консоль або інші пристрої, які підтримують проксі-сервери.</translation>
+    </message>
+    <message>
+        <source>The firewall is in an Always On mode. Allowing LAN traffic can leak your DNS and other traffic to your local network while you are disconnected. Are you sure you want to enable it?</source>
+        <translation>Фаєрвол працює в режимі Always On. Дозволити LAN-трафік може витікати ваш DNS та інший трафік у вашу локальну мережу, поки ви відключені. Ви впевнені, що хочете його увімкнути?</translation>
+    </message>
+    <message>
+        <source>Settings Conflict</source>
+        <translation>Конфлікт налаштувань</translation>
+    </message>
+    <message>
+        <source>Disabling Allow LAN Traffic will cause your proxy gateway to stop working.  Do you want to disable the proxy?</source>
+        <translation>Вимкнення параметра «Дозволити LAN-трафік» призведе до того, що ваш проксі-шлюз перестане працювати.  Хочете відключити проксі?</translation>
+    </message>
+    <message>
+        <source>LAN traffic is currently blocked by the Windscribe firewall.  Do you want to allow LAN traffic to bypass the firewall in order for this feature to work?</source>
+        <translation>Наразі трафік локальної мережі заблокований брандмауером Windscribe.  Ви хочете дозволити трафіку локальної мережі обходити брандмауер, щоб ця функція працювала?</translation>
+    </message>
+    <message>
+        <source>Disabling Allow LAN Traffic will cause your secure hotspot to stop working.  Do you want to disable the hotspot?</source>
+        <translation>Вимкнення параметра «Дозволити трафік локальної мережі» призведе до того, що ваша безпечна точка доступу перестане працювати.  Хочете відключити точку доступу?</translation>
+    </message>
+    <message>
+        <source>Automatically determine the MTU for your connection, or manually override.  This has no effect on TCP-based protocols.</source>
+        <translation>Автоматичне визначення MTU для вашого з&apos;єднання або перевизначення вручну.  Це ніяк не впливає на протоколи на основі TCP.</translation>
+    </message>
+    <message>
+        <source>Caution</source>
+        <translation>Обережність</translation>
+    </message>
+    <message>
+        <source>In this firewall mode, the Windscribe API will not be available while disconnected, this could have unintended consequences. Use at own risk.</source>
+        <translation>У цьому режимі брандмауера API Windscribe не буде доступний у відключеному стані, це може мати непередбачені наслідки. Використання на свій ризик.</translation>
+    </message>
+    <message>
+        <source>Control the mode of behaviour of the Windscribe firewall. Always On modes disable Allow LAN Traffic to prevent DNS leaks.</source>
+        <translation>Контролюйте режим поведінки міжмережевого екрану Windscribe. Режими Always On, вимкніть Дозвольте LAN-трафік для запобігання витокам DNS.</translation>
+    </message>
+    <message>
+        <source>Configure egress IP stack for VPN connections (WireGuard only).</source>
+        <translation>Налаштуйте IP-стек виходу для VPN-з&apos;єднань (тільки через WireGuard).</translation>
+    </message>
+    <message>
+        <source>Clear Wi-Fi History</source>
+        <translation>Очистити історію Wi-Fi</translation>
+    </message>
+    <message>
+        <source>Are you sure?</source>
+        <translation>Ти впевнений?</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to clear all your Wi-Fi history? This will also clear all Wi-Fi passwords except for the one you&apos;re currently connected to. This may also temporarily disable your Wi-Fi.</source>
+        <translation>Ви впевнені, що хочете очистити всю історію Wi-Fi? Це також очистить всі паролі Wi-Fi, крім того, до якого ви підключені зараз. Це також може тимчасово вимкнути ваш Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Remove Wi-Fi SSID and MAC information from your operating system to prevent location history tracking.</source>
+        <translation>Видаліть інформацію про Wi-Fi SSID та MAC з операційної системи, щоб запобігти відстеженню історії місцезнаходження.</translation>
+    </message>
+    <message>
+        <source>Anti-Censorship Settings</source>
+        <translation>Антицензурні налаштування</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::CopyableTextItem</name>
+    <message>
+        <source>Copied</source>
+        <translation>Скопійовано</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DecoyTrafficGroup</name>
+    <message>
+        <source>Decoy Traffic</source>
+        <translation>Трафік-приманка</translation>
+    </message>
+    <message>
+        <source>This is an experimental feature that attempts to combat traffic correlation attacks on adversarial networks. When enabled, the app will generate random activity over the tunnel, and upload and download random data at chosen intervals.</source>
+        <translation>Це експериментальна функція, яка намагається боротися з атаками кореляції трафіку на зловмисні мережі. Коли цей параметр увімкнено, додаток генеруватиме випадкову активність у тунелі, а також завантажуватиме та завантажуватиме випадкові дані через вибрані проміжки часу.</translation>
+    </message>
+    <message>
+        <source>Fake Traffic Volume</source>
+        <translation>Фальшивий обсяг трафіку</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation>Низький</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>Середнє</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation>Високий</translation>
+    </message>
+    <message>
+        <source>Estimated Data Usage</source>
+        <translation>Приблизне використання даних</translation>
+    </message>
+    <message>
+        <source>%1/hour</source>
+        <translation>%1/год</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DnsDomainsGroup</name>
+    <message>
+        <source>Domain already exists. Please enter a new domain.</source>
+        <translation>Домен вже існує. Будь ласка, введіть новий домен.</translation>
+    </message>
+    <message>
+        <source>Incorrect domain name. Please enter a valid domain.</source>
+        <translation>Неправильне доменне ім&apos;я. Будь ласка, введіть дійсний домен.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DnsDomainsWindowItem</name>
+    <message>
+        <source>List of domains</source>
+        <translation>Список доменів</translation>
+    </message>
+    <message>
+        <source>Enter the IP and/or wildcards you wish to use for DNS split feature.</source>
+        <translation>Введіть IP-адресу та/або символи узагальнення, які ви хочете використовувати для функції розділення DNS.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify domains.</source>
+        <translation>Будь ласка, увійдіть, щоб змінити домени.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::EmailItem</name>
+    <message>
+        <source>Sent!</source>
+        <translation>Відправлено!</translation>
+    </message>
+    <message>
+        <source>Resend</source>
+        <translation>Повторна відправка</translation>
+    </message>
+    <message>
+        <source>Sending</source>
+        <translation>Відправлення</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Не вдалося</translation>
+    </message>
+    <message>
+        <source>Get 10GB/Month of data and gain the ability to reset your password.</source>
+        <translation>Отримайте 10 ГБ даних на місяць і отримайте можливість скинути пароль.</translation>
+    </message>
+    <message>
+        <source>Please confirm your email</source>
+        <translation>Будь ласка, підтвердіть свою електронну пошту</translation>
+    </message>
+    <message>
+        <source>Email</source>
+        <translation>Електронна пошта</translation>
+    </message>
+    <message>
+        <source>Add Email</source>
+        <translation>Додати адресу електронної пошти</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::FirewallGroup</name>
+    <message>
+        <source>Firewall Mode</source>
+        <translation>Режим брандмауера</translation>
+    </message>
+    <message>
+        <source>When?</source>
+        <translation>Коли?</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::GeneralWindowItem</name>
+    <message>
+        <source>General</source>
+        <translation>Загальне</translation>
+    </message>
+    <message>
+        <source>Run Windscribe when your device starts.</source>
+        <translation>Запустити Windscribe під час запуску пристрою.</translation>
+    </message>
+    <message>
+        <source>Launch on Startup</source>
+        <translation>Запустити під час запуску пристрою</translation>
+    </message>
+    <message>
+        <source>Launch Windscribe in a minimized state.</source>
+        <translation>Запустити Windscribe у згорнутому стані.</translation>
+    </message>
+    <message>
+        <source>Start Minimized</source>
+        <translation>Запустити у згорнутому вигляді</translation>
+    </message>
+    <message>
+        <source>Windscribe minimizes to system tray and no longer appears in the task bar.</source>
+        <translation>Windscribe згортається до системного лотка і не відображається на панелі завдань.</translation>
+    </message>
+    <message>
+        <source>Windscribe minimizes to menubar and no longer appears in the dock.</source>
+        <translation>Windscribe згортається на смужку меню і більше не з&apos;являється на панелі Dock.</translation>
+    </message>
+    <message>
+        <source>Close to Tray</source>
+        <translation>Згорнути до лотка</translation>
+    </message>
+    <message>
+        <source>Don&apos;t show the Windscribe icon in dock.</source>
+        <translation>Не показувати піктограму Windscribe на панелі Dock.</translation>
+    </message>
+    <message>
+        <source>Hide from Dock</source>
+        <translation>Сховати з панелі Dock</translation>
+    </message>
+    <message>
+        <source>Pin Windscribe near the system tray or menu bar.</source>
+        <translation>Закріпити Windscribe у системному лотку або y рядку меню.</translation>
+    </message>
+    <message>
+        <source>Docked</source>
+        <translation>Пристиковано</translation>
+    </message>
+    <message>
+        <source>Display system-level notifications when connection events occur.</source>
+        <translation>Показувати сповіщення системного рівня при виникненні подій з&apos;єднання.</translation>
+    </message>
+    <message>
+        <source>Show Notifications</source>
+        <translation>Показувати сповіщення</translation>
+    </message>
+    <message>
+        <source>Display a location&apos;s load. Shorter bars mean lesser load (usage).</source>
+        <translation>Відображати навантаження на локації. Коротші смуги означають менше навантаження (використання).</translation>
+    </message>
+    <message>
+        <source>Show Location Load</source>
+        <translation>Показати завантаження локації</translation>
+    </message>
+    <message>
+        <source>Arrange locations alphabetically, geographically, or by latency.</source>
+        <translation>Розташуйте локації в алфавітному порядку, за географією або за затримкою.</translation>
+    </message>
+    <message>
+        <source>Location Order</source>
+        <translation>Упорядкування локацій</translation>
+    </message>
+    <message>
+        <source>Localize Windscribe to supported languages.</source>
+        <translation>Локалізуйте Windscribe підтримуваними мовами.</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Мова</translation>
+    </message>
+    <message>
+        <source>Choose to receive stable, beta, or experimental builds.</source>
+        <translation>Виберіть стабільну, бета-версію або експериментальну збірку.</translation>
+    </message>
+    <message>
+        <source>Update Channel</source>
+        <translation>Канал оновлення</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>Версія</translation>
+    </message>
+    <message>
+        <source>Multi-Desktop</source>
+        <translation>Мультинастільний комп&apos;ютер</translation>
+    </message>
+    <message>
+        <source>Select behaviour when window is activated with multiple desktops.</source>
+        <translation>Виберіть поведінку, коли вікно активовано на кількох робочих столах.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::HelpWindowItem</name>
+    <message>
+        <source>Help</source>
+        <translation>Допомога</translation>
+    </message>
+    <message>
+        <source>All you need to know about Windscribe.</source>
+        <translation>Все, що вам потрібно знати про Windscribe.</translation>
+    </message>
+    <message>
+        <source>Knowledge Base</source>
+        <translation>База знань</translation>
+    </message>
+    <message>
+        <source>Talk to Garry</source>
+        <translation>Поговоріть з Гаррі</translation>
+    </message>
+    <message>
+        <source>Best places to help and get help from other users.</source>
+        <translation>Найкращі місця, де можна допомагати та отримувати допомогу від інших користувачів.</translation>
+    </message>
+    <message>
+        <source>Community Support</source>
+        <translation>Підтримка спільноти</translation>
+    </message>
+    <message>
+        <source>View Debug Log</source>
+        <translation>Перегляд журналу налагодження</translation>
+    </message>
+    <message>
+        <source>Send Debug Log</source>
+        <translation>Надіслати журнал налагодження</translation>
+    </message>
+    <message>
+        <source>Sending log...</source>
+        <translation>Відправка журналу...</translation>
+    </message>
+    <message>
+        <source>Sent, thanks!</source>
+        <translation>Відправлено, дякую!</translation>
+    </message>
+    <message>
+        <source>Failed!</source>
+        <translation>Не вдалося!</translation>
+    </message>
+    <message>
+        <source>Need help? Garry can help you with most issues, go talk to him.</source>
+        <translation>Потрібна допомога? Гаррі може допомогти вам з більшістю питань, підіть поговоріть з ним.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::LookAndFeelWindowItem</name>
+    <message>
+        <source>Look &amp; Feel</source>
+        <translation>Зовнішній вигляд і поведінка</translation>
+    </message>
+    <message>
+        <source>Choose between the classic GUI or the &quot;earless&quot; alternative GUI.</source>
+        <translation>Вибирайте між класичним графічним інтерфейсом або «безвухим» альтернативним графічним інтерфейсом.</translation>
+    </message>
+    <message>
+        <source>App Skin</source>
+        <translation>Оформлення програми</translation>
+    </message>
+    <message>
+        <source>Customize the background of the main app screen.</source>
+        <translation>Налаштуйте фон головного екрана програми.</translation>
+    </message>
+    <message>
+        <source>Choose sounds to play when connection events occur.</source>
+        <translation>Виберіть звуки, які відтворюватимуться під час подій з&apos;єднання.</translation>
+    </message>
+    <message>
+        <source>Change location names to your liking.</source>
+        <translation>Змінюйте назви локацій на свій смак.</translation>
+    </message>
+    <message>
+        <source>Rename Locations</source>
+        <translation>Перейменування місцеположень</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Експорт</translation>
+    </message>
+    <message>
+        <source>Import</source>
+        <translation>Імпорт</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>Скинути</translation>
+    </message>
+    <message>
+        <source>Choose between white and black tray icon.</source>
+        <translation>Виберіть між білою та чорною іконкою лотка.</translation>
+    </message>
+    <message>
+        <source>Tray Icon Colour</source>
+        <translation>Колір піктограми лотка</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::MacSpoofingGroup</name>
+    <message>
+        <source>Cannot spoof on &apos;No Interface&apos;</source>
+        <translation>Неможливо підробити «Немає інтерфейсу»</translation>
+    </message>
+    <message>
+        <source>You can only spoof an existing adapter.</source>
+        <translation>Ви можете підробити лише наявний адаптер.</translation>
+    </message>
+    <message>
+        <source>Cannot spoof the current interface</source>
+        <translation>Неможливо підробити поточний інтерфейс</translation>
+    </message>
+    <message>
+        <source>The current primary interface must match the selected interface to spoof.</source>
+        <translation>Поточний основний інтерфейс повинен збігатися з вибраним інтерфейсом для підробки.</translation>
+    </message>
+    <message>
+        <source>No Interface</source>
+        <translation>Немає інтерфейсу</translation>
+    </message>
+    <message>
+        <source>MAC Spoofing</source>
+        <translation>Підміна MAC</translation>
+    </message>
+    <message>
+        <source>MAC Address</source>
+        <translation>MAC-адреса</translation>
+    </message>
+    <message>
+        <source>Interface</source>
+        <translation>Інтерфейс</translation>
+    </message>
+    <message>
+        <source>Auto-Rotate MAC</source>
+        <translation>Автоматична ротація MAC</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NetworkOptionsNetworkWindowItem</name>
+    <message>
+        <source>Windscribe auto-connects if the device connects to this network.</source>
+        <translation>Windscribe автоматично підключається, якщо пристрій підключається до цієї мережі.</translation>
+    </message>
+    <message>
+        <source>Auto-Secure</source>
+        <translation>Автоматична безпека</translation>
+    </message>
+    <message>
+        <source>Preferred Protocol</source>
+        <translation>Бажаний протокол</translation>
+    </message>
+    <message>
+        <source>Choose whether to connect using the recommended tunneling protocol, or to specify a protocol of your choice.</source>
+        <translation>Виберіть, чи підключатися за рекомендованим протоколом тунелювання, чи вказати протокол на свій  власний розсуд.</translation>
+    </message>
+    <message>
+        <source>Forget Network</source>
+        <translation>Забути мережу</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NetworkOptionsWindowItem</name>
+    <message>
+        <source>Network Options</source>
+        <translation>Параметри мережі</translation>
+    </message>
+    <message>
+        <source>Mark all newly encountered networks as Secured.</source>
+        <translation>Позначте всі нові мережі як захищені.</translation>
+    </message>
+    <message>
+        <source>Auto-Secure Networks</source>
+        <translation>Автоматичний захист мереж</translation>
+    </message>
+    <message>
+        <source>No Network Detected</source>
+        <translation>Мережу не виявлено</translation>
+    </message>
+    <message>
+        <source>CURRENT NETWORK</source>
+        <translation>ПОТОЧНА МЕРЕЖА</translation>
+    </message>
+    <message>
+        <source>OTHER NETWORKS</source>
+        <translation>ІНШІ МЕРЕЖІ</translation>
+    </message>
+    <message>
+        <source>Secured</source>
+        <translation>Захищено</translation>
+    </message>
+    <message>
+        <source>Unsecured</source>
+        <translation>Незахищено</translation>
+    </message>
+    <message>
+        <source>No Networks Detected.
+Connect to a network first</source>
+        <translation>Мереж не виявлено.
+Спочатку підключіться до мережі</translation>
+    </message>
+    <message>
+        <source>New networks are automatically &quot;Secured&quot;. If you tag a network as &quot;Unsecured&quot;, Windscribe will disconnect when the device joins it. Setting a network as &quot;Unsecured&quot; is NOT recommended.</source>
+        <translation>Нові мережі автоматично отримують статус «Захищених». Якщо позначити мережу як «Незахищена», Windscribe відключиться, коли пристрій до неї приєднається. Встановлювати мережу як «Незахищену» НЕ рекомендується.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NewAddressItem</name>
+    <message>
+        <source>Enter IP or Hostname</source>
+        <translation>Введіть IP-адресу або ім&apos;я хоста</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PacketSizeGroup</name>
+    <message>
+        <source>Auto-Detect &amp; Generate MTU</source>
+        <translation>Автоматичне визначення та генерація MTU</translation>
+    </message>
+    <message>
+        <source>Packet Size</source>
+        <translation>Розмір пакета</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Вручну</translation>
+    </message>
+    <message>
+        <source>MTU</source>
+        <translation>MTU</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PlanItem</name>
+    <message>
+        <source>Free</source>
+        <translation>Безкоштовний</translation>
+    </message>
+    <message>
+        <source>Plan Type</source>
+        <translation>Тип плану</translation>
+    </message>
+    <message>
+        <source>Unlimited Data</source>
+        <translation>Необмежений об&apos;єм даних</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Нестандартний</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PreferencesTabControlItem</name>
+    <message>
+        <source>General</source>
+        <translation>Загальне</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Обліковий запис</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Підключення</translation>
+    </message>
+    <message>
+        <source>R.O.B.E.R.T.</source>
+        <translation>R.O.B.E.R.T.</translation>
+    </message>
+    <message>
+        <source>Advanced Options</source>
+        <translation>Додаткові параметри</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>Допомога</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>Про додаток</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Log Out</source>
+        <translation>Вийти з системи</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Вийти</translation>
+    </message>
+    <message>
+        <source>Look &amp; Feel</source>
+        <translation>Зовнішній вигляд і поведінка</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PreferencesWindowItem</name>
+    <message>
+        <source>Unsaved Changes</source>
+        <translation>Незбережені зміни</translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation>Скасувати</translation>
+    </message>
+    <message>
+        <source>You have unsaved changes in edit fields. Do you want to save them?</source>
+        <translation>У вас є незбережені зміни в полях редагування. Хочете їх зберегти?</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Зберегти</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProtocolGroup</name>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Вручну</translation>
+    </message>
+    <message>
+        <source>Protocol</source>
+        <translation>Протокол</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Порт</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProtocolTweaksGroup</name>
+    <message>
+        <source>Protocol Tweaks</source>
+        <translation>Коригування протоколу</translation>
+    </message>
+    <message>
+        <source>Amnezia Config</source>
+        <translation>Конфігурація Amnezia</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxyGatewayGroup</name>
+    <message>
+        <source>Proxy Gateway</source>
+        <translation>Проксі-шлюз</translation>
+    </message>
+    <message>
+        <source>Proxy Type</source>
+        <translation>Тип проксі-сервера</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Порт</translation>
+    </message>
+    <message>
+        <source>Require Authentication</source>
+        <translation>Потрібна автентифікація</translation>
+    </message>
+    <message>
+        <source>Without authentication, anyone on your network (e.g. coffee shop Wi-Fi) can use this proxy. Leave this on unless you know what you&apos;re doing.</source>
+        <translation>Без автентифікації будь-хто у вашій мережі (наприклад, у кав&apos;ярні Wi-Fi) може користуватися цим проксі. Залиште це увімкненим, якщо не знаєте, що робите.</translation>
+    </message>
+    <message>
+        <source>IP</source>
+        <translation>IP</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Автоматично</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Недоступно</translation>
+    </message>
+    <message>
+        <source>Only when VPN is connected</source>
+        <translation>Лише коли підключено VPN</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxySettingsGroup</name>
+    <message>
+        <source>Proxy</source>
+        <translation>Проксі</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адреса</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Порт</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Ім&apos;я користувача</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>Invalid proxy address</source>
+        <translation>Невірна адреса проксі-сервера</translation>
+    </message>
+    <message>
+        <source>Invalid proxy port</source>
+        <translation>Невірний порт проксі</translation>
+    </message>
+    <message>
+        <source>Proxy port is invalid. Please enter a valid port in the range 1-65535.</source>
+        <translation>Порт проксі неприпустимий. Будь ласка, введіть дійсний порт у діапазоні 1-65535.</translation>
+    </message>
+    <message>
+        <source>Proxy address is invalid. Please enter a valid IP address.</source>
+        <translation>Адреса проксі-сервера невірна. Будь ласка, введіть дійсну IP-адресу.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxySettingsWindowItem</name>
+    <message>
+        <source>Proxy Settings</source>
+        <translation>Налаштування проксі-сервера</translation>
+    </message>
+    <message>
+        <source>If your network has a LAN proxy, configure it here. Please note these proxy settings are only utilized when connecting with the TCP protocol.</source>
+        <translation>Якщо у вашій мережі є проксі-сервер локальної мережі, налаштуйте його тут. Зверніть увагу, що ці налаштування проксі використовуються лише при підключенні за протоколом TCP.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::RobertItem</name>
+    <message>
+        <source>Blocking</source>
+        <translation>Блокування</translation>
+    </message>
+    <message>
+        <source>Allowing</source>
+        <translation>Дозволено</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::RobertWindowItem</name>
+    <message>
+        <source>R.O.B.E.R.T.</source>
+        <translation>R.O.B.E.R.T.</translation>
+    </message>
+    <message>
+        <source>R.O.B.E.R.T. is a customizable server-side domain and IP blocking tool. Select the block lists you wish to apply on all your devices by toggling the switch.</source>
+        <translation>R.O.B.E.R.T. - це інструмент блокування доменів та IP-адрес на стороні сервера, що налаштовується. Виберіть списки блокування, які ви хочете застосувати на всіх своїх пристроях, перемикаючи перемикач.</translation>
+    </message>
+    <message>
+        <source>Could not retrieve R.O.B.E.R.T. preferences from server. Try again later.</source>
+        <translation>Не вдалося отримати налаштування R.O.B.E.R.T. з сервера. Повторіть спробу пізніше.</translation>
+    </message>
+    <message>
+        <source>Login to view or change R.O.B.E.R.T preferences</source>
+        <translation>Увійдіть, щоб переглянути або змінити налаштування R.O.B.E.R.T</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Manage Custom Rules</source>
+        <translation>Керування користувацькими правилами</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SearchLineEditItem</name>
+    <message>
+        <source>Search</source>
+        <translation>Шукати</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SecureHotspotGroup</name>
+    <message>
+        <source>Secure Hotspot</source>
+        <translation>Захищена точка доступу</translation>
+    </message>
+    <message>
+        <source>Secure hotspot is not supported by your network adapter.</source>
+        <translation>Захищена точка доступу не підтримується мережним адаптером.</translation>
+    </message>
+    <message>
+        <source>Secure hotspot is not supported for IKEv2 protocol.</source>
+        <translation>Захищена точка доступу не підтримується для протоколу IKEv2.</translation>
+    </message>
+    <message>
+        <source>Share your secure Windscribe connection wirelessly.</source>
+        <translation>Поділіться своїм безпечним з&apos;єднанням Windscribe бездротовим способом.</translation>
+    </message>
+    <message>
+        <source>Enter SSID</source>
+        <translation>Введіть SSID</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Пароль</translation>
+    </message>
+    <message>
+        <source>At least 8 characters</source>
+        <translation>Щонайменше 8 символів</translation>
+    </message>
+    <message>
+        <source>To turn on Secure Hotspot, please turn off split tunneling or use exclusive mode.</source>
+        <translation>Щоб увімкнути безпечну точку доступу, вимкніть роздільне тунелювання або скористайтеся ексклюзивним режимом.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SelectFileItem</name>
+    <message>
+        <source>[no selection]</source>
+        <translation>[без вибору]</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SoundsGroup</name>
+    <message>
+        <source>Sound Notifications</source>
+        <translation>Звукові сповіщення</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нічого</translation>
+    </message>
+    <message>
+        <source>When Disconnected</source>
+        <translation>При відключенні</translation>
+    </message>
+    <message>
+        <source>Bundled</source>
+        <translation>Вбудований</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Нестандартний</translation>
+    </message>
+    <message>
+        <source>Select a sound</source>
+        <translation>Виберіть звук</translation>
+    </message>
+    <message>
+        <source>When Connected</source>
+        <translation>При підключенні</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAddressesGroup</name>
+    <message>
+        <source>There are too many IPs/CIDR ranges in the list. Please remove some before adding more.</source>
+        <translation>У списку занадто багато IP/CIDR діапазонів. Будь ласка, видаліть деякі перед додаванням нових.</translation>
+    </message>
+    <message>
+        <source>IP or hostname already exists. Please enter a new IP or hostname.</source>
+        <translation>IP-адреса або ім&apos;я хоста вже існує. Будь ласка, введіть нову IP-адресу або ім&apos;я хоста.</translation>
+    </message>
+    <message>
+        <source>Incorrect IP address/mask combination. Please enter a valid hostname or IP address in plain or CIDR notation.</source>
+        <translation>Неправильна комбінація IP-адреси/маски. Будь ласка, введіть дійсне ім&apos;я хоста або IP-адресу у вигляді простої нотації або позначення CIDR.</translation>
+    </message>
+    <message>
+        <source>This IP address or range is reserved by Windscribe and can not be changed.</source>
+        <translation>Ця IP-адреса або діапазон зарезервовані Windscribe і не можуть бути змінені.</translation>
+    </message>
+    <message>
+        <source>There are too many hostnames in the list. Please remove some before adding more.</source>
+        <translation>У списку занадто багато імен хостів. Будь ласка, видаліть деякі з них, перш ніж додавати нові.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAddressesWindowItem</name>
+    <message>
+        <source>IPs &amp; Hostnames</source>
+        <translation>IP-адреси та імена хостів</translation>
+    </message>
+    <message>
+        <source>Enter the IP and/or hostnames you wish to include in or exclude from the VPN tunnel below.</source>
+        <translation>Введіть IP-адресу та/або імена хостів, які ви хочете включити або виключити з VPN-тунелю нижче.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify split tunneling rules.</source>
+        <translation>Будь ласка, увійдіть в систему, щоб змінити правила роздільного тунелювання.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsGroup</name>
+    <message>
+        <source>This app is already in the list.</source>
+        <translation>Цей додаток уже є у списку.</translation>
+    </message>
+    <message>
+        <source>There are too many apps in the list. Please remove some before adding more.</source>
+        <translation>У списку занадто багато додатків. Будь ласка, видаліть деякі з них, перш ніж додавати нові.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsItem</name>
+    <message>
+        <source>Search/Add Apps</source>
+        <translation>Пошук/додавання додатків</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsWindowItem</name>
+    <message>
+        <source>Apps</source>
+        <translation>Програми</translation>
+    </message>
+    <message>
+        <source>Add the apps you wish to include in or exclude from the VPN tunnel below.</source>
+        <translation>Додайте додатки, які ви хочете включити або виключити з VPN-тунелю нижче.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify split tunneling rules.</source>
+        <translation>Будь ласка, увійдіть в систему, щоб змінити правила роздільного тунелювання.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingGroup</name>
+    <message>
+        <source>Service Not Installed</source>
+        <translation>Службу не встановлено</translation>
+    </message>
+    <message>
+        <source>The split tunneling driver is not installed.  To enable this feature, try reinstalling the Windscribe application.
+
+If the reinstall does not help, please contact Windscribe support for assistance.</source>
+        <translation>Драйвер роздільного тунелювання не встановлено.  Щоб увімкнути цю функцію, спробуйте перевстановити програму Windscribe.
+
+Якщо перевстановлення не допомогло, зверніться по допомогу до служби підтримки Windscribe.</translation>
+    </message>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Роздільне тунелювання</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Режим</translation>
+    </message>
+    <message>
+        <source>Exclusive</source>
+        <translation>Ексклюзивний</translation>
+    </message>
+    <message>
+        <source>Inclusive</source>
+        <translation>Інклюзивний</translation>
+    </message>
+    <message>
+        <source>Apps</source>
+        <translation>Програми</translation>
+    </message>
+    <message>
+        <source>IPs &amp; Hostnames</source>
+        <translation>IP-адреси та імена хостів</translation>
+    </message>
+    <message>
+        <source>When enabled, selected apps, IPs, and hostnames will not go through Windscribe when connected.</source>
+        <translation>Коли увімкнено, вибрані програми, IP-адреси та імена хостів не проходитимуть через Windscribe при підключенні.</translation>
+    </message>
+    <message>
+        <source>When enabled, only selected apps, IPs, and hostnames will go through Windscribe when connected.</source>
+        <translation>Якщо увімкнено, лише вибрані програми, IP-адреси та імена хостів проходитимуть через Windscribe під час підключення.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingWindowItem</name>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Роздільне тунелювання</translation>
+    </message>
+    <message>
+        <source>Include or exclude apps and hostnames from the VPN tunnel.</source>
+        <translation>Включати або виключати програми та імена хостів з VPN-тунелю.</translation>
+    </message>
+    <message>
+        <source>The Windscribe split tunneling system extension must be enabled for this feature to function. Please enable it in System Settings.</source>
+        <translation>Розширення системи розділеного тунелювання Windscribe має бути увімкнене для роботи цієї функції. Будь ласка, увімкніть його в системних налаштуваннях.</translation>
+    </message>
+</context>
+<context>
+    <name>ProtocolWindow::ProtocolLineItem</name>
+    <message>
+        <source>NEXT UP IN %1s</source>
+        <translation>НАСТУПНЕ через %1s</translation>
+    </message>
+    <message>
+        <source>Connected to</source>
+        <translation>Підключено до</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Не вдалося</translation>
+    </message>
+</context>
+<context>
+    <name>ProtocolWindow::ProtocolPromptItem</name>
+    <message>
+        <source>Cutting-edge protocol.</source>
+        <translation>Найсучасніший протокол.</translation>
+    </message>
+    <message>
+        <source>An IPsec based tunneling protocol.</source>
+        <translation>Протокол тунелювання на основі IPsec.</translation>
+    </message>
+    <message>
+        <source>Balanced speed and security.</source>
+        <translation>Збалансована швидкість і безпека.</translation>
+    </message>
+    <message>
+        <source>Use it if OpenVPN UDP fails.</source>
+        <translation>Використовуйте його, якщо OpenVPN UDP не працює.</translation>
+    </message>
+    <message>
+        <source>Disguises traffic as HTTPS with TLS.</source>
+        <translation>Маскує трафік під HTTPS за допомогою протоколу TLS.</translation>
+    </message>
+    <message>
+        <source>Wraps traffic with web sockets.</source>
+        <translation>Обгортає трафік веб-сокетами.</translation>
+    </message>
+    <message>
+        <source>Change Protocol</source>
+        <translation>Змінити протокол</translation>
+    </message>
+    <message>
+        <source>Quickly re-connect using a different protocol.</source>
+        <translation>Швидко перепідключіться, використовуючи інший протокол.</translation>
+    </message>
+    <message>
+        <source>Connection Failure!</source>
+        <translation>Помилка з&apos;єднання!</translation>
+    </message>
+    <message>
+        <source>The protocol you’ve chosen has failed to connect. Windscribe will attempt to reconnect using the first protocol below.</source>
+        <translation>Не вдалося підключитись за обраним вами протоколом. Windscribe спробує перепідключитися за допомогою першого з наведених нижче протоколів.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Custom</source>
+        <translation>Користувацький</translation>
+    </message>
+    <message>
+        <source>OS Default</source>
+        <translation>ОС за замовчуванням</translation>
+    </message>
+    <message>
+        <source>UNKNOWN</source>
+        <translation>НЕВІДОМИЙ</translation>
+    </message>
+    <message>
+        <source>Geography</source>
+        <translation>За географією</translation>
+    </message>
+    <message>
+        <source>Alphabet</source>
+        <translation>За абеткою</translation>
+    </message>
+    <message>
+        <source>Latency</source>
+        <translation>За затримкою</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Вручну</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>Always On</source>
+        <translation>Завжди ввімкнено</translation>
+    </message>
+    <message>
+        <source>Before Connection</source>
+        <translation>До підключення</translation>
+    </message>
+    <message>
+        <source>After Connection</source>
+        <translation>Після підключення</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нічого</translation>
+    </message>
+    <message>
+        <source>Auto-detect</source>
+        <translation>Автоматичне визначення</translation>
+    </message>
+    <message>
+        <source>Release</source>
+        <translation>Реліз</translation>
+    </message>
+    <message>
+        <source>Beta</source>
+        <translation>Бета</translation>
+    </message>
+    <message>
+        <source>Guinea Pig</source>
+        <translation>Guinea Pig</translation>
+    </message>
+    <message>
+        <source>Internal</source>
+        <translation>Внутрішній</translation>
+    </message>
+    <message>
+        <source>Exclude</source>
+        <translation>Виключати</translation>
+    </message>
+    <message>
+        <source>Include</source>
+        <translation>Включити</translation>
+    </message>
+    <message>
+        <source>Alpha</source>
+        <translation>Альфа</translation>
+    </message>
+    <message>
+        <source>Van Gogh</source>
+        <translation>Ван Гог</translation>
+    </message>
+    <message>
+        <source>IPv4 Only</source>
+        <translation>Тільки IPv4</translation>
+    </message>
+    <message>
+        <source>Enabled</source>
+        <translation>Увімкнено</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>Вимкнено</translation>
+    </message>
+    <message>
+        <source>Config file too large</source>
+        <translation>Конфігураційний файл занадто великий</translation>
+    </message>
+    <message>
+        <source>Failed to open file</source>
+        <translation>Не вдалося відкрити файл</translation>
+    </message>
+    <message>
+        <source>Invalid config format</source>
+        <translation>Неприпустимий формат конфігурації</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Interface&quot; section</source>
+        <translation>Відсутній розділ &quot;Інтерфейс&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Peer&quot; section</source>
+        <translation>Відсутній розділ &quot;Peer&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;PrivateKey&quot; in the &quot;Interface&quot; section</source>
+        <translation>Відсутній &quot;PrivateKey&quot; у розділі &quot;Інтерфейс&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Address&quot; in the &quot;Interface&quot; section</source>
+        <translation>Відсутня &quot;Адреса&quot; в розділі &quot;Інтерфейс&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;DNS&quot; in the &quot;Interface&quot; section</source>
+        <translation>Відсутній &quot;DNS&quot; у розділі &quot;Інтерфейс&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;PublicKey&quot; in the &quot;Peer&quot; section</source>
+        <translation>Відсутній &quot;PublicKey&quot; у розділі &quot;Peer&quot;</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Endpoint&quot; in the &quot;Peer&quot; section</source>
+        <translation>Відсутній &quot;Endpoint&quot; в розділі &quot;Peer&quot;</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PrivateKey&quot; format</source>
+        <translation>Недійсний формат «PrivateKey»</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PublicKey&quot; format</source>
+        <translation>Недійсний формат «PublicKey»</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PresharedKey&quot; format</source>
+        <translation>Неправильний формат &quot;PresharedKey&quot;</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;Address&quot; value: %1</source>
+        <translation>Недійсне значення &quot;Адреса&quot;: %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;AllowedIPs&quot; value: %1</source>
+        <translation>Недійсне значення &quot;Дозволених IP&quot;: %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;DNS&quot; value: %1</source>
+        <translation>Недійсне значення &quot;DNS&quot;: %1</translation>
+    </message>
+    <message>
+        <source>Invalid endpoint port</source>
+        <translation>Недійсний порт кінцевої точки</translation>
+    </message>
+    <message>
+        <source>Invalid AmneziaWG header parameter</source>
+        <translation>Некоректний параметр заголовка AmneziaWG</translation>
+    </message>
+    <message>
+        <source>AmneziaWG init parameter too large</source>
+        <translation>Параметр ініціалізації AmneziaWG занадто великий</translation>
+    </message>
+    <message>
+        <source>AmneziaWG init parameter contains invalid characters</source>
+        <translation>Init параметр AmneziaWG містить недопустимі символи</translation>
+    </message>
+    <message>
+        <source>Invalid AmneziaWG parameter: %1</source>
+        <translation>Недійсний параметр AmneziaWG: %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PersistentKeepalive&quot; value</source>
+        <translation>Недійсне значення &quot;PersistentKeepalive&quot;</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>Статичні IP-адреси</translation>
+    </message>
+    <message>
+        <source>Your original account %1 has expired. Creating multiple accounts to bypass free tier limitations is prohibited. Please login into the original account and wait until the bandwidth is reset. You can also upgrade to Pro.</source>
+        <translation>Термін дії вашого облікового запису %1 закінчився. Створення декількох облікових записів для обходу обмежень безкоштовного рівня заборонено. Будь ласка, увійдіть в початковий обліковий запис і зачекайте, поки пропускну здатність буде скинуто. Ви також можете перейти на Pro.</translation>
+    </message>
+    <message>
+        <source>Your account is disabled for abuse.</source>
+        <translation>Ваш обліковий запис вимкнено через зловживання.</translation>
+    </message>
+    <message>
+        <source>Firewall Always On</source>
+        <translation>Брандмауер завжди ввімкнено</translation>
+    </message>
+    <message>
+        <source>Can&apos;t turn the firewall off because &quot;Always On&quot; mode is enabled</source>
+        <translation>Не вдається вимкнути брандмауер, оскільки ввімкнено режим «Завжди ввімкнено»</translation>
+    </message>
+    <message>
+        <source>Windscribe is already running on your computer, but appears to not be responding.</source>
+        <translation>Windscribe вже запущено на вашому комп&apos;ютері, але, схоже, не відповідає.</translation>
+    </message>
+    <message>
+        <source>You may need to kill the non-responding Windscribe app or reboot your computer to fix the issue.</source>
+        <translation>Можливо, вам доведеться закрити програму Windscribe, яка не відповідає, або перезавантажити комп&apos;ютер, щоб вирішити проблему.</translation>
+    </message>
+    <message>
+        <source>One or more files in the Windscribe application bundle have been suspiciously modified. Please re-install Windscribe.</source>
+        <translation>Один або кілька файлів у пакеті програм Windscribe були підозріло змінені. Будь ласка, перевстановіть Windscribe.</translation>
+    </message>
+    <message>
+        <source>White</source>
+        <translation>Білий</translation>
+    </message>
+    <message>
+        <source>Black</source>
+        <translation>Чорний</translation>
+    </message>
+    <message>
+        <source>Forced</source>
+        <translation>Примусово</translation>
+    </message>
+    <message>
+        <source>Move spaces</source>
+        <translation>Переміщення пробілів</translation>
+    </message>
+    <message>
+        <source>Move window</source>
+        <translation>Перемістити вікно</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Дублювати</translation>
+    </message>
+    <message>
+        <source>Local DNS</source>
+        <translation>Локальний DNS</translation>
+    </message>
+    <message>
+        <source>Stretch</source>
+        <translation>Розтягнути</translation>
+    </message>
+    <message>
+        <source>Fill</source>
+        <translation>Заповнити</translation>
+    </message>
+    <message>
+        <source>Tile</source>
+        <translation>Плитка</translation>
+    </message>
+    <message>
+        <source>Always On+</source>
+        <translation>Завжди ввімкнено+</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Користувацькі конфігурації</translation>
+    </message>
+    <message>
+        <source>Random IP</source>
+        <translation>Випадковий IP</translation>
+    </message>
+    <message>
+        <source>Your application version is no longer supported. Please update to continue using %1.</source>
+        <translation>Ваша версія додатку більше не підтримується. Будь ласка, оновіть для подальшого використання %1.</translation>
+    </message>
+    <message>
+        <source>Please upgrade to a Pro account to continue using %1.</source>
+        <translation>Будь ласка, оновіть акаунт до Pro, щоб продовжувати користуватися %1.</translation>
+    </message>
+    <message>
+        <source>Regular</source>
+        <translation>Звичайний</translation>
+    </message>
+    <message>
+        <source>Alternate</source>
+        <translation>Альтернативний</translation>
+    </message>
+    <message>
+        <source>Windscribe is already running in another user session on this computer. Quit Windscribe in that session, then try again.</source>
+        <translation>Windscribe вже запущено в сеансі іншого користувача на цьому комп&apos;ютері. Вийдіть з Windscribe у тому сеансі, а потім спробуйте ще раз.</translation>
+    </message>
+    <message>
+        <source>%1 is required</source>
+        <translation>%1: обов&apos;язкове поле</translation>
+    </message>
+    <message>
+        <source>%1 must be a string</source>
+        <translation>%1 має бути рядком</translation>
+    </message>
+    <message>
+        <source>%1 must be 1-65535</source>
+        <translation>%1 має бути в діапазоні 1-65535</translation>
+    </message>
+    <message>
+        <source>%1 must be a positive whole number</source>
+        <translation>%1 має бути додатним цілим числом</translation>
+    </message>
+    <message>
+        <source>%1 must be a hostname</source>
+        <translation>%1 має бути ім&apos;ям хоста</translation>
+    </message>
+    <message>
+        <source>%1 must be an IPv4 address</source>
+        <translation>%1 має бути адресою IPv4</translation>
+    </message>
+    <message>
+        <source>must be an object</source>
+        <translation>має бути об&apos;єктом</translation>
+    </message>
+    <message>
+        <source>unknown field %1</source>
+        <translation>невідоме поле %1</translation>
+    </message>
+    <message>
+        <source>unsupported protocol %1</source>
+        <translation>непідтримуваний протокол %1</translation>
+    </message>
+    <message>
+        <source>The file is too large to be a hydra profile.</source>
+        <translation>Файл завеликий для профілю hydra.</translation>
+    </message>
+    <message>
+        <source>Not a hydra profile: the file is not a JSON object.</source>
+        <translation>Це не профіль hydra: файл не є об&apos;єктом JSON.</translation>
+    </message>
+    <message>
+        <source>Not a hydra profile: kind must be %1.</source>
+        <translation>Це не профіль hydra: kind має бути %1.</translation>
+    </message>
+    <message>
+        <source>This hydra profile is from an older hydra and names one server; ask for a new one.</source>
+        <translation>Цей профіль hydra створено старою версією hydra, і він вказує лише один сервер; попросіть новий.</translation>
+    </message>
+    <message>
+        <source>Unsupported hydra profile version; this app reads version 2.</source>
+        <translation>Непідтримувана версія профілю hydra; застосунок читає версію 2.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: unknown field %1.</source>
+        <translation>Недійсний профіль hydra: невідоме поле %1.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: %1.</source>
+        <translation>Недійсний профіль hydra: %1.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: all must be true or false.</source>
+        <translation>Недійсний профіль hydra: all має бути true або false.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: it has no fronts.</source>
+        <translation>Недійсний профіль hydra: немає жодного front.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: front %1: %2.</source>
+        <translation>Недійсний профіль hydra: front %1: %2.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: front %1: entry %2 is listed twice.</source>
+        <translation>Недійсний профіль hydra: front %1: запис %2 вказано двічі.</translation>
+    </message>
+    <message>
+        <source>%1 via %2</source>
+        <translation>%1 через %2</translation>
+    </message>
+    <message>
+        <source>%1 via %2 (not in the server list)</source>
+        <translation>%1 через %2 (немає в списку серверів)</translation>
+    </message>
+    <message>
+        <source>Could not read the hydra profile: %1</source>
+        <translation>Не вдалося прочитати профіль hydra: %1</translation>
+    </message>
+    <message>
+        <source>Could not save the hydra profile: %1</source>
+        <translation>Не вдалося зберегти профіль hydra: %1</translation>
+    </message>
+    <message>
+        <source>%1 (not in the server list)</source>
+        <translation>%1 (немає в списку серверів)</translation>
+    </message>
+</context>
+<context>
+    <name>QWidget</name>
+    <message>
+        <source>Unknown Config Error</source>
+        <translation>Невідома помилка конфігурації</translation>
+    </message>
+</context>
+<context>
+    <name>SharingFeatures::SharingFeaturesWindowItem</name>
+    <message>
+        <source>Sharing Features</source>
+        <translation>Спільне використання функцій</translation>
+    </message>
+    <message>
+        <source>Proxy Gateway</source>
+        <translation>Проксі-шлюз</translation>
+    </message>
+    <message>
+        <source>Secure Hotspot</source>
+        <translation>Безпечна точка доступу</translation>
+    </message>
+</context>
+<context>
+    <name>TrayIcon</name>
+    <message>
+        <source>Connect</source>
+        <translation>Підключити</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Відключити</translation>
+    </message>
+    <message>
+        <source>Locations</source>
+        <translation>Розташування</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>Статичні IP-адреси</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Користувацькі конфігурації</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Налаштування</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>Допомога</translation>
+    </message>
+    <message>
+        <source>Quit Windscribe</source>
+        <translation>Вийти з Windscribe</translation>
+    </message>
+    <message>
+        <source>Favourites</source>
+        <translation>Улюблені</translation>
+    </message>
+    <message>
+        <source>Show app</source>
+        <translation>Показати додаток</translation>
+    </message>
+</context>
+<context>
+    <name>TwoFactorAuthWindow::TwoFactorAuthOkButton</name>
+    <message>
+        <source>Add</source>
+        <translation>Додати</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+</context>
+<context>
+    <name>TwoFactorAuthWindow::TwoFactorAuthWindowItem</name>
+    <message>
+        <source>Two-Factor Auth</source>
+        <translation>Двофакторна аутентифікація</translation>
+    </message>
+    <message>
+        <source>Use your app to get an authentication code, and enter it below</source>
+        <translation>Скористайтеся додатком, щоб отримати код автентифікації, і введіть його нижче</translation>
+    </message>
+    <message>
+        <source>Please provide a 2FA code</source>
+        <translation>Будь ласка, введіть код 2FA</translation>
+    </message>
+    <message>
+        <source>Invalid 2FA code, please try again</source>
+        <translation>Недійсний код 2FA, спробуйте ще раз</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateApp::UpdateAppItem</name>
+    <message>
+        <source>v</source>
+        <translation>v</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Оновити</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateWindowItem</name>
+    <message>
+        <source>Updating </source>
+        <translation>Оновлення </translation>
+    </message>
+    <message>
+        <source>Your update is in progress, hang in there...</source>
+        <translation>Оновлення триває, зачекайте...</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Пізніше</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Оновити</translation>
+    </message>
+    <message>
+        <source>Windscribe will download the update, then terminate active connections and restart automatically.</source>
+        <translation>Windscribe завантажить оновлення, потім розірве активні з&apos;єднання та автоматично перезапуститься.</translation>
+    </message>
+    <message>
+        <source>Windscribe will download and install the update, which may take several minutes. Your computer will restart after the update.</source>
+        <translation>Windscribe завантажить та встановить оновлення, що може зайняти кілька хвилин. Після оновлення комп&apos;ютер перезавантажиться.</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeBanner</name>
+    <message>
+        <source>Unlock full access to Windscribe</source>
+        <translation>Розблокуйте повний доступ до Windscribe</translation>
+    </message>
+    <message>
+        <source>Go Pro for unlimited everything</source>
+        <translation>Go Pro без обмежень на все</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeWidget::UpgradeWidgetItem</name>
+    <message>
+        <source>Get more data</source>
+        <translation>Отримуйте більше даних</translation>
+    </message>
+    <message>
+        <source>%1 left</source>
+        <translation>Залишилось %1</translation>
+    </message>
+    <message>
+        <source>0 days left</source>
+        <translation>Залишилось 0 днів</translation>
+    </message>
+    <message>
+        <source>1 day left</source>
+        <translation>Залишився 1 день</translation>
+    </message>
+    <message>
+        <source>2 days left</source>
+        <translation>Залишилось 2 дні</translation>
+    </message>
+    <message>
+        <source>3 days left</source>
+        <translation>Залишилось 3 дні</translation>
+    </message>
+    <message>
+        <source>4 days left</source>
+        <translation>Залишилось 4 дні</translation>
+    </message>
+    <message>
+        <source>5 days left</source>
+        <translation>Залишилось 5 днів</translation>
+    </message>
+    <message>
+        <source>%1 days left</source>
+        <translation>Залишилось %1 днів</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Логін</translation>
+    </message>
+    <message>
+        <source>Renew</source>
+        <translation>Продовжити</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeWindow::UpgradeWindowItem</name>
+    <message>
+        <source>You&apos;re out of data!</source>
+        <translation>У вас закінчилися дані!</translation>
+    </message>
+    <message>
+        <source>Don&apos;t leave your front door open. Upgrade or wait until next month to get your monthly data allowance back.</source>
+        <translation>Не залишайте вхідні двері відчиненими. Оновіть систему або зачекайте до наступного місяця, щоб повернути щомісячний обсяг даних.</translation>
+    </message>
+    <message>
+        <source>Get more data</source>
+        <translation>Отримати більше даних</translation>
+    </message>
+    <message>
+        <source>I&apos;m broke</source>
+        <translation>Я розорений</translation>
+    </message>
+</context>
+<context>
+    <name>gui_locations::LocationsModel</name>
+    <message>
+        <source>Best Location</source>
+        <translation>Краща локація</translation>
+    </message>
+</context>
+</TS>

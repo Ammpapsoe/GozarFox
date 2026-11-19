@@ -1,0 +1,446 @@
+#pragma once
+
+#include <QSocketNotifier>
+#include <QSystemTrayIcon>
+#include <QTimer>
+#include <QWidget>
+#include <QWidgetAction>
+
+#include "api_responses/checkupdate.h"
+#include "api_responses/robertfilter.h"
+#include "backend/backend.h"
+#include "backend/notificationscontroller.h"
+#include "blockconnect.h"
+#include "dialogs/advancedparametersdialog.h"
+#include "freetrafficnotificationcontroller.h"
+#include "generalmessagecontroller.h"
+#include "graphicresources/iconmanager.h"
+#include "localipcserver/localipcserver.h"
+#include "locations/model/selectedlocation.h"
+#include "locationswindow/locationswindow.h"
+#include "log/logviewerwindow.h"
+#include "loginattemptscontroller.h"
+#include "mainwindowcontroller.h"
+#include "multipleaccountdetection/imultipleaccountdetection.h"
+#include "protocolwindow/protocolwindowmode.h"
+#include "sounds/soundmanager.h"
+#include "splittunnelfailurepolicy.h"
+#include "trayicon.h"
+
+#if defined(Q_OS_MACOS)
+#include "permissions/permissionmonitor_mac.h"
+#endif
+
+enum class AppIconType { DISCONNECTED, DISCONNECTED_WITH_ERROR, CONNECTING, CONNECTED };
+
+class MainWindow : public QWidget
+{
+    Q_OBJECT
+
+public:
+    MainWindow();
+    ~MainWindow();
+
+    virtual bool eventFilter(QObject *watched, QEvent *event);
+
+    bool doClose(QCloseEvent *event = NULL, bool isFromSigTerm_mac = false);
+    bool isActiveState() const { return activeState_; }
+    void showAfterLaunch();
+    TrayIcon *trayIcon() const { return trayIcon_; }
+
+    bool handleKeyPressEvent(QKeyEvent *event);
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+    void setSigTermHandler(int fd);
+#endif
+
+protected:
+    bool event(QEvent *event);
+    void closeEvent(QCloseEvent *event);
+
+    virtual void mousePressEvent(QMouseEvent *event);
+    virtual void mouseReleaseEvent(QMouseEvent *event);
+
+    virtual void paintEvent(QPaintEvent *event);
+
+signals:
+    void wireGuardKeyLimitUserResponse(bool deleteOldestKey);
+
+private slots:
+    void setWindowToDpiScaleManager();
+
+    void onMinimizeClick();
+    void onCloseClick();
+
+    // init window signals
+    void onAbortInitialization();
+
+    // welcome window signals
+    void onWelcomeEmergencyWindowClick();
+    void onWelcomePreferencesClick();
+    void onWelcomeExternalConfigWindowClick();
+    void onWelcomeHaveAccountYesClick();
+    void onWelcomeCreateAccountClick();
+
+    // login window signals
+    void onLoginClick(const QString &username, const QString &password, const QString &code2fa);
+    void onLoginTwoFactorAuthWindowClick(const QString &username, const QString &password);
+    void onLoginFirewallTurnOffClick();
+
+    // signup window signals
+    void onSignupClick(const QString &username, const QString &password, const QString &email,
+                       const QString &voucherCode,  const QString &referringUsername);
+
+    // captcha window signals
+    void onCaptchaBackClicked();
+    void onCaptchaResolved(const QString &captchaSolution, const std::vector<float> &captchaTrailX, const std::vector<float> &captchaTrailY);
+
+    // connect window signals
+    void onConnectWindowConnectClick();
+    void onConnectWindowFirewallClick();
+    void onConnectWindowNetworkButtonClick();
+    void onConnectWindowLocationsClick();
+    void onConnectWindowPreferencesClick();
+    void onConnectWindowNotificationsClick();
+    void onConnectWindowSplitTunnelingClick();
+    void onConnectWindowProtocolsClick();
+    void onConnectWindowRotateIpClick();
+    void onConnectWindowLocationTabClicked(LOCATION_TAB tab);
+    void onConnectWindowSearchFilterChanged(const QString &filter);
+    void onConnectWindowLocationsKeyPressed(QKeyEvent *event);
+    void onPinIp();
+    void onUnpinIp(const QString &ip);
+
+    // news feed window signals
+    void onEscapeNotificationsClick();
+    // protocol window signals
+    void onEscapeProtocolsClick();
+    void onProtocolWindowProtocolClick(const types::Protocol &protocol, uint port);
+    void onProtocolWindowDisconnect();
+
+    // preferences window signals
+    void onPreferencesEscapeClick();
+    void onPreferencesLogoutClick();
+    void onPreferencesLoginClick();
+    void onPreferencesViewLogClick();
+    void onPreferencesExportSettingsClick();
+    void onPreferencesImportSettingsClick();
+    void onPreferencesImportHydraProfileClick();
+    void onPreferencesRemoveHydraProfileClick();
+    // Lists the imported hydra profile's fronts in Preferences > Connection, named as the server list names them.
+    void updateHydraProfileInPreferences();
+    void onPreferencesSendConfirmEmailClick();
+    void onSendDebugLogClick(); // also used by protocol window
+    void onPreferencesManageAccountClick();
+    void onPreferencesAddEmailButtonClick();
+    void onPreferencesManageRobertRulesClick();
+    void onPreferencesQuitAppClick();
+    void onPreferencesAccountLoginClick();
+    void onPreferencesCycleMacAddressClick();
+    void onPreferencesWindowDetectPacketSizeClick();
+    void onPreferencesAdvancedParametersClicked();
+    void onPreferencesCustomConfigsPathChanged(QString path);
+    void onPreferencesCustomConfigPathNeedsUpdate(const QString &path);
+    void onPreferencesShowNotificationsChanged();
+    void onPreferencesExportLocationNamesClick();
+    void onPreferencesImportLocationNamesClick();
+    void onPreferencesResetLocationNamesClick();
+    void onPreferencesClearWifiHistoryClick();
+
+    // emergency window signals
+    void onEmergencyConnectEscapeClick();
+    void onEmergencyConnectClick();
+    void onEmergencyDisconnectClick();
+
+    // external config window signals
+    void onExternalConfigWindowNextClick();
+
+    // 2FA window signals
+    void onTwoFactorAuthWindowButtonAddClick(const QString &code2fa);
+
+    // bottom window signals
+    void onBottomWindowRenewClick();
+    void onBottomWindowExternalConfigLoginClick();
+    void onBottomWindowSharingFeaturesClick();
+
+    // update app item signals
+    void onUpdateAppItemClick();
+
+    // update window signals
+    void onUpdateWindowAccept();
+    void onUpdateWindowCancel();
+    void onUpdateWindowLater();
+
+    // upgrade window signals
+    void onUpgradeAccountAccept();
+    void onUpgradeAccountCancel();
+
+    // logout & exit window signals
+    void onLogoutWindowAccept();
+    void onExitWindowAccept();
+    void onExitWindowReject();
+
+    // locations window signals
+    void onLocationSelected(const LocationID &lid);
+    void onClickedOnPremiumStarCity();
+    void onLocationsAddStaticIpClicked();
+    void onLocationsClearCustomConfigClicked();
+    void onLocationsAddCustomConfigClicked();
+    void onLocationsUpgradeBannerClicked();
+
+    void onLanguageChanged();
+
+    // backend state signals
+    void onBackendInitFinished(INIT_STATE initState);
+
+    void onBackendCaptchaRequired(bool isAsciiCaptcha, const QString &asciiArt, const QString &background, const QString &slider, int top);
+    void onBackendLoginFinished();
+    void onBackendTryingBackupEndpoint();
+    void onBackendLoginError(wsnet::LoginResult loginError, const QString &errorMessage);
+
+    void onBackendSessionStatusChanged(const api_responses::SessionStatus &sessionStatus);
+    void onBackendCheckUpdateChanged(const api_responses::CheckUpdate &checkUpdateInfo);
+    void onBackendMyIpChanged(QString ip, bool isFromDisconnectedState);
+    void onBackendConnectStateChanged(const types::ConnectState &connectState);
+    void onBackendEmergencyConnectStateChanged(const types::ConnectState &connectState);
+    void onBackendFirewallStateChanged(bool isEnabled);
+    void onNetworkChanged(types::NetworkInterface network);
+    void onSplitTunnelingStateChanged(bool isActive);
+    void onSystemExtensionAvailabilityChanged(bool available);
+    void onBackendLogoutFinished();
+    void onBackendCleanupFinished();
+    void onBackendGotoCustomOvpnConfigModeFinished();
+    void onBackendConfirmEmailResult(bool bSuccess);
+    void onBackendDebugLogResult(bool bSuccess);
+    void onBackendStatisticsUpdated(quint64 bytesIn, quint64 bytesOut, bool isTotalBytes);
+    void onBackendProxySharingInfoChanged(const types::ProxySharingInfo &psi);
+    void onBackendWifiSharingInfoChanged(const types::WifiSharingInfo &wsi);
+    void onBackendWifiSharingFailed(WIFI_SHARING_ERROR error);
+    void onBackendProxySharingFailed(PROXY_SHARING_ERROR error);
+    void onBackendRequestCustomOvpnConfigCredentials(const QString &username);
+    void onBackendRequestCustomOvpnConfigPrivKeyPassword();
+    void onBackendSessionDeleted();
+    void onBackendTestTunnelResult(bool success);
+    void onBackendLostConnectionToHelper();
+    void onBackendUserWarning(USER_WARNING_TYPE userWarningType);
+    void onBackendInternetConnectivityChanged(bool connectivity);
+    void onBackendProtocolPortChanged(const types::Protocol &protocol, const uint port);
+    void onBackendPacketSizeDetectionStateChanged(bool on, bool isError);
+    void onBackendUpdateVersionChanged(uint progressPercent, UPDATE_VERSION_STATE state, UPDATE_VERSION_ERROR error);
+    void onBackendWebSessionTokenForManageAccount(const QString &tempSessionToken);
+    void onBackendWebSessionTokenForAddEmail(const QString &tempSessionToken);
+    void onBackendWebSessionTokenForManageRobertRules(const QString &tempSessionToken);
+    void onBackendRobertFiltersChanged(bool success, const QVector<api_responses::RobertFilter> &filters);
+    void onBackendSetRobertFilterResult(bool success);
+    void onBackendSyncRobertResult(bool success);
+    void onBackendProtocolStatusChanged(const QVector<types::ProtocolStatus> &status, bool isAutomaticMode);
+    void onSplitTunnelingStartFailed(SPLIT_TUNNEL_START_FAIL_REASON reason);
+    void onBackendBridgeApiAvailabilityChanged(bool isAvailable);
+    void onBackendIpRotateResult(bool success);
+    void onBackendIpRotateReadyChanged();
+    void onLocationsModelDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QList<int> &roles);
+    void onBackendClearWifiHistoryFinished(bool bSuccess);
+
+    void onBackendEngineCrash();
+
+    void onNotificationControllerNewPopupMessage(int messageId);
+
+    // preferences changes signals
+    void onPreferencesFirewallSettingsChanged(const types::FirewallSettings &fm);
+    void onPreferencesShareProxyGatewayChanged(const types::ShareProxyGateway &sp);
+    void onPreferencesShareSecureHotspotChanged(const types::ShareSecureHotspot &ss);
+    void onPreferencesLocationOrderChanged(ORDER_LOCATION_TYPE o);
+    void onPreferencesSplitTunnelingChanged(types::SplitTunneling st);
+    void onPreferencesAllowLanTrafficChanged(bool bAllowLanTraffic);
+    void onPreferencesLaunchOnStartupChanged(bool bEnabled);
+    void onPreferencesConnectionSettingsChanged(types::ConnectionSettings connectionSettings);
+    void onPreferencesNetworkPreferredProtocolsChanged(QMap<QString, types::ConnectionSettings> p);
+    void onPreferencesIsDockedToTrayChanged(bool isDocked);
+    void onPreferencesUpdateChannelChanged(UPDATE_CHANNEL updateChannel);
+    void onPreferencesGetRobertFilters();
+    void onPreferencesSetRobertFilter(const api_responses::RobertFilter &filter);
+    void onPreferencesReportErrorToUser(const QString &title, const QString &desc);
+#if defined(Q_OS_MACOS)
+    void onPreferencesMultiDesktopBehaviorChanged(MULTI_DESKTOP_BEHAVIOR m);
+    void onPreferencesHideFromDockChanged(bool hideFromDock);
+    void hideShowDockIconImpl(bool bAllowActivateAndShow);
+#endif
+    // WindscribeApplications signals
+    void onDockIconClicked();
+    void onAppActivateFromAnotherInstance();
+    void onAppShouldTerminate();
+    void onAppCloseRequest();
+
+    // LocalIPCServer signals
+    void onIpcConnect(const LocationID &id, const types::Protocol &protocol, uint port);
+    void onIpcUpdate();
+
+    void showShutdownWindow();
+
+    void onCurrentNetworkUpdated(types::NetworkInterface networkInterface);
+    void onAutoConnectUpdated(bool on);
+
+    void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
+    void onTrayPreferences();
+    void onTrayShow();
+    void onTrayHelpMe();
+    void onTrayQuit();
+
+    void onFreeTrafficNotification(const QString &message);
+    void onSplitTunnelingAppsAddButtonClick();
+    void onRevealConnectStateChanged(bool revealingConnect);
+
+    void onScaleChanged();
+    void onDpiScaleManagerNewScreen(QScreen *screen);
+    void onFocusWindowChanged(QWindow *focusWindow);
+    void onWindowDeactivateAndHideImpl();
+
+    void onAdvancedParametersOkClick();
+    void onAdvancedParametersCancelClick();
+
+    void onWireGuardAtKeyLimit();
+
+    // Selected location signals
+    void onSelectedLocationChanged();
+    void onSelectedLocationRemoved();
+
+    void onLocationPermissionUpdated();
+
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+    void onSigTerm();
+#endif
+
+private:
+    SplitTunnelFailurePolicy splitTunnelFailurePolicy_;
+    // The selected location as the API knows it, which is what carries a pinned IP: Best Location is an alias and has none.
+    QModelIndex selectedApiLocationIndex() const;
+    void gotoWelcomeWindow();
+    void gotoLoginWindow();
+    void gotoLogoutWindow();
+    void gotoExitWindow();
+    void collapsePreferences();
+    void selectLocation(const LocationID &lid, const types::Protocol &protocol, uint port = 0);
+
+    Backend *backend_;
+    LocalIPCServer *localIpcServer_;
+    NotificationsController notificationsController_;
+
+    MainWindowController *mainWindowController_;
+
+    LocationsWindow *locationsWindow_;
+    LogViewer::LogViewerWindow *logViewerWindow_;
+    AdvancedParametersDialog *advParametersWindow_;
+
+    TrayIcon *trayIcon_;
+
+    void updateAppIconType(AppIconType type);
+    AppIconType currentAppIconType_;
+    bool bNotificationConnectedShowed_;
+    // Id of the outstanding WireGuard key-limit prompt, or 0 when none is pending; lets a disconnect
+    // dismiss exactly that prompt.
+    int wireGuardKeyLimitMessageId_ = 0;
+    int customOvpnCredentialsMessageId_ = 0;
+    QElapsedTimer connectionElapsedTimer_;
+    quint64 bytesTransferred_;
+    bool bMovingWindow_;
+
+    enum LOGOUT_REASON { LOGOUT_UNDEFINED, LOGOUT_FROM_MENU, LOGOUT_SESSION_EXPIRED, LOGOUT_WITH_MESSAGE, LOGOUT_GO_TO_LOGIN };
+    LOGOUT_REASON logoutReason_;
+    LoginWindow::ERROR_MESSAGE_TYPE logoutMessageType_;
+    QString logoutErrorMessage_;
+
+    LoginAttemptsController loginAttemptsController_;
+    QSharedPointer<IMultipleAccountDetection> multipleAccountDetection_;
+    BlockConnect blockConnect_;
+    FreeTrafficNotificationController *freeTrafficNotificationController_;
+
+    bool isInitializationAborted_;
+    bool isLoginOkAndConnectWindowVisible_;
+    static constexpr int TIME_BEFORE_SHOW_SHUTDOWN_WINDOW = 1500;   // ms
+
+    QScopedPointer<gui_locations::SelectedLocation> selectedLocation_;
+
+    void hideSupplementaryWidgets();
+
+    QString getConnectionTime();
+    QString getConnectionTransferred();
+    void setInitialFirewallState();
+    void handleDisconnectWithError(const types::ConnectState &connectState);
+    void setVariablesToInitState();
+
+    void openStaticIpExternalWindow();
+    void openUpgradeExternalWindow();
+
+    bool onLocalHttpServerCommand(QString authHash, bool isConnectCmd, bool isDisconnectCmd, QString location);
+
+    bool revealingConnectWindow_;
+    bool internetConnected_;
+
+    QSet<USER_WARNING_TYPE> alreadyShownWarnings_;
+
+    types::NetworkInterface curNetwork_;
+
+    void activateAndShow();
+    void deactivateAndHide();
+
+    bool backendAppActiveState_;
+    void setBackendAppActiveState(bool state);
+
+#if defined(Q_OS_MACOS)
+    void hideShowDockIcon(bool hideFromDock);
+    QTimer hideShowDockIconTimer_;
+    bool currentDockIconVisibility_;
+    bool desiredDockIconVisibility_;
+#endif
+    QTimer deactivationTimer_;
+
+    bool activeState_;
+    qint64 lastWindowStateChange_;
+
+    bool isExitingFromPreferences_;
+    bool isSpontaneousCloseEvent_;
+    bool isExitingAfterUpdate_;
+    bool isExitingAfterCriticalError_;
+
+    void minimizeToTray();
+
+    bool downloadRunning_;
+    bool ignoreUpdateUntilNextRun_;
+    void cleanupAdvParametersWindow();
+    void cleanupLogViewerWindow();
+
+    void showUserWarning(USER_WARNING_TYPE userWarningType);
+    void openBrowserToMyAccountWithToken(const QString &tempSessionToken);
+    void updateConnectWindowStateProtocolPortDisplay();
+
+    types::Protocol getDefaultProtocolForNetwork(const QString &network);
+    bool userProtocolOverride_;
+    bool askedAboutPreferredProtocol_;
+    bool isCliInitiatedConnection_;
+
+    bool sendDebugLogOnDisconnect_;
+    bool receivedInitialIpAfterConnect_;
+    // The address last shown, which is what a pin is compared against.
+    QString myIp_;
+
+    QSocketNotifier *socketNotifier_;
+    int fd_;
+
+    bool isLastCallWasSignup_ = false;
+
+    void normalizeConnectionSettings(types::ConnectionSettings &cs);
+
+#ifdef Q_OS_MACOS
+    PermissionMonitor_mac *permissionMonitor_;
+#endif
+    void checkLocationPermission();
+    void checkNotificationEnabled();
+
+    void checkCustomConfigPath(const QString &path);
+    bool wasLaunchedOnStartup();
+
+    SoundManager *soundManager_;
+
+    void setDataRemaining(qint64 bytesUsed, qint64 bytesMax);
+    void setFirewallTurnOffButtonVisibility(bool visible);
+    void setLoginOrSignupWindowError(LoginWindow::ERROR_MESSAGE_TYPE errorMessageType, const QString &errorMessage = QString());
+};

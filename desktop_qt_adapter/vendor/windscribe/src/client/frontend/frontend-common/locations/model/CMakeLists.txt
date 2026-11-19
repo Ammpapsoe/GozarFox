@@ -1,0 +1,26 @@
+target_sources(frontend-common PRIVATE
+    proxymodels/cities_proxymodel.cpp
+    proxymodels/cities_proxymodel.h
+    proxymodels/customconfigs_proxymodel.cpp
+    proxymodels/customconfigs_proxymodel.h
+    proxymodels/favoritecities_proxymodel.cpp
+    proxymodels/favoritecities_proxymodel.h
+    proxymodels/sortedcities_proxymodel.cpp
+    proxymodels/sortedcities_proxymodel.h
+    proxymodels/sortedlocations_proxymodel.cpp
+    proxymodels/sortedlocations_proxymodel.h
+    proxymodels/staticips_proxymodel.cpp
+    proxymodels/staticips_proxymodel.h
+    favoritelocationsstorage.cpp
+    favoritelocationsstorage.h
+    locationsmodel.cpp
+    locationsmodel.h
+    locationsmodel_utils.cpp
+    locationsmodel_utils.h
+    locationitem.cpp
+    locationitem.h
+    renamedlocationsstorage.cpp
+    renamedlocationsstorage.h
+    selectedlocation.cpp
+    selectedlocation.h
+)

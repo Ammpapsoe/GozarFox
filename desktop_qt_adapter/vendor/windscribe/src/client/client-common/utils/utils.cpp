@@ -1,0 +1,332 @@
+#include "utils.h"
+
+#include <QDir>
+#include <QRandomGenerator>
+
+#include "log/categories.h"
+#include "ws_assert.h"
+
+#ifdef Q_OS_WIN
+    #include <Windows.h>
+    #include "winutils.h"
+#elif defined Q_OS_MACOS
+    #include "macutils.h"
+    #include <math.h>
+    #include <unistd.h>
+    #include <ApplicationServices/ApplicationServices.h>
+#elif defined Q_OS_LINUX
+    #include "linuxutils.h"
+    #include <unistd.h>
+#endif
+
+using namespace Utils;
+
+QString Utils::getPlatformName()
+{
+#ifdef Q_OS_WIN
+    #if defined(_M_ARM64)
+    return "windows_arm64";
+    #else
+    return "windows";
+    #endif
+#elif defined Q_OS_MACOS
+    return "macos";
+#elif defined Q_OS_LINUX
+    return LinuxUtils::getLastInstallPlatform();
+#endif
+}
+
+QString Utils::getOSVersion()
+{
+#ifdef Q_OS_WIN
+    return WinUtils::getWinVersionString();
+#elif defined Q_OS_MACOS
+    return ("MacOS " + MacUtils::getOsVersion());
+#elif defined Q_OS_LINUX
+    return LinuxUtils::getOsVersionString();
+#endif
+}
+
+void Utils::parseVersionString(const QString &version, int &major, int &minor, bool &bSuccess)
+{
+    QStringList strs = version.split(".");
+    if (strs.count() == 2)
+    {
+        bool bOk1, bOk2;
+        major = strs[0].toInt(&bOk1);
+        minor = strs[1].toInt(&bOk2);
+        bSuccess = bOk1 && bOk2;
+    }
+    else
+    {
+        bSuccess = false;
+    }
+}
+
+void Utils::getOSVersionAndBuild(QString &osVersion, QString &build)
+{
+#ifdef Q_OS_WIN
+    WinUtils::getOSVersionAndBuild(osVersion, build);
+#elif defined Q_OS_MACOS
+    MacUtils::getOSVersionAndBuild(osVersion, build);
+#elif defined Q_OS_LINUX
+    osVersion = LinuxUtils::getLinuxKernelVersion();
+    build = "";
+#endif
+}
+
+double Utils::generateDoubleRandom(const double &min, const double &max)
+{
+    return min + QRandomGenerator::global()->generateDouble() * (max - min);
+}
+
+// generate random intereg in [min, max]
+int Utils::generateIntegerRandom(const int &min, const int &max)
+{
+    return QRandomGenerator::global()->bounded(min, max + 1);
+}
+
+QString Utils::generateSecureCredential(int length)
+{
+    Q_ASSERT(length > 0);
+    static const char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    constexpr int kAlphabetSize = sizeof(alphabet) - 1;
+    QString out;
+    out.reserve(length);
+    auto *gen = QRandomGenerator::system();
+    for (int i = 0; i < length; ++i) {
+        out.append(QChar::fromLatin1(alphabet[gen->bounded(kAlphabetSize)]));
+    }
+    return out;
+}
+
+QString Utils::redactCredential(const QString &value)
+{
+    if (value.isEmpty()) {
+        return value;
+    }
+    return (value.size() <= 2 ? QString() : value.left(2)) + "***";
+}
+
+bool Utils::isSubdomainsEqual(const QString &hostname1, const QString &hostname2)
+{
+    // Compare only the subdomain portion so pinned IP matching still works when the server TLD changes.
+    int i1 = hostname1.indexOf('.');
+    int i2 = hostname2.indexOf('.');
+    QString sub1 = (i1 != -1) ? hostname1.left(i1) : hostname1;
+    QString sub2 = (i2 != -1) ? hostname2.left(i2) : hostname2;
+    return !sub1.isEmpty() && sub1 == sub2;
+}
+
+std::wstring Utils::getDirPathFromFullPath(const std::wstring &fullPath)
+{
+    size_t found = fullPath.find_last_of(L"/\\");
+    if (found != std::wstring::npos)
+    {
+        return fullPath.substr(0, found);
+    }
+    else
+    {
+        return fullPath;
+    }
+}
+
+QString Utils::fileNameFromFullPath(const QString &fullPath)
+{
+    int index = fullPath.lastIndexOf("/"); // TODO: verify this works on MAC
+    if (index != -1)
+    {
+        return fullPath.mid(index+1);
+    }
+    else
+    {
+        return fullPath;
+    }
+}
+
+QList<types::SplitTunnelingApp> Utils::insertionSort(QList<types::SplitTunnelingApp> apps)
+{
+    QList<types::SplitTunnelingApp> sortedApps;
+
+    for (int i = 0; i < apps.length(); i++)
+    {
+        int insertIndex = 0;
+        for (insertIndex = 0; insertIndex < sortedApps.length(); insertIndex++)
+        {
+            QString loweredInsertItem = sortedApps[insertIndex].name.toLower();
+            if (apps[i].name.toLower() < loweredInsertItem)
+            {
+                break;
+            }
+        }
+        sortedApps.insert(insertIndex, apps[i]);
+    }
+    return sortedApps;
+}
+
+bool Utils::isAppAlreadyRunning()
+{
+#ifdef Q_OS_WIN
+    return WinUtils::isAppAlreadyRunning();
+#elif defined Q_OS_MACOS
+    return MacUtils::isAppAlreadyRunning();
+#elif defined Q_OS_LINUX
+    return LinuxUtils::isAppAlreadyRunning();
+#endif
+}
+
+unsigned long Utils::getCurrentPid()
+{
+#ifdef Q_OS_WIN
+    return GetCurrentProcessId();
+#elif defined Q_OS_MACOS || defined(Q_OS_LINUX)
+    return static_cast<unsigned long>(getpid());
+#endif
+}
+
+const QString Utils::filenameEscapeSpaces(const QString &filename)
+{
+    QString result("");
+    for (QChar c : filename)
+    {
+        if (c == ' ') result.append('\\');
+        result.append(c);
+    }
+    return result;
+}
+
+const QString Utils::filenameQuotedSingle(const QString &filename)
+{
+    return "'" + filename + "'";
+}
+
+const QString Utils::filenameQuotedDouble(const QString &filename)
+{
+    return "\"" + filename + "\"";
+}
+
+bool Utils::isFullyQualifiedPath(const QString &path)
+{
+#ifdef Q_OS_WIN
+    // QFileInfo::isAbsolute() also accepts drive-relative (C:foo) and root-relative (\foo) paths, which resolve
+    // against the current directory; only a drive root or a UNC share is fully qualified.
+    const bool driveRooted = path.size() >= 3 && path[0].isLetter() && path[1] == ':' && (path[2] == '/' || path[2] == '\\');
+    return driveRooted || path.startsWith("//") || path.startsWith("\\\\");
+#else
+    return path.startsWith('/');
+#endif
+}
+
+bool Utils::removeDirectory(const QString dir)
+{
+    QDir d(dir);
+    return d.removeRecursively();
+}
+
+bool Utils::accessibilityPermissions()
+{
+#ifdef Q_OS_MACOS
+    return AXIsProcessTrusted();
+#else
+    return true;
+#endif
+}
+
+QString Utils::getDirPathFromFullPath(const QString &fullPath)
+{
+    int index = fullPath.lastIndexOf(QDir::separator());
+
+    if (index < 0)
+    {
+        qCCritical(LOG_BASIC) << "Failed to find index of delimiter";
+        WS_ASSERT(false);
+        return fullPath;
+    }
+
+    // exludes the "/" tail
+    return fullPath.mid(0, index);
+}
+
+QString Utils::getPlatformNameSafe()
+{
+    QString platform = getPlatformName();
+#ifdef Q_OS_LINUX
+    // Default to debian so most of our API calls don't fail if we cannot find the platform file
+    // file (someone would have to manually delete)
+    if (platform.isEmpty())
+#ifdef __aarch64__
+        return LinuxUtils::DEB_PLATFORM_NAME_ARM64;
+#else
+        return LinuxUtils::DEB_PLATFORM_NAME_X64;
+#endif
+#endif
+    return platform;
+}
+
+#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+QString Utils::execCmd(const QString &cmd)
+{
+#ifdef Q_OS_LINUX
+    // Utilities such as nmcli and ping translate their output under a non-English locale, which breaks
+    // the callers that parse it. C.UTF-8 rather than C so non-ASCII connection names survive nmcli's
+    // charset conversion; LANGUAGE is unset because older glibc lets it override LC_ALL for messages.
+    const std::string shellCmd = "export LC_ALL=C.UTF-8; unset LANGUAGE; " + cmd.toStdString();
+#else
+    const std::string shellCmd = cmd.toStdString();
+#endif
+    char buffer[1024];
+    QString result = "";
+    FILE* pipe = popen(shellCmd.c_str(), "r");
+    if (!pipe) return "";
+    while (!feof(pipe))
+    {
+        if (fgets(buffer, 1024, pipe) != NULL)
+        {
+            result += buffer;
+        }
+    }
+    pclose(pipe);
+    return result;
+}
+#endif
+
+QString Utils::getBasePlatformName()
+{
+#ifdef Q_OS_WIN
+    return "win";
+#elif defined Q_OS_MACOS
+    return "mac";
+#elif defined Q_OS_LINUX
+    return "linux";
+#else
+    error
+#endif
+}
+
+QString Utils::toBase64(const QString &str)
+{
+    return QString(str.toUtf8().toBase64());
+}
+
+QString Utils::fromBase64(const QString& str)
+{
+    QByteArray arr = QByteArray::fromBase64(str.toUtf8(), QByteArray::AbortOnBase64DecodingErrors);
+    QString out = QString::fromUtf8(arr);
+
+    // Removes control characters
+    return out.remove(QRegularExpression("\\p{Cc}"));
+}
+
+bool Utils::isCLIRunning(int minCount)
+{
+    if (strlen(WS_CLI_EXECUTABLE_NAME) == 0) {
+        return false;
+    }
+
+#ifdef Q_OS_WIN
+    return WinUtils::enumerateProcesses(WS_CLI_EXECUTABLE_NAME ".exe").size() > minCount;
+#else
+    return Utils::execCmd("ps axco command | grep " WS_CLI_EXECUTABLE_NAME " | grep -v grep | wc -l").trimmed().toInt() > minCount;
+#endif
+}

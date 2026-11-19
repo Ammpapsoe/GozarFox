@@ -1,0 +1,74 @@
+#pragma once
+
+#include <QDataStream>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QList>
+#include <QSettings>
+#include <QString>
+#include "enums.h"
+
+namespace types {
+
+struct ConnectedDnsInfo
+{
+    CONNECTED_DNS_TYPE type = CONNECTED_DNS_TYPE_AUTO;
+    QString upStream1;
+    bool isSplitDns = false;
+    QString upStream2;
+    QStringList hostnames;
+    QString controldApiKey;
+    QList<QPair<QString, QString>> controldDevices;  // List of (name, doh_resolver) pairs
+
+    ConnectedDnsInfo() = default;
+    ConnectedDnsInfo(const QJsonObject &json);
+
+    static QList<CONNECTED_DNS_TYPE> allAvailableTypes();
+
+    QJsonObject toJson(bool isForDebugLog = false) const;
+
+#ifdef CLI_ONLY
+    void fromIni(const QSettings &settings);
+    void toIni(QSettings &settings) const;
+#endif
+
+    void validate();
+
+    // Rewrites a custom DNS upstream given as the wildcard listen address (0.0.0.0 / ::) to its
+    // loopback equivalent (127.0.0.1 / ::1) — that is the address a resolver bound to the
+    // wildcard is actually reached on. Covers upStream1, plus upStream2 in split-DNS mode.
+    // Applied at every entry point (load, import, GUI) so the stored value is already canonical
+    // and use sites never have to special-case the wildcard.
+    void normalize();
+
+    bool isCustomIPv4Address() const;
+    bool isSplitDnsActive() const;
+
+    // IPs of ctrld upstreams that use plain DNS (:53) and therefore must be reachable through
+    // DNS-leak protection. DoH/DoT (https:// / hostname) upstreams are excluded — they use :443 and
+    // are governed by the general firewall, not the :53 leak block.
+    QStringList ctrldPlainUpstreamIps() const;
+
+    friend QDataStream& operator <<(QDataStream &stream, const ConnectedDnsInfo &o);
+    friend QDataStream& operator >>(QDataStream &stream, ConnectedDnsInfo &o);
+
+    bool operator==(const ConnectedDnsInfo &other) const;
+    bool operator!=(const ConnectedDnsInfo &other) const;
+
+    static const inline QString kIniTypeProp = "ConnectedDNSMode";
+    static const inline QString kIniUpStream1Prop = "ConnectedDNSUpstream1";
+    static const inline QString kIniIsSplitDnsProp = "SplitDNS";
+    static const inline QString kIniUpStream2Prop = "ConnectedDNSUpstream2";
+    static const inline QString kIniHostnamesProp = "SplitDNSHostnames";
+
+    static const inline QString kJsonTypeProp = "type";
+    static const inline QString kJsonUpStream1Prop = "upStream1";
+    static const inline QString kJsonIsSplitDnsProp = "isSplitDns";
+    static const inline QString kJsonUpStream2Prop = "upStream2";
+    static const inline QString kJsonHostnamesProp = "hostnames";
+    static const inline QString kJsonControldApiKeyProp = "controldApiKey";
+
+    static constexpr quint32 versionForSerialization_ = 3;  // should increment the version if the data format is changed
+};
+
+} // types namespace

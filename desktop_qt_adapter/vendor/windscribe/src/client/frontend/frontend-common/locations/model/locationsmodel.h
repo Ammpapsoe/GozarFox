@@ -1,0 +1,107 @@
+#pragma once
+
+#include <QAbstractItemModel>
+#include <QJsonObject>
+#include "favoritelocationsstorage.h"
+#include "types/location.h"
+#include "types/locationid.h"
+#include "types/pingtime.h"
+#include "locationitem.h"
+#include "renamedlocationsstorage.h"
+
+namespace gui_locations {
+
+/*  It is an implementation of the locations model based on QAbstractItemModel
+    The structure is a simple unsorted tree. Only the best location is always added to the top of the list,
+    other items can be in any order, proxy models are used for sorting.
+
+     BestLocation (if exists)
+     Country1
+          City1
+          ...
+          CityN
+     Country2
+          City1
+          ...
+          CityN
+          ...
+     CountryN
+     CustomConfig Location  (if exists)
+          custom_config1
+          ...
+          custom_configN
+
+    Here also management of the best location and CustomConfig location.
+    The best location has no children
+    Roles for LocationsModel items are located in locationsmodel_roles.h
+    Can be used with any Qt-class based on QAbstractItemView (for example with QTreeView) to show this model in the GUI.
+*/
+
+class LocationsModel : public QAbstractItemModel
+{
+    Q_OBJECT
+public:
+    // Untranslated; the GUI passes it through tr(), the CLI shows it as is.
+    static constexpr const char *BEST_LOCATION_NAME = QT_TR_NOOP("Best Location");
+
+    explicit LocationsModel(QObject *parent = nullptr);
+    virtual ~LocationsModel();
+
+    void updateLocations(const LocationID &bestLocation, const QVector<types::Location> &newLocations);
+    void updateBestLocation(const LocationID &bestLocation);
+    void updateCustomConfigLocation(const types::Location &location);
+    void changeConnectionSpeed(LocationID id, PingTime speed);
+    void setFreeSessionStatus(bool isFreeSessionStatus, const QStringList &alcLocations);
+
+    int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;
+    QModelIndex parent(const QModelIndex &index) const override;
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
+    Qt::ItemFlags flags(const QModelIndex &index) const override;
+
+    QModelIndex getIndexByLocationId(const LocationID &id) const;
+    QModelIndex getBestLocationIndex() const;
+    QModelIndex getCustomConfigLocationIndex() const;
+    // The server list's own name for the datacenter with this id, as "City - Nick" (never a rename); empty
+    // when no city in the list has it.
+    QString cityNameForDatacenter(int datacenterId) const;
+    // The datacenter id of an API city, or of the city a best location stands for; 0 for anything else.
+    int datacenterIdForLocation(const LocationID &lid) const;
+
+    // the client of the class must explicitly save locations if required
+    void saveFavoriteLocations();
+
+    QJsonArray favoriteLocationsToJson() const;
+    void setFavoriteLocationsFromJson(const QJsonArray &arr);
+
+    QJsonObject renamedLocations() const;
+    void setRenamedLocations(const QJsonObject &obj);
+    void resetRenamedLocations();
+
+signals:
+    void deviceNameChanged(const QString &deviceName);
+
+private slots:
+    void onLanguageChanged();
+
+private:
+    QVector<LocationItem *> locations_;
+    QHash<LocationID, LocationItem *> mapLocations_;   // map LocationID to index in locations_
+
+    int *root_;   // Fake root node. The typename does not matter, only the pointer to identify the root node matters.
+    bool isFreeSessionStatus_;
+    QSet<QString> alcLocations_;
+    FavoriteLocationsStorage favoriteLocationsStorage_;
+    RenamedLocationsStorage renamedLocationsStorage_;
+
+    QVariant dataForLocation(int row, int role) const;
+    QVariant dataForCity(LocationItem *l, int row, int role) const;
+    void clearLocations();
+    void handleChangedLocation(int ind, const types::Location &newLocation);
+    LocationItem *findAndCreateBestLocationItem(const LocationID &bestLocation);
+
+};
+
+} //namespace gui_locations

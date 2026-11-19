@@ -1,0 +1,138 @@
+if(IS_BUILD_TESTS)
+    add_executable(locationsmodel.test
+        locationsmodel.test.cpp
+        locationsmodel.test.h
+        locationsmodel.test.qrc
+    )
+    target_link_libraries(locationsmodel.test PRIVATE
+        Qt6::Test frontend-common engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(locationsmodel.test PRIVATE
+        ${PROJECT_DIRECTORY}/frontend/frontend-common
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(locationsmodel.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(locationsmodel)
+
+    add_executable(hydraprofile.test
+        hydraprofile.test.cpp
+        hydraprofile.test.h
+    )
+    target_link_libraries(hydraprofile.test PRIVATE
+        Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(hydraprofile.test PRIVATE
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(hydraprofile.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(hydraprofile)
+
+    # The IPC commands between windscribe-cli and the app: what crosses, and what an unreadable body reads as.
+    add_executable(clicommands.test
+        clicommands.test.cpp
+        clicommands.test.h
+    )
+    target_link_libraries(clicommands.test PRIVATE
+        Qt6::Test Qt6::Network engine client-common wsnet::wsnet spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(clicommands.test PRIVATE
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(clicommands.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(clicommands)
+
+    add_executable(networkingvalidation.test
+        networkingvalidation.test.cpp
+        networkingvalidation.test.h
+    )
+    target_link_libraries(networkingvalidation.test PRIVATE
+        Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(networkingvalidation.test PRIVATE
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(networkingvalidation.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(networkingvalidation)
+
+    # Compiles the lock directly instead of linking client-common: it needs nothing but the OS.
+    add_executable(systemwideapplock.test
+        systemwideapplock.test.cpp
+        systemwideapplock.test.h
+        ../utils/systemwideapplock.cpp
+    )
+    target_link_libraries(systemwideapplock.test PRIVATE Qt6::Test)
+    target_include_directories(systemwideapplock.test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    set_target_properties(systemwideapplock.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(systemwideapplock)
+
+    # Covers NetworkUtils_linux only, hence the guard. Cross-platform NetworkUtils tests belong in
+    # their own unguarded target, not here.
+    if(UNIX AND NOT APPLE)
+        add_executable(networkutilslinux.test
+            networkutilslinux.test.cpp
+            networkutilslinux.test.h
+        )
+        target_link_libraries(networkutilslinux.test PRIVATE
+            Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+        target_include_directories(networkutilslinux.test PRIVATE
+            ${PROJECT_DIRECTORY}/client-common
+        )
+        set_target_properties(networkutilslinux.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+        ws_add_test(networkutilslinux)
+    endif()
+
+    # Linux-only: Utils::execCmd pins the child's locale only on Linux, where system utilities translate
+    # their output.
+    if(UNIX AND NOT APPLE)
+        add_executable(utilslinux.test
+            utilslinux.test.cpp
+            utilslinux.test.h
+        )
+        target_link_libraries(utilslinux.test PRIVATE
+            Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+        target_include_directories(utilslinux.test PRIVATE
+            ${PROJECT_DIRECTORY}/client-common
+        )
+        set_target_properties(utilslinux.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+        ws_add_test(utilslinux)
+    endif()
+
+    add_executable(utils.test
+        utils.test.cpp
+        utils.test.h
+    )
+    target_link_libraries(utils.test PRIVATE
+        Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(utils.test PRIVATE
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(utils.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(utils)
+
+    # Linux-only: DnsLeakParse reads resolvectl/nmcli output. Compiles the parser and ipaddress
+    # directly instead of linking client-common, keeping the target free of Qt — the same module is
+    # compiled into the root helper, which has no Qt.
+    if(UNIX AND NOT APPLE)
+        add_executable(dnsleakparse.test
+            dnsleakparse.test.cpp
+            ../utils/dns_utils/dnsleakparse.cpp
+            ../types/ipaddress.cpp
+        )
+        target_link_libraries(dnsleakparse.test PRIVATE
+            spdlog::spdlog
+        )
+        target_include_directories(dnsleakparse.test PRIVATE
+            ${PROJECT_DIRECTORY}/client-common
+        )
+        set_target_properties(dnsleakparse.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+        ws_add_test(dnsleakparse)
+    endif()
+
+    add_executable(settingsvalidation.test
+        settingsvalidation.test.cpp
+        settingsvalidation.test.h
+    )
+    target_link_libraries(settingsvalidation.test PRIVATE
+        Qt6::Test Qt6::Network engine client-common spdlog::spdlog ${OS_SPECIFIC_LIBRARIES})
+    target_include_directories(settingsvalidation.test PRIVATE
+        ${PROJECT_DIRECTORY}/client-common
+    )
+    set_target_properties(settingsvalidation.test PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+    ws_add_test(settingsvalidation)
+endif(IS_BUILD_TESTS)

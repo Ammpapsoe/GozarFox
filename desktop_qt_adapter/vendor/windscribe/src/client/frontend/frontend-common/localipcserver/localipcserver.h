@@ -1,0 +1,103 @@
+#pragma once
+
+#include <QVector>
+
+#include "api_responses/checkupdate.h"
+#include "backend/backend.h"
+#include "ipc/clicommands.h"
+#include "ipc/connection.h"
+#include "ipc/server.h"
+#include "types/connectstate.h"
+#include "types/enums.h"
+#include "types/protocol.h"
+
+// Local server for receive and execute commands from local processes (currently only from the CLI).
+class LocalIPCServer : public QObject
+{
+    Q_OBJECT
+public:
+    explicit LocalIPCServer(Backend *backend, QObject *parent = nullptr);
+    ~LocalIPCServer();
+
+    void start();
+    void setDisconnectedByKeyLimit();
+
+signals:
+    void connectToLocation(const LocationID &id, const types::Protocol &protocol, uint port);
+    void attemptLogin(const QString &username, const QString &password, const QString &code2fa);
+    void setKeyLimitBehavior(bool deleteKey);
+    void setIgnoreSslErrors(bool ignore);
+    void update();
+    // windscribe-cli imported or removed the hydra profile.
+    void hydraProfileChanged();
+
+private slots:
+    void onServerCallbackAcceptFunction(IPC::Connection *connection);
+    void onConnectionCommandCallback(IPC::Command *command, IPC::Connection *connection);
+    void onConnectionStateCallback(int state, IPC::Connection *connection);
+
+    void onBackendCheckUpdateChanged(const api_responses::CheckUpdate &checkUpdate);
+    void onBackendConnectStateChanged(const types::ConnectState &state);
+    void onBackendInternetConnectivityChanged(bool connectivity);
+    void onBackendMyIpChanged(const QString &ip, bool isFromDisconnectedState);
+    void onBackendLoginFinished();
+    void onBackendCaptchaRequired(bool isAsciiCaptcha, const QString &asciiArt, const QString &background, const QString &slider, int top);
+    void onBackendLoginError(wsnet::LoginResult code, const QString &msg);
+    void onBackendLogoutFinished();
+    void onBackendProtocolPortChanged(const types::Protocol &protocol, uint port);
+    void onBackendTestTunnelResult(bool success);
+    void onBackendUpdateDownloaded(const QString &path);
+    void onBackendUpdateVersionChanged(uint progressPercent, UPDATE_VERSION_STATE state, UPDATE_VERSION_ERROR error);
+    void onBackendConnectionIdChanged(const QString &connId);
+    void onBackendBridgeApiAvailabilityChanged(bool isAvailable);
+    void onBackendIpRotateResult(bool success);
+    void onBackendDebugLogResult(bool success);
+
+    void onLocationsModelManagerDeviceNameChanged(const QString &deviceName);
+
+private:
+    Backend *backend_;
+    IPC::Server *server_ = nullptr;
+    QVector<IPC::Connection *> connections_;
+
+    bool connectivity_;
+    LOGIN_STATE loginState_;
+
+    bool isCaptchaRequired_ = false;
+    QString asciiArt_;
+
+    UPDATE_VERSION_STATE updateState_;
+    UPDATE_VERSION_ERROR updateError_;
+    uint updateProgress_;
+    QString updatePath_;
+    QString updateAvailable_;
+    wsnet::LoginResult lastLoginError_ = wsnet::LoginResult::kSuccess;
+    QString lastLoginErrorMessage_;
+    types::ConnectState connectState_;
+    types::Protocol protocol_;
+    uint port_;
+    TUNNEL_TEST_STATE tunnelTestState_;
+    bool disconnectedByKeyLimit_ = false;
+    QString connectId_;
+    bool tunnelTestSuccess_;
+    QString deviceName_;
+    bool invalidLocation_ = false;
+    bool isBridgeApiAvailable_ = false;
+    bool awaitingIpRotateResult_ = false;
+    bool awaitingDebugLogResult_ = false;
+    QString myIp_;
+    bool isMyIpFromDisconnectedState_ = true;
+    // Set when the connect state changes, cleared when the IP is looked up again. While connected, the IP is only
+    // looked up by a successful tunnel test, so after a reconnect whose test fails it stays the previous server's.
+    bool isMyIpStale_ = false;
+
+    void sendState(IPC::Connection *connection);
+    // Whether myIp_ was looked up in the current connect state.
+    bool isMyIpCurrent() const;
+    void sendCommand(const IPC::Command &command);
+    // Answers a request on the connection that made it only.
+    void reply(IPC::Connection *connection, const IPC::Command &command);
+    QList<IPC::CliCommands::IpcLocation> locationsList(IPC::CliCommands::LocationType type) const;
+    void sendLocations(IPC::Connection *connection, const QList<IPC::CliCommands::IpcLocation> &locations, IPC::CliCommands::LocationType type);
+    IPC::CliCommands::Acknowledge hydraProfileAnswer(const IPC::CliCommands::SetHydraProfile &cmd) const;
+};

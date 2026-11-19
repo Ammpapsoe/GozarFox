@@ -1,0 +1,3242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="fr_FR">
+<context>
+    <name>AdvancedParametersDialog</name>
+    <message>
+        <source>Write your parameters here</source>
+        <translation>Écrivez vos paramètres ici</translation>
+    </message>
+    <message>
+        <source>Clear</source>
+        <translation>Clair</translation>
+    </message>
+    <message>
+        <source>Ok</source>
+        <translation>D’accord</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <source>Advanced Parameters</source>
+        <translation>Paramètres avancés</translation>
+    </message>
+</context>
+<context>
+    <name>CommonGraphics::EscapeButton</name>
+    <message>
+        <source>ESC</source>
+        <translation>ESC</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::ConnectWindowItem</name>
+    <message>
+        <source>Connection to Windscribe has been terminated. </source>
+        <translation>La connexion à Windscribe a été interrompue. </translation>
+    </message>
+    <message>
+        <source> transferred in </source>
+        <translation> transféré en </translation>
+    </message>
+    <message>
+        <source>Connected for </source>
+        <translation>Connecté pour </translation>
+    </message>
+    <message>
+        <source> transferred</source>
+        <translation> Transféré</translation>
+    </message>
+    <message>
+        <source>Firewall</source>
+        <translation>Pare-feu</translation>
+    </message>
+    <message>
+        <source>Blocks all connectivity in the event of a sudden disconnect</source>
+        <translation>Bloque toute connectivité en cas de déconnexion soudaine</translation>
+    </message>
+    <message>
+        <source>Keeping the firewall on while disconnected may break internet connectivity</source>
+        <translation>Garder le pare-feu allumé alors qu’on est déconnecté peut interrompre la connectivité Internet</translation>
+    </message>
+    <message>
+        <source>Favourite IP</source>
+        <translation>IP préférée</translation>
+    </message>
+    <message>
+        <source>Rotate IP</source>
+        <translation>Rotation de l’IP</translation>
+    </message>
+    <message>
+        <source>FIREWALL</source>
+        <translation>PARE-FEU</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::LocationsButton</name>
+    <message>
+        <source>Locations</source>
+        <translation>Lieux</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectWindow::LocationsMenu</name>
+    <message>
+        <source>All</source>
+        <translation>Tout</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>Adresses IP statiques</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Rechercher</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Configurations personnalisées</translation>
+    </message>
+    <message>
+        <source>Favourites</source>
+        <translation>Favoris</translation>
+    </message>
+</context>
+<context>
+    <name>CustomMenuWidget</name>
+    <message>
+        <source>Undo</source>
+        <translation>Défaire</translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation>Refaire</translation>
+    </message>
+    <message>
+        <source>Cut</source>
+        <translation>Couper</translation>
+    </message>
+    <message>
+        <source>Copy</source>
+        <translation>Copier</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Pâte</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Supprimer</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>Sélectionner tout</translation>
+    </message>
+</context>
+<context>
+    <name>EmergencyConnectWindow::EmergencyConnectWindowItem</name>
+    <message>
+        <source>Emergency Connect</source>
+        <translation>Connexion d’urgence</translation>
+    </message>
+    <message>
+        <source>Emergency connection failure. Try again?</source>
+        <translation>Échec de la connexion d’urgence. Réessayez?</translation>
+    </message>
+    <message>
+        <source>Can&apos;t access Windscribe.com or login into the app on your restrictive network? Connect to the emergency server that unblocks all of Windscribe.</source>
+        <translation>Vous ne pouvez pas accéder à Windscribe.com ou vous connecter à l’application sur votre réseau restrictif ? Connectez-vous au serveur d’urgence qui débloque l’ensemble de Windscribe.</translation>
+    </message>
+    <message>
+        <source>Connecting...</source>
+        <translation>Connectant...</translation>
+    </message>
+    <message>
+        <source>Disconnecting...</source>
+        <translation>Déconnexion...</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Relier</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Déconnecter</translation>
+    </message>
+</context>
+<context>
+    <name>EmergencyConnectWindow::TextLinkItem</name>
+    <message>
+        <source>Access for %1 Only</source>
+        <translation>Accès pour %1 uniquement</translation>
+    </message>
+</context>
+<context>
+    <name>ExternalConfigWindow::ExternalConfigWindowItem</name>
+    <message>
+        <source>External Config Mode</source>
+        <translation>Mode de configuration externe</translation>
+    </message>
+    <message>
+        <source>Use the Windscribe app without an account to connect to any OpenVPN or WireGuard server.</source>
+        <translation>Utilisez l’application Windscribe sans compte pour vous connecter à n’importe quel serveur OpenVPN ou WireGuard.</translation>
+    </message>
+    <message>
+        <source>Ok, got it!</source>
+        <translation>Ok, j’ai compris!</translation>
+    </message>
+</context>
+<context>
+    <name>FreeTrafficNotificationController</name>
+    <message>
+        <source>You reached %1% of your free bandwidth allowance</source>
+        <translation>Vous avez atteint %1 % de votre allocation de bande passante libre</translation>
+    </message>
+</context>
+<context>
+    <name>GeneralMessageController</name>
+    <message>
+        <source>Ok</source>
+        <translation>D’accord</translation>
+    </message>
+    <message>
+        <source>Yes</source>
+        <translation>Oui</translation>
+    </message>
+    <message>
+        <source>No</source>
+        <translation>Non</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+</context>
+<context>
+    <name>GeneralMessageWindow::GeneralMessageItem</name>
+    <message>
+        <source>Ignore Warnings</source>
+        <translation>Ignorer les avertissements</translation>
+    </message>
+    <message>
+        <source>Learn More</source>
+        <translation>Pour en savoir plus</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>Remember</source>
+        <translation>Se souvenir</translation>
+    </message>
+</context>
+<context>
+    <name>GuiLocations::LocationsTab</name>
+    <message>
+        <source>Choose the directory that contains custom configs you wish to display here</source>
+        <translation>Choisissez le répertoire qui contient les configurations personnalisées que vous souhaitez afficher ici</translation>
+    </message>
+    <message>
+        <source>Choose</source>
+        <translation>Choisir</translation>
+    </message>
+    <message>
+        <source>The selected directory contains no custom configs</source>
+        <translation>Le répertoire sélectionné ne contient aucune configuration personnalisée</translation>
+    </message>
+    <message>
+        <source>No locations found</source>
+        <translation>Aucun emplacement trouvé</translation>
+    </message>
+    <message>
+        <source>Nothing to see here...</source>
+        <translation>Rien à voir ici...</translation>
+    </message>
+    <message>
+        <source>You don&apos;t have any Static IPs</source>
+        <translation>Vous n’avez pas d’adresses IP statiques</translation>
+    </message>
+    <message>
+        <source>No locations</source>
+        <translation>Pas d’emplacements</translation>
+    </message>
+    <message>
+        <source>ALL LOCATIONS</source>
+        <translation>TOUS EMPLACEMENTS</translation>
+    </message>
+    <message>
+        <source>FAVOURITES</source>
+        <translation>FAVORIS</translation>
+    </message>
+    <message>
+        <source>STATIC IPs</source>
+        <translation>IP STATIQUES</translation>
+    </message>
+    <message>
+        <source>CUSTOM CONFIGs</source>
+        <translation>CONFIGURATIONS PERSONNALISÉES</translation>
+    </message>
+    <message>
+        <source>SEARCH</source>
+        <translation>RECHERCHER</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Ajouter</translation>
+    </message>
+</context>
+<context>
+    <name>GuiLocations::StaticIPDeviceInfo</name>
+    <message>
+        <source>Add</source>
+        <translation>Ajouter</translation>
+    </message>
+</context>
+<context>
+    <name>LocalIPCServer</name>
+    <message>
+        <source>Malformed hydra profile command.</source>
+        <translation>Commande de profil hydra mal formée.</translation>
+    </message>
+    <message>
+        <source>Could not remove the hydra profile.</source>
+        <translation>Impossible de supprimer le profil hydra.</translation>
+    </message>
+    <message>
+        <source>Hydra profile removed.</source>
+        <translation>Profil hydra supprimé.</translation>
+    </message>
+    <message>
+        <source>No hydra profile imported.</source>
+        <translation>Aucun profil hydra importé.</translation>
+    </message>
+    <message>
+        <source>The imported hydra profile is not in use. %1</source>
+        <translation>Le profil hydra importé n&apos;est pas utilisé. %1</translation>
+    </message>
+    <message>
+        <source>Hydra profile %1:</source>
+        <translation>Profil hydra %1 :</translation>
+    </message>
+    <message>
+        <source>(unnamed)</source>
+        <translation>(sans nom)</translation>
+    </message>
+    <message>
+        <source>It maps every location: all of them connect through your hydra server.</source>
+        <translation>Il couvre tous les emplacements : tous se connectent via votre serveur hydra.</translation>
+    </message>
+    <message>
+        <source>Connect to one of these locations to go through your hydra server; the others connect directly.</source>
+        <translation>Connectez-vous à l&apos;un de ces emplacements pour passer par votre serveur hydra ; les autres se connectent directement.</translation>
+    </message>
+</context>
+<context>
+    <name>LogViewer::LogViewerWindow</name>
+    <message>
+        <source>Word Wrap</source>
+        <translation>Retour automatique à la ligne</translation>
+    </message>
+    <message>
+        <source>Colour highlighting</source>
+        <translation>Mise en évidence des couleurs</translation>
+    </message>
+    <message>
+        <source>Export to file...</source>
+        <translation>Exporter vers un fichier...</translation>
+    </message>
+    <message>
+        <source>Save log</source>
+        <translation>Enregistrer le journal</translation>
+    </message>
+    <message>
+        <source>Text files (*.txt)</source>
+        <translation>Fichiers texte (*.txt)</translation>
+    </message>
+    <message>
+        <source>Export log</source>
+        <translation>Journal d’exportation</translation>
+    </message>
+    <message>
+        <source>Failed to export log.  Make sure you have the correct permissions.</source>
+        <translation>Echec de l’exportation du journal.  Assurez-vous de disposer des autorisations appropriées.</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::CaptchaItem</name>
+    <message>
+        <source>Slide puzzle piece into place</source>
+        <translation>Faites glisser la pièce du puzzle en place</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::LoggingInWindowItem</name>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Complete Puzzle to continue</source>
+        <translation>Terminez le puzzle pour continuer</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::LoginWindowItem</name>
+    <message>
+        <source>Turn Off Firewall</source>
+        <translation>Désactiver le pare-feu</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connexion</translation>
+    </message>
+    <message>
+        <source>Emergency Connect is ON</source>
+        <translation>Le Emergency Connect est ACTIVÉ</translation>
+    </message>
+    <message>
+        <source>2FA Code</source>
+        <translation>Code 2FA</translation>
+    </message>
+    <message>
+        <source>Forgot password?</source>
+        <translation>Tu as oublié le mot de passe ?</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>Hashed</source>
+        <translation>Haché</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Enter username</source>
+        <translation>Saisissez le nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation>Saisissez le mot de passe</translation>
+    </message>
+    <message>
+        <source>Hash</source>
+        <translation>Hachch</translation>
+    </message>
+    <message>
+        <source>Account Hash or upload file</source>
+        <translation>Hachage du compte ou fichier d’envoi</translation>
+    </message>
+    <message>
+        <source>Select file for hash</source>
+        <translation>Sélectionnez le fichier pour le hachage</translation>
+    </message>
+    <message>
+        <source>All Files (*.*)</source>
+        <translation>Tous les fichiers (*.*)</translation>
+    </message>
+    <message>
+        <source>No Internet Connectivity</source>
+        <translation>Pas de connexion Internet</translation>
+    </message>
+    <message>
+        <source>No API Connectivity</source>
+        <translation>Aucune connectivité API</translation>
+    </message>
+    <message>
+        <source>Proxy requires authentication</source>
+        <translation>Le proxy nécessite une authentification</translation>
+    </message>
+    <message>
+        <source>Invalid API response, check your network</source>
+        <translation>Réponse API invalide, vérifiez votre réseau</translation>
+    </message>
+    <message>
+        <source>Invalid API Endpoint</source>
+        <translation>Endpoint API invalide</translation>
+    </message>
+    <message>
+        <source>...hmm are you sure this is correct?</source>
+        <translation>... Hmm, êtes-vous sûr que c’est correct ?</translation>
+    </message>
+    <message>
+        <source>...Sorry, seems like it&apos;s wrong again</source>
+        <translation>... Désolé, ça semble encore mal</translation>
+    </message>
+    <message>
+        <source>...hmm, try resetting your password!</source>
+        <translation>... Hmm, essaie de réinitialiser ton mot de passe !</translation>
+    </message>
+    <message>
+        <source>Rate limited. Please wait before trying to login again.</source>
+        <translation>Tarif limité. Veuillez patienter avant de réessayer de vous connecter.</translation>
+    </message>
+    <message>
+        <source>Session is expired. Please login again</source>
+        <translation>La session est expirée. Veuillez vous reconnecter</translation>
+    </message>
+    <message>
+        <source>Your username should not be an email address. Please try again.</source>
+        <translation>Votre nom d’utilisateur ne doit pas être une adresse e-mail. Veuillez réessayer.</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::SignupWindowItem</name>
+    <message>
+        <source>Sign Up</source>
+        <translation>Inscrivez-vous</translation>
+    </message>
+    <message>
+        <source>Standard</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>Hashed</source>
+        <translation>Haché</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Enter username</source>
+        <translation>Saisissez le nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>Enter password</source>
+        <translation>Saisissez le mot de passe</translation>
+    </message>
+    <message>
+        <source>8 or more characters with at least one uppercase and lowercase(ie. &quot;Hello1234&quot;, &quot;Solyanka&quot;).</source>
+        <translation>8 caractères ou plus avec au moins une majuscule et une minuscule (c’est-à-dire « Hello1234 », « Solyanka »).</translation>
+    </message>
+    <message>
+        <source>Email (Optional)</source>
+        <translation>Email (optionnel)</translation>
+    </message>
+    <message>
+        <source>Enter email</source>
+        <translation>Saisissez votre e-mail</translation>
+    </message>
+    <message>
+        <source>Voucher Code?</source>
+        <translation>Code de bon ?</translation>
+    </message>
+    <message>
+        <source>Voucher code (optional)</source>
+        <translation>Code de bon (optionnel)</translation>
+    </message>
+    <message>
+        <source>Referred By Someone?</source>
+        <translation>Recommandé par quelqu’un ?</translation>
+    </message>
+    <message>
+        <source>Referring username (optional)</source>
+        <translation>Nom d’utilisateur référent (optionnel)</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Continuez</translation>
+    </message>
+    <message>
+        <source>Hash</source>
+        <translation>Hachch</translation>
+    </message>
+    <message>
+        <source>Generate or browse file</source>
+        <translation>Générer ou parcourir un fichier</translation>
+    </message>
+    <message>
+        <source>No personal info required. Account recovery is impossible.
+If you lose your account hash, it&apos;s gone forever and support cannot help you recover it.</source>
+        <translation>Aucune information personnelle requise. La récupération de compte est impossible.
+Si vous perdez le hachage de votre compte, il disparaît à jamais et le support ne peut pas vous aider à le récupérer.</translation>
+    </message>
+    <message>
+        <source>Select file for hash</source>
+        <translation>Sélectionnez le fichier pour le hachage</translation>
+    </message>
+    <message>
+        <source>All Files (*.*)</source>
+        <translation>Tous les fichiers (*.*)</translation>
+    </message>
+    <message>
+        <source>Username must be at least 3 characters</source>
+        <translation>Le nom d’utilisateur doit comporter au moins 3 caractères</translation>
+    </message>
+    <message>
+        <source>Your username should not be an email address.</source>
+        <translation>Votre nom d’utilisateur ne doit pas être une adresse e-mail.</translation>
+    </message>
+    <message>
+        <source>Invalid email</source>
+        <translation>Email invalide</translation>
+    </message>
+    <message>
+        <source>Invalid hash</source>
+        <translation>Hachage invalide</translation>
+    </message>
+</context>
+<context>
+    <name>LoginWindow::WelcomeWindowItem</name>
+    <message>
+        <source>Emergency Connect</source>
+        <translation>Connexion d’urgence</translation>
+    </message>
+    <message>
+        <source>External Config</source>
+        <translation>Configuration externe</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Préférences</translation>
+    </message>
+    <message>
+        <source>Turn Off Firewall</source>
+        <translation>Désactiver le pare-feu</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Get Started</source>
+        <translation>Démarrer</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindow</name>
+    <message>
+        <source>Windscribe could not update your hosts file, which IKEv2 requires. Another program, such as antivirus or endpoint security software, may be blocking changes to it. Please try again, or use a different connection mode.</source>
+        <translation>Windscribe n’a pas pu mettre à jour votre fichier hosts, nécessaire à IKEv2. Un autre programme, tel qu’un antivirus ou un logiciel de sécurité des points de terminaison, bloque peut-être les modifications de ce fichier. Veuillez réessayer ou utiliser un autre mode de connexion.</translation>
+    </message>
+    <message>
+        <source>Split Tunneling Stopped</source>
+        <translation>Split tunneling arrêté</translation>
+    </message>
+    <message>
+        <source>The split tunneling session ended unexpectedly. Please reconnect to retry. If this persists, please contact support.</source>
+        <translation>La session de split tunneling s’est terminée de manière inattendue. Veuillez vous reconnecter pour réessayer. Si le problème persiste, veuillez contacter le support.</translation>
+    </message>
+    <message>
+        <source>Logging you in...</source>
+        <translation>En vous connectant...</translation>
+    </message>
+    <message>
+        <source>VPN is active</source>
+        <translation>Le VPN est actif</translation>
+    </message>
+    <message>
+        <source>Rotating your MAC address will result in a disconnect event from the current network. Are you sure?</source>
+        <translation>La rotation de votre adresse MAC entraînera un événement de déconnexion du réseau actuel. Es-tu sûr?</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size while connected. Please disconnect first.</source>
+        <translation>Impossible de détecter la taille de paquet appropriée lors de la connexion. Veuillez d’abord vous déconnecter.</translation>
+    </message>
+    <message>
+        <source>No Internet</source>
+        <translation>Pas d’Internet</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size without internet. Check your connection.</source>
+        <translation>Impossible de détecter la taille de paquet appropriée sans Internet. Vérifiez votre connexion.</translation>
+    </message>
+    <message>
+        <source>Select Custom Config Folder</source>
+        <translation>Sélectionnez le dossier de configuration personnalisé</translation>
+    </message>
+    <message>
+        <source>Could not start &apos;Base Filtering Engine&apos; service.  Please enable this service manually in Windows Services.</source>
+        <translation>Impossible de démarrer le service « Moteur de filtrage de base ».  Veuillez activer ce service manuellement dans les services Windows.</translation>
+    </message>
+    <message>
+        <source>We&apos;ve detected that your network settings may interfere with Windscribe.  Please send us a debug log to troubleshoot.</source>
+        <translation>Nous avons détecté que vos paramètres réseau peuvent interférer avec Windscribe.  Veuillez nous envoyer un journal de débogage pour dépanner.</translation>
+    </message>
+    <message>
+        <source>Could not spoof MAC address.  Please try a different network interface or contact support.</source>
+        <translation>Impossible d’usurper l’adresse MAC.  Veuillez essayer une autre interface réseau ou contacter le support.</translation>
+    </message>
+    <message>
+        <source>Could not download update.  Please try again or use a different network.</source>
+        <translation>Impossible de télécharger la mise à jour.  Veuillez réessayer ou utiliser un autre réseau.</translation>
+    </message>
+    <message>
+        <source>Could not run updater (Error %1).  Please contact support</source>
+        <translation>Impossible d’exécuter le programme de mise à jour (erreur %1).  Veuillez contacter le support</translation>
+    </message>
+    <message>
+        <source>The custom configuration could not be loaded.  Please check that it’s correct or contact support.</source>
+        <translation>La configuration personnalisée n’a pas pu être chargée.  Veuillez vérifier qu’il est correct ou contacter le support.</translation>
+    </message>
+    <message>
+        <source>VPN adapter setup failed. Please wait one minute and try the connection again. If the problem persists, please send a debug log and open a support ticket, then switch to a different connection mode.</source>
+        <translation>Installation de l’adaptateur VPN échouée. Veuillez patienter une minute et réessayer la connexion. Si le problème persiste, veuillez envoyer un journal de débogage et ouvrir un ticket de support, puis passer à un autre mode connexion.</translation>
+    </message>
+    <message>
+        <source>Windscribe could not generate the connection configuration. If this error persists, please send a debug log and open a support ticket.</source>
+        <translation>Windscribe n’a pas pu générer la configuration de connexion. Si cette erreur persiste, veuillez envoyer un journal de débogage et ouvrir un ticket de support.</translation>
+    </message>
+    <message>
+        <source>Can&apos;t reach your hydra server</source>
+        <translation>Impossible de joindre votre serveur hydra</translation>
+    </message>
+    <message>
+        <source>Windscribe couldn&apos;t connect through the hydra server at %1. Check that it&apos;s running (hydra doctor), or remove the hydra profile in Preferences &gt; Connection to connect without it.</source>
+        <translation>Windscribe n&apos;a pas pu se connecter via le serveur hydra à l&apos;adresse %1. Vérifiez qu&apos;il est en cours d&apos;exécution (hydra doctor), ou supprimez le profil hydra dans Préférences &gt; Connexion pour vous connecter sans lui.</translation>
+    </message>
+    <message>
+        <source>Hydra needs WireGuard</source>
+        <translation>Hydra nécessite WireGuard</translation>
+    </message>
+    <message>
+        <source>This location is set to connect through your hydra server, which works with WireGuard only. Choose WireGuard or Auto, or remove the hydra profile in Preferences &gt; Connection.</source>
+        <translation>Cet emplacement est configuré pour se connecter via votre serveur hydra, qui fonctionne uniquement avec WireGuard. Choisissez WireGuard ou Auto, ou supprimez le profil hydra dans Préférences &gt; Connexion.</translation>
+    </message>
+    <message>
+        <source>The Remote Access Connection Manager (RasMan) service is not running and could not be started. This prevents IKEv2 from being used on this PC. Please try another connection mode or investigate why this core Windows service is unable to start.</source>
+        <translation>Le service Remote Access Connection Manager (RasMan) ne fonctionne pas et n’a pas pu être lancé. Cela empêche l’utilisation d’IKEv2 sur ce PC. Veuillez essayer un autre mode de connexion ou enquêter sur les raisons pour lesquelles ce service principal de Windows ne peut pas démarrer.</translation>
+    </message>
+    <message>
+        <source>An unexpected error occurred establishing the VPN connection (Error %1).  If this error persists, try using a different protocol or contact support.</source>
+        <translation>Une erreur inattendue s’est produite lors de l’établissement de la connexion VPN (erreur %1).  Si cette erreur persiste, essayez d’utiliser un autre protocole ou contactez le support technique.</translation>
+    </message>
+    <message>
+        <source>Security Risk</source>
+        <translation>Risque de sécurité</translation>
+    </message>
+    <message>
+        <source>Enable Service?</source>
+        <translation>Activer le service ?</translation>
+    </message>
+    <message>
+        <source>Enable &quot;Base Filtering Engine&quot; service? This is required for Windscribe to function.</source>
+        <translation>Activer le service «&#xa0;Moteur de filtrage de base&#xa0;» ? Ceci est nécessaire pour que Windscribe fonctionne.</translation>
+    </message>
+    <message>
+        <source>Failed to Enable Service</source>
+        <translation>Echec de l’activation du service</translation>
+    </message>
+    <message>
+        <source>Failed to Start</source>
+        <translation>Échec du démarrage</translation>
+    </message>
+    <message>
+        <source>SSL Error</source>
+        <translation>Erreur SSL</translation>
+    </message>
+    <message>
+        <source>Disconnected</source>
+        <translation>Coupé</translation>
+    </message>
+    <message>
+        <source>Import Hydra Profile</source>
+        <translation>Importer un profil Hydra</translation>
+    </message>
+    <message>
+        <source>Unable to import hydra profile</source>
+        <translation>Impossible d&apos;importer le profil hydra</translation>
+    </message>
+    <message>
+        <source>The imported hydra profile is not in use. %1</source>
+        <translation>Le profil hydra importé n&apos;est pas utilisé. %1</translation>
+    </message>
+    <message>
+        <source>The selected directory is writeable for other users. Custom configs in this directory may pose a potential security risk.</source>
+        <translation>Le répertoire sélectionné est écrivable pour d’autres utilisateurs. Les configurations personnalisées dans ce répertoire peuvent représenter un risque potentiel pour la sécurité.</translation>
+    </message>
+    <message>
+        <source>Installation Incomplete</source>
+        <translation>Installation incomplète</translation>
+    </message>
+    <message>
+        <source>Part of the Windscribe installation is missing.  Please download Windscribe and install it again.</source>
+        <translation>Une partie de l’installation Windscribe manque.  Veuillez télécharger Windscribe et réinstaller.</translation>
+    </message>
+    <message>
+        <source>Proxy Gateway is unauthenticated</source>
+        <translation>Proxy Gateway n’est pas authentifié</translation>
+    </message>
+    <message>
+        <source>Your Proxy Gateway is enabled without authentication. Anyone on your local network, including untrusted networks like coffee-shop Wi-Fi, can route their traffic through your VPN. We strongly recommend setting credentials.</source>
+        <translation>Votre passerelle proxy est activée sans authentification. Toute personne sur votre réseau local, y compris des réseaux non fiables comme le Wi-Fi des cafés, peut acheminer son trafic via votre VPN. Nous recommandons vivement de définir des références.</translation>
+    </message>
+    <message>
+        <source>Go to Preferences</source>
+        <translation>Aller dans Préférences</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Plus tard</translation>
+    </message>
+    <message>
+        <source>Trying Backup Endpoints...</source>
+        <translation>Essayer les points de secours...</translation>
+    </message>
+    <message>
+        <source>SSL requests may be intercepted on your network. Ignoring SSL errors disables TLS certificate validation for this session: anyone able to intercept your traffic can then impersonate Windscribe and read or alter your data, and we can&apos;t guarantee your security while it&apos;s on. Ignore SSL errors?</source>
+        <translation>Les requêtes SSL peuvent être interceptées sur votre réseau. Ignorer les erreurs SSL désactive la validation des certificats TLS pour cette session : toute personne capable d’intercepter votre trafic peut alors se faire passer pour Windscribe et lire ou modifier vos données, et nous ne pouvons pas garantir votre sécurité tant que c’est activé. Ignorer les erreurs SSL ?</translation>
+    </message>
+    <message>
+        <source>Connected to </source>
+        <translation>Connecté à </translation>
+    </message>
+    <message>
+        <source>You are now connected to Windscribe (%1).</source>
+        <translation>Vous êtes maintenant connecté à Windscribe (%1).</translation>
+    </message>
+    <message>
+        <source>Connection to Windscribe has been terminated.
+%1 transferred in %2</source>
+        <translation>La connexion à Windscribe a été interrompue.
+%1 transféré en %2</translation>
+    </message>
+    <message>
+        <source>Could not start Proxy Gateway</source>
+        <translation>Impossible de démarrer la passerelle proxy</translation>
+    </message>
+    <message>
+        <source>The configured port is in use. Please try a different port.</source>
+        <translation>Le port configuré est en service. Essayez un autre port, s’il vous plaît.</translation>
+    </message>
+    <message>
+        <source>An unknown error occurred.</source>
+        <translation>Une erreur inconnue s’est produite.</translation>
+    </message>
+    <message>
+        <source>Network Settings Interference</source>
+        <translation>Interférence des paramètres réseau</translation>
+    </message>
+    <message>
+        <source>Set “%1” as preferred protocol?</source>
+        <translation>Définir «&#xa0;%1&#xa0;» comme protocole préféré ?</translation>
+    </message>
+    <message>
+        <source>Windscribe will always use this protocol to connect on this network in the future to avoid any interruptions.</source>
+        <translation>Windscribe utilisera toujours ce protocole pour se connecter à ce réseau à l’avenir afin d’éviter toute interruption.</translation>
+    </message>
+    <message>
+        <source>Set as Preferred</source>
+        <translation>Définir comme préféré</translation>
+    </message>
+    <message>
+        <source>Service Error</source>
+        <translation>Erreur de service</translation>
+    </message>
+    <message>
+        <source>MAC Spoofing Failed</source>
+        <translation>Echec de l’usurpation d’identité MAC</translation>
+    </message>
+    <message>
+        <source>Your network adapter does not support MAC spoofing. Try a different adapter.</source>
+        <translation>Votre carte réseau ne prend pas en charge l’usurpation d’adresse MAC. Essayez un autre adaptateur.</translation>
+    </message>
+    <message>
+        <source>Detection Error</source>
+        <translation>Erreur de détection</translation>
+    </message>
+    <message>
+        <source>Cannot detect appropriate packet size due to an error. Please try again.</source>
+        <translation>Impossible de détecter la taille de paquet appropriée en raison d’une erreur. Veuillez réessayer.</translation>
+    </message>
+    <message>
+        <source>This network hates us</source>
+        <translation>Ce réseau nous déteste</translation>
+    </message>
+    <message>
+        <source>We couldn’t connect you on this network. Send us your debug log so we can figure out what happened.</source>
+        <translation>Nous n’avons pas pu vous connecter sur ce réseau. Envoyez-nous votre journal de débogage afin que nous puissions comprendre ce qui s’est passé.</translation>
+    </message>
+    <message>
+        <source>Send Debug Log</source>
+        <translation>Envoyer le journal de débogage</translation>
+    </message>
+    <message>
+        <source>Your debug log has been received. Please contact support if you want assistance with this issue.</source>
+        <translation>Votre journal de débogage a été reçu. Veuillez contacter le support si vous souhaitez obtenir de l’aide pour résoudre ce problème.</translation>
+    </message>
+    <message>
+        <source>Contact Support</source>
+        <translation>Contacter le support</translation>
+    </message>
+    <message>
+        <source>Auto-Update Failed</source>
+        <translation>Echec de la mise à jour automatique</translation>
+    </message>
+    <message>
+        <source>Lost connection to the backend process.
+Recovering...</source>
+        <translation>Perte de connexion au processus principal.
+Récupération...</translation>
+    </message>
+    <message>
+        <source>Select an application</source>
+        <translation>Sélectionner une application</translation>
+    </message>
+    <message>
+        <source>WireGuard adapter setup failed. Please wait one minute and try the connection again. If adapter setup fails again, please try restarting your computer.
+
+If the problem persists after a restart, please send a debug log and open a support ticket, then switch to a different connection mode.</source>
+        <translation>La configuration de la carte WireGuard a échoué. Veuillez patienter une minute et réessayer la connexion. Si la configuration de l’adaptateur échoue à nouveau, essayez de redémarrer votre ordinateur.
+
+Si le problème persiste après un redémarrage, envoyez un journal de débogage et ouvrez un ticket de support, puis passez à un autre mode de connexion.</translation>
+    </message>
+    <message>
+        <source>Connection Error</source>
+        <translation>Erreur de connexion</translation>
+    </message>
+    <message>
+        <source>Reached Key Limit</source>
+        <translation>Limite de clé atteinte</translation>
+    </message>
+    <message>
+        <source>You have reached your limit of WireGuard public keys. Do you want to delete your oldest key?</source>
+        <translation>Vous avez atteint votre limite de clés publiques WireGuard. Voulez-vous supprimer votre clé la plus ancienne ?</translation>
+    </message>
+    <message>
+        <source>The split tunneling feature could not be started, and has been disabled in Preferences.</source>
+        <translation>La fonctionnalité de tunneling fractionné n’a pas pu être démarrée et a été désactivée dans les Préférences.</translation>
+    </message>
+    <message>
+        <source>Unable to start custom DNS service.  Please ensure you don&apos;t have any other local DNS services running, or contact support.</source>
+        <translation>Impossible de démarrer le service DNS personnalisé.  Assurez-vous qu’aucun autre service DNS local n’est en cours d’exécution ou contactez l’assistance.</translation>
+    </message>
+    <message>
+        <source>JSON Files (*.json)</source>
+        <translation>Fichiers JSON (*.json)</translation>
+    </message>
+    <message>
+        <source>Unable to import preferences</source>
+        <translation>Impossible d’importer les préférences</translation>
+    </message>
+    <message>
+        <source>Preferences can only be imported when the app is disconnected. Please disconnect and try again.</source>
+        <translation>Les préférences ne peuvent être importées que lorsque l’application est déconnectée. Veuillez vous déconnecter et réessayer.</translation>
+    </message>
+    <message>
+        <source>The selected file&apos;s format is incorrect.</source>
+        <translation>Le format du fichier sélectionné est incorrect.</translation>
+    </message>
+    <message>
+        <source>Export Preferences To</source>
+        <translation>Préférences d’exportation vers</translation>
+    </message>
+    <message>
+        <source>Import Preferences From</source>
+        <translation>Importer les préférences à partir de</translation>
+    </message>
+    <message>
+        <source>Could not open file.</source>
+        <translation>Impossible d’ouvrir le fichier.</translation>
+    </message>
+    <message>
+        <source>Unable to export preferences</source>
+        <translation>Impossible d’exporter les préférences</translation>
+    </message>
+    <message>
+        <source>Could not open file for writing.  Check your permissions and try again.</source>
+        <translation>Impossible d’ouvrir le fichier pour l’écriture.  Vérifiez vos autorisations et réessayez.</translation>
+    </message>
+    <message>
+        <source>Enter Connection Credentials</source>
+        <translation>Entrez les informations d’identification de connexion</translation>
+    </message>
+    <message>
+        <source>Enter Private Key Password</source>
+        <translation>Entrez le mot de passe de la clé privée</translation>
+    </message>
+    <message>
+        <source>Windscribe could not retrieve server configuration. Please try another protocol.</source>
+        <translation>Windscribe n’a pas pu récupérer la configuration du serveur. Veuillez essayer un autre protocole.</translation>
+    </message>
+    <message>
+        <source>IKEv2 connectivity is not available in MacOS Lockdown Mode. Please disable Lockdown Mode in System Settings or change your connection settings.</source>
+        <translation>La connectivité IKEv2 n’est pas disponible en mode de verrouillage de MacOS. Veuillez désactiver le mode de verrouillage dans les paramètres système ou modifier vos paramètres de connexion.</translation>
+    </message>
+    <message>
+        <source>Rotating MAC Address</source>
+        <translation>Rotation de l’adresse MAC</translation>
+    </message>
+    <message>
+        <source>Wi-Fi is off</source>
+        <translation>Le Wi-Fi est désactivé</translation>
+    </message>
+    <message>
+        <source>Could not start Secure Hotspot</source>
+        <translation>Impossible de démarrer le point d’accès sécurisé</translation>
+    </message>
+    <message>
+        <source>Your network adapter may not support this feature. It has been disabled in preferences.</source>
+        <translation>Il se peut que votre carte réseau ne prenne pas en charge cette fonctionnalité. Il a été désactivé dans les préférences.</translation>
+    </message>
+    <message>
+        <source>...hmm are you sure this is correct?</source>
+        <translation>... Hmm êtes-vous sûr que c’est correct?</translation>
+    </message>
+    <message>
+        <source>Windscribe has detected that Wi-Fi is currently turned off. To use Secure Hotspot, Wi-Fi must be turned on.</source>
+        <translation>Windscribe a détecté que le Wi-Fi est actuellement désactivé. Pour utiliser le point d’accès sécurisé, le Wi-Fi doit être activé.</translation>
+    </message>
+    <message>
+        <source>Location Services is disabled</source>
+        <translation>Le service de localisation est désactivé</translation>
+    </message>
+    <message>
+        <source>Windscribe requires Location Services to determine your Wi-Fi SSID. If it is not enabled, per-network settings will apply to all Wi-Fi networks. Please enable Location Services and grant the permission to Windscribe in your System Settings.</source>
+        <translation>Windscribe nécessite le service de localisation pour déterminer votre SSID Wi-Fi. S’il n’est pas activé, les paramètres par réseau s’appliqueront à tous les réseaux Wi-Fi. Veuillez activer le service de localisation et accorder l’autorisation à Windscribe dans vos paramètres système.</translation>
+    </message>
+    <message>
+        <source>Windscribe requires Location Services to determine your Wi-Fi SSID. If it is not enabled, per-network settings will apply to all Wi-Fi networks. Please enable Location Services in your System Settings.</source>
+        <translation>Windscribe nécessite le service de localisation pour déterminer votre SSID Wi-Fi. S’il n’est pas activé, les paramètres par réseau s’appliqueront à tous les réseaux Wi-Fi. Veuillez activer le service de localisation dans vos paramètres système.</translation>
+    </message>
+    <message>
+        <source>  If you are on a restrictive network, please connect the VPN before trying the download again.</source>
+        <translation>  Si vous êtes sur un réseau restrictif, veuillez connecter le VPN avant de réessayer le téléchargement.</translation>
+    </message>
+    <message>
+        <source>Your &quot;Connected DNS&quot; server is set to an OS default DNS server, which would result in a DNS leak.  It has been changed to Auto.</source>
+        <translation>Votre serveur «&#xa0;DNS connecté&#xa0;» est configuré sur un serveur DNS par défaut du système d’exploitation, ce qui entraînerait une fuite DNS.  Il a été changé en Auto.</translation>
+    </message>
+    <message>
+        <source>Invalid DNS Settings</source>
+        <translation>Paramètres DNS non valides</translation>
+    </message>
+    <message>
+        <source>System notifications are disabled</source>
+        <translation>Les notifications système sont désactivées</translation>
+    </message>
+    <message>
+        <source>You have chosen to show notifications, but system notifications are disabled. Please enable system notifications in your System Settings.</source>
+        <translation>Vous avez choisi d’afficher les notifications, mais les notifications système sont désactivées. Veuillez activer les notifications système dans vos paramètres système.</translation>
+    </message>
+    <message>
+        <source>Error Starting Split Tunneling</source>
+        <translation>Erreur lors du démarrage du split tunneling</translation>
+    </message>
+    <message>
+        <source>Export Location Names To</source>
+        <translation>Exporter les noms d’emplacements vers</translation>
+    </message>
+    <message>
+        <source>Unable to export location names</source>
+        <translation>Impossible d’exporter les noms de lieux</translation>
+    </message>
+    <message>
+        <source>Import Location Names From</source>
+        <translation>Importation de noms d’emplacements à partir de</translation>
+    </message>
+    <message>
+        <source>Unable to import location names</source>
+        <translation>Impossible d’importer les noms de lieux</translation>
+    </message>
+    <message>
+        <source>The split tunneling feature has been disabled because the Windscribe split tunnel extension is not enabled in System Settings.  To use this feature, please enable the extension in System Settings, and turn on the feature again.</source>
+        <translation>La fonctionnalité de tunneling fractionné a été désactivée car l’extension de tunnel fractionné Windscribe n’est pas activée dans les paramètres système.  Pour utiliser cette fonctionnalité, veuillez activer l’extension dans les paramètres système et réactivez-la.</translation>
+    </message>
+    <message>
+        <source>Debug Log Sent!</source>
+        <translation>Journal de débogage envoyé !</translation>
+    </message>
+    <message>
+        <source>Could not connect to the Windscribe service.  Windscribe will now exit.  Please contact support.</source>
+        <translation>Impossible de se connecter au service Windscribe.  Windscribe va maintenant quitter.  Veuillez contacter l’assistance.</translation>
+    </message>
+    <message>
+        <source>Lost connection to the Windscribe service.  Windscribe will now exit.  Send us a debug log so we can improve this.</source>
+        <translation>Perte de connexion au service Windscribe.  Windscribe va maintenant quitter.  Envoyez-nous un journal de débogage afin que nous puissions améliorer cela.</translation>
+    </message>
+    <message>
+        <source>Local DNS server is not available</source>
+        <translation>Le serveur DNS local n’est pas disponible</translation>
+    </message>
+    <message>
+        <source>The local DNS server is not available.  Connected DNS has been set back to Auto.</source>
+        <translation>Le serveur DNS local n’est pas disponible.  Le DNS connecté a été réinitialisé à Auto.</translation>
+    </message>
+    <message>
+        <source>DNS Server Conflict</source>
+        <translation>Conflit de serveur DNS</translation>
+    </message>
+    <message>
+        <source>Unable to start custom DNS service - port 53 is already in use.  Would you like to change your Connected DNS to the local server?</source>
+        <translation>Impossible de démarrer le service DNS personnalisé - le port 53 est déjà utilisé.  Souhaitez-vous changer votre DNS connecté pour le serveur local ?</translation>
+    </message>
+    <message>
+        <source>Could not pin IP</source>
+        <translation>Impossible d’épingler l’adresse IP</translation>
+    </message>
+    <message>
+        <source>We could not set your favourite IP for this location.  Try again later.</source>
+        <translation>Nous n’avons pas pu définir votre adresse IP préférée pour cet emplacement.  Réessayez plus tard.</translation>
+    </message>
+    <message>
+        <source>Could not rotate IP</source>
+        <translation>Impossible de faire pivoter l’IP</translation>
+    </message>
+    <message>
+        <source>Try again later or go to our Status page for more info.</source>
+        <translation>Réessayez plus tard ou rendez-vous sur notre page d’état pour plus d’informations.</translation>
+    </message>
+    <message>
+        <source>Check Location Status</source>
+        <translation>Vérifier l’état de l’emplacement</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Précédent</translation>
+    </message>
+    <message>
+        <source>Manual connection mode failed</source>
+        <translation>Mode de connexion manuelle échoué</translation>
+    </message>
+    <message>
+        <source>We couldn’t connect you on this network. Automatic connection mode recommended for best results. Switch connection mode to Auto?</source>
+        <translation>Nous ne pouvions pas vous connecter sur ce réseau. Mode de connexion automatique recommandé pour de meilleurs résultats. Changer le mode de connexion en mode automatique ?</translation>
+    </message>
+    <message>
+        <source>Switch to Auto</source>
+        <translation>Passer à l’auto</translation>
+    </message>
+    <message>
+        <source>Creating your account...</source>
+        <translation>Créer votre compte...</translation>
+    </message>
+    <message>
+        <source>Cannot rotate MAC address while connected to VPN. Please disconnect first.</source>
+        <translation>Impossible de faire tourner l’adresse MAC en étant connecté au VPN. Veuillez d’abord déconnecter.</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindowController</name>
+    <message>
+        <source>Quit Windscribe?</source>
+        <translation>Quitter Windscribe?</translation>
+    </message>
+    <message>
+        <source>Log Out of Windscribe?</source>
+        <translation>Déconnectez-vous de Windscribe ?</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quitter</translation>
+    </message>
+    <message>
+        <source>Log Out</source>
+        <translation>Se déconnecter</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+</context>
+<context>
+    <name>NewsFeedWindow::NewsFeedWindowItem</name>
+    <message>
+        <source>News Feed</source>
+        <translation>Fil d’actualité</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationsController</name>
+    <message>
+        <source>WELCOME TO WINDSCRIBE</source>
+        <translation>BIENVENUE CHEZ WINDSCRIBE</translation>
+    </message>
+    <message>
+        <source>&lt;p&gt;You will find announcements and general Windscribe related news here. Perhaps even delicious cake, everyone loves cake!&lt;/p&gt;</source>
+        <translation>&lt;p&gt;Vous trouverez des annonces et des nouvelles générales liées à Windscribe ici. Peut-être même un délicieux gâteau, tout le monde aime le gâteau!&lt;/p&gt;</translation>
+    </message>
+</context>
+<context>
+    <name>Preferences</name>
+    <message>
+        <source>Invalid DNS Settings</source>
+        <translation>Paramètres DNS non valides</translation>
+    </message>
+    <message>
+        <source>&apos;Connected DNS&apos; was not configured with a valid Upstream 1 (IP/DNS-over-HTTPS/TLS). DNS was reverted to ROBERT (default).</source>
+        <translation>&apos;Connected DNS&apos; n’a pas été configuré avec un Upstream 1 valide (IP/DNS-over-HTTPS/TLS). DNS est revenu à ROBERT (par défaut).</translation>
+    </message>
+    <message>
+        <source>&apos;Connected DNS&apos; was not configured with a valid Upstream 2 (IP/DNS-over-HTTPS/TLS). DNS was reverted to ROBERT (default).</source>
+        <translation>&apos;Connected DNS&apos; n’a pas été configuré avec un Upstream 2 valide (IP/DNS-over-HTTPS/TLS). DNS est revenu à ROBERT (par défaut).</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AboutWindowItem</name>
+    <message>
+        <source>About</source>
+        <translation>Environ</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Statut</translation>
+    </message>
+    <message>
+        <source>About Us</source>
+        <translation>Qui sommes-nous</translation>
+    </message>
+    <message>
+        <source>Privacy Policy</source>
+        <translation>Politique de confidentialité</translation>
+    </message>
+    <message>
+        <source>Terms</source>
+        <translation>Conditions d’utilisation</translation>
+    </message>
+    <message>
+        <source>Blog</source>
+        <translation>Blog</translation>
+    </message>
+    <message>
+        <source>Jobs</source>
+        <translation>Emplois</translation>
+    </message>
+    <message>
+        <source>Software Licenses</source>
+        <translation>Licences logicielles</translation>
+    </message>
+    <message>
+        <source>Changelog</source>
+        <translation>Journal des modifications</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AccountWindowItem</name>
+    <message>
+        <source>Login to view your account info</source>
+        <translation>Connectez-vous pour afficher les informations de votre compte</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Compte</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Reset Date</source>
+        <translation>Date de réinitialisation</translation>
+    </message>
+    <message>
+        <source>Data Left</source>
+        <translation>Données restantes</translation>
+    </message>
+    <message>
+        <source>Manage Account</source>
+        <translation>Gérer le compte</translation>
+    </message>
+    <message>
+        <source>Expiry Date</source>
+        <translation>Échéance</translation>
+    </message>
+    <message>
+        <source>ACCOUNT INFO</source>
+        <translation>INFORMATIONS SUR LE COMPTE</translation>
+    </message>
+    <message>
+        <source>PLAN INFO</source>
+        <translation>INFORMATIONS SUR LE PLAN</translation>
+    </message>
+    <message>
+        <source>UPGRADE &gt;</source>
+        <translation>MISE À NIVEAU &gt;</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AdvancedWindowItem</name>
+    <message>
+        <source>Advanced Options</source>
+        <translation>Options avancées</translation>
+    </message>
+    <message>
+        <source>Make advanced tweaks to the way the app functions.</source>
+        <translation>Apportez des modifications avancées au fonctionnement de l’application.</translation>
+    </message>
+    <message>
+        <source>Advanced Parameters</source>
+        <translation>Paramètres avancés</translation>
+    </message>
+    <message>
+        <source>Prevents connections from dying (by time-out) by periodically pinging the server.</source>
+        <translation>Empêche les connexions de mourir (par délai d’attente) en envoyant régulièrement une requête ping au serveur.</translation>
+    </message>
+    <message>
+        <source>Client-Side Keepalive</source>
+        <translation>Keepalive côté client</translation>
+    </message>
+    <message>
+        <source>Windscribe uses this DNS server to resolve addresses outside the VPN.</source>
+        <translation>Windscribe utilise ce serveur DNS pour résoudre les adresses en dehors du VPN.</translation>
+    </message>
+    <message>
+        <source>Warning: Using &quot;OS Default&quot; may sometimes cause DNS leaks during reconnects.</source>
+        <translation>Avertissement : L’utilisation de « OS par défaut » peut parfois provoquer des fuites DNS lors des reconnexions.</translation>
+    </message>
+    <message>
+        <source>App Internal DNS</source>
+        <translation>DNS interne de l’application</translation>
+    </message>
+    <message>
+        <source>Select the DNS system service Windscribe enforces. Experienced users only.</source>
+        <translation>Sélectionnez le service système DNS appliqué par Windscribe. Utilisateurs expérimentés uniquement.</translation>
+    </message>
+    <message>
+        <source>DNS Manager</source>
+        <translation>Gestionnaire DNS</translation>
+    </message>
+    <message>
+        <source>App Preferences</source>
+        <translation>Préférences de l’application</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Exportation</translation>
+    </message>
+    <message>
+        <source>Import</source>
+        <translation>Importation</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AntiCensorshipWindowItem</name>
+    <message>
+        <source>Anti-Censorship</source>
+        <translation>Anti-censure</translation>
+    </message>
+    <message>
+        <source>These degrade performance, enable only if Windscribe doesn&apos;t connect normally.</source>
+        <translation>Celles-ci dégradent les performances, activées uniquement si Windscribe ne se connecte pas normalement.</translation>
+    </message>
+    <message>
+        <source>Protocol-level changes made to WireGuard, OpenVPN, and Stealth protocols.</source>
+        <translation>Modifications au niveau des protocoles apportées aux protocoles WireGuard, OpenVPN et Stealth.</translation>
+    </message>
+    <message>
+        <source>Increases latency, but improves chances of being able to connect.</source>
+        <translation>Cela augmente la latence, mais augmente les chances de connexion.</translation>
+    </message>
+    <message>
+        <source>Server Routing</source>
+        <translation>Routage des serveurs</translation>
+    </message>
+    <message>
+        <source>Large TLS</source>
+        <translation>TLS grand</translation>
+    </message>
+    <message>
+        <source>Artificially enlarge TLS packets, helps to circumvent censorship in some cases. Adds extra TLS padding to all API requests.</source>
+        <translation>Agrandir artificiellement les paquets TLS aide à contourner la censure dans certains cas. Ajoute un remplissage TLS supplémentaire à toutes les requêtes API.</translation>
+    </message>
+    <message>
+        <source>Custom SNI Domain</source>
+        <translation>Domaine SNI personnalisé</translation>
+    </message>
+    <message>
+        <source>This setting applies to Stealth and Wstunnel protocols only.</source>
+        <translation>Ce paramètre s&apos;applique uniquement aux protocoles Stealth et Wstunnel.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::AppBackgroundGroup</name>
+    <message>
+        <source>App Background</source>
+        <translation>Contexte de l’application</translation>
+    </message>
+    <message>
+        <source>Aspect Ratio Mode</source>
+        <translation>Mode Rapport d’Aspect</translation>
+    </message>
+    <message>
+        <source>When Disconnected</source>
+        <translation>Lorsqu’il est déconnecté</translation>
+    </message>
+    <message>
+        <source>Flags</source>
+        <translation>Drapeaux</translation>
+    </message>
+    <message>
+        <source>Bundled</source>
+        <translation>Livré</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Aucun</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Coutume</translation>
+    </message>
+    <message>
+        <source>When Connected</source>
+        <translation>Lorsqu’il est connecté</translation>
+    </message>
+    <message>
+        <source>Select an image</source>
+        <translation>Sélectionnez une image</translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation>Carré</translation>
+    </message>
+    <message>
+        <source>Palm</source>
+        <translation>Paume</translation>
+    </message>
+    <message>
+        <source>Drip</source>
+        <translation>Goutter</translation>
+    </message>
+    <message>
+        <source>Snow</source>
+        <translation>Neige</translation>
+    </message>
+    <message>
+        <source>Ripple</source>
+        <translation>Ondulation</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ConnectedDnsGroup</name>
+    <message>
+        <source>Connected DNS</source>
+        <translation>DNS connecté</translation>
+    </message>
+    <message>
+        <source>Upstream 1</source>
+        <translation>En amont 1</translation>
+    </message>
+    <message>
+        <source>IP/DNS-over-HTTPS/TLS</source>
+        <translation>IP/DNS-sur-HTTPS/TLS</translation>
+    </message>
+    <message>
+        <source>Upstream 2</source>
+        <translation>En amont 2</translation>
+    </message>
+    <message>
+        <source>Split DNS</source>
+        <translation>DNS fractionné</translation>
+    </message>
+    <message>
+        <source>Domains</source>
+        <translation>Domaines</translation>
+    </message>
+    <message>
+        <source>DNS leak detected</source>
+        <translation>Fuite DNS détectée</translation>
+    </message>
+    <message>
+        <source>Using a LAN or local IP address for connected DNS will result in a DNS leak.  We strongly recommend using ROBERT or a public DNS server.</source>
+        <translation>L’utilisation d’un réseau local ou d’une adresse IP locale pour le DNS connecté entraînera une fuite DNS.  Nous vous recommandons vivement d’utiliser ROBERT ou un serveur DNS public.</translation>
+    </message>
+    <message>
+        <source>API Key</source>
+        <translation>Clé API</translation>
+    </message>
+    <message>
+        <source>Failed to reach Control D API.</source>
+        <translation>Impossible d’atteindre l’API de contrôle D.</translation>
+    </message>
+    <message>
+        <source>Please provide a valid Control D API Key.</source>
+        <translation>Veuillez fournir une clé API de contrôle D valide.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ConnectionWindowItem</name>
+    <message>
+        <source>Allow LAN Traffic</source>
+        <translation>Autoriser le trafic LAN</translation>
+    </message>
+    <message>
+        <source>Terminate Sockets</source>
+        <translation>Terminaison des sockets</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Connexion</translation>
+    </message>
+    <message>
+        <source>Exclusive</source>
+        <translation>Exclusif</translation>
+    </message>
+    <message>
+        <source>Inclusive</source>
+        <translation>Inclusif</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Desactivé</translation>
+    </message>
+    <message>
+        <source>Network Options</source>
+        <translation>Options réseau</translation>
+    </message>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Split Tunneling</translation>
+    </message>
+    <message>
+        <source>Proxy Settings</source>
+        <translation>Paramètres de proxy</translation>
+    </message>
+    <message>
+        <source>Connects to last used location when the app launches or joins a network.</source>
+        <translation>Se connecte au dernier emplacement utilisé lorsque l’application se lance ou rejoint un réseau.</translation>
+    </message>
+    <message>
+        <source>Auto-Connect</source>
+        <translation>Connexion automatique</translation>
+    </message>
+    <message>
+        <source>Connection Mode</source>
+        <translation>Mode de connexion</translation>
+    </message>
+    <message>
+        <source>IP Stack</source>
+        <translation>Pile IP</translation>
+    </message>
+    <message>
+        <source>Select the DNS server while connected to Windscribe.</source>
+        <translation>Sélectionnez le serveur DNS lorsque vous êtes connecté à Windscribe.</translation>
+    </message>
+    <message>
+        <source>Allow access to local services and printers while connected to Windscribe.</source>
+        <translation>Autorisez l’accès aux services locaux et aux imprimantes lorsque vous êtes connecté à Windscribe.</translation>
+    </message>
+    <message>
+        <source>Hydra Profile</source>
+        <translation>Profil Hydra</translation>
+    </message>
+    <message>
+        <source>Import Profile</source>
+        <translation>Importer un profil</translation>
+    </message>
+    <message>
+        <source>Remove Profile</source>
+        <translation>Supprimer le profil</translation>
+    </message>
+    <message>
+        <source>All locations</source>
+        <translation>Tous les emplacements</translation>
+    </message>
+    <message>
+        <source>Connect to Windscribe through a private hydra server you run. Applies to WireGuard.</source>
+        <translation>Connectez-vous à Windscribe via un serveur hydra privé que vous gérez. S&apos;applique à WireGuard.</translation>
+    </message>
+    <message>
+        <source>+1 more location</source>
+        <translation>+1 autre emplacement</translation>
+    </message>
+    <message>
+        <source>+%1 more locations</source>
+        <translation>+%1 autres emplacements</translation>
+    </message>
+    <message>
+        <source>Select this location to connect through your hydra server.</source>
+        <translation>Sélectionnez cet emplacement pour vous connecter via votre serveur hydra.</translation>
+    </message>
+    <message>
+        <source>Select one of these locations to connect through your hydra server.</source>
+        <translation>Sélectionnez l&apos;un de ces emplacements pour vous connecter via votre serveur hydra.</translation>
+    </message>
+    <message>
+        <source>Spoof your device&apos;s physical address (MAC address).</source>
+        <translation>Usurper l’adresse physique de votre appareil (adresse MAC).</translation>
+    </message>
+    <message>
+        <source>MAC spoofing requires NetworkManager to be installed and running.</source>
+        <translation>L’usurpation MAC nécessite l’installation et l’exécution de NetworkManager.</translation>
+    </message>
+    <message>
+        <source>Close all active TCP sockets when the VPN tunnel is established.</source>
+        <translation>Fermez tous les sockets TCP actifs lorsque le tunnel VPN est établi.</translation>
+    </message>
+    <message>
+        <source>Configure your TV, gaming console, or other devices that support proxy servers.</source>
+        <translation>Configurez votre téléviseur, votre console de jeu ou d’autres appareils prenant en charge les serveurs proxy.</translation>
+    </message>
+    <message>
+        <source>The firewall is in an Always On mode. Allowing LAN traffic can leak your DNS and other traffic to your local network while you are disconnected. Are you sure you want to enable it?</source>
+        <translation>Le pare-feu est en mode Toujours Activé. Autoriser le trafic LAN peut faire fuir votre DNS et d’autres trafics vers votre réseau local pendant que vous êtes déconnecté. Êtes-vous sûr de vouloir l’activer ?</translation>
+    </message>
+    <message>
+        <source>Settings Conflict</source>
+        <translation>Conflit de paramètres</translation>
+    </message>
+    <message>
+        <source>Disabling Allow LAN Traffic will cause your proxy gateway to stop working.  Do you want to disable the proxy?</source>
+        <translation>La désactivation de l’option Autoriser le trafic LAN entraînera l’arrêt du fonctionnement de votre passerelle proxy.  Voulez-vous désactiver le proxy ?</translation>
+    </message>
+    <message>
+        <source>LAN traffic is currently blocked by the Windscribe firewall.  Do you want to allow LAN traffic to bypass the firewall in order for this feature to work?</source>
+        <translation>Le trafic LAN est actuellement bloqué par le pare-feu Windscribe.  Voulez-vous autoriser le trafic LAN à contourner le pare-feu pour que cette fonctionnalité fonctionne ?</translation>
+    </message>
+    <message>
+        <source>Automatically choose the VPN protocol, or select one manually. NOTE: &quot;Preferred Protocol&quot; will override this setting.</source>
+        <translation>Choisissez automatiquement le protocole VPN ou sélectionnez-en un manuellement. REMARQUE: «&#xa0;Protocole préféré&#xa0;» remplacera ce paramètre.</translation>
+    </message>
+    <message>
+        <source>Disabling Allow LAN Traffic will cause your secure hotspot to stop working.  Do you want to disable the hotspot?</source>
+        <translation>La désactivation de l’option Autoriser le trafic LAN entraînera l’arrêt du fonctionnement de votre point d’accès sécurisé.  Voulez-vous désactiver le hotspot ?</translation>
+    </message>
+    <message>
+        <source>Automatically determine the MTU for your connection, or manually override.  This has no effect on TCP-based protocols.</source>
+        <translation>Déterminez automatiquement la MTU de votre connexion ou remplacez-la manuellement.  Cela n’a aucun effet sur les protocoles basés sur TCP.</translation>
+    </message>
+    <message>
+        <source>Caution</source>
+        <translation>Prudence</translation>
+    </message>
+    <message>
+        <source>In this firewall mode, the Windscribe API will not be available while disconnected, this could have unintended consequences. Use at own risk.</source>
+        <translation>Dans ce mode pare-feu, l’API Windscribe ne sera pas disponible lorsqu’elle sera déconnectée, ce qui pourrait avoir des conséquences inattendues. Utilisation à vos risques et périls.</translation>
+    </message>
+    <message>
+        <source>Control the mode of behaviour of the Windscribe firewall. Always On modes disable Allow LAN Traffic to prevent DNS leaks.</source>
+        <translation>Contrôlez le mode de comportement du pare-feu Windscribe. Les modes Toujours Activés désactivent Autoriser le trafic LAN pour éviter les fuites DNS.</translation>
+    </message>
+    <message>
+        <source>Configure egress IP stack for VPN connections (WireGuard only).</source>
+        <translation>Configurez la pile d’IP de sortie pour les connexions VPN (WireGuard uniquement).</translation>
+    </message>
+    <message>
+        <source>Clear Wi-Fi History</source>
+        <translation>Histoire du Wi-Fi Clear</translation>
+    </message>
+    <message>
+        <source>Are you sure?</source>
+        <translation>Es-tu sûr?</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to clear all your Wi-Fi history? This will also clear all Wi-Fi passwords except for the one you&apos;re currently connected to. This may also temporarily disable your Wi-Fi.</source>
+        <translation>Êtes-vous sûr de vouloir effacer tout votre historique Wi-Fi ? Cela effacera également tous les mots de passe Wi-Fi sauf celui auquel vous êtes actuellement connecté. Cela peut aussi désactiver temporairement votre Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Remove Wi-Fi SSID and MAC information from your operating system to prevent location history tracking.</source>
+        <translation>Supprimez les informations SSID Wi-Fi et MAC de votre système d’exploitation pour empêcher le suivi de l’historique de localisation.</translation>
+    </message>
+    <message>
+        <source>Anti-Censorship Settings</source>
+        <translation>Paramètres anti-censure</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::CopyableTextItem</name>
+    <message>
+        <source>Copied</source>
+        <translation>Copié</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DecoyTrafficGroup</name>
+    <message>
+        <source>Decoy Traffic</source>
+        <translation>Trafic de leurres</translation>
+    </message>
+    <message>
+        <source>This is an experimental feature that attempts to combat traffic correlation attacks on adversarial networks. When enabled, the app will generate random activity over the tunnel, and upload and download random data at chosen intervals.</source>
+        <translation>Il s’agit d’une fonctionnalité expérimentale qui tente de lutter contre les attaques de corrélation de trafic sur les réseaux adverses. Lorsqu’elle est activée, l’application génère une activité aléatoire sur le tunnel, et télécharge et télécharge des données aléatoires à des intervalles choisis.</translation>
+    </message>
+    <message>
+        <source>Fake Traffic Volume</source>
+        <translation>Faux volume de trafic</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation>Bas</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>Douleur moyenne</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation>Haut</translation>
+    </message>
+    <message>
+        <source>Estimated Data Usage</source>
+        <translation>Utilisation estimée des données</translation>
+    </message>
+    <message>
+        <source>%1/hour</source>
+        <translation>%1/heure</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DnsDomainsGroup</name>
+    <message>
+        <source>Domain already exists. Please enter a new domain.</source>
+        <translation>Le domaine existe déjà. Veuillez saisir un nouveau domaine.</translation>
+    </message>
+    <message>
+        <source>Incorrect domain name. Please enter a valid domain.</source>
+        <translation>Nom de domaine incorrect. Veuillez saisir un domaine valide.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::DnsDomainsWindowItem</name>
+    <message>
+        <source>List of domains</source>
+        <translation>Liste des domaines</translation>
+    </message>
+    <message>
+        <source>Enter the IP and/or wildcards you wish to use for DNS split feature.</source>
+        <translation>Entrez l’adresse IP et/ou les caractères génériques que vous souhaitez utiliser pour la fonction de division DNS.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify domains.</source>
+        <translation>Veuillez vous connecter pour modifier les domaines.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::EmailItem</name>
+    <message>
+        <source>Sent!</source>
+        <translation>Envoyèrent!</translation>
+    </message>
+    <message>
+        <source>Resend</source>
+        <translation>Renvoyer</translation>
+    </message>
+    <message>
+        <source>Sending</source>
+        <translation>Envoi</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Raté</translation>
+    </message>
+    <message>
+        <source>Get 10GB/Month of data and gain the ability to reset your password.</source>
+        <translation>Obtenez 10 Go / mois de données et obtenez la possibilité de réinitialiser votre mot de passe.</translation>
+    </message>
+    <message>
+        <source>Please confirm your email</source>
+        <translation>Veuillez confirmer votre adresse e-mail</translation>
+    </message>
+    <message>
+        <source>Email</source>
+        <translation>Adresse e-mail</translation>
+    </message>
+    <message>
+        <source>Add Email</source>
+        <translation>Ajouter une adresse e-mail</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::FirewallGroup</name>
+    <message>
+        <source>Firewall Mode</source>
+        <translation>Mode pare-feu</translation>
+    </message>
+    <message>
+        <source>When?</source>
+        <translation>Quand?</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::GeneralWindowItem</name>
+    <message>
+        <source>General</source>
+        <translation>Généralités</translation>
+    </message>
+    <message>
+        <source>Run Windscribe when your device starts.</source>
+        <translation>Exécutez Windscribe au démarrage de votre appareil.</translation>
+    </message>
+    <message>
+        <source>Launch on Startup</source>
+        <translation>Lancement au démarrage</translation>
+    </message>
+    <message>
+        <source>Launch Windscribe in a minimized state.</source>
+        <translation>Lancez Windscribe dans un état réduit.</translation>
+    </message>
+    <message>
+        <source>Start Minimized</source>
+        <translation>Début réduit</translation>
+    </message>
+    <message>
+        <source>Windscribe minimizes to system tray and no longer appears in the task bar.</source>
+        <translation>Windscribe réduit à la barre d’état système et n’apparaît plus dans la barre des tâches.</translation>
+    </message>
+    <message>
+        <source>Close to Tray</source>
+        <translation>Près du plateau</translation>
+    </message>
+    <message>
+        <source>Don&apos;t show the Windscribe icon in dock.</source>
+        <translation>N’affichez pas l’icône Windscribe dans le dock.</translation>
+    </message>
+    <message>
+        <source>Hide from Dock</source>
+        <translation>Masquer du Dock</translation>
+    </message>
+    <message>
+        <source>Pin Windscribe near the system tray or menu bar.</source>
+        <translation>Épinglez Windscribe près de la barre d’état système ou de la barre de menus.</translation>
+    </message>
+    <message>
+        <source>Docked</source>
+        <translation>Amarré</translation>
+    </message>
+    <message>
+        <source>Display system-level notifications when connection events occur.</source>
+        <translation>Affiche les notifications au niveau du système lorsque des événements de connexion se produisent.</translation>
+    </message>
+    <message>
+        <source>Show Notifications</source>
+        <translation>Afficher les notifications</translation>
+    </message>
+    <message>
+        <source>Display a location&apos;s load. Shorter bars mean lesser load (usage).</source>
+        <translation>Afficher la charge d’un emplacement. Des barres plus courtes signifient moins de charge (utilisation).</translation>
+    </message>
+    <message>
+        <source>Show Location Load</source>
+        <translation>Afficher la charge de localisation</translation>
+    </message>
+    <message>
+        <source>Arrange locations alphabetically, geographically, or by latency.</source>
+        <translation>Organisez les emplacements par ordre alphabétique, géographique ou par latence.</translation>
+    </message>
+    <message>
+        <source>Location Order</source>
+        <translation>Ordre d’emplacement</translation>
+    </message>
+    <message>
+        <source>Localize Windscribe to supported languages.</source>
+        <translation>Localisez Windscribe dans les langues prises en charge.</translation>
+    </message>
+    <message>
+        <source>Language</source>
+        <translation>Langue</translation>
+    </message>
+    <message>
+        <source>Choose to receive stable, beta, or experimental builds.</source>
+        <translation>Choisissez de recevoir des builds stables, bêta ou expérimentaux.</translation>
+    </message>
+    <message>
+        <source>Update Channel</source>
+        <translation>Mettre à jour le canal</translation>
+    </message>
+    <message>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <source>Windscribe minimizes to menubar and no longer appears in the dock.</source>
+        <translation>Windscribe réduit à la barre de menus et n’apparaît plus dans le dock.</translation>
+    </message>
+    <message>
+        <source>Multi-Desktop</source>
+        <translation>Multi-bureau</translation>
+    </message>
+    <message>
+        <source>Select behaviour when window is activated with multiple desktops.</source>
+        <translation>Sélectionnez le comportement lorsque la fenêtre est activée avec plusieurs postes de travail.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::HelpWindowItem</name>
+    <message>
+        <source>Help</source>
+        <translation>Aide</translation>
+    </message>
+    <message>
+        <source>All you need to know about Windscribe.</source>
+        <translation>Tout ce que vous devez savoir sur Windscribe.</translation>
+    </message>
+    <message>
+        <source>Knowledge Base</source>
+        <translation>Base de connaissances</translation>
+    </message>
+    <message>
+        <source>Talk to Garry</source>
+        <translation>Parlez à Garry</translation>
+    </message>
+    <message>
+        <source>Best places to help and get help from other users.</source>
+        <translation>Les meilleurs endroits pour aider et obtenir de l’aide d’autres utilisateurs.</translation>
+    </message>
+    <message>
+        <source>Community Support</source>
+        <translation>Soutien de la communauté</translation>
+    </message>
+    <message>
+        <source>View Debug Log</source>
+        <translation>Afficher le journal de débogage</translation>
+    </message>
+    <message>
+        <source>Send Debug Log</source>
+        <translation>Envoyer le journal de débogage</translation>
+    </message>
+    <message>
+        <source>Sending log...</source>
+        <translation>Journal d’envoi...</translation>
+    </message>
+    <message>
+        <source>Sent, thanks!</source>
+        <translation>Envoyé, merci!</translation>
+    </message>
+    <message>
+        <source>Failed!</source>
+        <translation>Raté!</translation>
+    </message>
+    <message>
+        <source>Need help? Garry can help you with most issues, go talk to him.</source>
+        <translation>Besoin d&amp;apos;aide ? Garry peut vous aider avec la plupart des problèmes, allez lui parler.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::LookAndFeelWindowItem</name>
+    <message>
+        <source>Look &amp; Feel</source>
+        <translation>Apparence et convivialité</translation>
+    </message>
+    <message>
+        <source>Choose between the classic GUI or the &quot;earless&quot; alternative GUI.</source>
+        <translation>Choisissez entre l’interface graphique classique ou l’interface graphique alternative «&#xa0;sans oreilles&#xa0;».</translation>
+    </message>
+    <message>
+        <source>App Skin</source>
+        <translation>Skin de l’application</translation>
+    </message>
+    <message>
+        <source>Customize the background of the main app screen.</source>
+        <translation>Personnalisez l’arrière-plan de l’écran principal de l’application.</translation>
+    </message>
+    <message>
+        <source>Choose sounds to play when connection events occur.</source>
+        <translation>Choisissez les sons à jouer lorsque des événements de connexion se produisent.</translation>
+    </message>
+    <message>
+        <source>Change location names to your liking.</source>
+        <translation>Changez les noms de lieux à votre guise.</translation>
+    </message>
+    <message>
+        <source>Rename Locations</source>
+        <translation>Renommer les emplacements</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Exportation</translation>
+    </message>
+    <message>
+        <source>Import</source>
+        <translation>Importation</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>Réinitialisation</translation>
+    </message>
+    <message>
+        <source>Choose between white and black tray icon.</source>
+        <translation>Choisissez entre l’icône blanche et l’icône noire de la barre d’état.</translation>
+    </message>
+    <message>
+        <source>Tray Icon Colour</source>
+        <translation>Couleur de l’icône du bac</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::MacSpoofingGroup</name>
+    <message>
+        <source>You can only spoof an existing adapter.</source>
+        <translation>Vous ne pouvez usurper qu’un adaptateur existant.</translation>
+    </message>
+    <message>
+        <source>Cannot spoof on &apos;No Interface&apos;</source>
+        <translation>Impossible d’usurper sur &apos;Pas d’interface&apos;</translation>
+    </message>
+    <message>
+        <source>Cannot spoof the current interface</source>
+        <translation>Impossible d’usurper l’interface actuelle</translation>
+    </message>
+    <message>
+        <source>The current primary interface must match the selected interface to spoof.</source>
+        <translation>L’interface principale actuelle doit correspondre à l’interface sélectionnée à l’usurpation.</translation>
+    </message>
+    <message>
+        <source>No Interface</source>
+        <translation>Pas d’interface</translation>
+    </message>
+    <message>
+        <source>MAC Spoofing</source>
+        <translation>Usurpation d’identité MAC</translation>
+    </message>
+    <message>
+        <source>MAC Address</source>
+        <translation>Adresse MAC</translation>
+    </message>
+    <message>
+        <source>Interface</source>
+        <translation>Interface</translation>
+    </message>
+    <message>
+        <source>Auto-Rotate MAC</source>
+        <translation>Rotation automatique MAC</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NetworkOptionsNetworkWindowItem</name>
+    <message>
+        <source>Windscribe auto-connects if the device connects to this network.</source>
+        <translation>Windscribe se connecte automatiquement si l’appareil se connecte à ce réseau.</translation>
+    </message>
+    <message>
+        <source>Auto-Secure</source>
+        <translation>Sécurisation automatique</translation>
+    </message>
+    <message>
+        <source>Preferred Protocol</source>
+        <translation>Protocole préféré</translation>
+    </message>
+    <message>
+        <source>Choose whether to connect using the recommended tunneling protocol, or to specify a protocol of your choice.</source>
+        <translation>Choisissez de vous connecter à l’aide du protocole de tunneling recommandé ou de spécifier un protocole de votre choix.</translation>
+    </message>
+    <message>
+        <source>Forget Network</source>
+        <translation>Oublier le réseau</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NetworkOptionsWindowItem</name>
+    <message>
+        <source>Network Options</source>
+        <translation>Options réseau</translation>
+    </message>
+    <message>
+        <source>Mark all newly encountered networks as Secured.</source>
+        <translation>Marquez tous les nouveaux réseaux comme sécurisés.</translation>
+    </message>
+    <message>
+        <source>Auto-Secure Networks</source>
+        <translation>Réseaux sécurisés automatiquement</translation>
+    </message>
+    <message>
+        <source>No Network Detected</source>
+        <translation>Aucun réseau détecté</translation>
+    </message>
+    <message>
+        <source>CURRENT NETWORK</source>
+        <translation>RÉSEAU ACTUEL</translation>
+    </message>
+    <message>
+        <source>OTHER NETWORKS</source>
+        <translation>AUTRES RÉSEAUX</translation>
+    </message>
+    <message>
+        <source>Secured</source>
+        <translation>Sécurisé</translation>
+    </message>
+    <message>
+        <source>Unsecured</source>
+        <translation>Non sécurisé</translation>
+    </message>
+    <message>
+        <source>No Networks Detected.
+Connect to a network first</source>
+        <translation>Aucun réseau détecté.
+Se connecter d’abord à un réseau</translation>
+    </message>
+    <message>
+        <source>New networks are automatically &quot;Secured&quot;. If you tag a network as &quot;Unsecured&quot;, Windscribe will disconnect when the device joins it. Setting a network as &quot;Unsecured&quot; is NOT recommended.</source>
+        <translation>Les nouveaux réseaux sont automatiquement « sécurisés ». Si vous identifiez un réseau comme « Non sécurisé », Windscribe se déconnectera lorsque l’appareil le rejoindra. Définir un réseau comme « Non sécurisé » n’est PAS recommandé.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::NewAddressItem</name>
+    <message>
+        <source>Enter IP or Hostname</source>
+        <translation>Entrez l’adresse IP ou le nom d’hôte</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PacketSizeGroup</name>
+    <message>
+        <source>Auto-Detect &amp; Generate MTU</source>
+        <translation>Détection automatique et génération de MTU</translation>
+    </message>
+    <message>
+        <source>Packet Size</source>
+        <translation>Taille du paquet</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Manuelle</translation>
+    </message>
+    <message>
+        <source>MTU</source>
+        <translation>MTU</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PlanItem</name>
+    <message>
+        <source>Free</source>
+        <translation>Libre</translation>
+    </message>
+    <message>
+        <source>Plan Type</source>
+        <translation>Type de régime</translation>
+    </message>
+    <message>
+        <source>Unlimited Data</source>
+        <translation>Données illimitées</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Coutume</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PreferencesTabControlItem</name>
+    <message>
+        <source>General</source>
+        <translation>Généralités</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>Compte</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Connexion</translation>
+    </message>
+    <message>
+        <source>R.O.B.E.R.T.</source>
+        <translation>R.O.B.E.R.T.</translation>
+    </message>
+    <message>
+        <source>Advanced Options</source>
+        <translation>Options avancées</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>Aide</translation>
+    </message>
+    <message>
+        <source>About</source>
+        <translation>Environ</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Log Out</source>
+        <translation>Se déconnecter</translation>
+    </message>
+    <message>
+        <source>Quit</source>
+        <translation>Quitter</translation>
+    </message>
+    <message>
+        <source>Look &amp; Feel</source>
+        <translation>Apparence et convivialité</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::PreferencesWindowItem</name>
+    <message>
+        <source>Unsaved Changes</source>
+        <translation>Modifications non enregistrées</translation>
+    </message>
+    <message>
+        <source>Discard</source>
+        <translation>Défausse</translation>
+    </message>
+    <message>
+        <source>You have unsaved changes in edit fields. Do you want to save them?</source>
+        <translation>Vous avez des modifications non enregistrées dans les champs d’édition. Veux-tu les sauver ?</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Sauvegarder</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProtocolGroup</name>
+    <message>
+        <source>Auto</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Manuelle</translation>
+    </message>
+    <message>
+        <source>Protocol</source>
+        <translation>Protocole</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Port</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProtocolTweaksGroup</name>
+    <message>
+        <source>Protocol Tweaks</source>
+        <translation>Ajustements de protocole</translation>
+    </message>
+    <message>
+        <source>Amnezia Config</source>
+        <translation>Configuration Amnezia</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxyGatewayGroup</name>
+    <message>
+        <source>Proxy Gateway</source>
+        <translation>Passerelle proxy</translation>
+    </message>
+    <message>
+        <source>Proxy Type</source>
+        <translation>Proxy Type</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Port</translation>
+    </message>
+    <message>
+        <source>Require Authentication</source>
+        <translation>Exiger l’authentification</translation>
+    </message>
+    <message>
+        <source>Without authentication, anyone on your network (e.g. coffee shop Wi-Fi) can use this proxy. Leave this on unless you know what you&apos;re doing.</source>
+        <translation>Sans authentification, toute personne sur votre réseau (par exemple le Wi-Fi d’un café) peut utiliser ce proxy. Laissez ça allumé à moins que vous ne sachiez ce que vous faites.</translation>
+    </message>
+    <message>
+        <source>IP</source>
+        <translation>IP</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Indisponible</translation>
+    </message>
+    <message>
+        <source>Only when VPN is connected</source>
+        <translation>Uniquement lorsque le VPN est connecté</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxySettingsGroup</name>
+    <message>
+        <source>Proxy</source>
+        <translation>Procuration</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    <message>
+        <source>Port</source>
+        <translation>Port</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Nom d’utilisateur</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>Invalid proxy address</source>
+        <translation>Adresse proxy non valide</translation>
+    </message>
+    <message>
+        <source>Invalid proxy port</source>
+        <translation>Port proxy non valide</translation>
+    </message>
+    <message>
+        <source>Proxy port is invalid. Please enter a valid port in the range 1-65535.</source>
+        <translation>Le port proxy n’est pas valide. Entrez un port valide dans la plage 1-65535.</translation>
+    </message>
+    <message>
+        <source>Proxy address is invalid. Please enter a valid IP address.</source>
+        <translation>L’adresse proxy n’est pas valide. Veuillez saisir une adresse IP valide.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::ProxySettingsWindowItem</name>
+    <message>
+        <source>Proxy Settings</source>
+        <translation>Paramètres de proxy</translation>
+    </message>
+    <message>
+        <source>If your network has a LAN proxy, configure it here. Please note these proxy settings are only utilized when connecting with the TCP protocol.</source>
+        <translation>Si votre réseau dispose d’un proxy LAN, configurez-le ici. Veuillez noter que ces paramètres proxy ne sont utilisés que lors de la connexion avec le protocole TCP.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::RobertItem</name>
+    <message>
+        <source>Blocking</source>
+        <translation>Blocage</translation>
+    </message>
+    <message>
+        <source>Allowing</source>
+        <translation>Autorisé</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::RobertWindowItem</name>
+    <message>
+        <source>R.O.B.E.R.T.</source>
+        <translation>R.O.B.E.R.T.</translation>
+    </message>
+    <message>
+        <source>R.O.B.E.R.T. is a customizable server-side domain and IP blocking tool. Select the block lists you wish to apply on all your devices by toggling the switch.</source>
+        <translation>R.O.B.E.R.T. est un outil personnalisable de blocage de domaine et d’adresses IP côté serveur. Sélectionnez les listes de blocage que vous souhaitez appliquer sur tous vos appareils en basculant le commutateur.</translation>
+    </message>
+    <message>
+        <source>Could not retrieve R.O.B.E.R.T. preferences from server. Try again later.</source>
+        <translation>Impossible de récupérer les préférences R.O.B.E.R.T. du serveur. Réessayez plus tard.</translation>
+    </message>
+    <message>
+        <source>Login to view or change R.O.B.E.R.T preferences</source>
+        <translation>Connectez-vous pour afficher ou modifier les préférences R.O.B.E.R.T</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Manage Custom Rules</source>
+        <translation>Gérer les règles personnalisées</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SearchLineEditItem</name>
+    <message>
+        <source>Search</source>
+        <translation>Rechercher</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SecureHotspotGroup</name>
+    <message>
+        <source>Secure Hotspot</source>
+        <translation>Point d’accès sécurisé</translation>
+    </message>
+    <message>
+        <source>Secure hotspot is not supported by your network adapter.</source>
+        <translation>Le point d’accès sécurisé n’est pas pris en charge par votre carte réseau.</translation>
+    </message>
+    <message>
+        <source>Secure hotspot is not supported for IKEv2 protocol.</source>
+        <translation>Le point d’accès sécurisé n’est pas pris en charge pour le protocole IKEv2.</translation>
+    </message>
+    <message>
+        <source>Share your secure Windscribe connection wirelessly.</source>
+        <translation>Partagez votre connexion sécurisée Windscribe sans fil.</translation>
+    </message>
+    <message>
+        <source>Enter SSID</source>
+        <translation>Entrez SSID</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Mot de passe</translation>
+    </message>
+    <message>
+        <source>At least 8 characters</source>
+        <translation>Au moins 8 caractères</translation>
+    </message>
+    <message>
+        <source>To turn on Secure Hotspot, please turn off split tunneling or use exclusive mode.</source>
+        <translation>Pour activer le point d’accès sécurisé, désactivez le tunneling fractionné ou utilisez le mode exclusif.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SelectFileItem</name>
+    <message>
+        <source>[no selection]</source>
+        <translation>[pas de sélection]</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SoundsGroup</name>
+    <message>
+        <source>Sound Notifications</source>
+        <translation>Notifications sonores</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Aucun</translation>
+    </message>
+    <message>
+        <source>When Disconnected</source>
+        <translation>Lorsqu’il est déconnecté</translation>
+    </message>
+    <message>
+        <source>Bundled</source>
+        <translation>Livré</translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation>Coutume</translation>
+    </message>
+    <message>
+        <source>Select a sound</source>
+        <translation>Sélectionnez un son</translation>
+    </message>
+    <message>
+        <source>When Connected</source>
+        <translation>Lorsqu’il est connecté</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAddressesGroup</name>
+    <message>
+        <source>There are too many IPs/CIDR ranges in the list. Please remove some before adding more.</source>
+        <translation>Il y a trop de plages d’IP/CIDR dans la liste. Merci de retirer certains avant d’en ajouter davantage.</translation>
+    </message>
+    <message>
+        <source>IP or hostname already exists. Please enter a new IP or hostname.</source>
+        <translation>L’adresse IP ou le nom d’hôte existe déjà. Veuillez saisir une nouvelle adresse IP ou un nouveau nom d’hôte.</translation>
+    </message>
+    <message>
+        <source>Incorrect IP address/mask combination. Please enter a valid hostname or IP address in plain or CIDR notation.</source>
+        <translation>Combinaison adresse IP/masque incorrecte. Veuillez saisir un nom d’hôte ou une adresse IP valide en notation simple ou CIDR.</translation>
+    </message>
+    <message>
+        <source>This IP address or range is reserved by Windscribe and can not be changed.</source>
+        <translation>Cette adresse IP ou plage est réservée par Windscribe et ne peut être modifiée.</translation>
+    </message>
+    <message>
+        <source>There are too many hostnames in the list. Please remove some before adding more.</source>
+        <translation>Il y a trop de noms d’hôtes dans la liste. Veuillez en retirer quelques-uns avant d’en ajouter d’autres.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAddressesWindowItem</name>
+    <message>
+        <source>IPs &amp; Hostnames</source>
+        <translation>IP et noms d’hôte</translation>
+    </message>
+    <message>
+        <source>Enter the IP and/or hostnames you wish to include in or exclude from the VPN tunnel below.</source>
+        <translation>Entrez l’adresse IP et/ou les noms d’hôte que vous souhaitez inclure ou exclure du tunnel VPN ci-dessous.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify split tunneling rules.</source>
+        <translation>Veuillez vous connecter pour modifier les règles de split tunneling.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsGroup</name>
+    <message>
+        <source>This app is already in the list.</source>
+        <translation>Cette application figure déjà dans la liste.</translation>
+    </message>
+    <message>
+        <source>There are too many apps in the list. Please remove some before adding more.</source>
+        <translation>Il y a trop d’applications dans la liste. Veuillez en retirer quelques-uns avant d’en ajouter d’autres.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsItem</name>
+    <message>
+        <source>Search/Add Apps</source>
+        <translation>Rechercher/Ajouter des applications</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingAppsWindowItem</name>
+    <message>
+        <source>Apps</source>
+        <translation>Apps</translation>
+    </message>
+    <message>
+        <source>Add the apps you wish to include in or exclude from the VPN tunnel below.</source>
+        <translation>Ajoutez les applications que vous souhaitez inclure ou exclure du tunnel VPN ci-dessous.</translation>
+    </message>
+    <message>
+        <source>Please log in to modify split tunneling rules.</source>
+        <translation>Veuillez vous connecter pour modifier les règles de split tunneling.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingGroup</name>
+    <message>
+        <source>Service Not Installed</source>
+        <translation>Service non installé</translation>
+    </message>
+    <message>
+        <source>The split tunneling driver is not installed.  To enable this feature, try reinstalling the Windscribe application.
+
+If the reinstall does not help, please contact Windscribe support for assistance.</source>
+        <translation>Le pilote de tunneling fractionné n’est pas installé.  Pour activer cette fonctionnalité, essayez de réinstaller l’application Windscribe.
+
+Si la réinstallation ne résout pas le problème, veuillez contacter le support Windscribe pour obtenir de l’aide.</translation>
+    </message>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Split Tunneling</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation>Mode</translation>
+    </message>
+    <message>
+        <source>Exclusive</source>
+        <translation>Exclusif</translation>
+    </message>
+    <message>
+        <source>Inclusive</source>
+        <translation>Inclusif</translation>
+    </message>
+    <message>
+        <source>Apps</source>
+        <translation>Apps</translation>
+    </message>
+    <message>
+        <source>IPs &amp; Hostnames</source>
+        <translation>IP et noms d’hôte</translation>
+    </message>
+    <message>
+        <source>When enabled, selected apps, IPs, and hostnames will not go through Windscribe when connected.</source>
+        <translation>Lorsqu’ils sont activés, les applications, les adresses IP et les noms d’hôte sélectionnés ne passent pas par Windscribe lorsqu’ils sont connectés.</translation>
+    </message>
+    <message>
+        <source>When enabled, only selected apps, IPs, and hostnames will go through Windscribe when connected.</source>
+        <translation>Lorsqu’il est activé, seules les applications, adresses IP et noms d’hôte sélectionnés passeront par Windscribe lorsqu’ils seront connectés.</translation>
+    </message>
+</context>
+<context>
+    <name>PreferencesWindow::SplitTunnelingWindowItem</name>
+    <message>
+        <source>Split Tunneling</source>
+        <translation>Split Tunneling</translation>
+    </message>
+    <message>
+        <source>Include or exclude apps and hostnames from the VPN tunnel.</source>
+        <translation>Incluez ou excluez des applications et des noms d’hôte du tunnel VPN.</translation>
+    </message>
+    <message>
+        <source>The Windscribe split tunneling system extension must be enabled for this feature to function. Please enable it in System Settings.</source>
+        <translation>L’extension du système de tunnel fractionné Windscribe doit être activée pour que cette fonctionnalité fonctionne. Veuillez l’activer dans les paramètres système.</translation>
+    </message>
+</context>
+<context>
+    <name>ProtocolWindow::ProtocolLineItem</name>
+    <message>
+        <source>NEXT UP IN %1s</source>
+        <translation>PROCHAINE ÉTAPE DANS %1s</translation>
+    </message>
+    <message>
+        <source>Connected to</source>
+        <translation>Connecté à</translation>
+    </message>
+    <message>
+        <source>Failed</source>
+        <translation>Raté</translation>
+    </message>
+</context>
+<context>
+    <name>ProtocolWindow::ProtocolPromptItem</name>
+    <message>
+        <source>Cutting-edge protocol.</source>
+        <translation>Protocole de pointe.</translation>
+    </message>
+    <message>
+        <source>An IPsec based tunneling protocol.</source>
+        <translation>Protocole de tunneling basé sur IPsec.</translation>
+    </message>
+    <message>
+        <source>Balanced speed and security.</source>
+        <translation>Vitesse et sécurité équilibrées.</translation>
+    </message>
+    <message>
+        <source>Use it if OpenVPN UDP fails.</source>
+        <translation>Utilisez-le si OpenVPN UDP échoue.</translation>
+    </message>
+    <message>
+        <source>Disguises traffic as HTTPS with TLS.</source>
+        <translation>Déguise le trafic en HTTPS avec TLS.</translation>
+    </message>
+    <message>
+        <source>Wraps traffic with web sockets.</source>
+        <translation>Encapsule le trafic avec des sockets Web.</translation>
+    </message>
+    <message>
+        <source>Change Protocol</source>
+        <translation>Modifier le protocole</translation>
+    </message>
+    <message>
+        <source>Quickly re-connect using a different protocol.</source>
+        <translation>Reconnectez-vous rapidement à l’aide d’un protocole différent.</translation>
+    </message>
+    <message>
+        <source>Connection Failure!</source>
+        <translation>Échec de connexion!</translation>
+    </message>
+    <message>
+        <source>The protocol you’ve chosen has failed to connect. Windscribe will attempt to reconnect using the first protocol below.</source>
+        <translation>Le protocole que vous avez choisi n’a pas réussi à se connecter. Windscribe tentera de se reconnecter en utilisant le premier protocole ci-dessous.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+</context>
+<context>
+    <name>QObject</name>
+    <message>
+        <source>Custom</source>
+        <translation>Coutume</translation>
+    </message>
+    <message>
+        <source>OS Default</source>
+        <translation>Système d’exploitation par défaut</translation>
+    </message>
+    <message>
+        <source>UNKNOWN</source>
+        <translation>INCONNU</translation>
+    </message>
+    <message>
+        <source>Geography</source>
+        <translation>Géographie</translation>
+    </message>
+    <message>
+        <source>Alphabet</source>
+        <translation>Alphabet</translation>
+    </message>
+    <message>
+        <source>Latency</source>
+        <translation>Latence</translation>
+    </message>
+    <message>
+        <source>Manual</source>
+        <translation>Manuelle</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Automatique</translation>
+    </message>
+    <message>
+        <source>Always On</source>
+        <translation>Toujours actif</translation>
+    </message>
+    <message>
+        <source>Before Connection</source>
+        <translation>Avant la connexion</translation>
+    </message>
+    <message>
+        <source>After Connection</source>
+        <translation>Après la connexion</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Aucun</translation>
+    </message>
+    <message>
+        <source>Auto-detect</source>
+        <translation>Détection automatique</translation>
+    </message>
+    <message>
+        <source>Release</source>
+        <translation>Stable</translation>
+    </message>
+    <message>
+        <source>Beta</source>
+        <translation>Bêta</translation>
+    </message>
+    <message>
+        <source>Guinea Pig</source>
+        <translation>Cobaye</translation>
+    </message>
+    <message>
+        <source>Internal</source>
+        <translation>Interne</translation>
+    </message>
+    <message>
+        <source>Exclude</source>
+        <translation>Exclure</translation>
+    </message>
+    <message>
+        <source>Include</source>
+        <translation>Inclure</translation>
+    </message>
+    <message>
+        <source>Alpha</source>
+        <translation>Alpha</translation>
+    </message>
+    <message>
+        <source>Van Gogh</source>
+        <translation>Van Gogh</translation>
+    </message>
+    <message>
+        <source>IPv4 Only</source>
+        <translation>IPv4 uniquement</translation>
+    </message>
+    <message>
+        <source>Enabled</source>
+        <translation>Activé</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>Handicapé</translation>
+    </message>
+    <message>
+        <source>Config file too large</source>
+        <translation>Fichier de configuration trop volumineux</translation>
+    </message>
+    <message>
+        <source>Failed to open file</source>
+        <translation>Impossible d’ouvrir le fichier</translation>
+    </message>
+    <message>
+        <source>Invalid config format</source>
+        <translation>Format de configuration non valide</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Interface&quot; section</source>
+        <translation>Section «&#xa0;Interface&#xa0;» manquante</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Peer&quot; section</source>
+        <translation>Section «&#xa0;Pair&#xa0;» manquante</translation>
+    </message>
+    <message>
+        <source>Missing &quot;PrivateKey&quot; in the &quot;Interface&quot; section</source>
+        <translation>Manque «&#xa0;PrivateKey&#xa0;» dans la section «&#xa0;Interface&#xa0;»</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Address&quot; in the &quot;Interface&quot; section</source>
+        <translation>Absence de «&#xa0;Adresse&#xa0;» dans la section «&#xa0;Interface&#xa0;»</translation>
+    </message>
+    <message>
+        <source>Missing &quot;DNS&quot; in the &quot;Interface&quot; section</source>
+        <translation>Manque «&#xa0;DNS&#xa0;» dans la section «&#xa0;Interface&#xa0;»</translation>
+    </message>
+    <message>
+        <source>Missing &quot;PublicKey&quot; in the &quot;Peer&quot; section</source>
+        <translation>Manque «&#xa0;PublicKey&#xa0;» dans la section «&#xa0;Peer&#xa0;»</translation>
+    </message>
+    <message>
+        <source>Missing &quot;Endpoint&quot; in the &quot;Peer&quot; section</source>
+        <translation>Il manque « Point de terminaison » dans la section « Pair »</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PrivateKey&quot; format</source>
+        <translation>Format « PrivateKey » invalide</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PublicKey&quot; format</source>
+        <translation>Format « PublicKey » invalide</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PresharedKey&quot; format</source>
+        <translation>Format « PresharedKey » invalide</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;Address&quot; value: %1</source>
+        <translation>Valeur « Adresse » invalide : %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;AllowedIPs&quot; value: %1</source>
+        <translation>Valeur « AllowedIPs » invalide : %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;DNS&quot; value: %1</source>
+        <translation>Valeur « DNS » invalide : %1</translation>
+    </message>
+    <message>
+        <source>Invalid endpoint port</source>
+        <translation>Port de terminaison invalide</translation>
+    </message>
+    <message>
+        <source>Invalid AmneziaWG header parameter</source>
+        <translation>Invalid AmneziaWG header parameter</translation>
+    </message>
+    <message>
+        <source>AmneziaWG init parameter too large</source>
+        <translation>Paramètre d’init AmneziaWG trop grand</translation>
+    </message>
+    <message>
+        <source>AmneziaWG init parameter contains invalid characters</source>
+        <translation>Le paramètre d’init d’AmneziaWG contient des caractères invalides</translation>
+    </message>
+    <message>
+        <source>Invalid AmneziaWG parameter: %1</source>
+        <translation>Invalid AmneziaWG parameter&#xa0;: %1</translation>
+    </message>
+    <message>
+        <source>Invalid &quot;PersistentKeepalive&quot; value</source>
+        <translation>Valeur invalide « PersistentKeepalive »</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>Adresses IP statiques</translation>
+    </message>
+    <message>
+        <source>Your original account %1 has expired. Creating multiple accounts to bypass free tier limitations is prohibited. Please login into the original account and wait until the bandwidth is reset. You can also upgrade to Pro.</source>
+        <translation>Votre compte d’origine %1 a expiré. La création de plusieurs comptes pour contourner les limitations d’offre gratuite est interdite. Veuillez vous connecter au compte d’origine et attendre que la bande passante soit réinitialisée. Vous pouvez également passer à Pro.</translation>
+    </message>
+    <message>
+        <source>Your account is disabled for abuse.</source>
+        <translation>Votre compte est désactivé en cas d’abus.</translation>
+    </message>
+    <message>
+        <source>Firewall Always On</source>
+        <translation>Pare-feu toujours activé</translation>
+    </message>
+    <message>
+        <source>Can&apos;t turn the firewall off because &quot;Always On&quot; mode is enabled</source>
+        <translation>Impossible de désactiver le pare-feu car le mode « Toujours activé » est activé</translation>
+    </message>
+    <message>
+        <source>Windscribe is already running on your computer, but appears to not be responding.</source>
+        <translation>Windscribe est déjà en cours d’exécution sur votre ordinateur, mais ne semble pas répondre.</translation>
+    </message>
+    <message>
+        <source>You may need to kill the non-responding Windscribe app or reboot your computer to fix the issue.</source>
+        <translation>Vous devrez peut-être tuer l’application Windscribe qui ne répond pas ou redémarrer votre ordinateur pour résoudre le problème.</translation>
+    </message>
+    <message>
+        <source>One or more files in the Windscribe application bundle have been suspiciously modified. Please re-install Windscribe.</source>
+        <translation>Un ou plusieurs fichiers du bundle d’applications Windscribe ont été modifiés de manière suspecte. Veuillez réinstaller Windscribe.</translation>
+    </message>
+    <message>
+        <source>White</source>
+        <translation>Blanc</translation>
+    </message>
+    <message>
+        <source>Black</source>
+        <translation>Noir</translation>
+    </message>
+    <message>
+        <source>Forced</source>
+        <translation>Forcé</translation>
+    </message>
+    <message>
+        <source>Move spaces</source>
+        <translation>Déplacer des espaces</translation>
+    </message>
+    <message>
+        <source>Move window</source>
+        <translation>Déplacer la fenêtre</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Dupliquer</translation>
+    </message>
+    <message>
+        <source>Local DNS</source>
+        <translation>Local DNS</translation>
+    </message>
+    <message>
+        <source>Stretch</source>
+        <translation>Étirer</translation>
+    </message>
+    <message>
+        <source>Fill</source>
+        <translation>Remplir</translation>
+    </message>
+    <message>
+        <source>Tile</source>
+        <translation>Carreau</translation>
+    </message>
+    <message>
+        <source>Always On+</source>
+        <translation>Toujours actif+</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Configurations personnalisées</translation>
+    </message>
+    <message>
+        <source>Random IP</source>
+        <translation>IP aléatoire</translation>
+    </message>
+    <message>
+        <source>Your application version is no longer supported. Please update to continue using %1.</source>
+        <translation>La version de votre application n’est plus prise en charge. Veuillez mettre à jour pour continuer à utiliser %1.</translation>
+    </message>
+    <message>
+        <source>Please upgrade to a Pro account to continue using %1.</source>
+        <translation>Merci de passer à un compte Pro pour continuer à utiliser %1.</translation>
+    </message>
+    <message>
+        <source>Regular</source>
+        <translation>Régulier</translation>
+    </message>
+    <message>
+        <source>Alternate</source>
+        <translation>Alternatif</translation>
+    </message>
+    <message>
+        <source>Windscribe is already running in another user session on this computer. Quit Windscribe in that session, then try again.</source>
+        <translation>Windscribe est déjà en cours d’exécution dans la session d’un autre utilisateur sur cet ordinateur. Quittez Windscribe dans cette session, puis réessayez.</translation>
+    </message>
+    <message>
+        <source>%1 is required</source>
+        <translation>%1 est requis</translation>
+    </message>
+    <message>
+        <source>%1 must be a string</source>
+        <translation>%1 doit être une chaîne</translation>
+    </message>
+    <message>
+        <source>%1 must be 1-65535</source>
+        <translation>%1 doit être compris entre 1-65535</translation>
+    </message>
+    <message>
+        <source>%1 must be a positive whole number</source>
+        <translation>%1 doit être un nombre entier positif</translation>
+    </message>
+    <message>
+        <source>%1 must be a hostname</source>
+        <translation>%1 doit être un nom d&apos;hôte</translation>
+    </message>
+    <message>
+        <source>%1 must be an IPv4 address</source>
+        <translation>%1 doit être une adresse IPv4</translation>
+    </message>
+    <message>
+        <source>must be an object</source>
+        <translation>doit être un objet</translation>
+    </message>
+    <message>
+        <source>unknown field %1</source>
+        <translation>champ inconnu %1</translation>
+    </message>
+    <message>
+        <source>unsupported protocol %1</source>
+        <translation>protocole non pris en charge %1</translation>
+    </message>
+    <message>
+        <source>The file is too large to be a hydra profile.</source>
+        <translation>Le fichier est trop volumineux pour être un profil hydra.</translation>
+    </message>
+    <message>
+        <source>Not a hydra profile: the file is not a JSON object.</source>
+        <translation>Ce n&apos;est pas un profil hydra : le fichier n&apos;est pas un objet JSON.</translation>
+    </message>
+    <message>
+        <source>Not a hydra profile: kind must be %1.</source>
+        <translation>Ce n&apos;est pas un profil hydra : kind doit être %1.</translation>
+    </message>
+    <message>
+        <source>This hydra profile is from an older hydra and names one server; ask for a new one.</source>
+        <translation>Ce profil hydra provient d&apos;une ancienne version de hydra et désigne un seul serveur ; demandez-en un nouveau.</translation>
+    </message>
+    <message>
+        <source>Unsupported hydra profile version; this app reads version 2.</source>
+        <translation>Version de profil hydra non prise en charge ; cette application lit la version 2.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: unknown field %1.</source>
+        <translation>Profil hydra non valide : champ inconnu %1.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: %1.</source>
+        <translation>Profil hydra non valide : %1.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: all must be true or false.</source>
+        <translation>Profil hydra non valide : all doit être true ou false.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: it has no fronts.</source>
+        <translation>Profil hydra non valide : il ne contient aucun front.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: front %1: %2.</source>
+        <translation>Profil hydra non valide : front %1 : %2.</translation>
+    </message>
+    <message>
+        <source>Invalid hydra profile: front %1: entry %2 is listed twice.</source>
+        <translation>Profil hydra non valide : front %1 : l&apos;entrée %2 apparaît deux fois.</translation>
+    </message>
+    <message>
+        <source>%1 via %2</source>
+        <translation>%1 via %2</translation>
+    </message>
+    <message>
+        <source>%1 via %2 (not in the server list)</source>
+        <translation>%1 via %2 (absent de la liste des serveurs)</translation>
+    </message>
+    <message>
+        <source>Could not read the hydra profile: %1</source>
+        <translation>Impossible de lire le profil hydra : %1</translation>
+    </message>
+    <message>
+        <source>Could not save the hydra profile: %1</source>
+        <translation>Impossible d&apos;enregistrer le profil hydra : %1</translation>
+    </message>
+    <message>
+        <source>%1 (not in the server list)</source>
+        <translation>%1 (absent de la liste des serveurs)</translation>
+    </message>
+</context>
+<context>
+    <name>QWidget</name>
+    <message>
+        <source>Unknown Config Error</source>
+        <translation>Erreur de configuration inconnue</translation>
+    </message>
+</context>
+<context>
+    <name>SharingFeatures::SharingFeaturesWindowItem</name>
+    <message>
+        <source>Sharing Features</source>
+        <translation>Fonctionnalités de partage</translation>
+    </message>
+    <message>
+        <source>Proxy Gateway</source>
+        <translation>Passerelle proxy</translation>
+    </message>
+    <message>
+        <source>Secure Hotspot</source>
+        <translation>Point d’accès sécurisé</translation>
+    </message>
+</context>
+<context>
+    <name>TrayIcon</name>
+    <message>
+        <source>Connect</source>
+        <translation>Relier</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Déconnecter</translation>
+    </message>
+    <message>
+        <source>Locations</source>
+        <translation>Lieux</translation>
+    </message>
+    <message>
+        <source>Static IPs</source>
+        <translation>IP statiques</translation>
+    </message>
+    <message>
+        <source>Custom configs</source>
+        <translation>Configurations personnalisées</translation>
+    </message>
+    <message>
+        <source>Preferences</source>
+        <translation>Préférences</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>Aide</translation>
+    </message>
+    <message>
+        <source>Quit Windscribe</source>
+        <translation>Quittez Windscribe</translation>
+    </message>
+    <message>
+        <source>Favourites</source>
+        <translation>Favoris</translation>
+    </message>
+    <message>
+        <source>Show app</source>
+        <translation>Application de présentation</translation>
+    </message>
+</context>
+<context>
+    <name>TwoFactorAuthWindow::TwoFactorAuthOkButton</name>
+    <message>
+        <source>Add</source>
+        <translation>Ajouter</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+</context>
+<context>
+    <name>TwoFactorAuthWindow::TwoFactorAuthWindowItem</name>
+    <message>
+        <source>Two-Factor Auth</source>
+        <translation>Authentification à deux facteurs</translation>
+    </message>
+    <message>
+        <source>Use your app to get an authentication code, and enter it below</source>
+        <translation>Utilisez votre application pour obtenir un code d’authentification, puis entrez-le ci-dessous</translation>
+    </message>
+    <message>
+        <source>Please provide a 2FA code</source>
+        <translation>Veuillez fournir un code 2FA</translation>
+    </message>
+    <message>
+        <source>Invalid 2FA code, please try again</source>
+        <translation>Code 2FA invalide, veuillez réessayer</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateApp::UpdateAppItem</name>
+    <message>
+        <source>v</source>
+        <translation>v</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Mettre à jour</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateWindowItem</name>
+    <message>
+        <source>Updating </source>
+        <translation>Actualisation </translation>
+    </message>
+    <message>
+        <source>Your update is in progress, hang in there...</source>
+        <translation>Votre mise à jour est en cours, accrochez-vous...</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation>Plus tard</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Mettre à jour</translation>
+    </message>
+    <message>
+        <source>Windscribe will download the update, then terminate active connections and restart automatically.</source>
+        <translation>Windscribe téléchargera la mise à jour, puis mettra fin aux connexions actives et redémarrera automatiquement.</translation>
+    </message>
+    <message>
+        <source>Windscribe will download and install the update, which may take several minutes. Your computer will restart after the update.</source>
+        <translation>Windscribe téléchargera et installera la mise à jour, ce qui peut prendre plusieurs minutes. Votre ordinateur redémarrera après la mise à jour.</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeBanner</name>
+    <message>
+        <source>Unlock full access to Windscribe</source>
+        <translation>Débloquez l’accès complet à Windscribe</translation>
+    </message>
+    <message>
+        <source>Go Pro for unlimited everything</source>
+        <translation>Go Pro pour tout illimité</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeWidget::UpgradeWidgetItem</name>
+    <message>
+        <source>Get more data</source>
+        <translation>Obtenez plus de données</translation>
+    </message>
+    <message>
+        <source>%1 left</source>
+        <translation>%1 restant</translation>
+    </message>
+    <message>
+        <source>0 days left</source>
+        <translation>0 jours restants</translation>
+    </message>
+    <message>
+        <source>1 day left</source>
+        <translation>1 jour restant</translation>
+    </message>
+    <message>
+        <source>2 days left</source>
+        <translation>2 jours restants</translation>
+    </message>
+    <message>
+        <source>3 days left</source>
+        <translation>3 jours restants</translation>
+    </message>
+    <message>
+        <source>4 days left</source>
+        <translation>4 jours restants</translation>
+    </message>
+    <message>
+        <source>5 days left</source>
+        <translation>5 jours restants</translation>
+    </message>
+    <message>
+        <source>%1 days left</source>
+        <translation>%1 jours restants</translation>
+    </message>
+    <message>
+        <source>Login</source>
+        <translation>Connectez-vous</translation>
+    </message>
+    <message>
+        <source>Renew</source>
+        <translation>Renouveler</translation>
+    </message>
+</context>
+<context>
+    <name>UpgradeWindow::UpgradeWindowItem</name>
+    <message>
+        <source>You&apos;re out of data!</source>
+        <translation>Vous êtes à court de données!</translation>
+    </message>
+    <message>
+        <source>Don&apos;t leave your front door open. Upgrade or wait until next month to get your monthly data allowance back.</source>
+        <translation>Ne laissez pas votre porte d’entrée ouverte. Effectuez une mise à niveau ou attendez le mois prochain pour récupérer votre allocation mensuelle de données.</translation>
+    </message>
+    <message>
+        <source>Get more data</source>
+        <translation>Obtenir plus de données</translation>
+    </message>
+    <message>
+        <source>I&apos;m broke</source>
+        <translation>Je suis fauché</translation>
+    </message>
+</context>
+<context>
+    <name>gui_locations::LocationsModel</name>
+    <message>
+        <source>Best Location</source>
+        <translation>Meilleur emplacement</translation>
+    </message>
+</context>
+</TS>

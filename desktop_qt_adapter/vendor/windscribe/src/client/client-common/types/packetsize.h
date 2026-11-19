@@ -1,0 +1,113 @@
+#pragma once
+
+#include "types/enums.h"
+#include "utils/log/categories.h"
+
+#include <QJsonObject>
+#include <QSettings>
+
+namespace types {
+
+struct PacketSize
+{
+    PacketSize() {}
+
+    PacketSize(const QJsonObject &json)
+    {
+        if (json.contains(kJsonIsAutomaticProp) && json[kJsonIsAutomaticProp].isBool())
+            isAutomatic = json[kJsonIsAutomaticProp].toBool();
+
+        if (json.contains(kJsonMTUProp) && json[kJsonMTUProp].isDouble()) {
+            int mtuValue = json[kJsonMTUProp].toInt();
+            // MTU is unset, or must be a minimum of 68 per RFC 791 and can't exceed maximum IP packet size of 65535
+            if (mtuValue == -1 || (mtuValue >= 68 && mtuValue < 65536)) {
+                mtu = mtuValue;
+            }
+        }
+    }
+
+    bool isAutomatic = true;
+    int mtu = -1;
+
+    bool operator==(const PacketSize &other) const
+    {
+        return other.isAutomatic == isAutomatic && other.mtu == mtu;
+    }
+
+    bool operator!=(const PacketSize &other) const
+    {
+        return !(*this == other);
+    }
+
+#ifdef CLI_ONLY
+    void fromIni(const QSettings &settings)
+    {
+        const PacketSize defaults;
+        const QString defaultMode = enumToString(defaults.isAutomatic ? TOGGLE_MODE_AUTO : TOGGLE_MODE_MANUAL);
+        TOGGLE_MODE mode = enumFromString<TOGGLE_MODE>(settings.value(kIniIsAutomaticProp, defaultMode).toString());
+        isAutomatic = (mode == TOGGLE_MODE_AUTO);
+        int mtuValue = settings.value(kIniMTUProp, defaults.mtu).toInt();
+        // MTU is unset, or must be a minimum of 68 per RFC 791 and can't exceed maximum IP packet size of 65535
+        if (mtuValue == -1 || (mtuValue >= 68 && mtuValue < 65536)) {
+            mtu = mtuValue;
+        } else {
+            mtu = defaults.mtu;
+        }
+    }
+
+    void toIni(QSettings &settings) const
+    {
+        settings.setValue(kIniIsAutomaticProp, enumToString(isAutomatic ? TOGGLE_MODE_AUTO : TOGGLE_MODE_MANUAL));
+        settings.setValue(kIniMTUProp, mtu);
+    }
+#endif
+
+    void validate()
+    {
+        // MTU is unset, or must be a minimum of 68 per RFC 791 and can't exceed maximum IP packet size of 65535
+        if (mtu != -1 && (mtu < 68 || mtu >= 65536)) {
+            qCWarning(LOG_BASIC) << "PacketSize: invalid MTU, resetting";
+            mtu = -1;
+            isAutomatic = true;
+        }
+    }
+
+    QJsonObject toJson() const
+    {
+        QJsonObject json;
+        json[kJsonIsAutomaticProp] = isAutomatic;
+        json[kJsonMTUProp] = mtu;
+        return json;
+    }
+
+    friend QDataStream& operator <<(QDataStream &stream, const PacketSize &o)
+    {
+        stream << versionForSerialization_;
+        stream << o.isAutomatic << o.mtu;
+        return stream;
+    }
+
+    friend QDataStream& operator >>(QDataStream &stream, PacketSize &o)
+    {
+        quint32 version;
+        stream >> version;
+        if (version > o.versionForSerialization_)
+        {
+            stream.setStatus(QDataStream::ReadCorruptData);
+            return stream;
+        }
+        stream >> o.isAutomatic >> o.mtu;
+        return stream;
+    }
+
+private:
+    static const inline QString kIniIsAutomaticProp = "PacketSizeMode";
+    static const inline QString kIniMTUProp = "PacketSizeMTU";
+
+    static const inline QString kJsonIsAutomaticProp = "isAutomatic";
+    static const inline QString kJsonMTUProp = "mtu";
+
+    static constexpr quint32 versionForSerialization_ = 1;  // should increment the version if the data format is changed
+};
+
+} // types namespace

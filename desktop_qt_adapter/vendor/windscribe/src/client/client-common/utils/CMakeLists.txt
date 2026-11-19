@@ -1,0 +1,90 @@
+target_sources(client-common PRIVATE
+    dns_utils/dnsserversconfiguration.cpp
+    dns_utils/dnsserversconfiguration.h
+    dns_utils/dnsutils.h
+    executable_signature/executable_signature.cpp
+    executable_signature/executable_signature.h
+    extraconfig.cpp
+    extraconfig.h
+    filechangewatcher.cpp
+    filechangewatcher.h
+    hardcodedsettings.cpp
+    hardcodedsettings.h
+    hydraprofile.cpp
+    hydraprofile.h
+    networkingvalidation.cpp
+    networkingvalidation.h
+    languagesutil.cpp
+    languagesutil.h
+    log/categories.cpp
+    log/debug_trace.cpp
+    log/debug_trace.h
+    log/categories.h
+    log/clean_sensitive_info.cpp
+    log/clean_sensitive_info.h
+    log/logger.cpp
+    log/logger.h
+    log/spdlog_utils.h
+    log/mergelog.cpp
+    log/mergelog.h
+    log/multiline_message_logger.h
+    log/paths.cpp
+    log/paths.h
+    network_utils/dnschecker.cpp
+    network_utils/dnschecker.h
+    network_utils/network_utils.cpp
+    network_utils/network_utils.h
+    simplecrypt.cpp
+    simplecrypt.h
+    systemwideapplock.cpp
+    systemwideapplock.h
+    utils.cpp
+    utils.h
+    ws_assert.cpp
+    ws_assert.h
+)
+
+if (WIN32)
+    target_sources(client-common PRIVATE
+        crashdump.cpp
+        crashhandler.cpp
+        dns_utils/dnsutils_win.cpp
+        executable_signature/executable_signature_win.cpp
+        network_utils/network_utils_win.cpp
+        network_utils/network_utils_win.h
+        network_utils/wlan_utils_win.cpp
+        network_utils/wlan_utils_win.h
+        servicecontrolmanager.cpp
+        timer_win.cpp
+        timer_win.h
+        wincryptutils.cpp
+        wincryptutils.h
+        winutils.cpp
+    )
+elseif(APPLE)
+    target_sources(client-common PRIVATE
+        dns_utils/dnsutils_mac.cpp
+        exithandler_mac.mm
+        exithandler_mac.h
+        executable_signature/executable_signature_mac.h
+        executable_signature/executable_signature_mac.mm
+        macutils.h
+        macutils.mm
+        network_utils/network_utils_mac.h
+        network_utils/network_utils_mac.mm
+    )
+elseif(UNIX)
+    target_sources(client-common PRIVATE
+        dns_utils/dnsleakparse.cpp
+        dns_utils/dnsleakparse.h
+        dns_utils/dnsutils_linux.cpp
+        executable_signature/executablesignature_linux.cpp
+        executable_signature/executablesignature_linux.h
+        helperconnector_linux.cpp
+        helperconnector_linux.h
+        linuxutils.cpp
+        linuxutils.h
+        network_utils/network_utils_linux.cpp
+        network_utils/network_utils_linux.h
+    )
+endif()

@@ -1,0 +1,1091 @@
+#include "settingsvalidation.test.h"
+
+#include <QFile>
+#include <QSettings>
+#include <QTemporaryDir>
+#include <QTemporaryFile>
+#include <QtTest>
+
+#include "types/backgroundsettings.h"
+#include "types/connecteddnsinfo.h"
+#include "types/connectionsettings.h"
+#include "types/enginesettings.h"
+#include "types/firewallsettings.h"
+#include "types/guipersistentstate.h"
+#include "types/guisettings.h"
+#include "types/macaddrspoofing.h"
+#include "types/networkinterface.h"
+#include "types/packetsize.h"
+#include "types/proxysettings.h"
+#include "types/sharesecurehotspot.h"
+#include "types/soundsettings.h"
+#include "types/splittunneling.h"
+#include "utils/languagesutil.h"
+
+void TestSettingsValidation::initTestCase()
+{
+    QCoreApplication::setOrganizationName("WindscribeTest");
+    QCoreApplication::setApplicationName("settingsvalidation.test");
+#ifdef CLI_ONLY
+    // Loading settings also applies the CLI config file; the machine's own file must not leak into the tests.
+    QVERIFY(settingsDir_.isValid());
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir_.filePath("user"));
+    QSettings::setPath(QSettings::IniFormat, QSettings::SystemScope, settingsDir_.filePath("system"));
+#endif
+}
+
+void TestSettingsValidation::cleanupTestCase()
+{
+    QSettings settings;
+    settings.clear();
+}
+
+void TestSettingsValidation::testEngineSettings_validNoop()
+{
+    types::EngineSettingsData data;
+    DNS_POLICY_TYPE origDnsPolicy = data.dnsPolicy;
+    UPDATE_CHANNEL origUpdate = data.updateChannel;
+    QString origLanguage = data.language;
+    data.validate();
+    QCOMPARE(data.dnsPolicy, origDnsPolicy);
+    QCOMPARE(data.updateChannel, origUpdate);
+    QCOMPARE(data.language, origLanguage);
+}
+
+void TestSettingsValidation::testEngineSettings_badLanguage()
+{
+    types::EngineSettingsData data;
+    data.language = "xx-XX-not-a-language";
+    data.validate();
+    QCOMPARE(data.language, LanguagesUtil::systemLanguage());
+}
+
+void TestSettingsValidation::testEngineSettings_badCustomOvpnPath()
+{
+    types::EngineSettingsData data;
+    data.customOvpnConfigsPath = "/this/path/does/not/exist/foo";
+    data.validate();
+    QVERIFY(data.customOvpnConfigsPath.isEmpty());
+}
+
+void TestSettingsValidation::testEngineSettings_keepsExistingCustomOvpnPath()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    types::EngineSettingsData data;
+    data.customOvpnConfigsPath = dir.path();
+    data.validate();
+    QCOMPARE(data.customOvpnConfigsPath, dir.path());
+}
+
+void TestSettingsValidation::testEngineSettings_resetOnWindowsRelativeCustomOvpnPath()
+{
+#ifndef Q_OS_WIN
+    QSKIP("Drive-relative and root-relative paths are Windows forms");
+#endif
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    types::EngineSettingsData data;
+    data.customOvpnConfigsPath = dir.path().mid(2);
+    data.validate();
+    QVERIFY(data.customOvpnConfigsPath.isEmpty());
+
+    data.customOvpnConfigsPath = dir.path().left(2) + "configs";
+    data.validate();
+    QVERIFY(data.customOvpnConfigsPath.isEmpty());
+}
+
+void TestSettingsValidation::testEngineSettings_oversizeNetworkPreferred()
+{
+    types::EngineSettingsData data;
+    for (int i = 0; i < 300; ++i) {
+        data.networkPreferredProtocols.insert(QString("network_%1").arg(i), types::ConnectionSettings());
+    }
+    data.validate();
+    QVERIFY(data.networkPreferredProtocols.size() <= 256);
+}
+
+void TestSettingsValidation::testEngineSettings_outOfRangeDnsPolicy()
+{
+    types::EngineSettingsData data;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    data.dnsPolicy = static_cast<DNS_POLICY_TYPE>(999);
+    data.validate();
+    QCOMPARE(data.dnsPolicy, DNS_TYPE_CLOUDFLARE);
+}
+
+#ifdef CLI_ONLY
+namespace {
+QString writeIni(const QTemporaryDir &dir, const QByteArray &contents)
+{
+    const QString path = dir.filePath("windscribe_cli.conf");
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(contents) != contents.size()) {
+        return QString();
+    }
+    return path;
+}
+}
+
+void TestSettingsValidation::testEngineSettings_readsPerNetworkProtocolsFromIni()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir,
+        "[Networks]\n"
+        "MyWifi\\ConnectionMode=Manual\n"
+        "MyWifi\\ManualConnectionProtocol=TCP\n"
+        "MyWifi\\ManualConnectionPort=8080\n"
+        "Cafe\\NetworkTrustType=Unsecured\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    types::EngineSettingsData data;
+    data.fromIni(ini);
+
+    QVERIFY(data.networkPreferredProtocols.contains("MyWifi"));
+    const types::ConnectionSettings &myWifi = data.networkPreferredProtocols["MyWifi"];
+    QVERIFY(!myWifi.isAutomatic());
+    QVERIFY(myWifi.protocol() == types::Protocol::OPENVPN_TCP);
+    QCOMPARE(myWifi.port(), 8080u);
+
+    QVERIFY(data.networkPreferredProtocols.contains("Cafe"));
+    QVERIFY(data.networkPreferredProtocols["Cafe"].isAutomatic());
+}
+
+void TestSettingsValidation::testEngineSettings_iniWithoutNetworksClearsPerNetworkProtocols()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Connection]\nAllowLANTraffic=true\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    types::EngineSettingsData data;
+    data.networkPreferredProtocols.insert("MyWifi", types::ConnectionSettings(types::Protocol::OPENVPN_TCP, 8080, false));
+    data.fromIni(ini);
+
+    QVERIFY(data.networkPreferredProtocols.isEmpty());
+}
+
+void TestSettingsValidation::testEngineSettings_iniFormatErrorIsLogged()
+{
+    // Qt rejects a nested section header and drops what is under it without a word; the user's
+    // only clue that their settings did not apply is this warning.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Networks/MyWifi]\nConnectionMode=Auto\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    types::EngineSettingsData data;
+    data.networkPreferredProtocols.insert("MyWifi", types::ConnectionSettings(types::Protocol::OPENVPN_TCP, 8080, false));
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression("\\.conf: .*format error"));
+    data.fromIni(ini);
+
+    QVERIFY(data.networkPreferredProtocols.isEmpty());
+}
+
+// The config file is the whole configuration: a setting it no longer mentions goes back to its default.
+void TestSettingsValidation::testEngineSettings_iniMissingKeysUseDefaults()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Advanced]\n");
+    QVERIFY(!path.isEmpty());
+
+    types::EngineSettingsData data;
+    data.language = "xx";
+    data.updateChannel = UPDATE_CHANNEL_BETA;
+    data.isAllowLanTraffic = true;
+    data.isAPIAntiCensorship = !LanguagesUtil::isCensorshipCountry();
+    data.amneziawgPreset = "Preset";
+    data.customSniDomain = "example.com";
+    data.serverRoutingMethod = SERVER_ROUTING_METHOD_ALTERNATIVE;
+    data.protocolTweaksMethod = PROTOCOL_TWEAKS_METHOD_DISABLED;
+    data.IpStackEgress = IpStack::kIPv4Only;
+    data.dnsManager = DNS_MANAGER_RESOLV_CONF;
+    data.dnsPolicy = DNS_TYPE_GOOGLE;
+    data.firewallSettings.mode = FIREWALL_MODE_ALWAYS_ON;
+    data.firewallSettings.when = FIREWALL_WHEN_AFTER_CONNECTION;
+    data.connectionSettings = types::ConnectionSettings(types::Protocol::OPENVPN_TCP, 8080, false);
+    data.proxySettings.setOption(PROXY_OPTION_HTTP);
+    data.proxySettings.setAddress("10.0.0.1");
+    data.proxySettings.setPort(8080);
+    data.packetSize.isAutomatic = false;
+    data.packetSize.mtu = 1400;
+    data.connectedDnsInfo.type = CONNECTED_DNS_TYPE_CUSTOM;
+    data.connectedDnsInfo.upStream1 = "9.9.9.9";
+    data.decoyTrafficSettings.setEnabled(true);
+    data.macAddrSpoofing.isAutoRotate = true;
+
+    QSettings ini(path, QSettings::IniFormat);
+    data.fromIni(ini);
+
+    const types::EngineSettingsData defaults;
+    QCOMPARE(data.language, LanguagesUtil::systemLanguage());
+    QCOMPARE(data.updateChannel, defaults.updateChannel);
+    QCOMPARE(data.isAllowLanTraffic, defaults.isAllowLanTraffic);
+    QCOMPARE(data.isAPIAntiCensorship, LanguagesUtil::isCensorshipCountry());
+    QCOMPARE(data.amneziawgPreset, defaults.amneziawgPreset);
+    QCOMPARE(data.customSniDomain, defaults.customSniDomain);
+    QCOMPARE(data.serverRoutingMethod, defaults.serverRoutingMethod);
+    QCOMPARE(data.protocolTweaksMethod, defaults.protocolTweaksMethod);
+    QVERIFY(data.IpStackEgress == defaults.IpStackEgress);
+#ifdef Q_OS_LINUX
+    QCOMPARE(data.dnsManager, defaults.dnsManager);
+#endif
+    QCOMPARE(data.dnsPolicy, defaults.dnsPolicy);
+    QVERIFY(data.firewallSettings == defaults.firewallSettings);
+    QVERIFY(data.connectionSettings == defaults.connectionSettings);
+    QVERIFY(data.proxySettings == defaults.proxySettings);
+    QVERIFY(data.packetSize == defaults.packetSize);
+    QVERIFY(data.connectedDnsInfo == defaults.connectedDnsInfo);
+    QVERIFY(data.decoyTrafficSettings == defaults.decoyTrafficSettings);
+    QCOMPARE(data.macAddrSpoofing.isAutoRotate, defaults.macAddrSpoofing.isAutoRotate);
+}
+
+void TestSettingsValidation::testGuiSettings_iniMissingKeysUseDefaults()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Advanced]\n");
+    QVERIFY(!path.isEmpty());
+
+    types::GuiSettings gs;
+    gs.isLaunchOnStartup = !gs.isLaunchOnStartup;
+    gs.isAutoConnect = !gs.isAutoConnect;
+    gs.isAutoSecureNetworks = !gs.isAutoSecureNetworks;
+    gs.shareProxyGateway.port = 8888;
+    gs.shareProxyGateway.requireAuth = false;
+    gs.shareProxyGateway.username = "user";
+    gs.splitTunneling.settings.active = true;
+    gs.splitTunneling.settings.mode = SPLIT_TUNNELING_MODE_INCLUDE;
+    types::SplitTunnelingNetworkRoute route;
+    route.name = "10.0.0.0/8";
+    route.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+    gs.splitTunneling.networkRoutes << route;
+
+    QSettings ini(path, QSettings::IniFormat);
+    gs.fromIni(ini);
+
+    const types::GuiSettings defaults;
+    QCOMPARE(gs.isLaunchOnStartup, defaults.isLaunchOnStartup);
+    QCOMPARE(gs.isAutoConnect, defaults.isAutoConnect);
+    QCOMPARE(gs.isAutoSecureNetworks, defaults.isAutoSecureNetworks);
+    QVERIFY(gs.shareProxyGateway == defaults.shareProxyGateway);
+    QVERIFY(gs.splitTunneling == defaults.splitTunneling);
+}
+
+void TestSettingsValidation::testConnectionSettings_iniMissingPortUsesProtocolDefault()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Networks]\nMyWifi\\ConnectionMode=Manual\nMyWifi\\ManualConnectionProtocol=TCP\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    ini.beginGroup("Networks");
+    const types::ConnectionSettings cs(ini, "MyWifi");
+    ini.endGroup();
+
+    QVERIFY(!cs.isAutomatic());
+    QVERIFY(cs.protocol() == types::Protocol::OPENVPN_TCP);
+    QCOMPARE(cs.port(), types::Protocol::defaultPortForProtocol(types::Protocol::OPENVPN_TCP));
+}
+
+void TestSettingsValidation::testPacketSize_iniInvalidMtuUsesDefault()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Connection]\nPacketSizeMode=Manual\nPacketSizeMTU=20\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    ini.beginGroup("Connection");
+    types::PacketSize ps;
+    ps.mtu = 1400;
+    ps.fromIni(ini);
+
+    QCOMPARE(ps.mtu, types::PacketSize().mtu);
+}
+
+void TestSettingsValidation::testShareProxyGateway_iniInvalidPortUsesDefault()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Connection]\nShareProxyGatewayPort=70000\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    ini.beginGroup("Connection");
+    types::ShareProxyGateway gateway;
+    gateway.port = 8888;
+    gateway.fromIni(ini);
+
+    QCOMPARE(gateway.port, types::ShareProxyGateway().port);
+}
+#endif
+
+void TestSettingsValidation::testProxySettings_resetOnBadHost()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_HTTP);
+    ps.setAddress("abc;rm -rf");
+    ps.setPort(8080);
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.address().isEmpty());
+}
+
+void TestSettingsValidation::testProxySettings_resetOnDomain()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_HTTP);
+    ps.setAddress("proxy.example.com");
+    ps.setPort(8080);
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.address().isEmpty());
+}
+
+void TestSettingsValidation::testProxySettings_resetOnBadPort()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_HTTP);
+    ps.setAddress("1.2.3.4");
+    ps.setPort(0);
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+}
+
+void TestSettingsValidation::testProxySettings_credentialOverflow()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_HTTP);
+    ps.setAddress("1.2.3.4");
+    ps.setPort(8080);
+    ps.setPassword(QString(300, 'x'));
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.getPassword().isEmpty());
+}
+
+void TestSettingsValidation::testProxySettings_outOfRangeOption()
+{
+    types::ProxySettings ps;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ps.setOption(static_cast<PROXY_OPTION>(999));
+    ps.setAddress("proxy.example.com");
+    ps.setPort(8080);
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.address().isEmpty());
+    QCOMPARE(ps.getPort(), 0u);
+}
+
+void TestSettingsValidation::testProxySettings_clearedWhenOptionNone()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_NONE);
+    ps.setAddress("proxy.example.com");
+    ps.setPort(8080);
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.address().isEmpty());
+    QCOMPARE(ps.getPort(), 0u);
+}
+
+void TestSettingsValidation::testProxySettings_clearedWhenOptionSocks()
+{
+    types::ProxySettings ps;
+    ps.setOption(PROXY_OPTION_SOCKS);
+    ps.setAddress("proxy.example.com");
+    ps.setPort(8080);
+    ps.setUsername("user");
+    ps.setPassword("pass");
+    ps.validate();
+    QCOMPARE(ps.option(), PROXY_OPTION_NONE);
+    QVERIFY(ps.address().isEmpty());
+    QCOMPARE(ps.getPort(), 0u);
+    QVERIFY(ps.getUsername().isEmpty());
+    QVERIFY(ps.getPassword().isEmpty());
+}
+
+void TestSettingsValidation::testSoundSettings_clearsPathWhenNone()
+{
+    types::SoundSettings ss;
+    ss.connectedSoundType = SOUND_NOTIFICATION_TYPE_NONE;
+    ss.connectedSoundPath = "/tmp/leftover.mp3";
+    ss.validate();
+    QVERIFY(ss.connectedSoundPath.isEmpty());
+}
+
+void TestSettingsValidation::testSoundSettings_resetOnNonResourceBundledPath()
+{
+    types::SoundSettings ss;
+    ss.disconnectedSoundType = SOUND_NOTIFICATION_TYPE_BUNDLED;
+    ss.disconnectedSoundPath = "/etc/passwd";
+    ss.validate();
+    QCOMPARE(ss.disconnectedSoundType, SOUND_NOTIFICATION_TYPE_NONE);
+    QVERIFY(ss.disconnectedSoundPath.isEmpty());
+}
+
+void TestSettingsValidation::testSoundSettings_resetOnBadCustomPath()
+{
+    types::SoundSettings ss;
+    ss.connectedSoundType = SOUND_NOTIFICATION_TYPE_CUSTOM;
+    ss.connectedSoundPath = "/this/path/does/not/exist/sound.mp3";
+    ss.validate();
+    QCOMPARE(ss.connectedSoundType, SOUND_NOTIFICATION_TYPE_NONE);
+    QVERIFY(ss.connectedSoundPath.isEmpty());
+}
+
+void TestSettingsValidation::testSoundSettings_keepsExistingCustomPath()
+{
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    types::SoundSettings ss;
+    ss.connectedSoundType = SOUND_NOTIFICATION_TYPE_CUSTOM;
+    ss.connectedSoundPath = file.fileName();
+    ss.validate();
+    QCOMPARE(ss.connectedSoundType, SOUND_NOTIFICATION_TYPE_CUSTOM);
+    QCOMPARE(ss.connectedSoundPath, file.fileName());
+}
+
+void TestSettingsValidation::testSoundSettings_resetOnWindowsRelativeCustomPath()
+{
+#ifndef Q_OS_WIN
+    QSKIP("Drive-relative and root-relative paths are Windows forms");
+#endif
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    types::SoundSettings ss;
+    ss.connectedSoundType = SOUND_NOTIFICATION_TYPE_CUSTOM;
+    ss.connectedSoundPath = file.fileName().mid(2);
+    ss.disconnectedSoundType = SOUND_NOTIFICATION_TYPE_CUSTOM;
+    ss.disconnectedSoundPath = file.fileName().left(2) + "sound.mp3";
+    ss.validate();
+    QCOMPARE(ss.connectedSoundType, SOUND_NOTIFICATION_TYPE_NONE);
+    QVERIFY(ss.connectedSoundPath.isEmpty());
+    QCOMPARE(ss.disconnectedSoundType, SOUND_NOTIFICATION_TYPE_NONE);
+    QVERIFY(ss.disconnectedSoundPath.isEmpty());
+}
+
+void TestSettingsValidation::testSoundSettings_outOfRangeType()
+{
+    types::SoundSettings ss;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    ss.connectedSoundType = static_cast<SOUND_NOTIFICATION_TYPE>(999);
+    ss.validate();
+    QCOMPARE(ss.connectedSoundType, SOUND_NOTIFICATION_TYPE_NONE);
+}
+
+void TestSettingsValidation::testBackgroundSettings_clearsPathWhenUnused()
+{
+    types::BackgroundSettings bs;
+    bs.connectedBackgroundType = BACKGROUND_TYPE_COUNTRY_FLAGS;
+    bs.backgroundImageConnected = "/tmp/leftover.png";
+    bs.disconnectedBackgroundType = BACKGROUND_TYPE_NONE;
+    bs.backgroundImageDisconnected = "/tmp/leftover2.png";
+    bs.validate();
+    QVERIFY(bs.backgroundImageConnected.isEmpty());
+    QVERIFY(bs.backgroundImageDisconnected.isEmpty());
+}
+
+void TestSettingsValidation::testBackgroundSettings_resetOnNonResourceBundledPath()
+{
+    types::BackgroundSettings bs;
+    bs.connectedBackgroundType = BACKGROUND_TYPE_BUNDLED;
+    bs.backgroundImageConnected = "/etc/passwd";
+    bs.validate();
+    QCOMPARE(bs.connectedBackgroundType, BACKGROUND_TYPE_COUNTRY_FLAGS);
+    QVERIFY(bs.backgroundImageConnected.isEmpty());
+}
+
+void TestSettingsValidation::testBackgroundSettings_resetOnBadCustomPath()
+{
+    types::BackgroundSettings bs;
+    bs.disconnectedBackgroundType = BACKGROUND_TYPE_CUSTOM;
+    bs.backgroundImageDisconnected = "relative/path.png";
+    bs.validate();
+    QCOMPARE(bs.disconnectedBackgroundType, BACKGROUND_TYPE_COUNTRY_FLAGS);
+    QVERIFY(bs.backgroundImageDisconnected.isEmpty());
+}
+
+void TestSettingsValidation::testBackgroundSettings_keepsExistingCustomPath()
+{
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    types::BackgroundSettings bs;
+    bs.connectedBackgroundType = BACKGROUND_TYPE_CUSTOM;
+    bs.backgroundImageConnected = file.fileName();
+    bs.validate();
+    QCOMPARE(bs.connectedBackgroundType, BACKGROUND_TYPE_CUSTOM);
+    QCOMPARE(bs.backgroundImageConnected, file.fileName());
+}
+
+void TestSettingsValidation::testBackgroundSettings_resetOnWindowsRelativeCustomPath()
+{
+#ifndef Q_OS_WIN
+    QSKIP("Drive-relative and root-relative paths are Windows forms");
+#endif
+    QTemporaryFile file;
+    QVERIFY(file.open());
+    types::BackgroundSettings bs;
+    bs.connectedBackgroundType = BACKGROUND_TYPE_CUSTOM;
+    bs.backgroundImageConnected = file.fileName().mid(2);
+    bs.disconnectedBackgroundType = BACKGROUND_TYPE_CUSTOM;
+    bs.backgroundImageDisconnected = file.fileName().left(2) + "image.png";
+    bs.validate();
+    QCOMPARE(bs.connectedBackgroundType, BACKGROUND_TYPE_COUNTRY_FLAGS);
+    QVERIFY(bs.backgroundImageConnected.isEmpty());
+    QCOMPARE(bs.disconnectedBackgroundType, BACKGROUND_TYPE_COUNTRY_FLAGS);
+    QVERIFY(bs.backgroundImageDisconnected.isEmpty());
+}
+
+void TestSettingsValidation::testBackgroundSettings_resetsAspectRatioWhenUnused()
+{
+    types::BackgroundSettings bs;
+    bs.connectedBackgroundType = BACKGROUND_TYPE_COUNTRY_FLAGS;
+    bs.disconnectedBackgroundType = BACKGROUND_TYPE_NONE;
+    bs.aspectRatioMode = ASPECT_RATIO_MODE_TILE;
+    bs.validate();
+    QCOMPARE(bs.aspectRatioMode, ASPECT_RATIO_MODE_FILL);
+}
+
+void TestSettingsValidation::testPacketSize_resetOnBadMtu()
+{
+    types::PacketSize ps;
+    ps.isAutomatic = false;
+    ps.mtu = 50;
+    ps.validate();
+    QCOMPARE(ps.mtu, -1);
+    QVERIFY(ps.isAutomatic);
+}
+
+void TestSettingsValidation::testPacketSize_validNoop()
+{
+    types::PacketSize ps;
+    ps.isAutomatic = false;
+    ps.mtu = 1400;
+    ps.validate();
+    QCOMPARE(ps.mtu, 1400);
+    QVERIFY(!ps.isAutomatic);
+}
+
+#ifdef CLI_ONLY
+void TestSettingsValidation::testPacketSize_readsFromIni()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = writeIni(dir, "[Connection]\nPacketSizeMode=Manual\nPacketSizeMTU=1400\n");
+    QVERIFY(!path.isEmpty());
+
+    QSettings ini(path, QSettings::IniFormat);
+    ini.beginGroup("Connection");
+    types::PacketSize ps;
+    ps.fromIni(ini);
+
+    QVERIFY(!ps.isAutomatic);
+    QCOMPARE(ps.mtu, 1400);
+}
+#endif
+
+void TestSettingsValidation::testMacAddrSpoofing_badMacDisables()
+{
+    types::MacAddrSpoofing mac;
+    mac.isEnabled = true;
+    mac.macAddress = "not-a-mac";
+    mac.validate();
+    QVERIFY(mac.macAddress.isEmpty());
+    QVERIFY(!mac.isEnabled);
+}
+
+void TestSettingsValidation::testMacAddrSpoofing_badInterfaceDisables()
+{
+    types::MacAddrSpoofing mac;
+    mac.isEnabled = true;
+    mac.selectedNetworkInterface.interfaceName = "bad\tiface\tname";
+    mac.validate();
+    QVERIFY(mac.selectedNetworkInterface.interfaceName.isEmpty());
+    QVERIFY(!mac.isEnabled);
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_badUpstream1()
+{
+    types::ConnectedDnsInfo dns;
+    dns.type = CONNECTED_DNS_TYPE_CUSTOM;
+    dns.upStream1 = "abc;rm -rf";
+    dns.validate();
+    QVERIFY(dns.upStream1.isEmpty());
+    QCOMPARE(dns.type, CONNECTED_DNS_TYPE_AUTO);
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_badTlsUpstream()
+{
+    types::ConnectedDnsInfo dns;
+    dns.type = CONNECTED_DNS_TYPE_CUSTOM;
+    dns.upStream1 = "tls://9.9.9.9";
+    dns.validate();
+    QVERIFY(dns.upStream1.isEmpty());
+    QCOMPARE(dns.type, CONNECTED_DNS_TYPE_AUTO);
+
+    types::ConnectedDnsInfo split;
+    split.type = CONNECTED_DNS_TYPE_CUSTOM;
+    split.isSplitDns = true;
+    split.upStream1 = "tls://dns.quad9.net";
+    split.upStream2 = "tls://[2620:fe::fe]:853";
+    split.hostnames = QStringList{"example.com"};
+    split.validate();
+    QCOMPARE(split.upStream1, QString("tls://dns.quad9.net"));
+    QVERIFY(split.upStream2.isEmpty());
+    QCOMPARE(split.type, CONNECTED_DNS_TYPE_CUSTOM);
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_tlsPersistence()
+{
+    types::ConnectedDnsInfo dns;
+    dns.type = CONNECTED_DNS_TYPE_CUSTOM;
+    dns.isSplitDns = true;
+    dns.upStream1 = "tls://dns.quad9.net";
+    dns.upStream2 = "tls://dns.quad9.net:443";
+    dns.hostnames = QStringList{"example.com"};
+    {
+        types::EngineSettings settings;
+        settings.setConnectedDnsInfo(dns);
+        settings.saveToSettings();
+    }
+#ifdef CLI_ONLY
+    // On this build the config file is applied on top of the saved settings, so the values must survive it too.
+    {
+        QSettings ini(WS_SETTINGS_ORG, WS_SETTINGS_CLI);
+        ini.beginGroup("Connection");
+        dns.toIni(ini);
+        ini.endGroup();
+    }
+#endif
+    types::EngineSettings reloaded;
+    QVERIFY(reloaded.loadFromSettings());
+    const types::ConnectedDnsInfo saved = reloaded.connectedDnsInfo();
+    QVERIFY(saved == dns);
+    QVERIFY(!saved.isCustomIPv4Address());
+    QVERIFY(saved.ctrldPlainUpstreamIps().isEmpty());
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_capHostnames()
+{
+    types::ConnectedDnsInfo dns;
+    QStringList hostnames;
+    for (int i = 0; i < 2000; ++i) {
+        hostnames << QString("host%1.example.com").arg(i);
+    }
+    dns.hostnames = hostnames;
+    dns.validate();
+    QVERIFY(dns.hostnames.size() <= 1024);
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_filtersInvalidHostnames()
+{
+    types::ConnectedDnsInfo dns;
+    dns.type = CONNECTED_DNS_TYPE_CUSTOM;
+    dns.isSplitDns = true;
+    dns.upStream1 = "8.8.8.8";
+    dns.upStream2 = "1.1.1.1";
+    dns.hostnames = QStringList{"valid.example.com", "abc;rm -rf", "1.2.3.4", "another bad one"};
+    dns.validate();
+    QVERIFY(dns.hostnames.contains("valid.example.com"));
+    QVERIFY(!dns.hostnames.contains("1.2.3.4"));
+    QVERIFY(!dns.hostnames.contains("abc;rm -rf"));
+    QVERIFY(!dns.hostnames.contains("another bad one"));
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_normalizesUnspecifiedUpstream()
+{
+    // A custom DNS server given as the wildcard listen address is canonicalized to loopback.
+    types::ConnectedDnsInfo v4;
+    v4.type = CONNECTED_DNS_TYPE_CUSTOM;
+    v4.upStream1 = "0.0.0.0";
+    v4.validate();
+    QCOMPARE(v4.upStream1, QString("127.0.0.1"));
+
+    types::ConnectedDnsInfo v6;
+    v6.type = CONNECTED_DNS_TYPE_CUSTOM;
+    v6.upStream1 = "::";
+    v6.validate();
+    QCOMPARE(v6.upStream1, QString("::1"));
+
+    // A normal custom DNS server is left untouched.
+    types::ConnectedDnsInfo plain;
+    plain.type = CONNECTED_DNS_TYPE_CUSTOM;
+    plain.upStream1 = "8.8.8.8";
+    plain.validate();
+    QCOMPARE(plain.upStream1, QString("8.8.8.8"));
+
+    // In split-DNS mode both upstreams are normalized.
+    types::ConnectedDnsInfo split;
+    split.type = CONNECTED_DNS_TYPE_CUSTOM;
+    split.isSplitDns = true;
+    split.upStream1 = "0.0.0.0";
+    split.upStream2 = "::";
+    split.validate();
+    QCOMPARE(split.upStream1, QString("127.0.0.1"));
+    QCOMPARE(split.upStream2, QString("::1"));
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_oversizeControldApiKey()
+{
+    types::ConnectedDnsInfo info;
+    info.type = CONNECTED_DNS_TYPE_CONTROLD;
+    info.controldApiKey = QString(300, 'x');
+    info.validate();
+    QVERIFY(info.controldApiKey.isEmpty());
+    QCOMPARE(info.type, CONNECTED_DNS_TYPE_AUTO);
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_clearsFieldsWhenAuto()
+{
+    types::ConnectedDnsInfo info;
+    info.type = CONNECTED_DNS_TYPE_AUTO;
+    info.upStream1 = "8.8.8.8";
+    info.isSplitDns = true;
+    info.upStream2 = "9.9.9.9";
+    info.hostnames = QStringList() << "example.com";
+    info.controldApiKey = "key";
+    info.controldDevices = QList<QPair<QString, QString>>() << qMakePair(QString("device"), QString("resolver"));
+    info.validate();
+    QVERIFY(info.upStream1.isEmpty());
+    QVERIFY(!info.isSplitDns);
+    QVERIFY(info.upStream2.isEmpty());
+    QVERIFY(info.hostnames.isEmpty());
+    QVERIFY(info.controldApiKey.isEmpty());
+    QVERIFY(info.controldDevices.isEmpty());
+}
+
+void TestSettingsValidation::testConnectedDnsInfo_clearsUnusedFieldsWhenCustom()
+{
+    types::ConnectedDnsInfo info;
+    info.type = CONNECTED_DNS_TYPE_CUSTOM;
+    info.upStream1 = "8.8.8.8";
+    info.isSplitDns = false;
+    info.upStream2 = "9.9.9.9";
+    info.hostnames = QStringList() << "example.com";
+    info.controldApiKey = "key";
+    info.validate();
+    QCOMPARE(info.upStream1, QString("8.8.8.8"));
+    QVERIFY(info.upStream2.isEmpty());
+    QVERIFY(info.hostnames.isEmpty());
+    QVERIFY(info.controldApiKey.isEmpty());
+}
+
+void TestSettingsValidation::testConnectionSettings_badPort()
+{
+    types::ConnectionSettings cs;
+    cs.setPort(70000);
+    cs.validate();
+    QVERIFY(cs.port() < 65536);
+}
+
+void TestSettingsValidation::testFirewallSettings_outOfRangeMode()
+{
+    types::FirewallSettings fw;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    fw.mode = static_cast<FIREWALL_MODE>(999);
+    fw.validate();
+    QCOMPARE(fw.mode, FIREWALL_MODE_AUTOMATIC);
+}
+
+void TestSettingsValidation::testFirewallSettings_resetsWhenWhenNotAutomatic()
+{
+    types::FirewallSettings fw;
+    fw.mode = FIREWALL_MODE_ALWAYS_ON;
+    fw.when = FIREWALL_WHEN_AFTER_CONNECTION;
+    fw.validate();
+    QCOMPARE(fw.when, FIREWALL_WHEN_BEFORE_CONNECTION);
+}
+
+void TestSettingsValidation::testGuiSettings_outOfRangeAppSkin()
+{
+    types::GuiSettings gs;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    gs.appSkin = static_cast<APP_SKIN>(999);
+    gs.validate();
+    QCOMPARE(gs.appSkin, APP_SKIN_ALPHA);
+}
+
+void TestSettingsValidation::testShareSecureHotspot_oversizedSsidDisables()
+{
+    types::ShareSecureHotspot sh;
+    sh.isEnabled = true;
+    sh.ssid = QString(64, 'a');
+    sh.password = "validpassword";
+    sh.validate();
+    QVERIFY(sh.ssid.isEmpty());
+    QVERIFY(!sh.isEnabled);
+}
+
+void TestSettingsValidation::testShareSecureHotspot_shortPasswordDisables()
+{
+    types::ShareSecureHotspot sh;
+    sh.isEnabled = true;
+    sh.ssid = "MyNetwork";
+    sh.password = "abc";
+    sh.validate();
+    QVERIFY(sh.password.isEmpty());
+    QVERIFY(!sh.isEnabled);
+}
+
+void TestSettingsValidation::testSplitTunneling_dropInvalidRoute()
+{
+    types::SplitTunneling st;
+    types::SplitTunnelingNetworkRoute good;
+    good.name = "10.0.0.0/8";
+    good.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+    good.active = true;
+    types::SplitTunnelingNetworkRoute bad;
+    bad.name = "abc;rm -rf";
+    bad.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+    bad.active = true;
+    st.networkRoutes << good << bad;
+    st.validate();
+    QCOMPARE(st.networkRoutes.size(), 1);
+    QCOMPARE(st.networkRoutes[0].name, QString("10.0.0.0/8"));
+}
+
+void TestSettingsValidation::testSplitTunneling_capApps()
+{
+    types::SplitTunneling st;
+    for (int i = 0; i < types::SplitTunneling::kMaxApps + 10; ++i) {
+        types::SplitTunnelingApp app;
+        app.fullName = QString("/Applications/App%1.app").arg(i);
+        app.name = QString("App%1").arg(i);
+        app.active = true;
+        st.apps << app;
+    }
+    st.validate();
+    QCOMPARE(st.apps.size(), types::SplitTunneling::kMaxApps);
+}
+
+void TestSettingsValidation::testSplitTunneling_capHostnames()
+{
+    types::SplitTunneling st;
+    for (int i = 0; i < types::SplitTunneling::kMaxHostnames + 10; ++i) {
+        types::SplitTunnelingNetworkRoute r;
+        r.name = QString("host%1.example.com").arg(i);
+        r.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME;
+        r.active = true;
+        st.networkRoutes << r;
+    }
+    st.validate();
+    QCOMPARE(st.networkRoutes.size(), types::SplitTunneling::kMaxHostnames);
+    for (const types::SplitTunnelingNetworkRoute &r : st.networkRoutes) {
+        QCOMPARE(r.type, SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME);
+    }
+}
+
+void TestSettingsValidation::testSplitTunneling_capIpRoutes()
+{
+    types::SplitTunneling st;
+    for (int i = 0; i < types::SplitTunneling::kMaxIpRoutes + 10; ++i) {
+        types::SplitTunnelingNetworkRoute r;
+        r.name = QString("2001:db8:%1::/48").arg(i, 0, 16);
+        r.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+        r.active = true;
+        st.networkRoutes << r;
+    }
+    st.validate();
+    QCOMPARE(st.networkRoutes.size(), types::SplitTunneling::kMaxIpRoutes);
+    for (const types::SplitTunnelingNetworkRoute &r : st.networkRoutes) {
+        QCOMPARE(r.type, SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP);
+    }
+}
+
+void TestSettingsValidation::testSplitTunneling_mixedRouteCapsKeepIpRoutes()
+{
+    types::SplitTunneling st;
+    constexpr int kIpRouteCount = 128;
+    for (int i = 0; i < kIpRouteCount; ++i) {
+        if (i < types::SplitTunneling::kMaxHostnames + 10) {
+            types::SplitTunnelingNetworkRoute hostname;
+            hostname.name = QString("host%1.example.com").arg(i);
+            hostname.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME;
+            hostname.active = true;
+            st.networkRoutes << hostname;
+        }
+
+        types::SplitTunnelingNetworkRoute ipRoute;
+        ipRoute.name = (i % 2 == 0)
+            ? QString("10.%1.0.0/16").arg(i)
+            : QString("203.0.113.%1").arg(i);
+        ipRoute.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+        ipRoute.active = true;
+        st.networkRoutes << ipRoute;
+    }
+
+    st.validate();
+
+    int numHostnames = 0;
+    int numIpRoutes = 0;
+    for (const types::SplitTunnelingNetworkRoute &r : st.networkRoutes) {
+        if (r.type == SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME) {
+            numHostnames++;
+        } else if (r.type == SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP) {
+            numIpRoutes++;
+        }
+    }
+    QCOMPARE(numHostnames, types::SplitTunneling::kMaxHostnames);
+    QCOMPARE(numIpRoutes, kIpRouteCount);
+}
+
+void TestSettingsValidation::testSplitTunneling_dropEmptyFullNameApp()
+{
+    types::SplitTunneling st;
+    types::SplitTunnelingApp good;
+    good.fullName = "/Applications/Foo.app";
+    good.name = "Foo";
+    types::SplitTunnelingApp empty;
+    empty.fullName = "";
+    empty.name = "Missing";
+    st.apps << good << empty;
+    st.validate();
+    QCOMPARE(st.apps.size(), 1);
+    QCOMPARE(st.apps[0].name, QString("Foo"));
+}
+
+void TestSettingsValidation::testSplitTunneling_rederivesRouteType()
+{
+    types::SplitTunneling st;
+    types::SplitTunnelingNetworkRoute ipShaped;
+    ipShaped.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME;
+    ipShaped.name = "10.0.0.0/8";
+    types::SplitTunnelingNetworkRoute domainShaped;
+    domainShaped.type = SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP;
+    domainShaped.name = "example.com";
+    st.networkRoutes << ipShaped << domainShaped;
+    st.validate();
+    QCOMPARE(st.networkRoutes.size(), 2);
+    QCOMPARE(st.networkRoutes[0].type, SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP);
+    QCOMPARE(st.networkRoutes[1].type, SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME);
+}
+
+void TestSettingsValidation::testSplitTunneling_cleansAppPath()
+{
+    types::SplitTunnelingApp app;
+    app.fullName = "/Applications//Foo.app/";
+    app.validate();
+    QCOMPARE(app.fullName, QDir::toNativeSeparators("/Applications/Foo.app"));
+
+    types::SplitTunnelingApp flatpak;
+    flatpak.fullName = "org.mozilla.firefox";
+    flatpak.validate();
+    QCOMPARE(flatpak.fullName, QString("org.mozilla.firefox"));
+
+#ifdef Q_OS_WIN
+    types::SplitTunnelingApp win;
+    win.fullName = "C://Program Files//Windscribe//Windscribe.exe";
+    win.validate();
+    QCOMPARE(win.fullName, QString("C:\\Program Files\\Windscribe\\Windscribe.exe"));
+#endif
+}
+
+void TestSettingsValidation::testSplitTunneling_mergesAppsDifferingOnlyInSeparators()
+{
+    types::SplitTunneling st;
+    types::SplitTunnelingApp plain;
+    plain.fullName = "/Applications/Foo.app";
+    plain.name = "Foo";
+    plain.active = false;
+    types::SplitTunnelingApp slashes;
+    slashes.fullName = "/Applications//Foo.app/";
+    slashes.name = "";
+    slashes.active = true;
+    st.apps << plain << slashes;
+#ifdef Q_OS_WIN
+    types::SplitTunnelingApp backslashes;
+    backslashes.fullName = "\\Applications\\Foo.app\\";
+    backslashes.active = false;
+    st.apps << backslashes;
+#endif
+    st.validate();
+    QCOMPARE(st.apps.size(), 1);
+    QCOMPARE(st.apps[0].name, QString("Foo"));
+    QVERIFY(st.apps[0].active);
+}
+
+void TestSettingsValidation::testSplitTunneling_jsonDropsMissingApp()
+{
+    QJsonObject json;
+    json["fullName"] = QDir::toNativeSeparators(QDir::tempPath() + "/ws-missing-app/missing.exe");
+    QVERIFY(types::SplitTunnelingApp(json).fullName.isEmpty());
+
+#ifdef Q_OS_LINUX
+    json["fullName"] = "org.mozilla.firefox";
+    QCOMPARE(types::SplitTunnelingApp(json).fullName, QString("org.mozilla.firefox"));
+#endif
+}
+
+void TestSettingsValidation::testGuiPersistentState_validNoop()
+{
+    types::GuiPersistentState s;
+    QString origIp = s.lastExternalIp;
+    LOCATION_TAB origTab = s.lastLocationTab;
+    s.validate();
+    QCOMPARE(s.lastExternalIp, origIp);
+    QCOMPARE(s.lastLocationTab, origTab);
+}
+
+void TestSettingsValidation::testGuiPersistentState_badLastExternalIp()
+{
+    types::GuiPersistentState s;
+    s.lastExternalIp = "999.999.999.999";
+    s.validate();
+    QCOMPARE(s.lastExternalIp, QString("---.---.---.---"));
+}
+
+void TestSettingsValidation::testGuiPersistentState_capNetworkWhitelist()
+{
+    types::GuiPersistentState s;
+    for (int i = 0; i < 500; ++i) {
+        types::NetworkInterface nif;
+        nif.networkOrSsid = QString("net_%1").arg(i);
+        s.networkWhiteList << nif;
+    }
+    s.validate();
+    QVERIFY(s.networkWhiteList.size() <= 256);
+}
+
+void TestSettingsValidation::testGuiPersistentState_capAppGeometry()
+{
+    types::GuiPersistentState s;
+    s.appGeometry = QByteArray(200 * 1024, 'x');
+    s.validate();
+    QVERIFY(s.appGeometry.isEmpty());
+}
+
+void TestSettingsValidation::testNetworkInterface_badInterfaceNameCleared()
+{
+    types::NetworkInterface nif;
+    nif.interfaceName = "bad\tname";
+    nif.friendlyName = "preserved";
+    nif.validate();
+    QVERIFY(nif.interfaceName.isEmpty());
+    QCOMPARE(nif.friendlyName, QString("preserved"));
+}
+
+void TestSettingsValidation::testRoundTrip_engineSettings_forgedDnsPolicy()
+{
+    // Forge a value out of range, then exercise validate() — same code path as load.
+    types::EngineSettingsData data;
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    data.dnsPolicy = static_cast<DNS_POLICY_TYPE>(999);
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    data.dnsManager = static_cast<DNS_MANAGER_TYPE>(123);
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    data.updateChannel = static_cast<UPDATE_CHANNEL>(50);
+    data.validate();
+    QCOMPARE(data.dnsPolicy, DNS_TYPE_CLOUDFLARE);
+    QCOMPARE(data.dnsManager, DNS_MANAGER_AUTOMATIC);
+    QCOMPARE(data.updateChannel, UPDATE_CHANNEL_RELEASE);
+}
+
+QTEST_MAIN(TestSettingsValidation)

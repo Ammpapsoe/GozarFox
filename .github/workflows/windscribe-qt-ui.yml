@@ -1,0 +1,59 @@
+name: Windscribe Qt UI integration (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'wip/original-windscribe-ui'
+
+permissions:
+  contents: read
+
+jobs:
+  ui-transport:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            qt_host: linux
+          - os: windows-2022
+            qt_host: windows
+          - os: macos-15-intel
+            qt_host: mac
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: ${{ matrix.qt_host }}
+          cache: true
+      - name: Build unchanged Gozar core
+        shell: bash
+        working-directory: go-desktop
+        run: |
+          set -euo pipefail
+          suffix=''
+          if [[ "${RUNNER_OS}" == Windows ]]; then suffix='.exe'; fi
+          go build -o "${RUNNER_TEMP}/gozar-core${suffix}" ./cmd/gozar
+          echo "GOZAR_CI_TEST_CORE=${RUNNER_TEMP}/gozar-core${suffix}" >> "$GITHUB_ENV"
+      - name: Configure Qt adapter and upstream widget tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-check" \
+            -DBUILD_UPSTREAM_SMOKE_TEST=ON \
+            -DGOZAR_REAL_CORE="${GOZAR_CI_TEST_CORE}"
+      - name: Build
+        shell: bash
+        run: cmake --build "${RUNNER_TEMP}/qt-check" --config Release --parallel 2
+      - name: Run tests
+        shell: bash
+        run: ctest --test-dir "${RUNNER_TEMP}/qt-check" -C Release --output-on-failure

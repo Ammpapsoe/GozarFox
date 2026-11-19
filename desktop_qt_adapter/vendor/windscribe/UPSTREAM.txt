@@ -1,0 +1,5 @@
+Repository: https://github.com/Windscribe/Desktop-App
+Tag: v2.26.2
+Commit: 5578945964760be0bf234c506fdbcbcfe07c974d
+Copied unchanged: src/client/frontend/gui, src/client/frontend/frontend-common, src/client/client-common, LICENSE.
+Development snapshot only; not a release.

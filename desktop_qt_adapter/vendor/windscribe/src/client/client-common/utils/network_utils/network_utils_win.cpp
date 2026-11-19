@@ -1,0 +1,910 @@
+#include "network_utils_win.h"
+
+#include <atomic>
+#include <utility>
+
+#include <QHostAddress>
+#include <QList>
+
+#include <Windows.h>
+
+#include <WS2tcpip.h>
+#include <atlbase.h>
+#include <iphlpapi.h>
+#include <netlistmgr.h>
+#include <ocidl.h>
+
+#include "../log/categories.h"
+#include "../log/debug_trace.h"
+#include "../networktypes.h"
+#include "../winutils.h"
+#include "wlan_utils_win.h"
+
+static bool g_SsidAccessDenied = false;
+
+static QString guidToQString(GUID guid)
+{
+    OLECHAR* guidString;
+    StringFromCLSID(guid, &guidString);
+
+    std::wstring str = (guidString);
+    QString guidQString = QString::fromWCharArray(str.c_str());
+
+    ::CoTaskMemFree(guidString);
+
+    return guidQString;
+}
+
+static QList<QString> singleHexChars()
+{
+    return QList<QString>() << "0" << "1" << "2" << "3" << "4" << "5" << "6" << "7" << "8" << "9" << "a" << "b" << "c" << "d" << "e" << "f";
+}
+
+template <typename T>
+static T tableRowByIndex(const QList<T> &table, int index)
+{
+    T found;
+
+    for (const T &row : table) {
+        if (index == static_cast<int>(row.index)) { // TODO: convert all ifIndices to int
+            found = row;
+            break;
+        }
+    }
+
+    return found;
+}
+
+static QList<IfTableRow> getIfTable()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::getIfTable");
+    QList<IfTableRow> table;
+
+    // Make an initial call to GetIfTable to get the necessary size into dwSize
+    DWORD dwSize = 0;
+    auto result = GetIfTable(NULL, &dwSize, FALSE);
+    if (result != ERROR_INSUFFICIENT_BUFFER) {
+        qCCritical(LOG_BASIC) << "Initial GetIfTable unexpected failure:" << result;
+        return table;
+    }
+
+    QScopedArrayPointer<unsigned char> buf(new unsigned char[dwSize]);
+    PMIB_IFTABLE pIfTable = (PMIB_IFTABLE)buf.data();
+
+    // Make a second call to GetIfTable to get the actual data we want.
+    result = GetIfTable(pIfTable, &dwSize, FALSE);
+    if (result != NO_ERROR) {
+        qCCritical(LOG_BASIC) << "GetIfTable failed with error:" << result;
+        return table;
+    }
+
+    for (DWORD i = 0; i < pIfTable->dwNumEntries; i++) {
+        NETWORK_INTERFACE_TYPE nicType = NETWORK_INTERFACE_NONE;
+        if (pIfTable->table[i].dwType == IF_TYPE_ETHERNET_CSMACD) {
+            nicType = NETWORK_INTERFACE_ETH;
+        }
+        else if (pIfTable->table[i].dwType == IF_TYPE_IEEE80211) {
+            nicType = NETWORK_INTERFACE_WIFI;
+        }
+        else if (pIfTable->table[i].dwType == IF_TYPE_PPP) {
+            nicType = NETWORK_INTERFACE_PPP;
+        }
+        else if (pIfTable->table[i].dwType == IF_TYPE_IEEE80216_WMAN || pIfTable->table[i].dwType == IF_TYPE_WWANPP || pIfTable->table[i].dwType == IF_TYPE_WWANPP2) {
+            nicType = NETWORK_INTERFACE_MOBILE_BROADBAND;
+        }
+
+        // qDebug() << "Index: " << pIfTable->table[i].dwIndex << ", State: " << pIfTable->table[i].dwOperStatus;
+
+        QString interfaceName = "";
+        for (DWORD j = 0; j < pIfTable->table[i].dwDescrLen; j++) {
+            interfaceName.append(static_cast<char>(pIfTable->table[i].bDescr[j]));
+        }
+
+        QString physicalAddress = "";
+        for (DWORD j = 0; j < pIfTable->table[i].dwPhysAddrLen; j++) {
+            physicalAddress.append(static_cast<char>(pIfTable->table[i].bPhysAddr[j]));
+        }
+
+        IfTableRow ifRow(static_cast<int>(pIfTable->table[i].dwIndex),
+                         QString::fromWCharArray(pIfTable->table[i].wszName),
+                         interfaceName,
+                         physicalAddress,
+                         nicType,
+                         static_cast<int>(pIfTable->table[i].dwType),
+                         static_cast<int>(pIfTable->table[i].dwMtu),
+                         pIfTable->table[i].dwOperStatus >= IF_OPER_STATUS_CONNECTED,
+                         (int) pIfTable->table[i].dwOperStatus);
+        table.append(ifRow);
+    }
+
+    return table;
+}
+
+static QList<IfTable2Row> getIfTable2()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::getIfTable2");
+    QList<IfTable2Row> if2Table;
+
+    PMIB_IF_TABLE2 pIfTable2;
+    auto result = GetIfTable2(&pIfTable2);
+    if (result != NO_ERROR) {
+        qCCritical(LOG_BASIC) << "GetIfTable2 failed:" << result;
+        return if2Table;
+    }
+
+    for (ULONG i = 0; i < pIfTable2->NumEntries; i++) {
+        PMIB_IF_ROW2 pEntry = &pIfTable2->Table[i];
+        if (!pEntry->InterfaceAndOperStatusFlags.FilterInterface) {
+            QString guid = guidToQString(pEntry->InterfaceGuid);
+            QString description = QString::fromWCharArray(pEntry->Description);
+            QString alias = QString::fromWCharArray(pEntry->Alias);
+
+            IfTable2Row row(pEntry->InterfaceIndex,
+                            guid,
+                            description,
+                            alias,
+                            pEntry->AccessType,
+                            pEntry->InterfaceAndOperStatusFlags.ConnectorPresent,
+                            pEntry->InterfaceAndOperStatusFlags.EndPointInterface,
+                            pEntry->Type,
+                            !pEntry->InterfaceAndOperStatusFlags.NotMediaConnected,
+                            QByteArray(reinterpret_cast<const char *>(pEntry->PermanentPhysicalAddress),
+                                       pEntry->PhysicalAddressLength));
+            if2Table.append(row);
+        }
+    }
+
+    FreeMibTable(pIfTable2);
+
+    for (IfTable2Row &row : if2Table) {
+        if (row.connectorPresent || row.permanentAddress.isEmpty()) {
+            continue;
+        }
+        for (const IfTable2Row &other : std::as_const(if2Table)) {
+            if (other.connectorPresent && other.permanentAddress == row.permanentAddress) {
+                row.sharesAddressWithConnectorAdapter = true;
+                break;
+            }
+        }
+    }
+
+    return if2Table;
+}
+
+static QString interfaceSubkeyPath(int interfaceIndex)
+{
+    IfTableRow row = tableRowByIndex(getIfTable(), interfaceIndex);
+
+    const QString keyPath("SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}");
+    const QStringList ifSubkeys = WinUtils::enumerateSubkeyNames(HKEY_LOCAL_MACHINE, keyPath);
+
+    QString foundSubkey = "";
+    for (const QString &subkey : ifSubkeys) {
+        QString subkeyPath = keyPath + "\\" + subkey;
+        QString subkeyInterfaceGuid = WinUtils::regGetLocalMachineRegistryValueSz(subkeyPath, "NetCfgInstanceId");
+
+        if (subkeyInterfaceGuid == row.guidName) {
+            foundSubkey = subkeyPath; // whole key path
+            break;
+        }
+    }
+
+    return foundSubkey;
+}
+
+static bool interfaceSubkeyHasProperty(int interfaceIndex, QString propertyName)
+{
+    QString interfaceSubkeyP = interfaceSubkeyPath(interfaceIndex);
+    return WinUtils::regHasLocalMachineSubkeyProperty(interfaceSubkeyP, propertyName);
+}
+
+static QList<IpAdapter> getIpAdapterTable()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::getIpAdapterTable");
+    QList<IpAdapter> adapters;
+
+    ULONG bufSize = sizeof(IP_ADAPTER_INFO) * 32;
+    QByteArray pAdapterInfo(bufSize, Qt::Uninitialized);
+
+    DWORD result = ::GetAdaptersInfo((IP_ADAPTER_INFO*)pAdapterInfo.data(), &bufSize);
+
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        pAdapterInfo.resize(bufSize);
+        result = ::GetAdaptersInfo((IP_ADAPTER_INFO*)pAdapterInfo.data(), &bufSize);
+    }
+
+    if (result != NO_ERROR) {
+        if (result != ERROR_NO_DATA) {
+            qCDebug(LOG_BASIC) << "getIpAdapterTable: GetAdaptersInfo failed" << result;
+        }
+        return adapters;
+    }
+
+    IP_ADAPTER_INFO *pAdapter = (IP_ADAPTER_INFO*)pAdapterInfo.data();
+    while (pAdapter) {
+        QString physAddress = "";
+        for (UINT i = 0; i < pAdapter->AddressLength; i++) {
+            QString s = QString("%1").arg(pAdapter->Address[i], 0, 16);
+
+            if (singleHexChars().contains(s)) {
+                s = "0" + s;
+            }
+            physAddress += s;
+        }
+
+        IpAdapter ipAdapter(pAdapter->Index, pAdapter->AdapterName, pAdapter->Description, physAddress);
+        adapters.append(ipAdapter);
+
+        pAdapter = pAdapter->Next;
+    }
+
+    return adapters;
+}
+
+static QList<IpForwardRow> getIpForwardTable()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::getIpForwardTable");
+    QList<IpForwardRow> forwardTable;
+
+    DWORD dwSize = 0;
+    auto result = GetIpForwardTable(NULL, &dwSize, 0);
+    if (result != ERROR_INSUFFICIENT_BUFFER) {
+        if (result != ERROR_NO_DATA) {
+            qCCritical(LOG_BASIC) << "Initial GetIpForwardTable unexpected failure:" << result;
+        }
+        return forwardTable;
+    }
+
+    QScopedArrayPointer<unsigned char> buf(new unsigned char[dwSize]);
+    PMIB_IPFORWARDTABLE pIpForwardTable = (PMIB_IPFORWARDTABLE)buf.data();
+
+    /* Note that the IPv4 addresses returned in
+     * GetIpForwardTable entries are in network byte order
+     */
+    result = GetIpForwardTable(pIpForwardTable, &dwSize, 0);
+    if (result != NO_ERROR) {
+        qCCritical(LOG_BASIC) << "GetIpForwardTable failed:" << result;
+        return forwardTable;
+    }
+
+    for (auto i = 0; i < pIpForwardTable->dwNumEntries; i++) {
+        IpForwardRow ipRow = IpForwardRow(pIpForwardTable->table[i].dwForwardIfIndex,
+                                          pIpForwardTable->table[i].dwForwardMetric1);
+        forwardTable.append(ipRow);
+    }
+
+    return forwardTable;
+}
+
+// Finds the OS network object the given adapter is connected to. Returns a failed HRESULT if the
+// query failed; success with an empty network means the adapter has no connection.
+static HRESULT networkForInterfaceGUID(const QString &adapterGUID, CComPtr<INetwork> &network)
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::networkForInterfaceGUID");
+    // Log once per failure streak, rearming on success: this runs on every network-change
+    // notification, so a persistent failure would flood the log.
+    static std::atomic<HRESULT> lastLoggedHr = S_OK;
+
+    CComPtr<INetworkListManager> pNetListManager;
+    HRESULT hr = CoCreateInstance(CLSID_NetworkListManager, NULL,
+                                  CLSCTX_ALL, IID_INetworkListManager,
+                                  (LPVOID *)&pNetListManager);
+    if (FAILED(hr)) {
+        if (lastLoggedHr.exchange(hr) == S_OK) {
+            qCCritical(LOG_BASIC) << "Failed to create CLSID_NetworkListManager:" << hr;
+        }
+        return hr;
+    }
+    lastLoggedHr = S_OK;
+
+    CComPtr<IEnumNetworkConnections> pEnumNetworkConnections;
+    hr = pNetListManager->GetNetworkConnections(&pEnumNetworkConnections);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    while (true) {
+        CComPtr<INetworkConnection> pNetConnection;
+        DWORD dwReturn = 0;
+        hr = pEnumNetworkConnections->Next(1, &pNetConnection, &dwReturn);
+        if (FAILED(hr)) {
+            return hr;
+        }
+        if (dwReturn == 0) {
+            break;
+        }
+
+        GUID adapterID;
+        if (pNetConnection->GetAdapterId(&adapterID) == S_OK && QString::compare(adapterGUID, guidToQString(adapterID), Qt::CaseInsensitive) == 0) {
+            return pNetConnection->GetNetwork(&network);
+        }
+    }
+
+    return S_OK;
+}
+
+static QString networkNameFromInterfaceGUID(QString adapterGUID)
+{
+    QString result = "";
+
+    CComPtr<INetwork> pNetwork;
+    if (SUCCEEDED(networkForInterfaceGUID(adapterGUID, pNetwork)) && pNetwork) {
+        BSTR bstrName = NULL;
+        if (pNetwork->GetName(&bstrName) == S_OK) {
+            result = QString::fromWCharArray(bstrName);
+            SysFreeString(bstrName);
+        }
+    }
+
+    return result;
+}
+
+bool NetworkUtils_win::isNetworkUnidentified(const QString &adapterGUID)
+{
+    CComPtr<INetwork> pNetwork;
+    if (FAILED(networkForInterfaceGUID(adapterGUID, pNetwork)) || !pNetwork) {
+        return false;
+    }
+
+    bool result = false;
+
+    CComPtr<IPropertyBag> pPropBag;
+    if (SUCCEEDED(pNetwork->QueryInterface(IID_IPropertyBag, (void**)&pPropBag))) {
+        VARIANT var;
+        VariantInit(&var);
+        if (SUCCEEDED(pPropBag->Read(NA_NetworkClass, &var, nullptr))) {
+            VARIANT varConverted;
+            VariantInit(&varConverted);
+            if (SUCCEEDED(VariantChangeType(&varConverted, &var, 0, VT_I4))) {
+                NLM_NETWORK_CLASS networkClass = static_cast<NLM_NETWORK_CLASS>(varConverted.lVal);
+                result = (networkClass == NLM_NETWORK_IDENTIFYING || networkClass == NLM_NETWORK_UNIDENTIFIED);
+            }
+            VariantClear(&varConverted);
+        }
+        VariantClear(&var);
+    }
+
+    return result;
+}
+
+static bool isRowUsableForAppVpn(const IfTable2Row &row)
+{
+    switch (row.interfaceType) {
+    case IF_TYPE_ETHERNET_CSMACD:
+    case IF_TYPE_IEEE80211:
+    case IF_TYPE_IEEE80216_WMAN:
+    case IF_TYPE_WWANPP:
+    case IF_TYPE_WWANPP2:
+        if (NetworkUtils_win::isNetworkUnidentified(row.interfaceGuid)) {
+            return false;
+        }
+        break;
+    default:
+        break;
+    }
+
+    // A Hyper-V external switch or a network bridge moves the IP to an adapter with no connector of its own, which
+    // carries the permanent address of the physical adapter underneath it.
+    return row.valid && row.interfaceType != IF_TYPE_PPP && !row.endPointInterface
+           && (row.connectorPresent || row.sharesAddressWithConnectorAdapter);
+}
+
+bool NetworkUtils_win::hasPhysicalConnector(int interfaceIndex)
+{
+    return tableRowByIndex(getIfTable2(), interfaceIndex).connectorPresent;
+}
+
+QVector<types::NetworkInterface> NetworkUtils_win::spoofableNetworkInterfaces(const QVector<types::NetworkInterface> &networkInterfaces)
+{
+    QVector<types::NetworkInterface> result;
+    for (const auto &networkInterface : networkInterfaces) {
+        if (types::NetworkInterface::isNoNetworkInterface(networkInterface.interfaceIndex)
+            || hasPhysicalConnector(networkInterface.interfaceIndex)) {
+            result << networkInterface;
+        }
+    }
+    return result;
+}
+
+static IfTable2Row lowestMetricNonVpnIfTableRow()
+{
+    IfTable2Row lowestMetricIfRow;
+
+    const QList<IpForwardRow> fwdTable = getIpForwardTable();
+    const QList<IfTable2Row> ifTable2 = getIfTable2();
+    const QList<IpAdapter> ipAdapters = getIpAdapterTable();
+
+    int lowestMetric = 999999;
+
+    for (const IpForwardRow &row: fwdTable) {
+        for (const IpAdapter &ipAdapter: ipAdapters) {
+            if (ipAdapter.index == row.index) {
+                IfTable2Row ifRow = tableRowByIndex(ifTable2, row.index);
+                // We call this function to determine the current interface, so also make sure that the row is media-connected.
+                if (isRowUsableForAppVpn(ifRow) && ifRow.mediaConnected && !ifRow.isAppVpnAdapter()) {
+                    const auto row_metric = static_cast<int>(row.metric);
+                    if (row_metric < lowestMetric) {
+                        lowestMetric = row_metric;
+                        lowestMetricIfRow = ifRow;
+                    }
+                }
+            }
+        }
+    }
+
+    return lowestMetricIfRow;
+}
+
+static QList<AdapterAddress> getAdapterAddressesTable()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::getAdapterAddressesTable");
+    QList<AdapterAddress> adapters;
+
+    ULONG bufSize = sizeof(IP_ADAPTER_ADDRESSES_LH) * 32;
+    QByteArray pAddresses(bufSize, Qt::Uninitialized);
+
+    ULONG result = ::GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL, (PIP_ADAPTER_ADDRESSES)pAddresses.data(), &bufSize);
+
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        pAddresses.resize(bufSize);
+        result = ::GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL, (PIP_ADAPTER_ADDRESSES)pAddresses.data(), &bufSize);
+    }
+
+    if (result == NO_ERROR) {
+        PIP_ADAPTER_ADDRESSES pCurrAddresses = (PIP_ADAPTER_ADDRESSES)pAddresses.data();
+        while (pCurrAddresses) {
+            QString guidString = guidToQString(pCurrAddresses->NetworkGuid);
+            AdapterAddress aa(pCurrAddresses->IfIndex, guidString, QString::fromWCharArray(pCurrAddresses->FriendlyName));
+            adapters.append(aa);
+
+            pCurrAddresses = pCurrAddresses->Next;
+        }
+    }
+    else {
+        if (result == ERROR_NO_DATA) {
+            qCWarning(LOG_BASIC) << "getAdapterAddressesTable: GetAdaptersAddresses returned no addresses for the requested parameters";
+        }
+        else {
+            wchar_t strErr[1024];
+            WinUtils::Win32GetErrorString(result, strErr, _countof(strErr));
+            qCCritical(LOG_BASIC) << "getAdapterAddressesTable: GetAdaptersAddresses failed (" << result << ")" << strErr;
+        }
+    }
+
+    return adapters;
+}
+
+bool NetworkUtils_win::isInterfaceSpoofed(int interfaceIndex)
+{
+    return interfaceSubkeyHasProperty(interfaceIndex, WS_APP_IDENTIFIER "MACSpoofed");
+}
+
+bool NetworkUtils_win::pingWithMtu(const QString &url, int mtu)
+{
+    const QString cmd = WinUtils::getSystemDir() + QString("\\ping.exe");
+    const QString params = QString(" -n 1 -l %1 -f %2").arg(mtu).arg(url);
+    QString result = WinUtils::executeBlockingCmd(cmd + params, params, 1000).trimmed();
+    if (result.contains("bytes=")) {
+        return true;
+    }
+    return false;
+}
+
+void NetworkUtils_win::getAdapterIpAndPrefix(unsigned long ifIndex, QString &outIp, int &outPrefix)
+{
+    outIp.clear();
+    outPrefix = 0;
+
+    ULONG bufSize = sizeof(IP_ADAPTER_ADDRESSES_LH) * 32;
+    QByteArray buf(bufSize, Qt::Uninitialized);
+
+    ULONG result = ::GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL,
+                                          (PIP_ADAPTER_ADDRESSES)buf.data(), &bufSize);
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        buf.resize(bufSize);
+        result = ::GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL,
+                                        (PIP_ADAPTER_ADDRESSES)buf.data(), &bufSize);
+    }
+    if (result != NO_ERROR) {
+        return;
+    }
+
+    for (PIP_ADAPTER_ADDRESSES aa = (PIP_ADAPTER_ADDRESSES)buf.data(); aa != nullptr; aa = aa->Next) {
+        if (aa->IfIndex != ifIndex) {
+            continue;
+        }
+        for (PIP_ADAPTER_UNICAST_ADDRESS_LH ua = aa->FirstUnicastAddress; ua != nullptr; ua = ua->Next) {
+            if (ua->Address.lpSockaddr == nullptr || ua->Address.lpSockaddr->sa_family != AF_INET) {
+                continue;
+            }
+            const sockaddr_in *addrIn = reinterpret_cast<const sockaddr_in *>(ua->Address.lpSockaddr);
+            outIp = QHostAddress(ntohl(addrIn->sin_addr.s_addr)).toString();
+            outPrefix = ua->OnLinkPrefixLength;
+            return;
+        }
+    }
+}
+
+QString NetworkUtils_win::getLocalIP()
+{
+    ULONG ulAdapterInfoSize = sizeof(IP_ADAPTER_INFO);
+    std::vector<unsigned char> pAdapterInfo(ulAdapterInfoSize);
+
+    if (GetAdaptersInfo((IP_ADAPTER_INFO *)&pAdapterInfo[0], &ulAdapterInfoSize) == ERROR_BUFFER_OVERFLOW) {
+        pAdapterInfo.resize(ulAdapterInfoSize);
+    }
+
+    if (GetAdaptersInfo((IP_ADAPTER_INFO *)&pAdapterInfo[0], &ulAdapterInfoSize) == ERROR_SUCCESS) {
+        IP_ADAPTER_INFO *ai = (IP_ADAPTER_INFO *)&pAdapterInfo[0];
+        do {
+            if ((ai->Type == MIB_IF_TYPE_ETHERNET) || (ai->Type == IF_TYPE_IEEE80211)) {
+                if (strcmp(ai->IpAddressList.IpAddress.String, "0.0.0.0") != 0 && strcmp(ai->GatewayList.IpAddress.String, "0.0.0.0") != 0) {
+                    return ai->IpAddressList.IpAddress.String;
+                }
+            }
+            ai = ai->Next;
+        } while (ai);
+    }
+    return "";
+}
+
+QString NetworkUtils_win::currentNetworkInterfaceGuid()
+{
+    // This function is used primarily by network detection manager to check if the current interface has changed.
+    // We do not want to use currentNetworkInterfaces() here, because that returns a cached list
+    // (which is not useful to determine if the interface has changed), or it forces an update
+    // (which we want to avoid until we know something actually changed).
+
+    IfTable2Row row = lowestMetricNonVpnIfTableRow();
+    if (!row.valid) {
+        return "";
+    }
+
+    return row.interfaceGuid;
+}
+
+std::optional<QString> NetworkUtils_win::networkIdFromInterfaceGuid(const QString &adapterGuid)
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::networkIdFromInterfaceGuid");
+    CComPtr<INetwork> pNetwork;
+    if (FAILED(networkForInterfaceGUID(adapterGuid, pNetwork)) || !pNetwork) {
+        return std::nullopt;
+    }
+
+    GUID networkId;
+    if (pNetwork->GetNetworkId(&networkId) != S_OK) {
+        return std::nullopt;
+    }
+
+    return guidToQString(networkId);
+}
+
+bool NetworkUtils_win::haveActiveInterface()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::haveActiveInterface");
+    // TODO: reconcile this with haveInternetConnectivity().  This function is used by NetworkDetectionManager::isOnlineImpl()
+    // to determine if there is an active interface, without forcing a network list update.
+    // Changing it to use haveInternetConnectivity() would reduce the amount of logic in this file, but may cause slightly different behavior.
+    QList<IpAdapter> ipAdapters = getIpAdapterTable();
+    QList<IfTable2Row> ifTable2 = getIfTable2();
+    for (const IpAdapter &ia : ipAdapters) {
+        IfTable2Row row = tableRowByIndex(ifTable2, ia.index);
+        if (isRowUsableForAppVpn(row) && row.mediaConnected) {
+            return true;
+        }
+    }
+    return false;
+}
+
+types::NetworkInterface NetworkUtils_win::currentNetworkInterface()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::currentNetworkInterface");
+    types::NetworkInterface curNetworkInterface = types::NetworkInterface::noNetworkInterface();
+
+    IfTable2Row row = lowestMetricNonVpnIfTableRow();
+    if (!row.valid) {
+        return curNetworkInterface;
+    }
+
+    QVector<types::NetworkInterface> networkInterfaces = currentNetworkInterfaces(true);
+
+    for (const auto &networkInterface : networkInterfaces) {
+        if (networkInterface.interfaceIndex == static_cast<int>(row.index)) {
+            curNetworkInterface = networkInterface;
+            break;
+        }
+    }
+
+    // qDebug() << "#########Current interface found to be: ";
+    // Utils::printInterface(curNetworkInterface);
+    // qDebug() << "Of: ";
+    // Utils::printInterfaces(interfaces);
+
+    return curNetworkInterface;
+}
+
+static QVector<types::NetworkInterface> addNoInterface(bool includeNoInterface, const QVector<types::NetworkInterface> &networkInterfaces)
+{
+    if (includeNoInterface) {
+        QVector<types::NetworkInterface> ret;
+        ret << types::NetworkInterface::noNetworkInterface();
+        ret << networkInterfaces;
+        return ret;
+    } else {
+        return networkInterfaces;
+    }
+}
+
+QVector<types::NetworkInterface> NetworkUtils_win::currentNetworkInterfaces(bool includeNoInterface, bool forceUpdate)
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::currentNetworkInterfaces");
+    static QVector<types::NetworkInterface> networkInterfaces;
+    if (!forceUpdate && !networkInterfaces.isEmpty()) {
+        return addNoInterface(includeNoInterface, networkInterfaces);
+    }
+    qCInfo(LOG_BASIC) << "Clearing cached network interfaces";
+    networkInterfaces.clear();
+
+    WlanUtils_win wlanUtils;
+
+    for (const IpAdapter &ia: getIpAdapterTable()) { // IpAdapters holds list of live adapters
+        types::NetworkInterface networkInterface;
+        networkInterface.interfaceIndex = ia.index;
+        networkInterface.interfaceGuid = ia.guid;
+        networkInterface.physicalAddress = ia.physicalAddress;
+
+        IfTableRow itRow = tableRowByIndex(getIfTable(), ia.index);
+        if (!itRow.valid) {
+            // Should never happen
+            assert(false);
+            continue;
+        }
+
+        networkInterface.mtu = itRow.mtu;
+        networkInterface.interfaceType = itRow.type;
+        networkInterface.active = itRow.connected;
+
+        if (networkInterface.interfaceType == NETWORK_INTERFACE_WIFI) {
+            DWORD ret = wlanUtils.ssidFromInterfaceGUID(itRow.guidName, networkInterface.networkOrSsid);
+            if (ret != ERROR_SUCCESS) {
+                if (ret == ERROR_ACCESS_DENIED) {
+                    g_SsidAccessDenied = true;
+                }
+                networkInterface.networkOrSsid = "Wi-Fi";
+            } else {
+                g_SsidAccessDenied = false;
+            }
+        } else if (networkInterface.interfaceType == NETWORK_INTERFACE_MOBILE_BROADBAND) {
+            networkInterface.networkOrSsid = itRow.interfaceName;
+        }
+
+        AdapterAddress aa = tableRowByIndex(getAdapterAddressesTable(), ia.index);
+        if (aa.valid) {
+            networkInterface.interfaceName = aa.friendlyName;
+            networkInterface.friendlyName  = networkInterface.interfaceName;
+        }
+
+        IfTable2Row it2Row = tableRowByIndex(getIfTable2(), ia.index);
+        if (!it2Row.valid) {
+            // Should never happen
+            assert(false);
+            continue;
+        }
+        if (!isRowUsableForAppVpn(it2Row)) {
+            continue;
+        }
+
+        if (networkInterface.interfaceType == NETWORK_INTERFACE_ETH) {
+            networkInterface.networkOrSsid = networkNameFromInterfaceGUID(it2Row.interfaceGuid);
+            if (networkInterface.networkOrSsid.isEmpty()) {
+                // Above function could not detect interface, probably virtual.  Set it to the friendly name instead.
+                networkInterface.networkOrSsid = networkInterface.friendlyName;
+            }
+        }
+
+        IpForwardRow ipfRow = tableRowByIndex(getIpForwardTable(), ia.index);
+        if (!ipfRow.valid) {
+            networkInterface.metric = -1;
+        } else {
+            networkInterface.metric = ipfRow.metric;
+        }
+
+        networkInterfaces << networkInterface;
+    }
+
+    return addNoInterface(includeNoInterface, networkInterfaces);
+}
+
+QString NetworkUtils_win::interfaceSubkeyName(int interfaceIndex)
+{
+    IfTableRow row = tableRowByIndex(getIfTable(), interfaceIndex);
+
+    const QString keyPath("SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002BE10318}");
+    const QStringList ifSubkeys = WinUtils::enumerateSubkeyNames(HKEY_LOCAL_MACHINE, keyPath);
+
+    QString foundSubkeyName = "";
+    for (const QString &subkey : ifSubkeys) {
+        QString subkeyPath = keyPath + "\\" + subkey;
+        QString subkeyInterfaceGuid = WinUtils::regGetLocalMachineRegistryValueSz(subkeyPath, "NetCfgInstanceId");
+
+        if (subkeyInterfaceGuid == row.guidName) {
+            foundSubkeyName = subkey; // just name -- not path
+            break;
+        }
+    }
+
+    return foundSubkeyName;
+}
+
+types::NetworkInterface NetworkUtils_win::interfaceByIndex(int index, bool &success)
+{
+    types::NetworkInterface result;
+    success = false;
+
+    QVector<types::NetworkInterface> nis = currentNetworkInterfaces(true);
+
+    for (int i = 0; i < nis.size(); i++) {
+        types::NetworkInterface ni = nis[i];
+
+        if (ni.interfaceIndex == index) {
+            result = ni;
+            success = true;
+            break;
+        }
+    }
+
+    return result;
+}
+
+std::optional<bool> NetworkUtils_win::haveInternetConnectivity()
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::haveInternetConnectivity");
+    INetworkListManager* mgr = nullptr;
+    HRESULT res = ::CoCreateInstance(CLSID_NetworkListManager, NULL, CLSCTX_ALL,
+                                     IID_INetworkListManager, reinterpret_cast<void**>(&mgr));
+    if (res != S_OK) {
+        qCCritical(LOG_BASIC) << "haveInternetConnectivity: could not create an INetworkListManager instance" << HRESULT_CODE(res);
+        return std::nullopt;
+    }
+
+    auto comRelease = qScopeGuard([&] {
+        if (mgr != nullptr) {
+            mgr->Release();
+        }
+    });
+
+    NLM_CONNECTIVITY connectivity;
+    res = mgr->GetConnectivity(&connectivity);
+
+    if (res != S_OK) {
+        qCCritical(LOG_BASIC) << "haveInternetConnectivity: GetConnectivity failed" << HRESULT_CODE(res);
+        return std::nullopt;
+    }
+
+    qCDebug(LOG_BASIC) << "haveInternetConnectivity: GetConnectivity returned" << connectivity;
+
+    if ((connectivity & NLM_CONNECTIVITY_IPV4_INTERNET) || (connectivity & NLM_CONNECTIVITY_IPV6_INTERNET)) {
+        return true;
+    }
+
+    return false;
+}
+
+static std::optional<bool> haveDefaultRouteForFamily(ADDRESS_FAMILY family)
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::haveDefaultRouteForFamily");
+    PMIB_IPFORWARD_TABLE2 pTable = nullptr;
+    DWORD result = GetIpForwardTable2(family, &pTable);
+    if (result != NO_ERROR || pTable == nullptr) {
+        qCWarning(LOG_BASIC) << "haveDefaultRouteForFamily: GetIpForwardTable2 failed" << result;
+        return std::nullopt;
+    }
+
+    // A default route is the entry whose destination prefix length is zero (0.0.0.0/0 or ::/0).
+    bool found = false;
+    for (ULONG i = 0; i < pTable->NumEntries; i++) {
+        if (pTable->Table[i].DestinationPrefix.PrefixLength == 0) {
+            found = true;
+            break;
+        }
+    }
+
+    FreeMibTable(pTable);
+    return found;
+}
+
+std::optional<bool> NetworkUtils_win::haveDefaultRouteV4()
+{
+    return haveDefaultRouteForFamily(AF_INET);
+}
+
+std::optional<bool> NetworkUtils_win::haveDefaultRouteV6()
+{
+    return haveDefaultRouteForFamily(AF_INET6);
+}
+
+void NetworkUtils_win::interfaceAddressPresence(unsigned long ifIndex, bool &hasIpv4, bool &hasGlobalIpv6)
+{
+    WS_DEBUG_TRACE_SCOPE("NetworkUtils_win::interfaceAddressPresence");
+    hasIpv4 = false;
+    hasGlobalIpv6 = false;
+
+    ULONG bufSize = sizeof(IP_ADAPTER_ADDRESSES_LH) * 32;
+    QByteArray buf(bufSize, Qt::Uninitialized);
+
+    ULONG result = ::GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
+                                          (PIP_ADAPTER_ADDRESSES)buf.data(), &bufSize);
+    if (result == ERROR_BUFFER_OVERFLOW) {
+        buf.resize(bufSize);
+        result = ::GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL,
+                                        (PIP_ADAPTER_ADDRESSES)buf.data(), &bufSize);
+    }
+    if (result != NO_ERROR) {
+        if (result != ERROR_NO_DATA) {
+            qCWarning(LOG_BASIC) << "interfaceAddressPresence: GetAdaptersAddresses failed" << result;
+        }
+        return;
+    }
+
+    for (PIP_ADAPTER_ADDRESSES aa = (PIP_ADAPTER_ADDRESSES)buf.data(); aa != nullptr; aa = aa->Next) {
+        // A single adapter entry carries both its IPv4 (IfIndex) and IPv6 (Ipv6IfIndex) addresses.
+        if (aa->IfIndex != ifIndex && aa->Ipv6IfIndex != ifIndex) {
+            continue;
+        }
+        for (PIP_ADAPTER_UNICAST_ADDRESS_LH ua = aa->FirstUnicastAddress; ua != nullptr; ua = ua->Next) {
+            if (ua->Address.lpSockaddr == nullptr) {
+                continue;
+            }
+            const ADDRESS_FAMILY family = ua->Address.lpSockaddr->sa_family;
+            if (family == AF_INET) {
+                hasIpv4 = true;
+            } else if (family == AF_INET6) {
+                const sockaddr_in6 *addr6 = reinterpret_cast<const sockaddr_in6 *>(ua->Address.lpSockaddr);
+                const IN6_ADDR *in6 = &addr6->sin6_addr;
+                // Only count routable, globally-scoped addresses; ignore link-local/site-local/loopback/multicast.
+                if (!IN6_IS_ADDR_LINKLOCAL(in6) && !IN6_IS_ADDR_SITELOCAL(in6) &&
+                    !IN6_IS_ADDR_LOOPBACK(in6) && !IN6_IS_ADDR_MULTICAST(in6)) {
+                    hasGlobalIpv6 = true;
+                }
+            }
+        }
+    }
+}
+
+QString NetworkUtils_win::getRoutingTable()
+{
+    const QString cmd = WinUtils::getSystemDir() + QString("\\route.exe print");
+    return WinUtils::executeBlockingCmd(cmd, "", 50).trimmed();
+}
+
+bool NetworkUtils_win::isIpv4AddressPreferred(unsigned long ifIndex, const types::IpAddress &address)
+{
+    if (!address.isValid() || !address.isV4()) {
+        return false;
+    }
+
+    PMIB_UNICASTIPADDRESS_TABLE table = nullptr;
+    const DWORD result = GetUnicastIpAddressTable(AF_INET, &table);
+    if (result != NO_ERROR || table == nullptr) {
+        qCDebug(LOG_BASIC) << "isIpv4AddressPreferred: GetUnicastIpAddressTable failed" << result;
+        return false;
+    }
+
+    bool isPreferred = false;
+    for (ULONG i = 0; i < table->NumEntries; i++) {
+        const MIB_UNICASTIPADDRESS_ROW &row = table->Table[i];
+        if (row.InterfaceIndex == ifIndex && row.Address.Ipv4.sin_addr.S_un.S_addr == address.ipv4NetworkOrder()
+            && row.DadState == IpDadStatePreferred) {
+            isPreferred = true;
+            break;
+        }
+    }
+
+    FreeMibTable(table);
+    return isPreferred;
+}
+
+bool NetworkUtils_win::isSsidAccessAvailable()
+{
+    return !g_SsidAccessDenied;
+}

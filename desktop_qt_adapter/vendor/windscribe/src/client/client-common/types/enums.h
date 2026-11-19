@@ -1,0 +1,350 @@
+#pragma once
+
+#include <QList>
+#include <QPair>
+#include <QString>
+#include <QVariant>
+
+// Basic enumerations
+// When adding a new enum, increase the number. Do not delete unused enums, just mark it as deprecated, since they are used in serialization
+
+enum PROXY_OPTION {
+    PROXY_OPTION_NONE = 0,
+    PROXY_OPTION_AUTODETECT = 1,
+    PROXY_OPTION_HTTP = 2,
+    PROXY_OPTION_SOCKS = 3
+};
+
+enum INIT_HELPER_RET {
+    INIT_HELPER_SUCCESS = 0,
+    INIT_HELPER_FAILED = 1,
+    INIT_HELPER_USER_CANCELED =2
+};
+
+enum LOGIN_MESSAGE {
+    LOGIN_MESSAGE_NONE = 0,
+    LOGIN_MESSAGE_TRYING_BACKUP1 = 1,
+    LOGIN_MESSAGE_TRYING_BACKUP2 = 2
+};
+
+enum API_RET_CODE { SERVER_RETURN_SUCCESS, SERVER_RETURN_NETWORK_ERROR, SERVER_RETURN_NO_NETWORK_CONNECTION, SERVER_RETURN_INCORRECT_JSON,
+                    SERVER_RETURN_FAILOVER_FAILED };
+
+enum ENGINE_INIT_RET_CODE { ENGINE_INIT_SUCCESS, ENGINE_INIT_HELPER_FAILED, ENGINE_INIT_BFE_SERVICE_FAILED, ENGINE_INIT_HELPER_USER_CANCELED,
+                            ENGINE_INIT_INCOMPLETE_INSTALL };
+
+enum CONNECT_STATE {
+    CONNECT_STATE_DISCONNECTED = 0,
+    CONNECT_STATE_CONNECTED = 1,
+    CONNECT_STATE_CONNECTING = 2,
+    CONNECT_STATE_DISCONNECTING = 3
+};
+
+enum DISCONNECT_REASON {
+    DISCONNECTED_ITSELF = 0,
+    DISCONNECTED_BY_USER = 1,
+    DISCONNECTED_BY_RECONNECTION_TIMEOUT_EXCEEDED = 2,
+    DISCONNECTED_WITH_ERROR = 3,
+    DISCONNECTED_BY_KEY_LIMIT = 4,
+    DISCONNECTED_BY_DATA_LIMIT = 5,
+};
+
+// Semantic error categories, runtime-only (never persisted). Every value must have a consumer that
+// treats it distinctly; the protocol-specific CAUSE is logged at the emit site, not encoded here.
+enum class ConnectError {
+    kNoError = 0,
+    kAuthFailure = 1,                   // server rejected the connection credentials
+    kPrivKeyPasswordFailure = 2,        // local private key in a custom config could not be decrypted
+    kLocationUnavailable = 3,           // location does not exist or has no usable nodes
+    kAccountBlocked = 4,                // out of data / account disabled
+    kLocalProcessLaunchFailure = 5,     // a required local process could not be started
+    kLocalProcessNotResponding = 6,     // local process started but never provided its resource
+    kAdapterSetupFailure = 7,           // VPN adapter setup failed; may be transient, so automatic mode fails over
+    kTransientTunnelFailure = 8,        // network-level failure; retrying the attempt makes sense
+    kTunnelEstablishmentFailure = 9,    // tunnel never established; the dialed config is suspect
+    kVpnServiceSetupFailure = 10,       // OS VPN service/extension plumbing failed
+    kHostsFileNotWritable = 11,         // hosts file could not be updated (IKEv2 on Windows)
+    kCustomConfigInvalid = 12,          // custom config unusable
+    kConfigFetchFailure = 13,           // server config unavailable from the API
+    kLocalConfigGenerationFailure = 14, // config could not be produced locally (e.g. keygen)
+    kDnsServiceStartFailure = 15,       // custom DNS service failed to start
+    kBlockedByOsPolicy = 16,            // OS policy forbids this protocol (e.g. macOS Lockdown)
+    kLocalDnsServerNotAvailable = 17,
+    kAdapterNotInstalled = 18,          // required VPN adapter/driver is not installed; terminal
+    kOSServiceUnavailable = 19,         //
+    kHydraUnreachable = 20,             // a hydra front never connected; its location isn't tried without it
+    kHydraNeedsWireGuard = 21,          // a hydra-fronted location with a protocol other than WireGuard chosen
+};
+
+enum PROXY_SHARING_TYPE {
+    PROXY_SHARING_HTTP = 0,
+    PROXY_SHARING_SOCKS = 1
+};
+
+enum DNS_POLICY_TYPE {
+    DNS_TYPE_OS_DEFAULT = 0,
+    DNS_TYPE_OPEN_DNS = 1,
+    DNS_TYPE_CLOUDFLARE = 2,
+    DNS_TYPE_GOOGLE = 3,
+    DNS_TYPE_CONTROLD = 4
+};
+
+enum UPDATE_CHANNEL {
+    UPDATE_CHANNEL_RELEASE = 0,
+    UPDATE_CHANNEL_BETA = 1,
+    UPDATE_CHANNEL_GUINEA_PIG = 2,
+    UPDATE_CHANNEL_INTERNAL = 3
+};
+
+enum FIREWALL_MODE {
+    FIREWALL_MODE_MANUAL = 0,
+    FIREWALL_MODE_AUTOMATIC = 1,
+    FIREWALL_MODE_ALWAYS_ON = 2,
+    FIREWALL_MODE_ALWAYS_ON_PLUS = 3
+};
+
+enum FIREWALL_WHEN {
+    FIREWALL_WHEN_BEFORE_CONNECTION = 0,
+    FIREWALL_WHEN_AFTER_CONNECTION = 1
+};
+
+enum NETWORK_INTERFACE_TYPE {
+    NETWORK_INTERFACE_NONE = 0,
+    NETWORK_INTERFACE_ETH = 1,
+    NETWORK_INTERFACE_WIFI = 2,
+    NETWORK_INTERFACE_PPP = 3,
+    NETWORK_INTERFACE_MOBILE_BROADBAND = 4
+};
+
+enum NETWORK_TRUST_TYPE {
+    NETWORK_TRUST_SECURED = 0,
+    NETWORK_TRUST_UNSECURED = 1,
+    NETWORK_TRUST_FORGET = 2
+};
+
+enum TAP_ADAPTER_TYPE {
+    DCO_ADAPTER = 1,
+    TAP_ADAPTER = 2
+};
+
+enum CONNECTED_DNS_TYPE {
+    CONNECTED_DNS_TYPE_AUTO = 0,
+    CONNECTED_DNS_TYPE_CUSTOM = 1, // Windows only. Forcely disable DOH settings on Windows 11.
+    CONNECTED_DNS_TYPE_FORCED = 2,
+    CONNECTED_DNS_TYPE_LOCAL = 3,
+    CONNECTED_DNS_TYPE_CONTROLD = 4
+};
+
+enum CONTROLD_FETCH_RESULT {
+    CONTROLD_FETCH_SUCCESS = 0,
+    CONTROLD_FETCH_AUTH_ERROR = 1,  // HTTP response is not 200
+    CONTROLD_FETCH_NETWORK_ERROR = 2  // Timeout or other network error
+};
+
+enum DNS_MANAGER_TYPE {
+    DNS_MANAGER_AUTOMATIC = 0,
+    DNS_MANAGER_RESOLV_CONF = 1,
+    DNS_MANAGER_SYSTEMD_RESOLVED = 2,
+    DNS_MANAGER_NETWORK_MANAGER = 3
+};
+
+enum USER_WARNING_TYPE {
+    USER_WARNING_MAC_SPOOFING_FAILURE_HARD = 0,
+    USER_WARNING_MAC_SPOOFING_FAILURE_SOFT = 1,
+    USER_WARNING_CHECK_UPDATE_INVALID_PLATFORM = 4
+};
+
+enum SPLIT_TUNNEL_START_FAIL_REASON {
+    // Generic start failure: the privileged service/helper, or the macOS extension session, could not
+    // start split tunneling.  Shows the generic "could not be started" message on every platform.
+    SPLIT_TUNNEL_START_FAIL_REASON_DEFAULT = 0,
+    // macOS only: the system extension is not enabled in System Settings, so the user is guided to
+    // enable it.  Used only for the genuine not-enabled case -- not for a session that failed while the
+    // extension was enabled, where that guidance would be wrong.
+    SPLIT_TUNNEL_START_FAIL_REASON_MAC_EXTENSION_NOT_ENABLED = 1,
+    SPLIT_TUNNEL_START_FAIL_REASON_MAC_SESSION_ENDED = 2
+};
+
+enum INIT_STATE {
+    INIT_STATE_CLEAN = 0,
+    INIT_STATE_SUCCESS = 1,
+    INIT_STATE_HELPER_FAILED = 2,
+    INIT_STATE_HELPER_USER_CANCELED = 3,
+    INIT_STATE_BFE_SERVICE_NOT_STARTED = 4,
+    INIT_STATE_BFE_SERVICE_FAILED_TO_START = 5,
+    // macOS only: files the privileged helper needs are missing from the root-only directory the
+    // installer populates, so the install cannot be completed or repaired from the running app.
+    INIT_STATE_INCOMPLETE_INSTALL = 6
+};
+
+enum WEB_SESSION_PURPOSE {
+    WEB_SESSION_PURPOSE_MANAGE_ACCOUNT = 0,
+    WEB_SESSION_PURPOSE_ADD_EMAIL = 1,
+    WEB_SESSION_PURPOSE_MANAGE_ROBERT_RULES = 2
+};
+
+enum CUSTOM_CONFIG_TYPE {
+    CUSTOM_CONFIG_OPENVPN = 0,
+    CUSTOM_CONFIG_WIREGUARD = 1
+};
+
+enum SPLIT_TUNNELING_MODE {
+    SPLIT_TUNNELING_MODE_EXCLUDE = 0,
+    SPLIT_TUNNELING_MODE_INCLUDE = 1
+};
+
+enum SPLIT_TUNNELING_APP_TYPE {
+    SPLIT_TUNNELING_APP_TYPE_USER = 0,
+    SPLIT_TUNNELING_APP_TYPE_SYSTEM = 1
+};
+
+enum SPLIT_TUNNELING_NETWORK_ROUTE_TYPE {
+    SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_IP = 0,
+    SPLIT_TUNNELING_NETWORK_ROUTE_TYPE_HOSTNAME = 1
+};
+
+enum ORDER_LOCATION_TYPE {
+    ORDER_LOCATION_BY_GEOGRAPHY = 0,
+    ORDER_LOCATION_BY_ALPHABETICALLY = 1,
+    ORDER_LOCATION_BY_LATENCY = 2
+};
+
+enum SERVER_ROUTING_METHOD_TYPE {
+    SERVER_ROUTING_METHOD_AUTO = 0,
+    SERVER_ROUTING_METHOD_REGULAR = 1,
+    SERVER_ROUTING_METHOD_ALTERNATIVE = 2
+};
+
+enum PROTOCOL_TWEAKS_METHOD_TYPE {
+    PROTOCOL_TWEAKS_METHOD_AUTO = 0,
+    PROTOCOL_TWEAKS_METHOD_ENABLED = 1,
+    PROTOCOL_TWEAKS_METHOD_DISABLED = 2
+};
+
+enum class IpStack {
+    kAuto = 0,
+    kIPv4Only = 1
+};
+
+enum BACKGROUND_TYPE
+{
+    BACKGROUND_TYPE_NONE = 0,
+    BACKGROUND_TYPE_COUNTRY_FLAGS = 1,
+    BACKGROUND_TYPE_CUSTOM = 2,
+    BACKGROUND_TYPE_BUNDLED = 3
+};
+
+enum UPDATE_VERSION_STATE {
+    UPDATE_VERSION_STATE_INIT = 0,
+    UPDATE_VERSION_STATE_DOWNLOADING = 1,
+    UPDATE_VERSION_STATE_RUNNING = 2,
+    UPDATE_VERSION_STATE_DONE = 3
+};
+
+enum UPDATE_VERSION_ERROR
+{
+    UPDATE_VERSION_ERROR_NO_ERROR = 0,
+    UPDATE_VERSION_ERROR_DL_FAIL = 1,
+    UPDATE_VERSION_ERROR_SIGN_FAIL = 2,
+    UPDATE_VERSION_ERROR_OTHER_FAIL = 3,
+    UPDATE_VERSION_ERROR_START_INSTALLER_FAIL = 8,
+    UPDATE_VERSION_ERROR_CANCELLED = 9,
+    UPDATE_VERSION_ERROR_ELEVATION_DECLINED = 10
+};
+
+enum APP_SKIN
+{
+    APP_SKIN_ALPHA = 0,
+    APP_SKIN_VAN_GOGH = 1
+};
+
+enum TRAY_ICON_COLOR
+{
+    TRAY_ICON_COLOR_WHITE = 0,
+    TRAY_ICON_COLOR_BLACK = 1,
+    TRAY_ICON_COLOR_OS_THEME = 2
+};
+
+enum LOCATION_TAB {
+    LOCATION_TAB_NONE = 0,
+    LOCATION_TAB_ALL_LOCATIONS,
+    LOCATION_TAB_FAVORITE_LOCATIONS,
+    LOCATION_TAB_STATIC_IPS_LOCATIONS,
+    LOCATION_TAB_CONFIGURED_LOCATIONS,
+    LOCATION_TAB_SEARCH_LOCATIONS,
+    LOCATION_TAB_FIRST = LOCATION_TAB_ALL_LOCATIONS,
+    LOCATION_TAB_LAST = LOCATION_TAB_SEARCH_LOCATIONS
+};
+
+enum LOGIN_STATE {
+    LOGIN_STATE_LOGGED_OUT = 0,
+    LOGIN_STATE_LOGIN_ERROR,
+    LOGIN_STATE_LOGGING_IN,
+    LOGIN_STATE_LOGGED_IN,
+};
+
+enum TUNNEL_TEST_STATE {
+    TUNNEL_TEST_STATE_UNKNOWN = 0,
+    TUNNEL_TEST_STATE_SUCCESS,
+    TUNNEL_TEST_STATE_FAILURE
+};
+
+enum TOGGLE_MODE {
+    TOGGLE_MODE_AUTO = 0,
+    TOGGLE_MODE_MANUAL
+};
+
+enum WIFI_SHARING_ERROR {
+    WIFI_SHARING_ERROR_RADIO_OFF = 0,
+    WIFI_SHARING_ERROR_OTHER
+};
+
+enum PROXY_SHARING_ERROR {
+    PROXY_SHARING_ERROR_NO_LOCAL_IP = 0,
+    PROXY_SHARING_ERROR_PORT_BUSY,
+    PROXY_SHARING_ERROR_MISSING_CREDENTIALS,
+};
+
+enum MULTI_DESKTOP_BEHAVIOR {
+    MULTI_DESKTOP_AUTO,
+    MULTI_DESKTOP_DUPLICATE,
+    MULTI_DESKTOP_MOVE_SPACES,
+    MULTI_DESKTOP_MOVE_WINDOW
+};
+
+enum ASPECT_RATIO_MODE {
+    ASPECT_RATIO_MODE_STRETCH,
+    ASPECT_RATIO_MODE_FILL,
+    ASPECT_RATIO_MODE_TILE
+};
+
+enum SOUND_NOTIFICATION_TYPE {
+    SOUND_NOTIFICATION_TYPE_NONE,
+    SOUND_NOTIFICATION_TYPE_BUNDLED,
+    SOUND_NOTIFICATION_TYPE_CUSTOM
+};
+
+// Generic enum <-> int/string/list helpers.
+//
+// Each enum's metadata (string mapping, defaults, translatable strings) lives in a single table in
+// enums.cpp, and these function templates are explicitly instantiated there for every supported
+// enum.  Adding conversions for a new enum only requires adding its table/specialization and the
+// explicit instantiations in enums.cpp -- no per-enum declarations are needed here.
+//
+// Usage:
+//   QString s = enumToString(value);        // E is deduced from the argument
+//   E v       = enumFromInt<E>(intValue);
+//   E v       = enumFromString<E>(str);
+//   auto list = enumToList<E>();             // for combo-box population (label + int value)
+template <typename E> E enumFromInt(int t);
+template <typename E> E enumFromString(const QString &s);
+template <typename E> QString enumToString(E value);
+template <typename E> QList<QPair<QString, QVariant>> enumToList();
+
+// TRAY_ICON_COLOR has platform-dependent behavior (default value, available options and OS-theme
+// handling differ per OS), so it keeps dedicated helpers instead of the generic tables.
+TRAY_ICON_COLOR TRAY_ICON_COLOR_default();
+TRAY_ICON_COLOR TRAY_ICON_COLOR_fromInt(int t);
+QString TRAY_ICON_COLOR_toString(TRAY_ICON_COLOR c);
+QList<QPair<QString, QVariant>> TRAY_ICON_COLOR_toList();
+
