@@ -21,6 +21,11 @@ public:
     void selectServer(const QString &host, const QString &countryCode);
     void setMode(const QString &mode);
     void setKillSwitch(bool enabled);
+    void setLanguage(const QString &language);
+    void setTheme(const QString &theme);
+    void setRecents(bool enabled);
+    void setWarpUdp(bool enabled, bool consent);
+    void setChain(const QJsonArray &hops);
 
 signals:
     void error(const QString &message);

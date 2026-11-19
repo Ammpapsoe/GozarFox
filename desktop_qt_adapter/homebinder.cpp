@@ -74,6 +74,28 @@ void HomeBinder::setKillSwitch(bool enabled) {
     sendMutation(QStringLiteral("kill_switch"), {{QStringLiteral("enabled"), enabled}});
 }
 
+void HomeBinder::setLanguage(const QString &language) {
+    sendMutation(QStringLiteral("language"), {{QStringLiteral("language"), language}});
+}
+
+void HomeBinder::setTheme(const QString &theme) {
+    sendMutation(QStringLiteral("theme"), {{QStringLiteral("theme"), theme}});
+}
+
+void HomeBinder::setRecents(bool enabled) {
+    sendMutation(QStringLiteral("recents"), {{QStringLiteral("enabled"), enabled}});
+}
+
+void HomeBinder::setWarpUdp(bool enabled, bool consent) {
+    // Never manufacture consent: it must come from the UI's explicit prompt.
+    sendMutation(QStringLiteral("warp_udp"), {{QStringLiteral("enabled"), enabled}, {QStringLiteral("consent"), consent}});
+}
+
+void HomeBinder::setChain(const QJsonArray &hops) {
+    if (live_) return;
+    sendMutation(QStringLiteral("chain"), {{QStringLiteral("hops"), hops}});
+}
+
 void HomeBinder::applyState(const QJsonObject &state) {
     // Missing/incomplete data must not manufacture a signed-in or live state.
     signedIn_ = state.value(QStringLiteral("signed_in")).toBool(false);

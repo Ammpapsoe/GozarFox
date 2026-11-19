@@ -11,6 +11,11 @@ int main(int argc, char **argv) {
     char line[65536];
     QString countryCode;
     QString mode = QStringLiteral("tun");
+    QString language;
+    QString theme = QStringLiteral("system");
+    bool recents = false;
+    bool warpUdp = false;
+    QJsonArray chain;
     bool killSwitch = false;
     bool live = false;
     while (std::fgets(line, sizeof(line), stdin)) {
@@ -24,10 +29,24 @@ int main(int argc, char **argv) {
         if (method == "disconnect") live = false;
         if (method == "mode") mode = params.value("mode").toString();
         if (method == "kill_switch") killSwitch = params.value("enabled").toBool();
-        const QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode}, {"kill_switch", killSwitch}, {"server", QJsonObject{{"code", countryCode}}}};
+        if (method == "language") language = params.value("language").toString();
+        if (method == "theme") theme = params.value("theme").toString();
+        if (method == "recents") recents = params.value("enabled").toBool();
+        QString error;
+        if (method == "warp_udp") {
+            if (params.value("enabled").toBool() && !params.value("consent").toBool())
+                error = QStringLiteral("Cloudflare WARP terms must be accepted");
+            else warpUdp = params.value("enabled").toBool();
+        }
+        if (method == "chain") chain = params.value("hops").toArray();
+        const QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode},
+                                {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
+                                {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},
+                                {"server", QJsonObject{{"code", countryCode}}}};
         QJsonValue payload = request.value("params");
         if (method == "servers") payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
-        const QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
+        QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
+        if (!error.isEmpty()) response.insert("error", error);
         const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';
         std::fwrite(bytes.constData(), 1, size_t(bytes.size()), stdout);
         std::fflush(stdout);

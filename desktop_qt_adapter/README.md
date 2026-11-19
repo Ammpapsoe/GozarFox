@@ -66,6 +66,15 @@ and connection state to those original widgets. It is **not** yet integrated
 into the complete window or Flutter login, and must not be used with a real VPN.
 The prior revision was tested on GitHub Actions with a fake core and isolated
 upstream widgets on Windows, Linux and macOS. This is not an end-to-end UI test.
+The settings RPC wrappers added after that run remain untested.
+
+The Gozar `kill_switch` field is an opt-in for firewall rules on the next TUN
+connection, not Windscribe's current firewall state. Do not bind it to the
+upstream firewall indicator as though they were equivalent. Likewise, Gozar's
+persisted language RPC accepts only English, Persian or system, whereas the
+upstream UI includes more translation files; those other UI translations need
+an independent persistence strategy. `warp_udp` requires explicit user consent.
+Unsupported controls must not silently claim success.
 
 The UI tests use a simulated core. For a separate, optional real-core check,
 build the Gozar 1.19.0 core, configure with `-DGOZAR_REAL_CORE=/path/to/core`

@@ -101,6 +101,7 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     HomeBinder binder(&bridge, &background, &button);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy servers(&binder, &HomeBinder::serversReady);
+    QSignalSpy errors(&binder, &HomeBinder::error);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
@@ -120,6 +121,31 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     binder.setKillSwitch(true);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QCOMPARE(states.last().at(0).toJsonObject().value("kill_switch").toBool(), true);
+    states.clear();
+    binder.setLanguage(QStringLiteral("fa"));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("language").toString(), QStringLiteral("fa"));
+    states.clear();
+    binder.setTheme(QStringLiteral("dark"));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("theme").toString(), QStringLiteral("dark"));
+    states.clear();
+    binder.setRecents(true);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("recents").toBool(), true);
+    states.clear();
+    const QJsonArray chain{QStringLiteral("socks5://proxy.example:1080")};
+    binder.setChain(chain);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("chain").toArray(), chain);
+    states.clear();
+    binder.setWarpUdp(true, false);
+    QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
+    QVERIFY(!states.last().at(0).toJsonObject().value("warp_udp").toBool());
+    states.clear();
+    binder.setWarpUdp(true, true);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QVERIFY(states.last().at(0).toJsonObject().value("warp_udp").toBool());
 
     // A live tunnel locks mode/server changes. No request should be sent.
     QVERIFY(bridge.request(QStringLiteral("connect")) > 0);
