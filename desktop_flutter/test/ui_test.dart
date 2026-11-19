@@ -25,6 +25,7 @@ class FakeCore extends Core {
   String activeEmail = 'example@example.com';
   String theme = 'system';
   bool recents = false;
+  String mode = 'tun';
   bool warpUdp = false;
   Map<String, dynamic>? lastWarp;
   List<String> chain = [];
@@ -86,7 +87,7 @@ class FakeCore extends Core {
                 email: email,
                 active: signedIn && email == activeEmail))
             .toList(),
-        mode: 'tun',
+        mode: mode,
         version: '1.9.0',
         servers: signedIn ? places : const [],
         server: places.firstWhere(
@@ -110,6 +111,7 @@ class FakeCore extends Core {
     }
     if (method == 'server') selectedHost = params!['host'] as String;
     if (method == 'theme') theme = params!['theme'] as String;
+    if (method == 'mode') mode = params!['mode'] as String;
     if (method == 'recents') recents = params!['enabled'] as bool;
     if (method == 'warp_udp') {
       lastWarp = Map<String, dynamic>.from(params!);
@@ -347,6 +349,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.lastWarp, {'enabled': false, 'consent': false});
     expect(core.warpUdp, isFalse);
+  });
+
+  testWidgets('connection mode selection does not connect or change system proxy', (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = FakeCore(signedIn: true, language: 'en');
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(_settingsGear());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connection'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connection mode'));
+    await tester.pumpAndSettle();
+    expect(find.text('Under development; not available yet.'), findsOneWidget);
+    await tester.tap(find.text('Proxy only'));
+    await tester.pumpAndSettle();
+    expect(core.mode, 'proxy-only');
+    expect(core.requests, contains('mode'));
+    expect(core.requests, isNot(contains('connect')));
   });
 
   testWidgets('server selection uses the chosen host', (tester) async {

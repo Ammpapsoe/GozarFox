@@ -57,6 +57,16 @@ class Words {
   String get settings => pick('تنظیمات', 'Settings');
   String get settingsSections => pick('بخش‌های تنظیمات', 'Settings sections');
   String get connectionSettings => pick('اتصال', 'Connection');
+  String get connectionMode => pick('حالت اتصال', 'Connection mode');
+  String get modeTun => pick('تونل سیستم', 'System tunnel');
+  String get modeProxyOnly => pick('فقط پراکسی', 'Proxy only');
+  String get modeSystemProxy => pick('پراکسی سیستم', 'System proxy');
+  String get modeProxyOnlyDetail => pick(
+      'برنامه‌ها باید دستی به پراکسی محلی وصل شوند؛ فقط HTTP و CONNECT.',
+      'Apps must use the local proxy manually; HTTP and CONNECT only.');
+  String get modeSystemProxyPending => pick(
+      'در حال آماده‌سازی؛ هنوز فعال نیست.',
+      'Under development; not available yet.');
   String get displaySettings => pick('شخصی‌سازی', 'Personalization');
   String get generalSettings => pick('عمومی', 'General');
   String get accountSectionDetail =>

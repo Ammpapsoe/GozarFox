@@ -680,6 +680,55 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     if (choice != null) await _requestSetting('theme', {'theme': choice});
   }
 
+  String _modeLabel(String mode) => switch (mode) {
+        'proxy-only' => words.modeProxyOnly,
+        'system-proxy' => words.modeSystemProxy,
+        _ => words.modeTun,
+      };
+
+  Future<void> _chooseConnectionMode() async {
+    if (_state.live || _state.connecting) {
+      await _info(words.connectionMode, words.switchDisconnect);
+      return;
+    }
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text(words.connectionMode),
+        content: RadioGroup<String>(
+          groupValue: _state.mode,
+          onChanged: (value) {
+            if (value != null) Navigator.pop(dialogContext, value);
+          },
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            RadioListTile<String>(title: Text(words.modeTun), value: 'tun'),
+            RadioListTile<String>(
+              title: Text(words.modeProxyOnly),
+              subtitle: Text(words.modeProxyOnlyDetail),
+              value: 'proxy-only',
+            ),
+            RadioListTile<String>(
+              title: Text(words.modeSystemProxy),
+              subtitle: Text(words.modeSystemProxyPending),
+              value: 'system-proxy',
+              enabled: false,
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(words.cancel),
+          ),
+        ],
+      ),
+    );
+    if (choice != null && choice != _state.mode) {
+      await _requestSetting('mode', {'mode': choice});
+    }
+  }
+
   Future<void> _editChain() async {
     if (_state.live || _state.connecting) {
       await _info(words.proxyChain, words.switchDisconnect);
@@ -1387,6 +1436,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     }
     if (_settingsSection == 'connection') {
       return Column(children: [
+        _settingTile(Icons.hub_outlined, words.connectionMode,
+            _modeLabel(_state.mode), _busy ? null : () => unawaited(_chooseConnectionMode())),
         Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: SwitchListTile(

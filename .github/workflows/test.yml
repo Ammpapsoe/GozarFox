@@ -309,6 +309,22 @@ jobs:
           go test -tags proxyexperiment ./internal/sysproxy -run '^(TestWinINetRealRoundTrip|TestLANExperimentTransaction|TestLANExperimentRegistryJournal|TestLANExperimentRealCrash|TestLANExperimentAncillaryOptions|TestLANExperimentRealWatchdog)$' -count=1 -v
           go test -tags proxyexperiment ./internal/app -run '^TestSystemProxyExperimentalAppIntegration$' -count=1 -v
 
+  focused-mode-ui:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.system_proxy_experiment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+      - name: Test connection mode control
+        working-directory: desktop_flutter
+        run: |
+          flutter pub get
+          flutter test test/ui_test.dart --plain-name 'connection mode selection does not connect or change system proxy'
+
   windows-live-tun:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.windows_live_tun) }}
     runs-on: windows-2022
