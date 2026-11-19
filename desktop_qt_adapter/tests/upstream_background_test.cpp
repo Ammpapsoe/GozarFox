@@ -1,6 +1,7 @@
 #include "corebridge.h"
 #include "homebinder.h"
 #include "originalhomebinding.h"
+#include "originallocationsbinding.h"
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
 #include "connectwindow/connectwindowitem.h"
@@ -28,6 +29,21 @@ signals:
     void connectClick();
 };
 
+// Contract stand-ins for locations; they do not replace the upstream UI.
+class FakeLocationsWindow : public QObject {
+    Q_OBJECT
+public:
+    void choose(const LocationID &id) { emit selected(id); }
+signals:
+    void selected(const LocationID &id);
+};
+class FakeLocationsManager : public QObject {
+    Q_OBJECT
+public:
+    QVector<types::Location> entries;
+    void updateLocations(const LocationID &, const QVector<types::Location> &items) { entries = items; }
+};
+
 class UpstreamBackgroundTest : public QObject {
     Q_OBJECT
 private slots:
@@ -36,6 +52,7 @@ private slots:
     void serverAndSettingsUseCoreResponses();
     void originalWindowPublicApiBindingWithFakeWindow();
     void originalWindowConnectWithFakeCore();
+    void locationsMapAndSelection();
     void originalWindowReadsRealCoreState();
     void cleanupTestCase();
 };
@@ -232,6 +249,41 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
     QTRY_COMPARE_WITH_TIMEOUT(clicks.size(), 1, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::locationsMapAndSelection() {
+    LocationCatalog catalog;
+    const QJsonObject germany{{"code", "DE"}, {"country", "Germany"}, {"city", "Berlin"}, {"host", "de.example"}};
+    const QJsonObject canada{{"code", "CA"}, {"country", "Canada"}, {"city", "Toronto"}, {"host", "ca.example"}};
+    QVERIFY(catalog.replace(QJsonArray{germany, canada}));
+    QCOMPARE(catalog.locations().size(), 2);
+    const auto caId = catalog.locations().at(0).cities.at(0).id;
+    LocationCatalog::Selection choice;
+    QVERIFY(catalog.selection(caId, &choice));
+    QCOMPARE(choice.host, QStringLiteral("ca.example"));
+    QVERIFY(catalog.replace(QJsonArray{canada, germany}));
+    QVERIFY(catalog.selection(caId, &choice)); // IDs stay stable when input order changes
+    QVERIFY(!catalog.replace(QJsonArray{QJsonObject{{"code", "DE"}}}));
+    QVERIFY(catalog.locations().isEmpty());
+    QVERIFY(!catalog.selection(caId, &choice));
+
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    FakeLocationsWindow window;
+    FakeLocationsManager manager;
+    bindOriginalLocations(&window, &manager, &binder, &catalog);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    binder.loadServers();
+    QTRY_COMPARE_WITH_TIMEOUT(manager.entries.size(), 1, 5000);
+    states.clear();
+    window.choose(manager.entries.at(0).cities.at(0).id);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }

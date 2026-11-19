@@ -34,8 +34,11 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   set(CMAKE_AUTORCC ON)
   set(WS_GUI "${WINDSCRIBE_ROOT}/src/client/frontend/gui")
   set(WS_COMMON "${WINDSCRIBE_ROOT}/src/client/client-common")
+  set(WS_FRONTEND_COMMON "${WINDSCRIBE_ROOT}/src/client/frontend/frontend-common")
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
+    locationcatalog.cpp locationcatalog.h originallocationsbinding.h
+    ${WS_COMMON}/types/locationid.cpp
     tests/upstream_background_test.cpp tests/upstream_shims/categories.cpp
     tests/upstream_pingtime.cpp
     tests/upstream_shims/backend/preferences/preferences.h
@@ -85,9 +88,9 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
   add_library(original_window_header_compile OBJECT
-    tests/original_window_header_compile.cpp
+    tests/original_window_header_compile.cpp tests/original_locations_header_compile.cpp
     ${WS_GUI}/connectwindow/connectwindowitem.cpp)
-  target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
+  target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_link_libraries(original_window_header_compile PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg)
   add_test(NAME upstream_background_test COMMAND upstream_background_test $<TARGET_FILE:fake_core>)
   set_tests_properties(upstream_background_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
