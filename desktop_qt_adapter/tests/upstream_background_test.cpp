@@ -6,6 +6,10 @@
 #include "connectwindow/connectbutton.h"
 #include "connectwindow/connectwindowitem.h"
 #include "locations/locationsmodel_manager.h"
+#include "locationswindow/locationswindow.h"
+#include "locations/view/locationsview.h"
+#include "commongraphics/commongraphics.h"
+#include "dpiscalemanager.h"
 #include "graphicresources/imageresourcessvg.h"
 #include <QApplication>
 #include <QGraphicsScene>
@@ -15,6 +19,7 @@
 #include <QSignalSpy>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QtMath>
 #include <QtTest>
 
 // Emulates the public contract of the original window. The actual window
@@ -29,15 +34,6 @@ public:
     void click() { emit connectClick(); }
 signals:
     void connectClick();
-};
-
-// Stand-in for a locations window; model and manager are original upstream code.
-class FakeLocationsWindow : public QObject {
-    Q_OBJECT
-public:
-    void choose(const LocationID &id) { emit selected(id); }
-signals:
-    void selected(const LocationID &id);
 };
 
 class UpstreamBackgroundTest : public QObject {
@@ -273,10 +269,14 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
-    FakeLocationsWindow window;
     gui_locations::LocationsModelManager manager;
+    Preferences preferences;
+    LocationsWindow window(nullptr, &preferences, &manager);
+    window.resize(350, 430);
+    window.show();
     bindOriginalLocations(&window, &manager, &binder, &catalog);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy selections(&window, &LocationsWindow::selected);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
@@ -284,8 +284,20 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QTRY_COMPARE_WITH_TIMEOUT(manager.locationsModel()->rowCount(), 1, 5000);
     const auto selectedId = catalog.locations().at(0).cities.at(0).id;
     QVERIFY(manager.getIndexByLocationId(selectedId).isValid());
+    gui_locations::LocationsView *visibleView = nullptr;
+    for (auto *view : window.findChildren<gui_locations::LocationsView *>()) {
+        if (view->isVisible()) { visibleView = view; break; }
+    }
+    QVERIFY(visibleView);
+    QWidget *items = visibleView->widget();
+    QVERIFY(items);
+    const int row = qCeil(LOCATION_ITEM_HEIGHT * G_SCALE);
+    QTest::mouseClick(items, Qt::LeftButton, Qt::NoModifier, QPoint(120, row / 2));
+    QTRY_VERIFY_WITH_TIMEOUT(items->height() >= row * 2, 5000);
+    QTest::qWait(300); // allow the original row expansion animation to finish
     states.clear();
-    window.choose(selectedId);
+    QTest::mouseClick(items, Qt::LeftButton, Qt::NoModifier, QPoint(120, row + row / 2));
+    QTRY_COMPARE_WITH_TIMEOUT(selections.size(), 1, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     bridge.shutdown();

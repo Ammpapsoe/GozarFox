@@ -6,6 +6,9 @@ public:
     static PersistentState &instance() { static PersistentState state; return state; }
     LOCATION_TAB lastLocationTab() const { return tab_; }
     void setLastLocationTab(LOCATION_TAB tab) { tab_ = tab; }
+    int locationsViewportHeight() const { return height_; }
+    void setLocationsViewportHeight(int height) { height_ = height; }
 private:
     LOCATION_TAB tab_ = LOCATION_TAB_ALL_LOCATIONS;
+    int height_ = 350;
 };

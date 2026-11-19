@@ -13,13 +13,9 @@ if(BUILD_TESTING)
   target_link_libraries(fake_core PRIVATE Qt6::Core)
   add_executable(corebridge_test tests/corebridge_test.cpp)
   target_link_libraries(corebridge_test PRIVATE gozar_core_adapter Qt6::Test)
-  add_test(NAME corebridge_test COMMAND corebridge_test $<TARGET_FILE:fake_core>)
   add_executable(realcore_smoke tests/realcore_smoke.cpp)
   target_link_libraries(realcore_smoke PRIVATE gozar_core_adapter Qt6::Test)
   set(GOZAR_REAL_CORE "" CACHE FILEPATH "Optional real Gozar core for isolated read-only smoke test")
-  if(GOZAR_REAL_CORE)
-    add_test(NAME realcore_smoke COMMAND realcore_smoke "${GOZAR_REAL_CORE}")
-  endif()
 endif()
 
 # Deliberately optional: this smoke test compiles real upstream GUI code, but
@@ -83,6 +79,21 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/ipaddressitem/numberitem.cpp
     ${WS_GUI}/connectwindow/ipaddressitem/numberspixmap.cpp
     ${WS_GUI}/connectwindow/ipaddressitem/octetitem.cpp
+    ${WS_GUI}/commongraphics/footerbackground.cpp
+    ${WS_GUI}/commonwidgets/scrollbar.cpp
+    ${WS_GUI}/locationswindow/locationswindow.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/configfooterinfo.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/emptylistwidget.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/locationstab.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/staticipdeviceinfo.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/upgradebanner.cpp
+    ${WS_GUI}/locationswindow/widgetlocations/widgetswitcher.cpp
+    ${WS_GUI}/locations/view/cityitemdelegate.cpp
+    ${WS_GUI}/locations/view/countryitemdelegate.cpp
+    ${WS_GUI}/locations/view/cursorupdatehelper.cpp
+    ${WS_GUI}/locations/view/expandableitemswidget.cpp
+    ${WS_GUI}/locations/view/locationsview.cpp
+    ${WS_GUI}/locations/view/textpixmap.cpp
     ${WS_COMMON}/types/location.cpp
     ${WS_COMMON}/utils/simplecrypt.cpp ${WS_COMMON}/utils/networkingvalidation.cpp
     ${WS_FRONTEND_COMMON}/locations/locationsmodel_manager.cpp
@@ -107,6 +118,24 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/connectwindowitem.cpp)
   target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_link_libraries(original_window_header_compile PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg)
-  add_test(NAME upstream_background_test COMMAND upstream_background_test $<TARGET_FILE:fake_core>)
-  set_tests_properties(upstream_background_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
+
+# One focused CTest entry per platform; it runs the existing bridge, real-core
+# and upstream-window checks as one scenario, without hiding failures.
+if(BUILD_TESTING)
+  set(integration_args
+    "-DCOREBRIDGE_TEST=$<TARGET_FILE:corebridge_test>"
+    "-DFAKE_CORE=$<TARGET_FILE:fake_core>"
+    "-DREALCORE_TEST=$<TARGET_FILE:realcore_smoke>"
+    "-DREAL_CORE=${GOZAR_REAL_CORE}")
+  if(BUILD_UPSTREAM_SMOKE_TEST)
+    list(APPEND integration_args "-DUPSTREAM_TEST=$<TARGET_FILE:upstream_background_test>")
+  endif()
+  add_test(NAME gozar_integration_smoke COMMAND "${CMAKE_COMMAND}" ${integration_args}
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_smoke.cmake")
+  set(integration_environment "QT_QPA_PLATFORM=offscreen")
+  if(GOZAR_REAL_CORE)
+    list(APPEND integration_environment "GOZAR_CI_TEST_CORE=${GOZAR_REAL_CORE}")
+  endif()
+  set_tests_properties(gozar_integration_smoke PROPERTIES ENVIRONMENT "${integration_environment}")
 endif()
