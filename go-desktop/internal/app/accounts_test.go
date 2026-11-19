@@ -186,6 +186,17 @@ func TestLegacySingleAccountMigratesAndRecentServerHasEffect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A genuine legacy config predates connection_mode; marshaling the
+	// current Config type would otherwise add an invalid empty value.
+	var legacy map[string]json.RawMessage
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	delete(legacy, "connection_mode")
+	data, err = json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(config.Dir(), "config.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
