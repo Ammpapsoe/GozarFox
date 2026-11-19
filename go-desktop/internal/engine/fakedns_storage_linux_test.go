@@ -23,6 +23,15 @@ func linuxPrivateTestRoot(t *testing.T) string {
 	return root
 }
 
+func platformFakeDNSStorage(t *testing.T) func() (*fakeDNS, io.Closer, error) {
+	t.Helper()
+	root := linuxPrivateTestRoot(t)
+	return func() (*fakeDNS, io.Closer, error) {
+		fake, owner, err := openLinuxDNSStorage(root, nil)
+		return fake, owner, err
+	}
+}
+
 func TestFakeDNSStorageLinuxIdentityAndLock(t *testing.T) {
 	root := linuxPrivateTestRoot(t)
 	f, session, err := openLinuxDNSStorage(root, nil)

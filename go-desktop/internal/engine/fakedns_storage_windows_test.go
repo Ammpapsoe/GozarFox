@@ -36,6 +36,15 @@ func windowsPrivateTestRoot(t *testing.T) string {
 	return root
 }
 
+func platformFakeDNSStorage(t *testing.T) func() (*fakeDNS, io.Closer, error) {
+	t.Helper()
+	root := windowsPrivateTestRoot(t)
+	return func() (*fakeDNS, io.Closer, error) {
+		fake, owner, err := openWindowsDNSStorage(root, nil)
+		return fake, owner, err
+	}
+}
+
 func TestFakeDNSStorageWindowsIdentityAndLock(t *testing.T) {
 	root := windowsPrivateTestRoot(t)
 	f, session, err := openWindowsDNSStorage(root, nil)
