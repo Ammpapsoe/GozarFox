@@ -57,9 +57,11 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.cpp ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.h)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Test)
-  # Compile the binding against the real upstream window declaration, using a
-  # backend stub. This does not compile or instantiate the entire window.
-  add_library(original_window_header_compile OBJECT tests/original_window_header_compile.cpp)
+  # Compile the binding and original window implementation against test-only
+  # backend stubs. This does not link or instantiate the whole application.
+  add_library(original_window_header_compile OBJECT
+    tests/original_window_header_compile.cpp
+    ${WS_GUI}/connectwindow/connectwindowitem.cpp)
   target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
   target_link_libraries(original_window_header_compile PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg)
   add_test(NAME upstream_background_test COMMAND upstream_background_test $<TARGET_FILE:fake_core>)

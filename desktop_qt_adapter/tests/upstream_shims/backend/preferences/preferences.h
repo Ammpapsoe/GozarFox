@@ -8,7 +8,9 @@ public:
     explicit Preferences(QObject *parent = nullptr) : QObject(parent) {}
     types::BackgroundSettings backgroundSettings() const { return settings_; }
     APP_SKIN appSkin() const { return APP_SKIN_VAN_GOGH; }
+    PROTOCOL_TWEAKS_METHOD_TYPE protocolTweaksMethod() const { return PROTOCOL_TWEAKS_METHOD_DISABLED; }
 signals:
+    void protocolTweaksMethodChanged(PROTOCOL_TWEAKS_METHOD_TYPE method);
     void backgroundSettingsChanged(const types::BackgroundSettings &settings);
     void appSkinChanged(APP_SKIN skin);
 private:
