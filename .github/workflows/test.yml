@@ -321,7 +321,11 @@ jobs:
 
   focused-fakedns:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only }}
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v5
