@@ -352,7 +352,8 @@ jobs:
         shell: pwsh
         env:
           GOZAR_LIVE_TUN_TEST: '1'
-        run: go test ./internal/engine -run '^TestFakeDNSLiveKernelReconnect$' -count=1 -v -timeout=120s
+          GOZAR_FAKEDNS_PRODUCTION_STORAGE_TEST: '1'
+        run: go test ./internal/engine -run '^TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage)$' -count=1 -v -timeout=120s
 
   focused-fakedns-live-linux:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}
@@ -372,14 +373,16 @@ jobs:
           go test -c -o "$RUNNER_TEMP/fakedns-live.test" ./internal/engine
           sudo mkdir -p /dev/net
           if [ ! -c /dev/net/tun ]; then sudo mknod /dev/net/tun c 10 200; fi
-          sudo unshare --net --mount --fork -- env GOZAR_LIVE_TUN_TEST=1 TEST_BINARY="$RUNNER_TEMP/fakedns-live.test" bash -eu -c '
+          sudo unshare --net --mount --fork -- env GITHUB_ACTIONS=true GOZAR_LIVE_TUN_TEST=1 GOZAR_FAKEDNS_PRODUCTION_STORAGE_TEST=1 TEST_BINARY="$RUNNER_TEMP/fakedns-live.test" bash -eu -c '
             mount --make-rprivate /
             temp=$(mktemp)
-            trap "rm -f $temp" EXIT
+            varlib=$(mktemp -d)
+            trap "rm -f $temp; rm -rf $varlib" EXIT
             printf "nameserver 127.0.0.1\n" > "$temp"
             mount --bind "$temp" /etc/resolv.conf
+            mount --bind "$varlib" /var/lib
             ip link set lo up
-            "$TEST_BINARY" -test.v -test.run="^TestFakeDNSLiveKernelReconnect$" -test.timeout=120s
+            "$TEST_BINARY" -test.v -test.run="^TestFakeDNS(LiveKernelReconnect|ProductionLinuxStorage)$" -test.timeout=120s
           '
 
   focused-mode-ui:
