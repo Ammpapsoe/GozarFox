@@ -5,6 +5,7 @@
 #include "originalhomebinding.h"
 #include "originalpowerbinding.h"
 #include "originalnavigationbinding.h"
+#include "originalmodebinding.h"
 #include "originallocationsbinding.h"
 #include "originallocationcontrols.h"
 #include "connectwindow/background.h"
@@ -39,6 +40,26 @@ public:
     void click() { emit connectClick(); }
 signals:
     void connectClick();
+};
+
+// Test-only control stand-in; original ComboBoxItem declaration is compiled
+// separately. It imitates the original signal ordering, not its graphics.
+class FakeModeItem : public QObject {
+    Q_OBJECT
+public:
+    void clear() { current_.clear(); populated_ = false; }
+    void setClickable(bool value) { clickable_ = value; }
+    void setLabelCaption(const QString &) {}
+    void setItems(const QList<QPair<QString, QVariant>> &, const QVariant &selected) {
+        current_ = selected.toString(); populated_ = true;
+    }
+    void setCurrentItem(const QVariant &value) { current_ = value.toString(); }
+    void choose(const QString &value) { current_ = value; emit currentItemChanged(value); }
+    QString current_;
+    bool clickable_ = false;
+    bool populated_ = false;
+signals:
+    void currentItemChanged(QVariant value);
 };
 
 // Test-only controller stand-in; the production adapter invokes the original
@@ -147,11 +168,15 @@ void UpstreamBackgroundTest::upstreamPowerButtonTriggersSimulatedCore() {
 }
 
 void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
+    FakeModeItem modeItem;
     Preferences preferences;
     ConnectWindow::Background background(nullptr, &preferences);
     ConnectWindow::ConnectButton button;
     CoreBridge bridge;
     HomeBinder binder(&bridge, &background, &button);
+    OriginalModeBinding<FakeModeItem> modeBinding(&modeItem, &binder);
+    QVERIFY(!modeItem.populated_);
+    QVERIFY(!modeItem.clickable_);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy servers(&binder, &HomeBinder::serversReady);
     QSignalSpy errors(&binder, &HomeBinder::error);
@@ -167,9 +192,23 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     states.clear();
+#ifdef Q_OS_WIN
+    const QString selectedMode = QStringLiteral("system-proxy");
+#else
+    const int oldErrors = errors.size();
     binder.setMode(QStringLiteral("system-proxy"));
+    QCOMPARE(errors.size(), oldErrors + 1);
+    QVERIFY(states.isEmpty());
+    const QString selectedMode = QStringLiteral("proxy-only");
+#endif
+    const QString previousMode = modeItem.current_;
+    QVERIFY(modeItem.populated_);
+    QVERIFY(modeItem.clickable_);
+    modeItem.choose(selectedMode);
+    QCOMPARE(modeItem.current_, previousMode); // no optimistic selection
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
-    QCOMPARE(states.last().at(0).toJsonObject().value("mode").toString(), QStringLiteral("system-proxy"));
+    QCOMPARE(states.last().at(0).toJsonObject().value("mode").toString(), selectedMode);
+    QCOMPARE(modeItem.current_, selectedMode);
     states.clear();
     binder.setKillSwitch(true);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
@@ -192,6 +231,7 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QCOMPARE(states.last().at(0).toJsonObject().value("chain").toArray(), chain);
     states.clear();
+    errors.clear();
     binder.setWarpUdp(true, false);
     QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
     QVERIFY(!states.last().at(0).toJsonObject().value("warp_udp").toBool());
@@ -203,16 +243,21 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     // A live tunnel locks mode/server changes. No request should be sent.
     QVERIFY(bridge.request(QStringLiteral("connect")) > 0);
     QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
+    QVERIFY(!modeItem.clickable_);
     states.clear();
+    modeItem.choose(QStringLiteral("tun"));
+    QCOMPARE(modeItem.current_, selectedMode);
     binder.setMode(QStringLiteral("tun"));
     binder.selectServer(QStringLiteral("other.example"), QStringLiteral("CA"));
     QVERIFY(bridge.request(QStringLiteral("state")) > 0);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     const auto locked = states.last().at(0).toJsonObject();
-    QCOMPARE(locked.value("mode").toString(), QStringLiteral("system-proxy"));
+    QCOMPARE(locked.value("mode").toString(), selectedMode);
     QCOMPARE(locked.value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+    QVERIFY(!modeItem.clickable_);
+    QVERIFY(!modeItem.populated_);
 }
 
 void UpstreamBackgroundTest::originalWindowPublicApiBindingWithFakeWindow() {

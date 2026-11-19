@@ -122,6 +122,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   # backend stubs. This does not link or instantiate the whole application.
   add_library(original_window_header_compile OBJECT
     tests/original_window_header_compile.cpp tests/original_locations_header_compile.cpp
+    tests/original_mode_header_compile.cpp
     ${WS_GUI}/connectwindow/connectwindowitem.cpp)
   target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_link_libraries(original_window_header_compile PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg)

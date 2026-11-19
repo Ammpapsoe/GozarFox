@@ -112,6 +112,13 @@ completeness across the full UI. The production preferences page is not yet
 connected to this adapter. `warp_udp` requires explicit user consent.
 Unsupported controls must not silently claim success.
 
+`OriginalModeBinding` is an experimental adapter for the upstream preferences
+combo-box API, not a complete preferences page. It only displays confirmed core
+state, disables changes while connected or unavailable, and refuses system
+proxy outside Windows. Its runtime test uses a stand-in control; the original
+combo-box API is only compile-checked. It has not been connected to the
+application or validated with a real VPN.
+
 The interactive UI tests use a simulated core. For the separate real-core
 smoke check, build the Gozar 1.19.0 core, configure with
 `-DGOZAR_REAL_CORE=/path/to/core` and run CTest. `realcore_smoke` checks

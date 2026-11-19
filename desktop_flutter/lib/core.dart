@@ -280,9 +280,9 @@ class CoreReply {
 enum CoreHandoffResult { ready, busy, signedOut, connected, unconfirmed }
 
 class Core {
-  Core({String? executablePath}) : _executablePath = executablePath;
+  Core({this.executablePath});
 
-  final String? _executablePath;
+  final String? executablePath;
   Process? _process;
   int _nextId = 0;
   bool _stopping = false;
@@ -293,7 +293,7 @@ class Core {
   bool get running => _process != null;
 
   String? _findBinary() {
-    final explicit = _executablePath;
+    final explicit = executablePath;
     if (explicit != null) {
       return explicit.isNotEmpty && File(explicit).existsSync() ? explicit : null;
     }

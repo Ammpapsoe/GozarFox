@@ -30,6 +30,14 @@ bool HomeBinder::isAvailable() const {
     return core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && !connecting_;
 }
 
+bool HomeBinder::canChangeMode() const {
+    return isAvailable() && !live_;
+}
+
+QJsonObject HomeBinder::currentState() const {
+    return stateKnown_ ? lastState_ : QJsonObject();
+}
+
 void HomeBinder::setEnabled() {
     const bool available = isAvailable();
     if (button_) button_->setClickable(available);
@@ -110,6 +118,15 @@ void HomeBinder::setMode(const QString &mode) {
         emit error(tr("Unsupported connection mode."));
         return;
     }
+#ifndef Q_OS_WIN
+    // The unchanged core does not implement system-proxy ownership on Linux
+    // or macOS. Match the existing Flutter UI rather than letting users save
+    // a mode that cannot connect on their platform.
+    if (mode == QLatin1String("system-proxy")) {
+        emit error(tr("System proxy mode is available on Windows only."));
+        return;
+    }
+#endif
     sendMutation(QStringLiteral("mode"), {{QStringLiteral("mode"), mode}});
 }
 
@@ -148,11 +165,13 @@ void HomeBinder::applyState(const QJsonObject &state) {
         !state.value(QStringLiteral("live")).isBool() ||
         !state.value(QStringLiteral("connecting")).isBool()) {
         stateKnown_ = false;
+        lastState_ = {};
         setEnabled();
         emit error(QStringLiteral("invalid core state; connection state unknown"));
         return;
     }
     stateKnown_ = true;
+    lastState_ = state;
     signedIn_ = state.value(QStringLiteral("signed_in")).toBool(false);
     live_ = state.value(QStringLiteral("live")).toBool(false);
     connecting_ = state.value(QStringLiteral("connecting")).toBool(false);
@@ -205,6 +224,7 @@ void HomeBinder::handleFailure(qint64 id, const QString &message) {
 
 void HomeBinder::coreStopped() {
     stateKnown_ = false;
+    lastState_ = {};
     signedIn_ = false;
     connecting_ = false;
     mutatingId_ = stateId_ = serversId_ = -1;

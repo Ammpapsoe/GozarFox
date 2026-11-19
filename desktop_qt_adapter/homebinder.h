@@ -28,6 +28,8 @@ public:
     void setChain(const QJsonArray &hops);
     void toggleConnection();
     bool isAvailable() const;
+    bool canChangeMode() const;
+    QJsonObject currentState() const;
 
 signals:
     void error(const QString &message);
@@ -59,5 +61,6 @@ private:
     bool signedIn_ = false;
     bool live_ = false;
     bool connecting_ = false;
+    QJsonObject lastState_;
     QString country_;
 };
