@@ -13,7 +13,12 @@ import (
 // ambiguous recovery or rollback; it must enforce size and privacy limits.
 // Deleting, replacing or rolling back a journal while DNS answers might be
 // cached can cause misrouting and must never be treated as an empty journal.
-// No platform implementation or production activation exists yet.
+// Platform-specific storage openers are prototypes only. Separate journals
+// can allocate the same address to different names, even sequentially, so an
+// account-local journal is insufficient when OS or application DNS caches are
+// shared. Production needs a single durable machine-wide namespace (or an
+// equally strong disjoint-allocation scheme), across users and privilege
+// changes, plus safe storage lifecycle integration. Do not enable until then.
 type fakeDNSJournal interface {
 	Load() (start uint32, names []string, exists bool, err error)
 	Initialize(start uint32) error

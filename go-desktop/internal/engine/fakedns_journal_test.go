@@ -39,6 +39,32 @@ func (j *memoryDNSJournal) Append(name string) error {
 	return nil
 }
 
+// Independent stores do not establish a machine-wide identity: if their
+// offset overlaps, the second can interpret a stale address as another name.
+// This documents a blocker to production activation, not desirable behavior.
+func TestJournalFakeDNSIndependentNamespacesCanAlias(t *testing.T) {
+	first, err := newJournalFakeDNS(&memoryDNSJournal{start: 42, exists: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newJournalFakeDNS(&memoryDNSJournal{start: 42, exists: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, err := first.address("first.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reused, err := second.address("second.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, synthetic, known := second.lookup(stale)
+	if stale != reused || !synthetic || !known || name != "second.example" {
+		t.Fatal("test did not reproduce independent namespace aliasing")
+	}
+}
+
 func TestJournalFakeDNSPreservesIdentityAcrossReopen(t *testing.T) {
 	journal := &memoryDNSJournal{}
 	first, err := newJournalFakeDNS(journal, nil)
