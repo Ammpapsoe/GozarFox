@@ -303,7 +303,7 @@ jobs:
         working-directory: go-desktop
         env:
           GOZAR_DISPOSABLE_WININET_TEST: '1'
-        run: go test -tags proxyexperiment ./internal/sysproxy -run '^(TestWinINetRealRoundTrip|TestLANExperimentTransaction|TestLANExperimentRegistryJournal|TestLANExperimentRealCrash)$' -count=1 -v
+        run: go test -tags proxyexperiment ./internal/sysproxy -run '^(TestWinINetRealRoundTrip|TestLANExperimentTransaction|TestLANExperimentRegistryJournal|TestLANExperimentRealCrash|TestLANExperimentAncillaryOptions)$' -count=1 -v
 
   windows-live-tun:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.windows_live_tun) }}
