@@ -34,7 +34,12 @@ protocol. It must not be used for actual connections yet: notably application
 lifecycle, reliable disconnect and cleanup under transport failures, shared
 Flutter login state/process ownership, platform packaging and behaviour are
 not integrated. Credentials must not be logged or passed on the command line.
-The included fake core is only for tests and must never ship as the real core.
+A fallback lets a running core finish asynchronously if its bridge is destroyed,
+instead of killing it immediately; the application still needs to request
+shutdown and await the `stopped` signal before exiting or handing off ownership.
+That fallback alone does not guarantee successful cleanup after a crash or
+when the event loop exits. The included fake core is only for tests and must
+never ship as the real core.
 
 Build the isolated transport tests (Qt 6 Core and Test, CMake, compiler):
 
@@ -73,6 +78,14 @@ It must not be used with a real VPN. The upstream window's
 protocol widget defaults to WireGuard/443, which does not describe Gozar; it
 must be corrected or disabled before this binding is shown to users. The
 binding does not enable the window's controls.
+
+`LocationCatalog` converts Gozar server snapshots to the upstream location
+model's types and maps selected IDs back to actual hostnames. It rejects
+identifier collisions and clears stale choices on malformed snapshots. GitHub
+Actions tested it with the original upstream location model and a simulated
+locations window/core on Windows, Linux and macOS. The actual locations window,
+other tabs, automatic best-server selection and persisted favorites are not
+integrated by this test.
 
 The Gozar `kill_switch` field is an opt-in for firewall rules on the next TUN
 connection, not Windscribe's current firewall state. Do not bind it to the
