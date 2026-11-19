@@ -62,6 +62,18 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 			peerDone <- err
 			return
 		}
+		// Do not send the download until the client starts its timer. Otherwise
+		// the operating system may buffer much of it before measurement begins.
+		_ = conn.SetReadDeadline(time.Now().Add(35 * time.Second))
+		var begin [1]byte
+		if _, err := io.ReadFull(conn, begin[:]); err != nil {
+			peerDone <- err
+			return
+		}
+		if begin[0] != 0x5a {
+			peerDone <- fmt.Errorf("unexpected download start byte: %x", begin)
+			return
+		}
 		_, err = io.Copy(conn, bytes.NewReader(payload))
 		peerDone <- err
 	}()
@@ -114,7 +126,11 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 	downCount, upCount := e.Counters()
 	t.Logf("upload and peer acknowledgement: %d bytes in %s; engine up=%d down=%d", written, upload, upCount, downCount)
 	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 	started = time.Now()
+	if _, err := conn.Write([]byte{0x5a}); err != nil {
+		t.Fatalf("start download: %v", err)
+	}
 	incoming := sha256.New()
 	read, err := io.CopyN(incoming, conn, int64(len(payload)))
 	download := time.Since(started)
