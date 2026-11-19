@@ -1,4 +1,7 @@
-//go:build windows
+//go:build windows && proxyexperiment
+
+// Experimental backend: WinINet changes per-connection registry blobs that
+// this journal does not yet capture. Never enable in production builds.
 
 package sysproxy
 

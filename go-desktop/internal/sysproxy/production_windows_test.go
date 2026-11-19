@@ -1,4 +1,7 @@
-//go:build windows
+//go:build windows && proxyexperiment
+
+// These tests intentionally exercise the incomplete experimental backend on a
+// disposable runner. They currently reveal loss of per-connection settings.
 
 package sysproxy
 
