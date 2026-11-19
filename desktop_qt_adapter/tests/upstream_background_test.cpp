@@ -3,6 +3,7 @@
 #include "originalhomebinding.h"
 #include "originalpowerbinding.h"
 #include "originallocationsbinding.h"
+#include "originallocationcontrols.h"
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
 #include "connectwindow/connectwindowitem.h"
@@ -285,10 +286,16 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     HomeBinder binder(&bridge, nullptr, nullptr);
     gui_locations::LocationsModelManager manager;
     Preferences preferences;
+    PreferencesHelper helper;
+    QGraphicsScene homeScene;
+    auto *home = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
+    homeScene.addItem(home);
     LocationsWindow window(nullptr, &preferences, &manager);
     window.resize(350, 430);
     window.show();
     bindOriginalLocations(&window, &manager, &binder, &catalog);
+    bindOriginalLocationControls(home, &window, &binder);
+    QSignalSpy errors(&binder, &HomeBinder::error);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy selections(&window, &LocationsWindow::selected);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
@@ -314,6 +321,14 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QTRY_COMPARE_WITH_TIMEOUT(selections.size(), 1, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QTRY_COMPARE_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"), 5000);
+    // Exercise the original home-to-locations search signal, without a fake UI.
+    emit home->searchFilterChanged(QStringLiteral("no-match-42"));
+    QTRY_COMPARE_WITH_TIMEOUT(manager.filterLocationsProxyModel()->rowCount(), 0, 5000);
+    emit home->searchFilterChanged(QStringLiteral("DE"));
+    QTRY_COMPARE_WITH_TIMEOUT(manager.filterLocationsProxyModel()->rowCount(), 1, 5000);
+    const int errorCount = errors.size();
+    emit home->locationTabClicked(LOCATION_TAB_STATIC_IPS_LOCATIONS);
+    QCOMPARE(errors.size(), errorCount + 1);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }
