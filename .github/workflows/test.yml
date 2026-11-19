@@ -278,7 +278,7 @@ jobs:
           $env:GOZAR_LIVE_TUN_TEST = '1'
           $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
           $env:GOZAR_PERF_DISABLE_RACK = '1'
-          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=1' '-test.timeout=100s'
+          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=5' '-test.timeout=240s'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Report production-default diagnostic failure
         if: ${{ steps.current_throughput.outcome == 'failure' }}
