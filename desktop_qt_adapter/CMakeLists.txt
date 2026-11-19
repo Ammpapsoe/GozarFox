@@ -55,6 +55,31 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/backgroundimage/backgroundimage.cpp ${WS_GUI}/connectwindow/backgroundimage/backgroundimage.h
     ${WS_GUI}/connectwindow/backgroundimage/imagechanger.cpp ${WS_GUI}/connectwindow/backgroundimage/imagechanger.h
     ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.cpp ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.h)
+  # Exercise the real upstream ConnectWindowItem and its original visible
+  # children. Only preferences, persistence and tooltips are test shims.
+  target_sources(upstream_background_test PRIVATE
+    tests/upstream_shims/backend/backend.h tests/upstream_shims/tooltip_service.cpp
+    ${WS_GUI}/tooltips/tooltipcontroller.h
+    ${WS_COMMON}/types/protocol.cpp
+    ${WS_GUI}/graphicresources/fontdescr.cpp ${WS_GUI}/graphicresources/fontmanager.cpp
+    ${WS_GUI}/utils/textshadow.cpp
+    ${WS_GUI}/commongraphics/commongraphics.cpp
+    ${WS_GUI}/commongraphics/iconbutton.cpp ${WS_GUI}/commongraphics/textbutton.cpp
+    ${WS_GUI}/commongraphics/togglebutton.cpp
+    ${WS_GUI}/loginwindow/blockableqlineedit.cpp
+    ${WS_GUI}/commonwidgets/custommenulineedit.cpp ${WS_GUI}/commonwidgets/custommenuwidget.cpp
+    ${WS_GUI}/commonwidgets/iconbuttonwidget.cpp
+    ${WS_GUI}/connectwindow/connectwindowitem.cpp ${WS_GUI}/connectwindow/connectwindowitem.h
+    ${WS_GUI}/connectwindow/iputilsmenu.cpp
+    ${WS_GUI}/connectwindow/locationsbutton.cpp ${WS_GUI}/connectwindow/locationsmenu.cpp
+    ${WS_GUI}/connectwindow/logonotificationsbutton.cpp ${WS_GUI}/connectwindow/networktrustbutton.cpp
+    ${WS_GUI}/connectwindow/connectstateprotocolport/badgepixmap.cpp
+    ${WS_GUI}/connectwindow/connectstateprotocolport/connectionbadgedots.cpp
+    ${WS_GUI}/connectwindow/connectstateprotocolport/connectstateprotocolport.cpp
+    ${WS_GUI}/connectwindow/ipaddressitem/ipaddressitem.cpp
+    ${WS_GUI}/connectwindow/ipaddressitem/numberitem.cpp
+    ${WS_GUI}/connectwindow/ipaddressitem/numberspixmap.cpp
+    ${WS_GUI}/connectwindow/ipaddressitem/octetitem.cpp)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Test)
   # Compile the binding and original window implementation against test-only

@@ -3,6 +3,7 @@
 #include "originalhomebinding.h"
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
+#include "connectwindow/connectwindowitem.h"
 #include "graphicresources/imageresourcessvg.h"
 #include <QApplication>
 #include <QGraphicsScene>
@@ -33,6 +34,7 @@ private slots:
     void upstreamPowerButtonTriggersSimulatedCore();
     void serverAndSettingsUseCoreResponses();
     void originalWindowPublicApiBindingWithFakeWindow();
+    void originalWindowConnectWithFakeCore();
     void cleanupTestCase();
 };
 
@@ -193,6 +195,41 @@ void UpstreamBackgroundTest::originalWindowPublicApiBindingWithFakeWindow() {
     QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_CONNECTED, 5000);
     window.click();
     QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_DISCONNECTED, 5000);
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
+    Preferences preferences;
+    PreferencesHelper helper;
+    QGraphicsScene scene;
+    auto *window = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
+    scene.addItem(window);
+    scene.setSceneRect(window->boundingRect());
+    QGraphicsView view(&scene);
+    view.resize(380, 300);
+    view.show();
+    window->setInternetConnectivity(true);
+    window->setClickable(true); // test fixture only; unsupported controls are not integrated
+    ConnectWindow::ConnectButton *power = nullptr;
+    for (auto *child : window->childItems()) {
+        if (auto *button = dynamic_cast<ConnectWindow::ConnectButton *>(child)) power = button;
+    }
+    QVERIFY(power);
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    bindOriginalHomeWindow(window, &binder);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy clicks(window, &ConnectWindow::ConnectWindowItem::connectClick);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    binder.selectServer(QStringLiteral("de.example"), QStringLiteral("DE"));
+    QTRY_COMPARE_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"), 5000);
+    const QPoint clickPos = view.mapFromScene(power->mapToScene(power->boundingRect().center()));
+    QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    QTRY_COMPARE_WITH_TIMEOUT(clicks.size(), 1, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }
