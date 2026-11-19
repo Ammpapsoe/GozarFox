@@ -20,7 +20,7 @@ func accountApp(t *testing.T) *App {
 	t.Setenv("XDG_CONFIG_HOME", root)
 	t.Setenv("APPDATA", root)
 	a := New("test")
-	t.Cleanup(a.Close)
+	t.Cleanup(func() { _ = a.Close() })
 	return a
 }
 

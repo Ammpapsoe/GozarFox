@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"io"
 	"time"
 
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
@@ -22,7 +24,45 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 		}
 		return err
 	}
+	a.mu.Lock()
+	systemMode := a.cfg.Mode == config.ModeSystemProxy
+	a.mu.Unlock()
+	var systemSession io.Closer
+	if systemMode {
+		if a.systemProxyStart == nil {
+			_ = server.Close()
+			if transport != nil {
+				transport.Close()
+			}
+			return errors.New("system proxy mode is not implemented yet")
+		}
+		systemSession, err = a.systemProxyStart(ctx, server.Port())
+		if err == nil && systemSession == nil {
+			err = errors.New("system proxy session was not created")
+		}
+		if err != nil {
+			if systemSession != nil {
+				err = errors.Join(err, systemSession.Close())
+			}
+			_ = server.Close()
+			if transport != nil {
+				transport.Close()
+			}
+			a.mu.Lock()
+			a.systemProxyFault = err
+			a.mu.Unlock()
+			return err
+		}
+	}
 	if err := ctx.Err(); err != nil {
+		if systemSession != nil {
+			if closeErr := systemSession.Close(); closeErr != nil {
+				a.mu.Lock()
+				a.systemProxyFault = closeErr
+				a.mu.Unlock()
+				err = errors.Join(err, closeErr)
+			}
+		}
 		_ = server.Close()
 		if transport != nil {
 			transport.Close()
@@ -30,6 +70,7 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 		return err
 	}
 	a.mu.Lock()
+	a.systemProxy = systemSession
 	a.proxy = server
 	a.transport = transport
 	a.activeServer = chosen.place
@@ -78,7 +119,7 @@ func (a *App) watchLocalProxy(server *localproxy.Server) {
 	if !active {
 		return
 	}
-	a.teardown()
+	err = errors.Join(err, a.teardown())
 	a.mu.Lock()
 	a.fault = "The local proxy stopped: " + err.Error()
 	a.mu.Unlock()

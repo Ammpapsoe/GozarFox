@@ -67,30 +67,35 @@ type State struct {
 }
 
 type App struct {
-	mu              sync.Mutex
-	connectionMu    sync.Mutex
-	authMu          sync.Mutex
-	refreshMu       sync.Mutex
-	sessionRevision uint64
-	authRevision    uint64
-	refreshToken    func(string) (*fxa.Tokens, error)
-	requestPass     func(string) (*fxa.Pass, error)
-	fetchServers    func() ([]fxa.Location, error)
-	renewDelay      func(string, time.Time) time.Duration
-	renewCancel     context.CancelFunc
-	connectCancel   context.CancelFunc
-	activeCancel    context.CancelFunc
-	cfg             config.Config
-	servers         []fxa.Location
-	serversUntil    time.Time
-	serversCached   bool
-	pass            *fxa.Pass
-	pending         *fxa.Session
-	pendingFor      string
-	pendingKind     string
-	unblockFor      string
-	engine          *engine.Engine
-	proxy           *localproxy.Server
+	mu               sync.Mutex
+	connectionMu     sync.Mutex
+	authMu           sync.Mutex
+	refreshMu        sync.Mutex
+	sessionRevision  uint64
+	authRevision     uint64
+	refreshToken     func(string) (*fxa.Tokens, error)
+	requestPass      func(string) (*fxa.Pass, error)
+	fetchServers     func() ([]fxa.Location, error)
+	renewDelay       func(string, time.Time) time.Duration
+	renewCancel      context.CancelFunc
+	connectCancel    context.CancelFunc
+	activeCancel     context.CancelFunc
+	cfg              config.Config
+	servers          []fxa.Location
+	serversUntil     time.Time
+	serversCached    bool
+	pass             *fxa.Pass
+	pending          *fxa.Session
+	pendingFor       string
+	pendingKind      string
+	unblockFor       string
+	engine           *engine.Engine
+	proxy            *localproxy.Server
+	systemProxy      io.Closer
+	systemProxyFault error // retained until explicit recovery; protected by mu
+	// The system-proxy starter must hold exclusive ownership until Close;
+	// it remains unset until the production platform adapter is safe.
+	systemProxyStart func(context.Context, int) (io.Closer, error)
 	// Tests can replace only relay preparation; the actual listener and
 	// connection/teardown lifecycle are always exercised unchanged.
 	proxyTestDial localproxy.Dialer
@@ -381,7 +386,7 @@ func (a *App) SetKillSwitch(enabled bool) error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
 	a.mu.Lock()
-	if enabled && a.live && a.cfg.Mode == config.ModeProxyOnly {
+	if enabled && a.live && (a.cfg.Mode == config.ModeProxyOnly || a.cfg.Mode == config.ModeSystemProxy) {
 		a.mu.Unlock()
 		return errors.New("kill switch is unavailable in proxy-only mode")
 	}
@@ -722,7 +727,12 @@ func (a *App) SwitchAccount(id string) error {
 	if !found {
 		return errors.New("account not found")
 	}
-	a.teardown()
+	if err := a.teardown(); err != nil {
+		a.mu.Lock()
+		a.fault = err.Error()
+		a.mu.Unlock()
+		return err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	next, found = a.cfg.SwitchAccount(id)
@@ -748,7 +758,12 @@ func (a *App) SwitchAccount(id string) error {
 func (a *App) SignOut() error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
-	a.teardown()
+	if err := a.teardown(); err != nil {
+		a.mu.Lock()
+		a.fault = err.Error()
+		a.mu.Unlock()
+		return err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	next := a.cfg.RemoveActive()
@@ -877,9 +892,14 @@ func (a *App) connectLocked() error {
 	}
 	// System proxy must remain disabled until transactional ownership and
 	// recovery are fully integrated. Never fall back to another mode.
-	if plan.systemProxy {
+	if plan.systemProxy && a.systemProxyStart == nil {
 		a.mu.Unlock()
 		return errors.New("system proxy mode is not implemented yet")
+	}
+	if plan.systemProxy && a.systemProxyFault != nil {
+		err := a.systemProxyFault
+		a.mu.Unlock()
+		return err
 	}
 	if plan.localProxy && (a.cfg.KillSwitch || a.cfg.WarpUDP) {
 		a.mu.Unlock()
@@ -920,7 +940,10 @@ func (a *App) connectLocked() error {
 	}
 	a.mu.Unlock()
 	if err != nil {
-		a.teardown()
+		err = errors.Join(err, a.teardown())
+		a.mu.Lock()
+		a.fault = err.Error()
+		a.mu.Unlock()
 	}
 	return err
 }
@@ -929,9 +952,9 @@ func (a *App) connect(ctx context.Context) error {
 	// The test seam substitutes relay preparation only. It never substitutes
 	// listener creation, Connect, or teardown, and is unset in production.
 	a.mu.Lock()
-	proxyOnly := a.cfg.Mode == config.ModeProxyOnly
+	localProxyMode := a.cfg.Mode == config.ModeProxyOnly || a.cfg.Mode == config.ModeSystemProxy
 	a.mu.Unlock()
-	if proxyOnly && a.proxyTestDial != nil {
+	if localProxyMode && a.proxyTestDial != nil {
 		return a.startLocalProxy(ctx, a.proxyTestDial, pathCandidate{}, nil, "")
 	}
 	// A successful sign-in already fetched a short-lived Mozilla pass. Using
@@ -1022,8 +1045,7 @@ func (a *App) connect(ctx context.Context) error {
 		a.noteActivity()
 		return transport.Open(host, remotePort, current, 15*time.Second)
 	}
-	if proxyOnly {
-		// This path creates no TUN, firewall or system-proxy resources.
+	if localProxyMode {
 		return a.startLocalProxy(ctx, dial, chosen, transport, pass.Token)
 	}
 	if err := wintun.Ensure(); err != nil {
@@ -1150,16 +1172,18 @@ func (a *App) watchTunnel(current *engine.Engine) {
 	if !active {
 		return
 	}
-	a.teardown()
+	err = errors.Join(err, a.teardown())
 	a.mu.Lock()
 	a.fault = "The tunnel device stopped: " + err.Error()
 	a.mu.Unlock()
 }
 
-func (a *App) teardown() {
+func (a *App) teardown() error {
 	a.mu.Lock()
 	engineNow := a.engine
 	proxyNow := a.proxy
+	systemProxyNow := a.systemProxy
+	a.systemProxy = nil
 	transport := a.transport
 	warpNow := a.warp
 	killActive := a.killActive
@@ -1183,8 +1207,22 @@ func (a *App) teardown() {
 	if activeCancel != nil {
 		activeCancel()
 	}
+	var teardownErr error
+	// Restore the system proxy before closing the listener: while owned,
+	// other applications may still be using it.
+	if systemProxyNow != nil {
+		teardownErr = systemProxyNow.Close()
+		if teardownErr != nil {
+			a.mu.Lock()
+			a.systemProxyFault = teardownErr
+			a.mu.Unlock()
+		}
+	}
+	a.mu.Lock()
+	teardownErr = a.systemProxyFault
+	a.mu.Unlock()
 	if proxyNow != nil {
-		_ = proxyNow.Close()
+		teardownErr = errors.Join(teardownErr, proxyNow.Close())
 	}
 	if warpNow != nil {
 		_ = warpNow.Close()
@@ -1202,6 +1240,7 @@ func (a *App) teardown() {
 	lease := a.modeLease
 	a.modeLease = nil
 	lease.release()
+	return teardownErr
 }
 
 func (a *App) cancelConnectionAttempt() {
@@ -1216,23 +1255,34 @@ func (a *App) cancelConnectionAttempt() {
 	}
 }
 
-func (a *App) Disconnect() {
+func (a *App) Disconnect() error {
 	a.cancelConnectionAttempt()
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
-	a.teardown()
+	err := a.teardown()
 	a.mu.Lock()
-	a.fault = ""
+	if err != nil {
+		a.fault = err.Error()
+	} else {
+		a.fault = ""
+	}
 	a.needAdmin = false
 	a.mu.Unlock()
+	return err
 }
 
-func (a *App) Close() {
+func (a *App) Close() error {
 	a.CloseSignInProxy()
 	a.cancelConnectionAttempt()
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
-	a.teardown()
+	err := a.teardown()
+	if err != nil {
+		a.mu.Lock()
+		a.fault = err.Error()
+		a.mu.Unlock()
+	}
+	return err
 }
 
 func (a *App) setStage(text string) {

@@ -31,7 +31,7 @@ func newProxyLifecycleApp(t *testing.T) *App {
 	}))
 	t.Cleanup(origin.Close)
 	current := New("test")
-	t.Cleanup(current.Close)
+	t.Cleanup(func() { _ = current.Close() })
 	if err := current.SetMode(config.ModeProxyOnly); err != nil {
 		t.Fatal(err)
 	}

@@ -252,7 +252,9 @@ func (s *Server) handle(request Request) Response {
 			response.Error = err.Error()
 		}
 	case "disconnect":
-		s.app.Disconnect()
+		if err := s.app.Disconnect(); err != nil {
+			response.Error = err.Error()
+		}
 	case "server":
 		var body struct {
 			Host string `json:"host"`
@@ -341,7 +343,9 @@ func (s *Server) handle(request Request) Response {
 			}
 		}
 	case "quit":
-		s.app.Close()
+		if err := s.app.Close(); err != nil {
+			response.Error = err.Error()
+		}
 		response.State = statePointer(s.app.State())
 	default:
 		response.Error = "unknown method"
