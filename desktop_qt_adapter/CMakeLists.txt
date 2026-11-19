@@ -26,19 +26,21 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   if(NOT BUILD_TESTING OR NOT EXISTS "${WINDSCRIBE_ROOT}/src/client/frontend/gui/images.qrc")
     message(FATAL_ERROR "BUILD_TESTING and WINDSCRIBE_ROOT are required")
   endif()
-  find_package(Qt6 REQUIRED COMPONENTS Widgets Svg Network)
+  find_package(Qt6 REQUIRED COMPONENTS Widgets Svg Network LinguistTools)
   set(CMAKE_AUTORCC ON)
   set(WS_GUI "${WINDSCRIBE_ROOT}/src/client/frontend/gui")
   set(WS_COMMON "${WINDSCRIBE_ROOT}/src/client/client-common")
   set(WS_FRONTEND_COMMON "${WINDSCRIBE_ROOT}/src/client/frontend/frontend-common")
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
+    uilanguage.cpp uilanguage.h
+    ${WS_FRONTEND_COMMON}/languagecontroller.cpp ${WS_FRONTEND_COMMON}/languagecontroller.h
+    ${WS_COMMON}/utils/languagesutil.cpp
     locationcatalog.cpp locationcatalog.h originallocationsbinding.h
     ${WS_COMMON}/types/locationid.cpp
     tests/upstream_background_test.cpp tests/upstream_shims/categories.cpp
     tests/upstream_pingtime.cpp
     tests/upstream_shims/backend/preferences/preferences.h
-    tests/upstream_shims/languagecontroller.h
     ${WS_GUI}/images.qrc
     ${WS_GUI}/dpiscalemanager.cpp ${WS_GUI}/dpiscalemanager.h
     ${WS_GUI}/mainwindowstate.cpp ${WS_GUI}/mainwindowstate.h
@@ -112,6 +114,10 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(upstream_background_test PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
+  # Compile upstream translations unchanged and embed them at the exact path
+  # expected by the original LanguageController.
+  file(GLOB WS_TRANSLATIONS CONFIGURE_DEPENDS "${WS_GUI}/translations/ws_desktop_*.ts")
+  qt_add_translations(upstream_background_test TS_FILES ${WS_TRANSLATIONS} RESOURCE_PREFIX "/translations")
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
   add_library(original_window_header_compile OBJECT

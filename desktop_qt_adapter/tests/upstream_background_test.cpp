@@ -1,5 +1,7 @@
 #include "corebridge.h"
 #include "homebinder.h"
+#include "uilanguage.h"
+#include "languagecontroller.h"
 #include "originalhomebinding.h"
 #include "originalpowerbinding.h"
 #include "originallocationsbinding.h"
@@ -49,6 +51,7 @@ private slots:
     void locationsMapAndSelection();
     void originalWindowReadsRealCoreState();
     void incompleteStateDisablesMutations();
+    void originalLanguagesAndDirection();
     void cleanupTestCase();
 };
 
@@ -399,6 +402,41 @@ void UpstreamBackgroundTest::incompleteStateDisablesMutations() {
     QCOMPARE(replies.size(), count);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::originalLanguagesAndDirection() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("ui.ini"));
+    QSettings settings(path, QSettings::IniFormat);
+    UiLanguage uiLanguage(&settings);
+    const QStringList codes{QStringLiteral("en"), QStringLiteral("ar"), QStringLiteral("be"),
+        QStringLiteral("cs"), QStringLiteral("de"), QStringLiteral("el"), QStringLiteral("es"),
+        QStringLiteral("fa"), QStringLiteral("fr"), QStringLiteral("hi"), QStringLiteral("id"),
+        QStringLiteral("it"), QStringLiteral("ja"), QStringLiteral("ko"), QStringLiteral("pl"),
+        QStringLiteral("pt"), QStringLiteral("ru"), QStringLiteral("sk"), QStringLiteral("tr"),
+        QStringLiteral("uk"), QStringLiteral("vi"), QStringLiteral("zh-CN"), QStringLiteral("zh-TW")};
+    for (const QString &code : codes) {
+        QString error;
+        QVERIFY2(uiLanguage.apply(code, &error), qPrintable(code + QStringLiteral(": ") + error));
+        QCOMPARE(LanguageController::instance().getLanguage(), code);
+        QCOMPARE(uiLanguage.choice(), code);
+    }
+    QVERIFY(uiLanguage.apply(QStringLiteral("fa")));
+    QCOMPARE(QApplication::layoutDirection(), Qt::RightToLeft);
+    QCOMPARE(QCoreApplication::translate("ConnectWindow::LocationsButton", "Locations"),
+             QStringLiteral("\u0645\u06a9\u0627\u0646\u200c\u0647\u0627"));
+    QSettings reloaded(path, QSettings::IniFormat);
+    QCOMPARE(reloaded.value(QStringLiteral("OriginalQtUI/language")).toString(), QStringLiteral("fa"));
+    QString error;
+    QVERIFY(!uiLanguage.apply(QStringLiteral("not-a-language"), &error));
+    QVERIFY(!error.isEmpty());
+    QCOMPARE(uiLanguage.choice(), QStringLiteral("fa"));
+    QCOMPARE(LanguageController::instance().getLanguage(), QStringLiteral("fa"));
+    QVERIFY(uiLanguage.apply(QStringLiteral("de")));
+    QCOMPARE(QApplication::layoutDirection(), Qt::LeftToRight);
+    QCOMPARE(QCoreApplication::translate("ConnectWindow::LocationsButton", "Locations"), QStringLiteral("Orte"));
+    QVERIFY(uiLanguage.apply(QStringLiteral("en")));
 }
 
 void UpstreamBackgroundTest::cleanupTestCase() {
