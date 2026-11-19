@@ -68,7 +68,7 @@ def build(binary: pathlib.Path, arch: str, output: pathlib.Path) -> None:
         'origin': 'net/gozar',
         'comment': 'Firefox Private Network client',
         'arch': ARCHES[arch],
-        'www': 'https://github.com/bardia049b-stack/Gozar',
+        'www': 'https://github.com/Ammpapsoe/GozarFox',
         'maintainer': 'noreply@github.com',
         'prefix': '/usr/local',
         'licenselogic': 'single',

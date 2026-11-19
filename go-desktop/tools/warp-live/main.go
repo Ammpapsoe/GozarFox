@@ -14,7 +14,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/warp"
 )
 
 func run() error {

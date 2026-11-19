@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
 )
 
 // These limits are the ones the field reports blamed for stalls. They are

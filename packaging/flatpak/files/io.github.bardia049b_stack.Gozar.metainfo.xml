@@ -5,7 +5,7 @@
   <summary>Connect to the Firefox Private Network</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
-  <developer id="io.github.bardia049b-stack">
+  <developer id="io.github.Ammpapsoe">
     <name>Gozar contributors</name>
   </developer>
   <description>
@@ -21,8 +21,8 @@
     </p>
   </description>
   <launchable type="desktop-id">io.github.bardia049b_stack.Gozar.desktop</launchable>
-  <url type="homepage">https://github.com/bardia049b-stack/Gozar</url>
-  <url type="bugtracker">https://github.com/bardia049b-stack/Gozar/issues</url>
+  <url type="homepage">https://github.com/Ammpapsoe/GozarFox</url>
+  <url type="bugtracker">https://github.com/Ammpapsoe/GozarFox/issues</url>
   <categories>
     <category>Network</category>
     <category>Utility</category>

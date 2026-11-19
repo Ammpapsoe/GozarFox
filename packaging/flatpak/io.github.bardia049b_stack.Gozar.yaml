@@ -38,8 +38,8 @@ modules:
       - chmod -R a+rX /app/lib/gozar
     sources:
       - type: archive
-        url: https://github.com/bardia049b-stack/Gozar/releases/download/v1.10.4-desktop/Gozar-Linux-amd64.tar.xz
-        sha256: 2a206ef8d758620c8c81373f747782de11dff51cd39d85e4308bcc447fae46fb
+        url: https://github.com/Ammpapsoe/GozarFox/releases/download/v1.18.2/Gozar-Linux-amd64.tar.xz
+        sha256: a2d927cfc76b122c0705973ce38daf881f5de2134d020800812f0922de7aaea4
         dest: bundle-src
       - type: dir
         path: files

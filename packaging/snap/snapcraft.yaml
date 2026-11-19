@@ -1,6 +1,6 @@
 name: gozar
 base: core22
-version: '1.10.4'
+version: '1.18.2'
 summary: Firefox Private Network client
 description: |
   Gozar connects a Linux desktop to the Firefox Private Network proxy and keeps
@@ -28,7 +28,8 @@ parts:
       set -e
       version="$(craftctl get version)"
       curl -fsSL -o "$CRAFT_PART_INSTALL/gozar.tar.xz" \
-        "https://github.com/bardia049b-stack/Gozar/releases/download/v${version}-desktop/Gozar-Linux-amd64.tar.xz"
+        "https://github.com/Ammpapsoe/GozarFox/releases/download/v${version}/Gozar-Linux-amd64.tar.xz"
+      echo 'a2d927cfc76b122c0705973ce38daf881f5de2134d020800812f0922de7aaea4  '"$CRAFT_PART_INSTALL/gozar.tar.xz" | sha256sum -c -
       mkdir -p "$CRAFT_PART_INSTALL/usr/lib"
       tar -xJf "$CRAFT_PART_INSTALL/gozar.tar.xz" -C "$CRAFT_PART_INSTALL/usr/lib"
       rm -f "$CRAFT_PART_INSTALL/gozar.tar.xz"

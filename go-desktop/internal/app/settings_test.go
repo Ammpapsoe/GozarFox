@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
 )
 
 func TestSettingsPersistAndRejectInvalidChangesWithoutConnecting(t *testing.T) {

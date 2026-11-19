@@ -29,7 +29,7 @@ trap 'rm -rf "$WORK"' EXIT
 python3 - "$VERSION" "$CHANNEL_MIN" "$APK_DIR" "$NOTES" "$TAG" "$WORK/update.json" <<'PY'
 import hashlib, json, os, re, sys, time
 version, channel_min, apk_dir, notes, tag, output = sys.argv[1:]
-repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "bardia049b-stack/Gozar")
+repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "Ammpapsoe/GozarFox")
 if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
     raise SystemExit("invalid release repository")
 pattern = re.compile(r"^\d{1,4}(\.\d{1,4}){1,3}(-[0-9A-Za-z.]{1,16})?$")

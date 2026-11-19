@@ -12,7 +12,7 @@ SCRIPT = ROOT / "scripts" / "build_official_upgrade_test_apks.sh"
 
 
 class OfficialApkFetchTest(unittest.TestCase):
-    def run_with_fake_curl(self, token):
+    def run_with_fake_curl(self, token, stable_id="12345"):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             bindir = root / "bin"
@@ -36,6 +36,9 @@ class OfficialApkFetchTest(unittest.TestCase):
                 "KEY_ALIAS": "synthetic-alias",
                 "KEY_PASSWORD": "synthetic-key-password",
                 "GH_TOKEN": token,
+                "GOZAR_STABLE_FIXTURE_ASSET_ID": stable_id,
+                "GOZAR_PREVIOUS_FIXTURE_ASSET_ID": "23456",
+                "GOZAR_CORRECTED_FIXTURE_ASSET_ID": "34567",
                 "RUNNER_TEMP": str(root),
                 "GOZAR_APK_DIR": str(root / "apks"),
                 "MOCK_ARGS": str(root / "curl-args.json"),
@@ -53,11 +56,20 @@ class OfficialApkFetchTest(unittest.TestCase):
         self.assertIn("unexpected SHA-256 for official-stable", err)
         self.assertNotIn("synthetic-gh-token", out + err)
         self.assertIsNotNone(args)
-        self.assertIn("https://api.github.com/repos/bardia049b-stack/Gozar/releases/assets/713630711", args)
+        self.assertIn("https://api.github.com/repos/Ammpapsoe/GozarFox/releases/assets/12345", args)
         self.assertIn("Authorization: Bearer synthetic-gh-token", args)
         self.assertIn("Accept: application/octet-stream", args)
         self.assertNotIn("--location-trusted", args)
         self.assertEqual([], keys)
+
+    def test_requires_current_repository_numeric_asset_ids(self):
+        for value in ("", "../123"):
+            with self.subTest(value=value):
+                code, out, err, args, keys = self.run_with_fake_curl("synthetic-gh-token", value)
+                self.assertNotEqual(0, code)
+                self.assertIn("Missing or invalid current-repository asset ID", err)
+                self.assertIsNone(args)
+                self.assertEqual([], keys)
 
     def test_requires_a_token_before_fetching(self):
         code, out, err, args, keys = self.run_with_fake_curl("")

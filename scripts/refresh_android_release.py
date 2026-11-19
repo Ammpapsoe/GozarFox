@@ -98,7 +98,7 @@ def asset_digest(asset):
     return 'sha256:' + hashlib.sha256(data).hexdigest()
 
 
-if repo != 'bardia049b-stack/Gozar1' or not sha or not run_id:
+if repo != 'Ammpapsoe/GozarFox' or not sha or not run_id:
     raise SystemExit('The release destination is not the expected repository')
 files = [root / f'Gozar_1.10.1_{abi}.apk' for abi in ('universal', 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64')]
 files += [pathlib.Path(str(path) + '.sig') for path in files]

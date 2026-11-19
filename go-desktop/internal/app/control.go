@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
 )
 
 func persistablePass(pass *fxa.Pass, now time.Time) string {

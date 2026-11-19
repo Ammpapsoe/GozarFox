@@ -1,6 +1,6 @@
 [Unit]
 Description=Gozar tunnel (Firefox Private Network)
-Documentation=https://github.com/bardia049b-stack/Gozar
+Documentation=https://github.com/Ammpapsoe/GozarFox
 After=network-online.target
 Wants=network-online.target
 

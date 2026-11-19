@@ -84,7 +84,7 @@ class ReleaseToolsTest(unittest.TestCase):
             data = (self.apkdir / item["name"]).read_bytes()
             self.assertEqual(len(data), item["size"])
             self.assertEqual(hashlib.sha256(data).hexdigest(), item["sha256"])
-            self.assertEqual(f'https://github.com/bardia049b-stack/Gozar/releases/download/v1.11.1/{item["name"]}', item["url"])
+            self.assertEqual(f'https://github.com/Ammpapsoe/GozarFox/releases/download/v1.11.1/{item["name"]}', item["url"])
         (self.apkdir / "update.json").write_bytes(raw + b" ")
         self.assertNotEqual(0, command("openssl", "pkeyutl", "-verify", "-rawin", "-pubin", "-inkey", str(self.public),
                                        "-in", str(self.apkdir / "update.json"), "-sigfile", str(sigfile)).returncode)
@@ -274,10 +274,10 @@ class ReleaseToolsTest(unittest.TestCase):
         (scratch / "docs/release-notes/1.11.1.md").write_text("<!-- DRAFT -->\nDraft fixture\n", encoding="utf-8")
         env = self.env.copy()
         env.pop("GOZAR_ALLOW_DRAFT_NOTES", None)
-        self.assertNotEqual(0, command("python3", str(notes), "1.10.4", "bardia049b-stack/Gozar", "1.11.1", "v1.11.1", env=env).returncode)
-        self.assertNotEqual(0, command("python3", str(notes), "9.9.9", "bardia049b-stack/Gozar", "9.9.9", "v9.9.9", env=env).returncode)
+        self.assertNotEqual(0, command("python3", str(notes), "1.10.4", "Ammpapsoe/GozarFox", "1.11.1", "v1.11.1", env=env).returncode)
+        self.assertNotEqual(0, command("python3", str(notes), "9.9.9", "Ammpapsoe/GozarFox", "9.9.9", "v9.9.9", env=env).returncode)
         env["GOZAR_ALLOW_DRAFT_NOTES"] = "1"
-        dry = command("python3", str(notes), "1.10.4", "bardia049b-stack/Gozar", "1.11.1", "v1.11.1", env=env)
+        dry = command("python3", str(notes), "1.10.4", "Ammpapsoe/GozarFox", "1.11.1", "v1.11.1", env=env)
         self.assertEqual(0, dry.returncode, dry.stderr)
         self.assertIn("Gozar_1.11.1_arm64-v8a.apk", dry.stdout)
         self.assertIn("/v1.11.1/", dry.stdout)

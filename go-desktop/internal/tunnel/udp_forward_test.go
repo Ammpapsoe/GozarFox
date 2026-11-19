@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/masque"
 )
 
 // This exercises an actual loopback UDP echo socket behind an authenticated

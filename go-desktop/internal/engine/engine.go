@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/dnsproxy"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/dnsproxy"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/header"

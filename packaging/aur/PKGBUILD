@@ -1,17 +1,17 @@
 # Maintainer: Gozar contributors <noreply@github.com>
 pkgname=gozar-bin
-pkgver=1.10.4
+pkgver=1.18.2
 pkgrel=1
 pkgdesc='Firefox Private Network client'
 arch=('x86_64')
-url='https://github.com/bardia049b-stack/Gozar'
+url='https://github.com/Ammpapsoe/GozarFox'
 license=('AGPL-3.0-or-later')
 depends=('gtk3' 'glib2' 'cairo' 'pango' 'harfbuzz' 'gdk-pixbuf2' 'zlib' 'iproute2')
 provides=('gozar')
 conflicts=('gozar')
 options=('!strip')
 source=("$pkgname-$pkgver.tar.xz::$url/releases/download/v$pkgver-desktop/Gozar-Linux-amd64.tar.xz")
-sha256sums=('2a206ef8d758620c8c81373f747782de11dff51cd39d85e4308bcc447fae46fb')
+sha256sums=('a2d927cfc76b122c0705973ce38daf881f5de2134d020800812f0922de7aaea4')
 
 package() {
 	install -dm755 "$pkgdir/usr/lib/gozar"

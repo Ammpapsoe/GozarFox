@@ -9,10 +9,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/app"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/systemaccounts"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/update"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/app"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/systemaccounts"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/update"
 )
 
 type Request struct {

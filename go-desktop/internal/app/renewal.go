@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
 )
 
 func explicitTokenExpiry(token string) (time.Time, bool) {

@@ -19,29 +19,27 @@ trap 'rm -f "$key"' EXIT
 printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$key"
 export KEYSTORE_FILE="$key"
 
-# Fetch fixed release asset IDs through GitHub's API. The stable fixture is
-# public; the two deleted preview releases' byte-identical APKs are preserved
-# in a CI-only draft release tagged ci-official-upgrade-fixtures (accessible to the
-# workflow's repository token). The earlier draft was removed; its APKs were re-uploaded
-# byte-for-byte from the retained build artifacts and re-verified against the pins below.
-# Hashes and the official signing identity are verified independently below.
+# Historical signed APKs must first be restored to this repository. Asset IDs
+# are repository-specific; do not reuse IDs from another repository. All three
+# bytestrings and the official signing identity remain independently pinned.
 # curl strips Authorization on cross-host redirects; never use --location-trusted.
 fetch_official() {
   local id="$1" expected="$2" name="$3"
+  [[ "$id" =~ ^[0-9]+$ ]] || { echo "Missing or invalid current-repository asset ID for $name" >&2; exit 1; }
   local path="$DEST/$name.apk" actual
   curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
     --header "Authorization: Bearer $GH_TOKEN" \
     --header 'Accept: application/octet-stream' \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
-    "https://api.github.com/repos/bardia049b-stack/Gozar/releases/assets/$id" \
+    "https://api.github.com/repos/Ammpapsoe/GozarFox/releases/assets/$id" \
     --output "$path"
   test -s "$path"
   actual=$(sha256sum "$path" | awk '{print $1}')
   test "$actual" = "$expected" || { echo "unexpected SHA-256 for $name" >&2; exit 1; }
 }
-fetch_official 713630711 d899da890c82761050e7ebac37be81aedf24aa0d51d45b3452f908f3e3a32a88 official-stable
-fetch_official 730844479 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
-fetch_official 730844502 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
+fetch_official "${GOZAR_STABLE_FIXTURE_ASSET_ID:-}" d899da890c82761050e7ebac37be81aedf24aa0d51d45b3452f908f3e3a32a88 official-stable
+fetch_official "${GOZAR_PREVIOUS_FIXTURE_ASSET_ID:-}" 7c30356ca885534ee250ec13d0cffe64142049ae6aa7f47ce8e8a90349cda41a official-previous
+fetch_official "${GOZAR_CORRECTED_FIXTURE_ASSET_ID:-}" 01971a8391d1d5f074861996afdbb0e58434ec4b74c8de8f9ad27670964cf797 official-corrected
 bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
 shopt -s nullglob
 candidates=(app/build/outputs/apk/release/*universal*.apk)

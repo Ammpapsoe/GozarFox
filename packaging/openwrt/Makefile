@@ -7,7 +7,7 @@ PKG_LICENSE:=AGPL-3.0-or-later
 PKG_MAINTAINER:=Gozar contributors <noreply@github.com>
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://github.com/bardia049b-stack/Gozar1/archive
+PKG_SOURCE_URL:=https://github.com/Ammpapsoe/GozarFox/archive
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=v$(PKG_VERSION)-desktop
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
@@ -16,7 +16,7 @@ PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
-GO_PKG:=github.com/bardia049b-stack/Gozar1/go-desktop
+GO_PKG:=github.com/Ammpapsoe/GozarFox/go-desktop
 GO_PKG_BUILD_PKG:=$$(GO_PKG)/cmd/gozar
 GO_PKG_LDFLAGS_X:=$(GO_PKG)/cmd/gozar.version=$(PKG_VERSION)
 
@@ -28,7 +28,7 @@ define Package/gozar
   CATEGORY:=Network
   SUBMENU:=Web Servers/Proxies
   TITLE:=Firefox Private Network client
-  URL:=https://github.com/bardia049b-stack/Gozar1
+  URL:=https://github.com/Ammpapsoe/GozarFox
   DEPENDS:=$(GO_ARCH_DEPENDS) +kmod-tun
 endef
 

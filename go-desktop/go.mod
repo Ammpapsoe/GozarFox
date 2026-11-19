@@ -1,4 +1,4 @@
-module github.com/bardia049b-stack/Gozar1/go-desktop
+module github.com/Ammpapsoe/GozarFox/go-desktop
 
 go 1.26
 

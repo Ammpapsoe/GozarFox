@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/quiet"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/quiet"
 )
 
 func Set(port int) error {

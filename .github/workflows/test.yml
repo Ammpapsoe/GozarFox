@@ -79,8 +79,8 @@ jobs:
 
   android-recovery-emulator:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
-    # Historical signed APKs are in a CI-only draft after their public releases
-    # were removed; GitHub requires push access to read draft release assets.
+    # Historical signed APKs must be restored to a CI-only draft in this
+    # repository; GitHub requires push access to read draft release assets.
     permissions:
       contents: write
     runs-on: ubuntu-24.04
@@ -109,6 +109,9 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           GH_TOKEN: ${{ github.token }}
+          GOZAR_STABLE_FIXTURE_ASSET_ID: ${{ vars.GOZAR_STABLE_FIXTURE_ASSET_ID }}
+          GOZAR_PREVIOUS_FIXTURE_ASSET_ID: ${{ vars.GOZAR_PREVIOUS_FIXTURE_ASSET_ID }}
+          GOZAR_CORRECTED_FIXTURE_ASSET_ID: ${{ vars.GOZAR_CORRECTED_FIXTURE_ASSET_ID }}
         run: bash scripts/build_official_upgrade_test_apks.sh
       - name: Configure emulator acceleration
         run: |
@@ -178,6 +181,27 @@ jobs:
           else
             echo 'signature pending from Sign relay endpoints workflow'
           fi
+
+  desktop-core-cross-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux-amd64, windows-amd64, darwin-amd64, darwin-arm64]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Build desktop core for ${{ matrix.target }}
+        working-directory: go-desktop
+        env:
+          TARGET: ${{ matrix.target }}
+          CGO_ENABLED: '0'
+        run: |
+          GOOS=${TARGET%-*} GOARCH=${TARGET#*-} go build -trimpath -o "$RUNNER_TEMP/gozar-core" ./cmd/gozar
 
   windows-proxy-registry:
     runs-on: windows-2022

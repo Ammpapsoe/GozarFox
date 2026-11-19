@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/quiet"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/quiet"
 )
 
 type Config struct {

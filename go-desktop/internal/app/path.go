@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
 )
 
 type pathCandidate struct {

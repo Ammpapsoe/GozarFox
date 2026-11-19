@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
 )
 
 func TestStateReportsActualActiveLocationAndPort(t *testing.T) {

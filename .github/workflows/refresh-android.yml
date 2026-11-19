@@ -12,7 +12,9 @@ concurrency:
 
 jobs:
   refresh:
-    if: github.repository == 'bardia049b-stack/Gozar1' && github.ref == 'refs/heads/main'
+    # Archived one-off operation for 1.10.1; never enable it merely because
+    # the repository moved. Historical release tags must not be rewritten.
+    if: ${{ false && github.repository == 'Ammpapsoe/GozarFox' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
 	"golang.org/x/net/dns/dnsmessage"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"

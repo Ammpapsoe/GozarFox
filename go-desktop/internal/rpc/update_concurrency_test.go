@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/update"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/update"
 )
 
 type blockedUpdate struct {

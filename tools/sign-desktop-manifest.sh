@@ -20,7 +20,7 @@ trap 'rm -rf "$WORK"' EXIT
 python3 - "$VERSION" "$TAG" "$ARTIFACT_DIR" "$NOTES" "$WORK/desktop-update.json" <<'PY'
 import hashlib, json, os, re, sys, time
 version, tag, directory, notes, output = sys.argv[1:]
-repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "bardia049b-stack/Gozar")
+repository = os.environ.get("GOZAR_RELEASE_REPOSITORY", "Ammpapsoe/GozarFox")
 if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
     raise SystemExit("invalid release repository")
 if not re.fullmatch(r"[0-9]{1,4}(\.[0-9]{1,4}){2}(-rc\.[0-9]{1,3})?", version):

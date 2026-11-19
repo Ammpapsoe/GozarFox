@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/dnsproxy"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/dnsproxy"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/wintun"
 	"golang.org/x/net/dns/dnsmessage"
 )
 

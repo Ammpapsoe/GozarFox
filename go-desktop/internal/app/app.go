@@ -12,17 +12,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/engine"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/killswitch"
-	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/signinproxy"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/engine"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/killswitch"
+	relaytransport "github.com/Ammpapsoe/GozarFox/go-desktop/internal/relay"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/signinproxy"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/warp"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/wintun"
 )
 
 type AccountSummary struct {

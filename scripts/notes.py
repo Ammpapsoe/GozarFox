@@ -44,7 +44,7 @@ def stack(*items):
 
 
 version = sys.argv[1]
-repo = sys.argv[2] if len(sys.argv) > 2 else 'bardia049b-stack/Gozar'
+repo = sys.argv[2] if len(sys.argv) > 2 else 'Ammpapsoe/GozarFox'
 android = sys.argv[3] if len(sys.argv) > 3 else version
 tag = sys.argv[4] if len(sys.argv) > 4 else f'v{version}'
 base = f'https://github.com/{repo}/releases/download/{tag}/'

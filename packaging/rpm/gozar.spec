@@ -7,7 +7,7 @@ Version:        %{gozar_version}
 Release:        1%{?gozar_dist}
 Summary:        Firefox Private Network client
 License:        AGPL-3.0-or-later
-URL:            https://github.com/bardia049b-stack/Gozar
+URL:            https://github.com/Ammpapsoe/GozarFox
 Source0:        %{name}-%{version}.tar.xz
 BuildArch:      x86_64
 Requires:       gtk3

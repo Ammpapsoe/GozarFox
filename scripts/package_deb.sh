@@ -23,7 +23,7 @@ Architecture: amd64
 Maintainer: Gozar contributors <noreply@github.com>
 Installed-Size: $size
 Depends: libgtk-3-0, libstdc++6, libgcc-s1, libc6, iproute2
-Homepage: https://github.com/bardia049b-stack/Gozar1
+Homepage: https://github.com/Ammpapsoe/GozarFox
 Description: Firefox VPN desktop client
  Gozar includes a Flutter desktop app and its separate Go tunnel core.
  The tunnel requires the appropriate system privileges.

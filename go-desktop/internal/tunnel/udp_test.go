@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/masque"
 	"golang.org/x/net/http2"
 )
 

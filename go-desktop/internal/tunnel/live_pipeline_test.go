@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/engine"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/wintun"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/engine"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/masque"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/wintun"
 	"golang.org/x/net/http2"
 )
 

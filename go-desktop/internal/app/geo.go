@@ -7,8 +7,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/geo"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
 )
 
 const geoListURL = "raw.githubusercontent.com"

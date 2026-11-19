@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
-	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
+	relaytransport "github.com/Ammpapsoe/GozarFox/go-desktop/internal/relay"
 )
 
 func (a *App) StartRelayDiscovery() {

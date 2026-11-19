@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/app"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/rpc"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/sysproxy"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tundev"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/app"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/rpc"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/sysproxy"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
 )
 
 const version = "1.18.2"

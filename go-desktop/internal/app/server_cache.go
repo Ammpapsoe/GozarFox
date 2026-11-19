@@ -7,9 +7,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/fxa"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
 )
 
 // A cached Mozilla list is a bootstrap hint, not a permanent server registry.

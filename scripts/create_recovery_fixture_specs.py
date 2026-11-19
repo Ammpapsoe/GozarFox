@@ -29,7 +29,7 @@ def generate(directory: Path) -> None:
         "issued_at": int(time.time()), "notes": "CI-only recovery fixture",
         "artifacts": [{"name": name, "sha256": digest.hexdigest(),
                        "size": apk.stat().st_size,
-                       "url": "https://github.com/bardia049b-stack/Gozar/releases/download/v1.11.2/" + name}],
+                       "url": "https://github.com/Ammpapsoe/GozarFox/releases/download/v1.11.2/" + name}],
         "recovery": {"affected_version": "1.11.1", "affected_code": 37,
                      "affected_commit": "2" * 40, "restores_version": "1.11.0",
                      "restores_code": 36, "restores_commit": "1" * 40, "recovery_code": 38},

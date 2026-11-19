@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/netguard"
 	"golang.org/x/net/publicsuffix"
 )
 

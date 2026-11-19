@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/masque"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/masque"
 )
 
 // UDPStream is a single target's CONNECT-UDP capsule stream. The desktop

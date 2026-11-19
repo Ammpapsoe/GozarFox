@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/netguard"
 )
 
 const KeyHex = "bd4c9be650ce400976e334c9d37a50fc03d9eddd72c2369e3ae0ca8669c97e88"

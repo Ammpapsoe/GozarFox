@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/config"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/tunnel"
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/warp"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tunnel"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/warp"
 )
 
 // Direct host routes apply to every IP protocol, not only to the TCP flow

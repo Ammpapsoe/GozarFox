@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bardia049b-stack/Gozar1/go-desktop/internal/netguard"
-	relaytransport "github.com/bardia049b-stack/Gozar1/go-desktop/internal/relay"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/netguard"
+	relaytransport "github.com/Ammpapsoe/GozarFox/go-desktop/internal/relay"
 	"golang.org/x/net/publicsuffix"
 )
 
