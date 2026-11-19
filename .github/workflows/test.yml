@@ -236,6 +236,38 @@ jobs:
           $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
           & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTunnel$' '-test.timeout=75s'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check out the v1.18.2 source for a local baseline
+        uses: actions/checkout@v5
+        with:
+          ref: 5286e637921b9f47b4a748e7c2ad74ae6661f8a9
+          path: baseline-source
+          persist-credentials: false
+      - name: Measure v1.18.2 local Wintun baseline
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $root = $env:GITHUB_WORKSPACE
+          $baseModule = ((Get-Content "$root/baseline-source/go-desktop/go.mod" -First 1) -replace '^module\s+', '').Trim()
+          $currentModule = ((Get-Content "$root/go-desktop/go.mod" -First 1) -replace '^module\s+', '').Trim()
+          $test = Get-Content "$root/go-desktop/internal/engine/live_throughput_windows_test.go" -Raw
+          $test = $test.Replace("$currentModule/internal/wintun", "$baseModule/internal/wintun")
+          [System.IO.File]::WriteAllText("$root/baseline-source/go-desktop/internal/engine/live_throughput_windows_test.go", $test, [System.Text.UTF8Encoding]::new($false))
+          Push-Location "$root/baseline-source/go-desktop"
+          try {
+            go test -c -o "$env:RUNNER_TEMP/gozar-baseline.test.exe" ./internal/engine
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $env:GOZAR_LIVE_TUN_TEST = '1'
+            $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
+            & "$env:RUNNER_TEMP/gozar-baseline.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=3' '-test.timeout=300s'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+      - name: Measure current local Wintun path
+        shell: pwsh
+        run: |
+          $env:GOZAR_LIVE_TUN_TEST = '1'
+          $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
+          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=3' '-test.timeout=300s'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   desktop-ui:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests) }}
