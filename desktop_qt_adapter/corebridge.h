@@ -11,6 +11,7 @@ class CoreBridge final : public QObject {
     Q_OBJECT
 public:
     explicit CoreBridge(QObject *parent = nullptr);
+    ~CoreBridge() override;
     bool start(const QString &corePath);
     qint64 request(const QString &method, const QJsonObject &params = {});
     bool running() const;
@@ -31,7 +32,7 @@ private slots:
 private:
     void failPending(const QString &message);
     void protocolFailure(const QString &message);
-    QProcess process_;
+    QProcess *process_;
     QByteArray buffer_;
     QSet<qint64> pending_;
     qint64 nextId_ = 0;

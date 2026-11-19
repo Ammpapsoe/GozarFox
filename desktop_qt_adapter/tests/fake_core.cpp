@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
+#include <QThread>
 #include <cstdio>
 
 int main(int argc, char **argv) {
@@ -51,6 +52,8 @@ int main(int argc, char **argv) {
         std::fwrite(bytes.constData(), 1, size_t(bytes.size()), stdout);
         std::fflush(stdout);
         if (method == "quit") {
+            const int delay = qEnvironmentVariableIntValue("FAKE_CORE_QUIT_DELAY_MS");
+            if (delay > 0 && delay <= 5000) QThread::msleep(static_cast<unsigned long>(delay));
             const QString markerPath = qEnvironmentVariable("FAKE_CORE_QUIT_MARKER");
             if (!markerPath.isEmpty()) {
                 QFile marker(markerPath);

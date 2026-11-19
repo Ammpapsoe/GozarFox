@@ -10,6 +10,8 @@ private slots:
     void multipleRequests();
     void crashFailsPending();
     void malformedReplyFailsClosed();
+    void destructionDoesNotKillCleanup();
+    void destructionDuringStartupRequestsQuit();
     void missingExecutable();
 };
 
@@ -53,6 +55,34 @@ void CoreBridgeTest::malformedReplyFailsClosed() {
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
     QCOMPARE(errors.size(), 1); QCOMPARE(failed.size(), 1);
     QVERIFY2(QFile::exists(marker), "core must receive quit instead of being killed");
+    qunsetenv("FAKE_CORE_QUIT_MARKER");
+}
+
+void CoreBridgeTest::destructionDoesNotKillCleanup() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString marker = dir.filePath(QStringLiteral("quit-marker"));
+    qputenv("FAKE_CORE_QUIT_MARKER", marker.toUtf8());
+    qputenv("FAKE_CORE_QUIT_DELAY_MS", "300");
+    auto *core = new CoreBridge;
+    QSignalSpy ready(core, &CoreBridge::ready);
+    QVERIFY(core->start(fakeCore()));
+    QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
+    delete core;
+    QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(marker), 5000);
+    qunsetenv("FAKE_CORE_QUIT_MARKER");
+    qunsetenv("FAKE_CORE_QUIT_DELAY_MS");
+}
+
+void CoreBridgeTest::destructionDuringStartupRequestsQuit() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString marker = dir.filePath(QStringLiteral("startup-quit-marker"));
+    qputenv("FAKE_CORE_QUIT_MARKER", marker.toUtf8());
+    auto *core = new CoreBridge;
+    QVERIFY(core->start(fakeCore()));
+    delete core;
+    QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(marker), 5000);
     qunsetenv("FAKE_CORE_QUIT_MARKER");
 }
 

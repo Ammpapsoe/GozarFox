@@ -7,27 +7,57 @@
 
 namespace { constexpr qsizetype kMaxLine = 4 * 1024 * 1024; }
 
-CoreBridge::CoreBridge(QObject *parent) : QObject(parent) {
+CoreBridge::CoreBridge(QObject *parent) : QObject(parent), process_(new QProcess) {
     // Never merge stderr into protocol output, and never log request bodies:
     // sign-in messages can contain credentials.
-    process_.setProcessChannelMode(QProcess::SeparateChannels);
-    connect(&process_, &QProcess::started, this, &CoreBridge::ready);
-    connect(&process_, &QProcess::readyReadStandardOutput, this, &CoreBridge::readOutput);
-    connect(&process_, &QProcess::readyReadStandardError, this, [this] { process_.readAllStandardError(); });
-    connect(&process_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &CoreBridge::onFinished);
-    connect(&process_, &QProcess::errorOccurred, this, &CoreBridge::onError);
+    process_->setProcessChannelMode(QProcess::SeparateChannels);
+    connect(process_, &QProcess::started, this, &CoreBridge::ready);
+    connect(process_, &QProcess::readyReadStandardOutput, this, &CoreBridge::readOutput);
+    connect(process_, &QProcess::readyReadStandardError, this, [this] { process_->readAllStandardError(); });
+    connect(process_, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this, &CoreBridge::onFinished);
+    connect(process_, &QProcess::errorOccurred, this, &CoreBridge::onError);
+}
+
+CoreBridge::~CoreBridge() {
+    // QProcess's destructor kills a running child. Do not force-kill a core
+    // which may own a tunnel or system-proxy settings merely because the UI
+    // object is destroyed. Prefer an explicit shutdown and await stopped in
+    // the application; this is a last-resort asynchronous cleanup path.
+    if (process_->state() == QProcess::Running && !stopping_) shutdown();
+    if (process_->state() == QProcess::NotRunning) {
+        delete process_;
+        return;
+    }
+    QProcess *orphan = process_;
+    disconnect(orphan, nullptr, this, nullptr);
+    connect(orphan, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
+            orphan, &QObject::deleteLater);
+    connect(orphan, &QProcess::errorOccurred, orphan, [orphan](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) orphan->deleteLater();
+    });
+    // Avoid a full pipe preventing the child from completing teardown.
+    connect(orphan, &QProcess::readyReadStandardOutput, orphan, [orphan] { orphan->readAllStandardOutput(); });
+    connect(orphan, &QProcess::readyReadStandardError, orphan, [orphan] { orphan->readAllStandardError(); });
+    orphan->readAllStandardOutput();
+    orphan->readAllStandardError();
+    if (orphan->state() == QProcess::Starting) {
+        connect(orphan, &QProcess::started, orphan, [orphan] {
+            orphan->write("{\"id\":0,\"method\":\"quit\"}\n");
+            orphan->closeWriteChannel();
+        });
+    }
 }
 
 bool CoreBridge::start(const QString &corePath) {
-    if (process_.state() != QProcess::NotRunning || corePath.isEmpty()) return false;
+    if (process_->state() != QProcess::NotRunning || corePath.isEmpty()) return false;
     buffer_.clear();
     stopping_ = false;
     protocolFault_ = false;
-    process_.start(corePath, {QStringLiteral("--rpc")});
+    process_->start(corePath, {QStringLiteral("--rpc")});
     return true;
 }
 
-bool CoreBridge::running() const { return process_.state() == QProcess::Running && !stopping_; }
+bool CoreBridge::running() const { return process_->state() == QProcess::Running && !stopping_; }
 
 qint64 CoreBridge::request(const QString &method, const QJsonObject &params) {
     if (!running() || method.isEmpty() || nextId_ == std::numeric_limits<qint64>::max()) return -1;
@@ -37,7 +67,7 @@ qint64 CoreBridge::request(const QString &method, const QJsonObject &params) {
     const QByteArray encoded = QJsonDocument(envelope).toJson(QJsonDocument::Compact) + '\n';
     if (encoded.size() > kMaxLine) return -1;
     pending_.insert(id);
-    if (process_.write(encoded) != encoded.size()) {
+    if (process_->write(encoded) != encoded.size()) {
         pending_.remove(id);
         return -1;
     }
@@ -46,10 +76,10 @@ qint64 CoreBridge::request(const QString &method, const QJsonObject &params) {
 
 void CoreBridge::readOutput() {
     if (protocolFault_) {
-        process_.readAllStandardOutput();
+        process_->readAllStandardOutput();
         return;
     }
-    buffer_.append(process_.readAllStandardOutput());
+    buffer_.append(process_->readAllStandardOutput());
     for (;;) {
         const qsizetype end = buffer_.indexOf('\n');
         if (end < 0) break;
@@ -95,12 +125,12 @@ void CoreBridge::shutdown() {
     if (protocolFault_ && id >= 0) pending_.remove(id);
     // If writing quit failed, EOF still lets the core's normal RPC loop exit.
     stopping_ = true;
-    process_.closeWriteChannel();
+    process_->closeWriteChannel();
     if (id < 0) emit transportError(QStringLiteral("could not send core shutdown request"));
     // Teardown can involve platform routes and system proxy restoration.
     // Do not kill the core on a timer while it may still be cleaning up.
     QTimer::singleShot(45000, this, [this] {
-        if (stopping_ && process_.state() != QProcess::NotRunning)
+        if (stopping_ && process_->state() != QProcess::NotRunning)
             emit transportError(QStringLiteral("core shutdown is taking too long"));
     });
 }
@@ -130,7 +160,7 @@ void CoreBridge::onError(QProcess::ProcessError error) {
             protocolFault_ = true;
             stopping_ = true;
             emit transportError(QStringLiteral("core communication failed"));
-            process_.closeWriteChannel();
+            process_->closeWriteChannel();
         }
     }
 }
