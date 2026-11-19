@@ -19,7 +19,13 @@ import (
 // Abandonment means the previous owner died while holding the mutex. Callers
 // must recover and validate their journal before any new mutation regardless
 // of this flag; an abandoned mutex can disappear when all handles are closed.
-func withWindowsProxyLock(ctx context.Context, name string, fn func(abandoned bool) error) (result error) {
+func withWindowsProxyLock(ctx context.Context, name string, fn func(abandoned bool) error) error {
+	return withWindowsProxyLockSecurity(ctx, name, nil, nil, fn)
+}
+
+// When security is supplied, verify is called on the actual object even if it
+// already existed; never trust the security attributes of a pre-existing mutex.
+func withWindowsProxyLockSecurity(ctx context.Context, name string, security *windows.SecurityAttributes, verify func(windows.Handle) error, fn func(abandoned bool) error) (result error) {
 	if ctx == nil || name == "" || fn == nil {
 		return errors.New("invalid proxy lock arguments")
 	}
@@ -32,7 +38,7 @@ func withWindowsProxyLock(ctx context.Context, name string, fn func(abandoned bo
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	handle, err := windows.CreateMutex(nil, false, encoded)
+	handle, err := windows.CreateMutex(security, false, encoded)
 	if err != nil && !errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		return err
 	}
@@ -44,6 +50,11 @@ func withWindowsProxyLock(ctx context.Context, name string, fn func(abandoned bo
 			result = errors.Join(result, fmt.Errorf("close proxy mutex: %w", err))
 		}
 	}()
+	if verify != nil {
+		if err := verify(handle); err != nil {
+			return fmt.Errorf("unsafe proxy mutex: %w", err)
+		}
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
