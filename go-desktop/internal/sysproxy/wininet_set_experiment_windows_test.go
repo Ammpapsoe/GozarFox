@@ -67,6 +67,39 @@ func TestWinINetRealRoundTrip(t *testing.T) {
 			if got != tc.value {
 				t.Fatalf("logical LAN setting not restored: got %#v, want %#v", got, tc.value)
 			}
+			key := isolatedRegistry(t)
+			journal := experimentalLANJournal{registryJournal{key: key.key}}
+			store := experimentalLANStore{}
+			if err := activateLAN(store, journal, 23456); err != nil {
+				t.Fatal(err)
+			}
+			other := LANProxySettings{Flags: 3, Server: "other.example:1234", Bypass: "localhost"}
+			if err := setExperimentalLANProxy(other); err != nil {
+				t.Fatal(err)
+			}
+			if err := recoverLAN(store, journal); err == nil {
+				t.Fatal("external setting was not treated as a conflict")
+			}
+			got, err = queryLANProxy()
+			if err != nil || got != other {
+				t.Fatalf("conflict changed external setting: %#v, %v", got, err)
+			}
+			if saved, err := journal.LoadLAN(); err != nil || saved == nil {
+				t.Fatalf("conflict lost journal: %v", err)
+			}
+			if err := setExperimentalLANProxy(desiredLAN(23456)); err != nil {
+				t.Fatal(err)
+			}
+			if err := recoverLAN(store, journal); err != nil {
+				t.Fatal(err)
+			}
+			got, err = queryLANProxy()
+			if err != nil || got != tc.value {
+				t.Fatalf("transaction did not restore setting: %#v, %v", got, err)
+			}
+			if saved, err := journal.LoadLAN(); err != nil || saved != nil {
+				t.Fatalf("completed recovery retained journal: %v", err)
+			}
 		})
 	}
 }
