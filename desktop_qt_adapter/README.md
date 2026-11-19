@@ -77,7 +77,8 @@ integrated Flutter login, complete application or real VPN integration.
 It must not be used with a real VPN. The upstream window's
 protocol widget defaults to WireGuard/443, which does not describe Gozar; it
 must be corrected or disabled before this binding is shown to users. The
-binding does not enable the window's controls.
+separate experimental power binding controls only the connection button; it
+does not make the other window controls functional.
 
 `LocationCatalog` converts Gozar server snapshots to the upstream location
 model's types and maps selected IDs back to actual hostnames. It rejects
@@ -94,9 +95,14 @@ the other upstream controls, and it must not yet be shipped with a real VPN.
 The Gozar `kill_switch` field is an opt-in for firewall rules on the next TUN
 connection, not Windscribe's current firewall state. Do not bind it to the
 upstream firewall indicator as though they were equivalent. Likewise, Gozar's
-persisted language RPC accepts only English, Persian or system, whereas the
-upstream UI includes more translation files; those other UI translations need
-an independent persistence strategy. `warp_udp` requires explicit user consent.
+persisted language RPC accepts only English, Persian or system. Experimental
+`UiLanguage` persists the original Qt UI's language separately without changing
+the core's language. The consolidated GitHub check compiled and loaded all 23
+original language catalogs on Windows, Linux and macOS; it also checked a
+Persian string, Persian RTL direction, German LTR direction, and rejected an
+unknown language. That does not establish visual RTL correctness or translation
+completeness across the full UI. The production preferences page is not yet
+connected to this adapter. `warp_udp` requires explicit user consent.
 Unsupported controls must not silently claim success.
 
 The interactive UI tests use a simulated core. For the separate real-core
