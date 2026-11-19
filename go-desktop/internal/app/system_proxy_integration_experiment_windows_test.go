@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/sysproxy"
@@ -46,7 +47,31 @@ func TestSystemProxyExperimentalAppIntegration(t *testing.T) {
 	if err := sysproxy.WriteExperimentalLANSettings(before); err != nil {
 		t.Fatal(err)
 	}
+	// Simulate an OS restart where both the original owner and watchdog died.
+	// The next app start must restore before any account or relay is needed.
+	if err := sysproxy.PrepareExperimentalLANRecovery(23456); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sysproxy.RecoverExperimentalLAN(); err != nil {
+			t.Errorf("recover startup test journal: %v", err)
+		}
+	})
 	current := newProxyLifecycleApp(t)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got, err := sysproxy.ReadExperimentalLANSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == before {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("app startup did not recover prior setting: %#v", got)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if err := current.SetMode(config.ModeSystemProxy); err != nil {
 		t.Fatal(err)
 	}

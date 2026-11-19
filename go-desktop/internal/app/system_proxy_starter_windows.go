@@ -12,3 +12,7 @@ import (
 func platformSystemProxyStart() func(context.Context, int) (io.Closer, error) {
 	return sysproxy.StartSystemProxy
 }
+
+func platformSystemProxyRecover() func(context.Context) error {
+	return sysproxy.RecoverSystemProxy
+}

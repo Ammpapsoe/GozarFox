@@ -12,6 +12,33 @@ import (
 	"time"
 )
 
+// RecoverSystemProxy handles a journal left when both the owner and its
+// watchdog were terminated (for example, an OS restart). It never replaces a
+// conflicting setting and coordinates with any live owner through the lock.
+func RecoverSystemProxy(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("missing recovery context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b, err := openWindowsBackend()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	return b.lock(ctx, func(bool) error {
+		old, err := b.journal.Load()
+		if err != nil {
+			return err
+		}
+		if old != nil {
+			return errors.New("legacy proxy recovery journal exists")
+		}
+		return recoverLAN(wininetLANStore{}, lanRegistryJournal{b.journal})
+	})
+}
+
 // RunRecoveryWatchdog is the internal crash-recovery child. The caller
 // launches it before mutation and holds the ownership lock while connected.
 func RunRecoveryWatchdog() error {

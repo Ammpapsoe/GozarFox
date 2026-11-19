@@ -12,6 +12,20 @@ import (
 // default production build.
 func ReadExperimentalLANSettings() (LANProxySettings, error) { return queryLANProxy() }
 func WriteExperimentalLANSettings(p LANProxySettings) error  { return setLANProxy(p) }
+
+// PrepareExperimentalLANRecovery simulates state left after both the owner and
+// watchdog have died. Tests must confine this to disposable Windows runners.
+func PrepareExperimentalLANRecovery(port int) error {
+	b, err := openWindowsBackend()
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+	return b.lock(context.Background(), func(bool) error {
+		return activateLAN(wininetLANStore{}, lanRegistryJournal{b.journal}, port)
+	})
+}
+
 func RecoverExperimentalLAN() error {
 	b, err := openWindowsBackend()
 	if err != nil {

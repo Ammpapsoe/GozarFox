@@ -95,7 +95,8 @@ type App struct {
 	systemProxyFault error // retained until explicit recovery; protected by mu
 	// The system-proxy starter must hold exclusive ownership until Close;
 	// it remains unset until the production platform adapter is safe.
-	systemProxyStart func(context.Context, int) (io.Closer, error)
+	systemProxyStart   func(context.Context, int) (io.Closer, error)
+	systemProxyRecover func(context.Context) error
 	// Tests can replace only relay preparation; the actual listener and
 	// connection/teardown lifecycle are always exercised unchanged.
 	proxyTestDial localproxy.Dialer
@@ -131,12 +132,15 @@ func New(version string) *App {
 	} else {
 		cfg.Server = ""
 	}
-	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, fetchServers: fxa.Servers, geo: geo.Default(), systemProxyStart: platformSystemProxyStart()}
+	created := &App{cfg: cfg, version: version, admin: tundev.Privileged(), refreshToken: fxa.Refresh, requestPass: fxa.PassToken, fetchServers: fxa.Servers, geo: geo.Default(), systemProxyStart: platformSystemProxyStart(), systemProxyRecover: platformSystemProxyRecover()}
 	created.servers, created.serversUntil = decodeServerCache(cfg.ServerCache, time.Now())
 	created.serversCached = len(created.servers) != 0
 	created.pass = cachedAccountPass(cfg.ActiveAccount(), time.Now())
 	relaytransport.RestoreCache(cfg.RelayCache, time.Now())
 	go created.sampler()
+	if created.systemProxyRecover != nil {
+		go created.recoverSystemProxyAtStartup()
+	}
 	// A previous run that was killed rather than closed leaves its firewall
 	// rules behind, and on Windows that means the whole machine is offline.
 	// Clearing them is unconditional and cheap: disabling an absent kill switch
@@ -149,6 +153,26 @@ func New(version string) *App {
 		}
 	}()
 	return created
+}
+
+// Recover stale user proxy state even when the previous watchdog also died,
+// e.g. at system shutdown. A live process may own the lock; timeout is not a
+// conflict, and a later system-proxy connect retries before network setup.
+func (a *App) recoverSystemProxyAtStartup() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := a.systemProxyRecover(ctx)
+	if err == nil || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.live && !a.connecting && a.systemProxyFault == nil {
+		a.systemProxyFault = fmt.Errorf("recover system proxy: %w", err)
+		if a.fault == "" {
+			a.fault = a.systemProxyFault.Error()
+		}
+	}
 }
 
 func (a *App) State() State {
@@ -953,7 +977,15 @@ func (a *App) connect(ctx context.Context) error {
 	// listener creation, Connect, or teardown, and is unset in production.
 	a.mu.Lock()
 	localProxyMode := a.cfg.Mode == config.ModeProxyOnly || a.cfg.Mode == config.ModeSystemProxy
+	systemProxyMode := a.cfg.Mode == config.ModeSystemProxy
 	a.mu.Unlock()
+	// Recover before fetching credentials or opening the remote relay; a
+	// previous crash may have left the system pointing at a dead local port.
+	if systemProxyMode && a.systemProxyRecover != nil {
+		if err := a.systemProxyRecover(ctx); err != nil {
+			return fmt.Errorf("recover system proxy: %w", err)
+		}
+	}
 	if localProxyMode && a.proxyTestDial != nil {
 		return a.startLocalProxy(ctx, a.proxyTestDial, pathCandidate{}, nil, "")
 	}

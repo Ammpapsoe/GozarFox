@@ -8,3 +8,4 @@ import (
 )
 
 func platformSystemProxyStart() func(context.Context, int) (io.Closer, error) { return nil }
+func platformSystemProxyRecover() func(context.Context) error                 { return nil }
