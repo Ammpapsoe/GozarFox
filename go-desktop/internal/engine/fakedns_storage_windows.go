@@ -148,6 +148,14 @@ func openWindowsDNSStorage(root string, direct func(string) bool) (*fakeDNS, *wi
 	if err != nil {
 		return nil, nil, err
 	}
+	return openWindowsDNSStorageWithSecurity(root, direct, sid, attrs)
+}
+
+func openWindowsDNSStorageWithSecurity(root string, direct func(string) bool, sid string, attrs *windows.SecurityAttributes) (*fakeDNS, *windowsDNSStorage, error) {
+	if !filepath.IsAbs(root) || sid == "" || attrs == nil || attrs.SecurityDescriptor == nil {
+		return nil, nil, errors.New("invalid FakeDNS storage security arguments")
+	}
+	var err error
 	s := &windowsDNSStorage{}
 	fail := func(err error) (*fakeDNS, *windowsDNSStorage, error) { _ = s.Close(); return nil, nil, err }
 	s.root, err = dnsWindowsOpen(root, windows.OPEN_EXISTING, true, sid, attrs)
