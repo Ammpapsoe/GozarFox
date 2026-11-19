@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      system_proxy_experiment:
+        description: Run WinINet mutation experiment on disposable GitHub-hosted Windows only
+        required: false
+        type: boolean
+        default: false
       windows_live_tun:
         description: Run the privileged Windows kernel TUN integration test
         required: false
@@ -293,6 +298,12 @@ jobs:
           if [ "${{ runner.os }}" = Linux ]; then
             go test -race ./internal/sysproxy ./internal/localproxy ./internal/app ./internal/rpc -count=1
           fi
+      - name: Experiment with real WinINet settings (disposable runner only)
+        if: ${{ runner.os == 'Windows' && inputs.system_proxy_experiment }}
+        working-directory: go-desktop
+        env:
+          GOZAR_DISPOSABLE_WININET_TEST: '1'
+        run: go test -tags proxyexperiment ./internal/sysproxy -run '^TestWinINetRealRoundTrip$' -count=1 -v
 
   windows-live-tun:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.windows_live_tun) }}

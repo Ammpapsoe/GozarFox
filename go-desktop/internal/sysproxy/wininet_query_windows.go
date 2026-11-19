@@ -14,6 +14,7 @@ import (
 const (
 	internetOptionPerConnection = 75
 	perConnFlags                = 1
+	perConnFlagsUI              = 10
 	perConnProxyServer          = 2
 	perConnProxyBypass          = 3
 	perConnAutoconfigURL        = 4
@@ -51,7 +52,14 @@ type internetPerConnOptionList struct {
 // queryLANProxy reads the documented per-connection configuration. Returned
 // strings are allocated by WinINet and must be freed with GlobalFree. This is
 // deliberately read-only and does not assume the raw connection blobs' layout.
-func queryLANProxy() (result LANProxySettings, resultErr error) {
+func queryLANProxy() (LANProxySettings, error) {
+	// Microsoft recommends querying FLAGS_UI on IE8 and later, but restoring
+	// with FLAGS. Do not fall back here: the supported desktop Windows versions
+	// have FLAGS_UI and unexpected failures must fail closed.
+	return queryLANProxyFlag(perConnFlagsUI)
+}
+
+func queryLANProxyFlag(flag uint32) (result LANProxySettings, resultErr error) {
 	if unsafe.Sizeof(uintptr(0)) != 8 {
 		return result, errors.New("WinINet per-connection query requires 64-bit Windows")
 	}
@@ -62,7 +70,7 @@ func queryLANProxy() (result LANProxySettings, resultErr error) {
 		return result, err
 	}
 	options := []internetPerConnOption{
-		{Option: perConnFlags}, {Option: perConnProxyServer},
+		{Option: flag}, {Option: perConnProxyServer},
 		{Option: perConnProxyBypass}, {Option: perConnAutoconfigURL},
 	}
 	list := internetPerConnOptionList{
