@@ -127,13 +127,16 @@ type resolver interface {
 }
 
 type Engine struct {
-	stack           *stack.Stack
-	device          *tundev.Device
-	config          tundev.Config
-	dial            Dialer
-	direct          Dialer
-	split           *geo.Rules
-	dns             resolver
+	stack  *stack.Stack
+	device *tundev.Device
+	config tundev.Config
+	dial   Dialer
+	direct Dialer
+	split  *geo.Rules
+	dns    resolver
+	// fakeDNS is injected only by tests until reconnect identity and UDP
+	// handling are ready for production. Never swap it after traffic starts.
+	fakeDNS         *fakeDNS
 	udpDial         DatagramDialer
 	udpMu           sync.Mutex
 	udpClosing      bool
@@ -264,13 +267,7 @@ func (e *Engine) handleTCP(request *tcp.ForwarderRequest) {
 			e.serveDNS(gonet.NewTCPConn(queue, endpoint))
 			return
 		}
-		var remote io.ReadWriteCloser
-		var err error
-		if e.split != nil && e.direct != nil && e.split.DirectAddress(netip.MustParseAddr(host)) {
-			remote, err = e.direct(host, port)
-		} else {
-			remote, err = e.dial(host, port)
-		}
+		remote, err := e.dialTCP(host, port)
 		if err != nil {
 			request.Complete(true)
 			return
@@ -290,6 +287,11 @@ func (e *Engine) handleTCP(request *tcp.ForwarderRequest) {
 func (e *Engine) listenUDP(created *stack.Stack) {
 	forwarder := udp.NewForwarder(created, e.handleUDP)
 	created.SetTransportProtocolHandler(udp.ProtocolNumber, func(id stack.TransportEndpointID, packet *stack.PacketBuffer) bool {
+		if id.LocalPort != 53 && e.syntheticAddress(id.LocalAddress.String()) {
+			// The datagram relay accepts real IP addresses, not domain names.
+			// Never transmit a synthetic address as though it were real.
+			return false
+		}
 		if id.LocalPort != 53 && !e.reserveDatagram() {
 			// No relay, shutdown, or the bounded flow limit was reached.
 			// Returning false lets the stack signal unreachable, not bypass.
@@ -322,7 +324,7 @@ func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
 				return
 			}
 			query := append([]byte{}, buffer[:count]...)
-			answer, err := e.dns.Resolve(query)
+			answer, err := e.resolveDNS(query)
 			if err != nil {
 				answer = dnsproxy.Failure(query)
 			}
@@ -449,7 +451,7 @@ func (e *Engine) serveDNS(local io.ReadWriteCloser) {
 		if _, err := io.ReadFull(local, query); err != nil {
 			return
 		}
-		answer, err := e.dns.Resolve(query)
+		answer, err := e.resolveDNS(query)
 		if err != nil {
 			answer = dnsproxy.Failure(query)
 		}
