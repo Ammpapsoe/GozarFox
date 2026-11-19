@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,14 @@ func TestFakeDNSWindowsSystemCacheDiagnostic(t *testing.T) {
 	}
 	observed, err := windowsQueryIPv4(name, 0)
 	if err != nil || observed != foreignIP {
+		// Only on the disposable runner: record adapter resolver settings and
+		// the route to the explicit TUN DNS, without changing system settings.
+		cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-DnsClientServerAddress -AddressFamily IPv4 | Format-Table InterfaceAlias,InterfaceIndex,ServerAddresses -AutoSize; Find-NetRoute -RemoteIPAddress '1.1.1.1' | Format-List InterfaceAlias,InterfaceIndex,DestinationPrefix,NextHop")
+		if out, diagnosticErr := cmd.CombinedOutput(); diagnosticErr == nil {
+			t.Logf("Windows DNS adapter diagnostics:\n%s", out)
+		} else {
+			t.Logf("Windows DNS adapter diagnostics unavailable: %v", diagnosticErr)
+		}
 		// An OS DNS client can select a different interface or resolver. Do not
 		// manufacture cache evidence, and do not infer exactly why it did so.
 		t.Skipf("inconclusive Windows cache diagnostic: explicit TUN DNS returned %s, but default Windows DNS lookup returned %s (%v); resolver choice requires separate investigation", foreignIP, observed, err)

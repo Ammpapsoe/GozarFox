@@ -139,6 +139,13 @@ class _WindscribeHomeState extends State<WindscribeHome>
                 const SizedBox(height: 6),
                 _cityAndStatus(),
                 _connectionModes(),
+                if (widget.systemProxyAvailable && widget.mode == 'tun')
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                    child: Text(widget.words.fakeDnsRisk,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Color(0xFFFFCC80), fontSize: 10)),
+                  ),
                 SizedBox(height: buttonHeight, child: Center(child: _connectButton())),
                 _infoPanel(),
                 if (widget.fault.isNotEmpty)

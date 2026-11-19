@@ -1,8 +1,13 @@
 # FakeDNS identity safety: activation blocker
 
-Status: **not enabled in the desktop application**. The exported production
-starter returns `ErrFakeDNSUnsafeNamespace` before provisioning state or
-changing the network. `startUDPManaged` is used only for isolated tests.
+Status on the development branch: **Windows TUN uses a mitigated FakeDNS**,
+subject to validation before release. This is not guaranteed safe across other
+VPNs: applications may retain a foreign synthetic IP that aliases a known
+Gozar mapping. Windows clears the system resolver cache before and after TUN
+startup; this does not clear application/browser caches. The machine-wide
+journal prevents reuse between cooperating Gozar sessions as long as its
+history survives. Linux and other platforms continue using real DNS. Do not
+advertise this as protection against all foreign cached identities.
 
 ## What was checked
 
@@ -28,8 +33,8 @@ also checks the same ambiguity through a genuine disposable OS TUN and local
 TCP/UDP peers. It explicitly models a retained address: it does not prove an
 OS, browser, or ArmanLife actually cached that address. These intentionally
 passing demonstration tests document the problem, not its resolution.
-`TestFakeDNSProductionEntryPointIsFailClosed` verifies that the public
-production starter refuses activation.
+`TestFakeDNSProductionEntryPointUnsupportedPlatforms` verifies that the
+mitigated starter refuses activation on platforms other than Windows.
 
 The prototype synthesizes only plain recursive A/AAAA questions. Queries with
 EDNS (including DNSSEC DO and options), AD/CD signalling, unusual sections or
@@ -54,16 +59,18 @@ client DNS may therefore receive real-IP answers for those queries.
 * A machine-local journal, lock, or marker protects cooperating instances, not
   unrelated VPNs. Restoring or deleting all correlated state can go undetected.
 
-## Activation criteria
+## Remaining safety criteria
 
-Before removing the gate, document a design and test evidence that preserve
-identity across application caches, Gozar restarts and accounts, and foreign
-namespace collisions, or constrain the supported environment in a way that
-actually enforces those properties. The test suite must cover the explicit
-TCP/UDP collision scenario, non-cooperating users, crashes and recovery, and
-real platform routing. Explicitly assess persistent-history privacy and the
-failure modes of removing or restoring storage. A user-visible warning or
-probabilistic mitigation alone is not proof of this invariant.
+The Windows branch is an explicitly risk-accepted mitigation, **not** a
+solution to the foreign namespace collision. A future claim of identity
+safety requires a design and evidence that preserve identity across
+application caches, Gozar restarts and accounts, and foreign namespace
+collisions, or a supported environment that actually enforces those
+properties. Tests must cover TCP/UDP collision scenarios, non-cooperating
+users, crashes and recovery, and real platform routing. Persistent history
+contains visited domain names and is protected by machine storage ACLs, but
+complete coordinated deletion/rollback is not detectable. A warning,
+randomization, or cache flushing does not prove the stronger invariant.
 
 Synthetic DNS being off does not itself prove the existing ordinary TUN DNS
 path has no leaks, that all routing conflicts are handled, or that WAN and real

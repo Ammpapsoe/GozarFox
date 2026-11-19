@@ -64,6 +64,12 @@ class Words {
   String get modeTun => pick('تونل سیستم', 'System tunnel');
   String get modeProxyOnly => pick('فقط پراکسی', 'Proxy only');
   String get modeSystemProxy => pick('پراکسی سیستم', 'System proxy');
+  String get fakeDnsRisk => pick(
+      'DNS مصنوعی آزمایشی است؛ پس از تغییر VPN برنامه‌ها را ببندید و دوباره باز کنید. آدرس کش‌شدهٔ VPN دیگر ممکن است مقصد اشتباه ایجاد کند.',
+      'Experimental FakeDNS: restart apps after switching VPNs. A cached address from another VPN can still reach the wrong destination.');
+  String get fakeDnsFlushError => pick(
+      'پاک‌سازی کش DNS ویندوز انجام نشد؛ اتصال متوقف شد.',
+      'Windows DNS cache could not be cleared; the connection was stopped.');
   String get modeProxyOnlyDetail => pick(
       'برنامه‌ها باید دستی به پراکسی محلی وصل شوند؛ فقط HTTP و CONNECT.',
       'Apps must use the local proxy manually; HTTP and CONNECT only.');

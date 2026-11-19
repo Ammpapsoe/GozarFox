@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/netip"
+	"runtime"
 	"testing"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -45,10 +46,12 @@ func TestFakeDNSForeignCachedAddressCanAliasKnownIdentity(t *testing.T) {
 	}
 }
 
-// Accidental wiring of the experimental production entry point must never
-// provision persistent state, create a tunnel, or silently downgrade to an
-// ordinary resolver before the cross-namespace design is verified.
-func TestFakeDNSProductionEntryPointIsFailClosed(t *testing.T) {
+// Only Windows has the cache-flush mitigation; other platforms must not
+// provision state, create a tunnel, or silently downgrade through this API.
+func TestFakeDNSProductionEntryPointUnsupportedPlatforms(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has a separately tested production starter")
+	}
 	var dialed bool
 	dial := func(string, int) (io.ReadWriteCloser, error) { dialed = true; return nil, nil }
 	e, err := StartSplitUDPWithFakeDNS("test.invalid", dial, dial, nil, nil, nil)

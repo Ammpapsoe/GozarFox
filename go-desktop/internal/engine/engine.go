@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/netip"
 	"runtime"
@@ -176,17 +177,42 @@ func StartSplitUDP(proxyHost string, dial, direct Dialer, protect []netip.Addr, 
 	return startUDP(proxyHost, dial, protect, nil, direct, split, udpDial)
 }
 
-// ErrFakeDNSUnsafeNamespace prevents accidental activation while other VPNs or
-// applications can retain indistinguishable addresses from the same range.
-var ErrFakeDNSUnsafeNamespace = errors.New("FakeDNS disabled: shared synthetic address identity is not safe")
+// ErrFakeDNSUnsafeNamespace is returned on platforms lacking the supported
+// mitigation. Windows still has residual cross-VPN/application-cache risk.
+var ErrFakeDNSUnsafeNamespace = errors.New("FakeDNS not available on this platform")
 
-// StartSplitUDPWithFakeDNS is intentionally unavailable in production. A
-// machine-wide journal keeps Gozar allocations stable, but cannot identify
-// answers cached from other independently allocated namespaces. Fail before
-// provisioning files or changing the network; do not silently fall back here.
-// Isolated tests exercise the implementation through startUDPManaged instead.
+// StartSplitUDPWithFakeDNS enables the Windows-only mitigated implementation.
+// A durable machine-wide journal and OS cache flush reduce stale identities,
+// but independently cached foreign VPN addresses can still collide. Startup
+// must fail rather than silently drop either mitigation on error.
 func StartSplitUDPWithFakeDNS(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
-	return nil, ErrFakeDNSUnsafeNamespace
+	if runtime.GOOS != "windows" {
+		return nil, ErrFakeDNSUnsafeNamespace
+	}
+	if !tundev.Privileged() {
+		return nil, errors.New("the tunnel needs administrator rights")
+	}
+	var directName func(string) bool
+	if split != nil {
+		directName = split.Direct
+	}
+	fake, owner, err := openProductionMachineFakeDNS(directName)
+	if err != nil {
+		return nil, fmt.Errorf("FakeDNS storage unavailable: %w", err)
+	}
+	if err := flushSyntheticDNSSystemCache(); err != nil {
+		_ = owner.Close()
+		return nil, fmt.Errorf("FakeDNS cache flush failed: %w", err)
+	}
+	created, err := startUDPManaged(proxyHost, dial, protect, nil, direct, split, udpDial, fake, owner)
+	if err != nil {
+		return nil, err
+	}
+	if err := flushSyntheticDNSSystemCache(); err != nil {
+		created.Stop()
+		return nil, fmt.Errorf("FakeDNS cache flush failed: %w", err)
+	}
+	return created, nil
 }
 
 func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules) (*Engine, error) {
