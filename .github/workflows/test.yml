@@ -367,22 +367,42 @@ jobs:
           $work = Join-Path $env:ProgramData ('GozarFox-FakeDNS-CI-' + $id)
           $owned = $false
           $createdUser = $false
+          $taskName = 'GozarFakeDNS-' + $id
+          $createdTask = $false
           try {
             New-Item -ItemType Directory -Path $work | Out-Null
             go test -c -o "$work\engine.test.exe" ./internal/engine
             if ($LASTEXITCODE -ne 0) { throw 'Failed to compile helper' }
-            $password = ConvertTo-SecureString ('Aa1!' + [guid]::NewGuid().ToString('N') + 'zZ2!') -AsPlainText -Force
+            $plainPassword = 'Aa1!' + [guid]::NewGuid().ToString('N') + 'zZ2!'
+            $password = ConvertTo-SecureString $plainPassword -AsPlainText -Force
             New-LocalUser -Name $user -Password $password -PasswordNeverExpires | Out-Null
             $createdUser = $true
             Add-LocalGroupMember -Group 'Administrators' -Member $user
-            $credential = [pscredential]::new("$env:COMPUTERNAME\$user", $password)
             $env:GOZAR_FAKEDNS_CROSS_USER = '1'
             $owned = $true
             $first = & "$work\engine.test.exe" '-test.v' '-test.run=^TestFakeDNSCrossUserWindowsHelper$' '-test.timeout=45s' 2>&1
             if ($LASTEXITCODE -ne 0) { $first | Write-Host; throw 'First account failed' }
-            $process = Start-Process -FilePath "$work\engine.test.exe" -WorkingDirectory $work -Credential $credential -LoadUserProfile -ArgumentList '-test.v','-test.run=^TestFakeDNSCrossUserWindowsHelper$','-test.timeout=45s' -RedirectStandardOutput "$work\second.out" -RedirectStandardError "$work\second.err" -PassThru -Wait
+            # Start-Process -Credential receives a UAC-filtered token. A
+            # scheduled task with Highest explicitly uses the elevated token.
+            $child = @'
+          $env:GITHUB_ACTIONS = 'true'
+          $env:GOZAR_FAKEDNS_CROSS_USER = '1'
+          & "$PSScriptRoot\engine.test.exe" '-test.v' '-test.run=^TestFakeDNSCrossUserWindowsHelper$' '-test.timeout=45s' *> "$PSScriptRoot\second.out"
+          $code = $LASTEXITCODE
+          Set-Content -LiteralPath "$PSScriptRoot\exitcode.txt" -Value $code
+          exit $code
+          '@
+            Set-Content -LiteralPath "$work\child.ps1" -Value $child
+            $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$work\child.ps1`""
+            Register-ScheduledTask -TaskName $taskName -Action $action -User "$env:COMPUTERNAME\$user" -Password $plainPassword -RunLevel Highest -Force | Out-Null
+            $createdTask = $true
+            $plainPassword = $null
+            Start-ScheduledTask -TaskName $taskName
+            $until = [DateTime]::UtcNow.AddSeconds(90)
+            while (!(Test-Path "$work\exitcode.txt") -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Seconds 1 }
+            if (!(Test-Path "$work\exitcode.txt")) { throw 'Second account timed out' }
             $second = Get-Content "$work\second.out"
-            if ($process.ExitCode -ne 0) { $second | Write-Host; Get-Content "$work\second.err" | Write-Host; throw 'Second account failed' }
+            if ((Get-Content "$work\exitcode.txt" -Raw).Trim() -ne '0') { $second | Write-Host; throw 'Second account failed' }
             $a = @($first | Where-Object { $_ -match '^IDENTITY (\S+) (\S+)$' })
             $b = @($second | Where-Object { $_ -match '^IDENTITY (\S+) (\S+)$' })
             if ($a.Count -ne 1 -or $b.Count -ne 1) { throw 'Missing identity evidence' }
@@ -391,6 +411,7 @@ jobs:
             Write-Host 'Distinct administrator SIDs recovered the same synthetic address.'
           } finally {
             Remove-Item Env:GOZAR_FAKEDNS_CROSS_USER -ErrorAction SilentlyContinue
+            if ($createdTask) { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue }
             if ($createdUser) { Remove-LocalUser -Name $user -ErrorAction SilentlyContinue }
             if ($owned) { Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $key -ErrorAction SilentlyContinue }
             Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
