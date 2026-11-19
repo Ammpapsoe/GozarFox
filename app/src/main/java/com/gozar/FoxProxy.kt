@@ -30,6 +30,7 @@ class FoxProxy(
     },
     private val tunnelScope: (FoxProxy) -> FoxLink.TransportScope? = { FoxLink.transportScope(it) },
     private val scopeCurrent: (Long) -> Boolean = { FoxLink.transportIsCurrent(it) },
+    private val handshakeTimeoutMillis: Int = 10_000,
     private val pass: () -> String?
 ) {
 
@@ -159,7 +160,7 @@ class FoxProxy(
     private fun handle(client: Socket, acceptedEpoch: Long) {
         try {
             client.tcpNoDelay = true
-            val input = BufferedInputStream(client.getInputStream())
+            val input = ProxyHandshakeInput(client, BufferedInputStream(client.getInputStream()), handshakeTimeoutMillis)
             val output = BufferedOutputStream(client.getOutputStream())
             input.mark(1)
             val first = input.read()
@@ -176,7 +177,7 @@ class FoxProxy(
         }
     }
 
-    private fun socks(input: InputStream, output: BufferedOutputStream, acceptedEpoch: Long) {
+    private fun socks(input: ProxyHandshakeInput, output: BufferedOutputStream, acceptedEpoch: Long) {
         if (input.read() != 0x05) return
         val count = input.read()
         if (count <= 0) return
@@ -221,6 +222,9 @@ class FoxProxy(
         val portBytes = ByteArray(2)
         if (readFull(input, portBytes) < 0) return
         val target = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
+        // Long-lived data streams and UDP control channels must not inherit
+        // the bounded handshake deadline.
+        input.finish()
         if (command == 0x03) {
             udpAssociate(input, output, acceptedEpoch, host, target)
             return
@@ -335,8 +339,9 @@ class FoxProxy(
         return ok
     }
 
-    private fun web(input: InputStream, output: BufferedOutputStream, acceptedEpoch: Long) {
+    private fun web(input: ProxyHandshakeInput, output: BufferedOutputStream, acceptedEpoch: Long) {
         val head = readHead(input) ?: return
+        input.finish()
         val lines = head.split("\r\n")
         val first = lines.firstOrNull()?.split(" ") ?: return
         if (first.size < 3) return
