@@ -100,11 +100,13 @@ func TestConnectionModeSelectionDoesNotActivateProxyOrAllowUnsafeConnect(t *test
 		if current.State().Mode != string(mode) || config.Load().Mode != mode {
 			t.Fatalf("mode %q was not persisted", mode)
 		}
+		// Without an account proxy-only cannot prepare a relay; system-proxy
+		// remains deliberately disabled. Neither should activate resources.
 		if err := current.Connect(); err == nil {
-			t.Fatalf("unfinished mode %q connected", mode)
+			t.Fatalf("mode %q connected without prerequisites", mode)
 		}
-		if current.State().Live || current.engine != nil || current.modeLease != nil {
-			t.Fatalf("unfinished mode %q activated resources", mode)
+		if current.State().Live || current.engine != nil || current.proxy != nil || current.modeLease != nil {
+			t.Fatalf("mode %q activated resources without prerequisites", mode)
 		}
 	}
 	current.mu.Lock()

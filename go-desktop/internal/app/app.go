@@ -17,6 +17,7 @@ import (
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/killswitch"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/localproxy"
 	relaytransport "github.com/Ammpapsoe/GozarFox/go-desktop/internal/relay"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/signinproxy"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
@@ -89,29 +90,33 @@ type App struct {
 	pendingKind     string
 	unblockFor      string
 	engine          *engine.Engine
-	modeLease       *modeLease // accessed only while connectionMu is held
-	transport       *tunnel.Manager
-	warp            *warp.Auto
-	stage           string
-	fault           string
-	live            bool
-	connecting      bool
-	needAdmin       bool
-	exit            string
-	activeServer    fxa.Location
-	since           int64
-	rateDown        atomic.Int64
-	rateUp          atomic.Int64
-	lastDown        int64
-	lastUp          int64
-	lastActivity    atomic.Int64
-	passMu          sync.Mutex
-	geo             *geo.Rules
-	signin          *signinproxy.Proxy
-	geoRefresh      atomic.Int64
-	killActive      bool
-	version         string
-	admin           bool
+	proxy           *localproxy.Server
+	// Tests can replace only relay preparation; the actual listener and
+	// connection/teardown lifecycle are always exercised unchanged.
+	proxyTestDial localproxy.Dialer
+	modeLease     *modeLease // accessed only while connectionMu is held
+	transport     *tunnel.Manager
+	warp          *warp.Auto
+	stage         string
+	fault         string
+	live          bool
+	connecting    bool
+	needAdmin     bool
+	exit          string
+	activeServer  fxa.Location
+	since         int64
+	rateDown      atomic.Int64
+	rateUp        atomic.Int64
+	lastDown      int64
+	lastUp        int64
+	lastActivity  atomic.Int64
+	passMu        sync.Mutex
+	geo           *geo.Rules
+	signin        *signinproxy.Proxy
+	geoRefresh    atomic.Int64
+	killActive    bool
+	version       string
+	admin         bool
 }
 
 func New(version string) *App {
@@ -194,6 +199,9 @@ func (a *App) State() State {
 	if a.engine != nil {
 		state.Down, state.Up = a.engine.Counters()
 		state.Device = a.engine.Device()
+	}
+	if a.proxy != nil {
+		state.Port = a.proxy.Port()
 	}
 	return state
 }
@@ -373,6 +381,10 @@ func (a *App) SetKillSwitch(enabled bool) error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
 	a.mu.Lock()
+	if enabled && a.live && a.cfg.Mode == config.ModeProxyOnly {
+		a.mu.Unlock()
+		return errors.New("kill switch is unavailable in proxy-only mode")
+	}
 	if a.cfg.KillSwitch == enabled {
 		a.mu.Unlock()
 		return nil
@@ -863,11 +875,15 @@ func (a *App) connectLocked() error {
 		a.mu.Unlock()
 		return err
 	}
-	// Until the proxy lifecycle is implemented, fail before network, TUN or
-	// system-proxy changes. Never silently connect using another mode.
-	if !plan.tun {
+	// System proxy must remain disabled until transactional ownership and
+	// recovery are fully integrated. Never fall back to another mode.
+	if plan.systemProxy {
 		a.mu.Unlock()
-		return errors.New("selected connection mode is not implemented yet")
+		return errors.New("system proxy mode is not implemented yet")
+	}
+	if plan.localProxy && (a.cfg.KillSwitch || a.cfg.WarpUDP) {
+		a.mu.Unlock()
+		return errors.New("kill switch and WARP UDP are unavailable in proxy-only mode")
 	}
 	lease, err := processModeOwnership.acquire(mode)
 	if err != nil {
@@ -910,6 +926,14 @@ func (a *App) connectLocked() error {
 }
 
 func (a *App) connect(ctx context.Context) error {
+	// The test seam substitutes relay preparation only. It never substitutes
+	// listener creation, Connect, or teardown, and is unset in production.
+	a.mu.Lock()
+	proxyOnly := a.cfg.Mode == config.ModeProxyOnly
+	a.mu.Unlock()
+	if proxyOnly && a.proxyTestDial != nil {
+		return a.startLocalProxy(ctx, a.proxyTestDial, pathCandidate{}, nil, "")
+	}
 	// A successful sign-in already fetched a short-lived Mozilla pass. Using
 	// it first avoids another direct Guardian request when the network changes.
 	pass := a.bootstrapPass(time.Now())
@@ -997,6 +1021,10 @@ func (a *App) connect(ctx context.Context) error {
 		}
 		a.noteActivity()
 		return transport.Open(host, remotePort, current, 15*time.Second)
+	}
+	if proxyOnly {
+		// This path creates no TUN, firewall or system-proxy resources.
+		return a.startLocalProxy(ctx, dial, chosen, transport, pass.Token)
 	}
 	if err := wintun.Ensure(); err != nil {
 		transport.Close()
@@ -1131,6 +1159,7 @@ func (a *App) watchTunnel(current *engine.Engine) {
 func (a *App) teardown() {
 	a.mu.Lock()
 	engineNow := a.engine
+	proxyNow := a.proxy
 	transport := a.transport
 	warpNow := a.warp
 	killActive := a.killActive
@@ -1142,6 +1171,7 @@ func (a *App) teardown() {
 	a.renewCancel = nil
 	a.activeCancel = nil
 	a.engine = nil
+	a.proxy = nil
 	a.live = false
 	a.activeServer = fxa.Location{}
 	a.exit = ""
@@ -1152,6 +1182,9 @@ func (a *App) teardown() {
 	}
 	if activeCancel != nil {
 		activeCancel()
+	}
+	if proxyNow != nil {
+		_ = proxyNow.Close()
 	}
 	if warpNow != nil {
 		_ = warpNow.Close()

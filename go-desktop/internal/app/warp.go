@@ -26,6 +26,10 @@ func (a *App) SetWarpUDP(enabled, consent bool) error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
 	a.mu.Lock()
+	if enabled && a.live && a.cfg.Mode == config.ModeProxyOnly {
+		a.mu.Unlock()
+		return errors.New("WARP UDP is unavailable in proxy-only mode")
+	}
 	if a.cfg.WarpUDP == enabled {
 		a.mu.Unlock()
 		return nil

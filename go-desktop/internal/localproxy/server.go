@@ -26,6 +26,7 @@ type Server struct {
 	mu        sync.Mutex
 	closed    bool
 	active    map[net.Conn]struct{}
+	failures  chan error
 }
 
 // Listen binds only IPv4 loopback. It must not expose an unauthenticated proxy
@@ -39,7 +40,7 @@ func Listen(port int, dial Dialer) (*Server, error) {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Server{listener: listener, dial: dial, ctx: ctx, cancel: cancel, active: make(map[net.Conn]struct{})}
+	s := &Server{listener: listener, dial: dial, ctx: ctx, cancel: cancel, active: make(map[net.Conn]struct{}), failures: make(chan error, 1)}
 	s.transport = &http.Transport{
 		Proxy:                 nil,
 		DisableCompression:    true,
@@ -48,11 +49,19 @@ func Listen(port int, dial Dialer) (*Server, error) {
 		IdleConnTimeout:       30 * time.Second,
 	}
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 15 * time.Second, MaxHeaderBytes: 32 << 10}
-	go func() { _ = s.http.Serve(listener) }()
+	go func() {
+		defer close(s.failures)
+		if err := s.http.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			s.failures <- err
+		}
+	}()
 	return s, nil
 }
 
 func (s *Server) Port() int { return s.listener.Addr().(*net.TCPAddr).Port }
+
+// Failures reports unexpected listener failure, and closes on normal shutdown.
+func (s *Server) Failures() <-chan error { return s.failures }
 
 // Close terminates both HTTP requests and hijacked CONNECT sockets. Hijacked
 // connections are not managed by http.Server.Close, so they are tracked here.
