@@ -542,6 +542,30 @@ jobs:
           Write-Error 'The production-default Wintun diagnostic failed; see individual steps for the test-only RACK comparison.'
           exit 1
 
+      # A pinned upstream checkout stays separate: no GPL implementation code
+      # is copied into Gozar. This is an isolated local adapter/stack probe.
+      - name: Check out ArmanLife v1.0.19 for stack comparison
+        uses: actions/checkout@v5
+        with:
+          repository: armanlife/arman-vpn-client
+          ref: 492dd7f389c539790cde3d07167535d28788a0d0
+          path: rival-source
+          persist-credentials: false
+      - name: Compare ArmanLife local Windows Wintun stack
+        shell: pwsh
+        run: |
+          $root = $env:GITHUB_WORKSPACE
+          Copy-Item "$root/tools/diagnostics/rival_wintun_probe_test.go.txt" "$root/rival-source/core/internal/tunstack/gozar_comparison_windows_test.go"
+          Copy-Item "$root/go-desktop/internal/wintun/bin/wintun_amd64.dll" "$env:RUNNER_TEMP/wintun.dll"
+          Push-Location "$root/rival-source/core"
+          try {
+            go test -tags with_gvisor -c -o "$env:RUNNER_TEMP/rival-stack.test.exe" ./internal/tunstack
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $env:GOZAR_RIVAL_PROBE = '1'
+            & "$env:RUNNER_TEMP/rival-stack.test.exe" '-test.v' '-test.run=^TestGozarComparisonLocalWintun$' '-test.count=5' '-test.timeout=400s'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+
   desktop-ui:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (!(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests)) }}
     runs-on: ubuntu-24.04
