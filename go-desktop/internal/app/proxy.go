@@ -85,6 +85,9 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 	a.stage = ""
 	a.mu.Unlock()
 	go a.watchLocalProxy(server)
+	if monitored, ok := systemSession.(interface{ Failures() <-chan error }); ok {
+		go a.watchSystemProxy(server, monitored.Failures())
+	}
 	if transport != nil {
 		a.startRenewal()
 		go a.refreshServersThroughTunnel()
@@ -104,6 +107,31 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 		}()
 	}
 	return nil
+}
+
+// A recovery watchdog failure is fatal to this session: continuing would leave
+// the user's proxy pointed at our port without crash recovery. Teardown keeps
+// the listener alive until the system proxy has been restored or an error is
+// reported. The identity check prevents an old watcher stopping a new session.
+func (a *App) watchSystemProxy(server *localproxy.Server, failures <-chan error) {
+	err, ok := <-failures
+	if !ok {
+		err = errors.New("recovery watchdog monitor closed unexpectedly")
+	} else if err == nil {
+		err = errors.New("recovery watchdog reported an unspecified failure")
+	}
+	a.connectionMu.Lock()
+	defer a.connectionMu.Unlock()
+	a.mu.Lock()
+	active := a.proxy == server && a.systemProxy != nil
+	a.mu.Unlock()
+	if !active {
+		return
+	}
+	err = errors.Join(err, a.teardown())
+	a.mu.Lock()
+	a.fault = "The system proxy recovery watchdog stopped: " + err.Error()
+	a.mu.Unlock()
 }
 
 func (a *App) watchLocalProxy(server *localproxy.Server) {
