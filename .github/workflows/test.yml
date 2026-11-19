@@ -179,6 +179,19 @@ jobs:
             echo 'signature pending from Sign relay endpoints workflow'
           fi
 
+  windows-proxy-registry:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test proxy registry adapter in an isolated user key
+        working-directory: go-desktop
+        run: go test ./internal/sysproxy -count=1
+
   windows-live-tun:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_live_tun }}
     runs-on: windows-2022
