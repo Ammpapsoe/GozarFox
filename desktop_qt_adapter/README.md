@@ -67,6 +67,14 @@ into the complete window or Flutter login, and must not be used with a real VPN.
 The prior revision was tested on GitHub Actions with a fake core and isolated
 upstream widgets on Windows, Linux and macOS. This is not an end-to-end UI test.
 The settings RPC wrappers added after that run remain untested.
+The experimental `bindOriginalHomeWindow` template additionally maps core
+connection and location states into the actual upstream `ConnectWindowItem`
+public methods and forwards its connect click. Its compile-only check uses the
+original header with a backend stub; its runtime test uses a fake window. It
+is not a complete window build or a real VPN integration. The upstream window's
+protocol widget defaults to WireGuard/443, which does not describe Gozar; it
+must be corrected or disabled before this binding is shown to users. The
+binding does not enable the window's controls.
 
 The Gozar `kill_switch` field is an opt-in for firewall rules on the next TUN
 connection, not Windscribe's current firewall state. Do not bind it to the

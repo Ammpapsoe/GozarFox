@@ -5,12 +5,14 @@
 HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
                        ConnectWindow::ConnectButton *button, QObject *parent)
     : QObject(parent), core_(core), background_(background), button_(button) {
-    Q_ASSERT(core && background && button);
+    // The full upstream ConnectWindowItem owns its widgets privately. A
+    // headless binder can drive that window through its public API instead.
+    Q_ASSERT(core);
     connect(core, &CoreBridge::ready, this, &HomeBinder::refresh);
     connect(core, &CoreBridge::reply, this, &HomeBinder::handleReply);
     connect(core, &CoreBridge::failed, this, &HomeBinder::handleFailure);
     connect(core, &CoreBridge::stopped, this, &HomeBinder::coreStopped);
-    connect(button, &ConnectWindow::ConnectButton::clicked, this, &HomeBinder::toggleConnection);
+    if (button) connect(button, &ConnectWindow::ConnectButton::clicked, this, &HomeBinder::toggleConnection);
     refreshTimer_.setInterval(2000);
     connect(&refreshTimer_, &QTimer::timeout, this, &HomeBinder::refresh);
     refreshTimer_.start();
@@ -19,7 +21,9 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
 }
 
 void HomeBinder::setEnabled() {
-    if (button_) button_->setClickable(core_ && core_->running() && signedIn_ && mutatingId_ < 0 && !connecting_);
+    const bool available = core_ && core_->running() && signedIn_ && mutatingId_ < 0 && !connecting_;
+    if (button_) button_->setClickable(available);
+    emit availabilityChanged(available);
 }
 
 void HomeBinder::setVisualState(CONNECT_STATE next) {
@@ -27,6 +31,7 @@ void HomeBinder::setVisualState(CONNECT_STATE next) {
     if (background_) background_->onConnectStateChanged(next, visual_);
     if (button_) button_->onConnectStateChanged(next, visual_);
     visual_ = next;
+    emit visualStateChanged(next);
 }
 
 void HomeBinder::refresh() {

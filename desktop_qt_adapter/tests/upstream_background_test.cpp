@@ -1,5 +1,6 @@
 #include "corebridge.h"
 #include "homebinder.h"
+#include "originalhomebinding.h"
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
 #include "graphicresources/imageresourcessvg.h"
@@ -11,12 +12,27 @@
 #include <QSignalSpy>
 #include <QtTest>
 
+// Emulates the public contract of the original window. The actual window
+// declaration is checked separately; this is not a full-window runtime test.
+class FakeOriginalWindow : public QObject {
+    Q_OBJECT
+public:
+    QString countryCode;
+    CONNECT_STATE state = CONNECT_STATE_DISCONNECTED;
+    void updateConnectState(const types::ConnectState &value) { state = value.connectState; }
+    void updateLocationInfo(const QString &, const QString &, const QString &code, PingTime, bool) { countryCode = code; }
+    void click() { emit connectClick(); }
+signals:
+    void connectClick();
+};
+
 class UpstreamBackgroundTest : public QObject {
     Q_OBJECT
 private slots:
     void sourceFlagFollowsSimulatedCore();
     void upstreamPowerButtonTriggersSimulatedCore();
     void serverAndSettingsUseCoreResponses();
+    void originalWindowPublicApiBindingWithFakeWindow();
     void cleanupTestCase();
 };
 
@@ -158,6 +174,25 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     const auto locked = states.last().at(0).toJsonObject();
     QCOMPARE(locked.value("mode").toString(), QStringLiteral("system-proxy"));
     QCOMPARE(locked.value("server").toObject().value("code").toString(), QStringLiteral("DE"));
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::originalWindowPublicApiBindingWithFakeWindow() {
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    FakeOriginalWindow window;
+    bindOriginalHomeWindow(&window, &binder);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    binder.selectServer(QStringLiteral("test.example"), QStringLiteral("DE"));
+    QTRY_COMPARE_WITH_TIMEOUT(window.countryCode, QStringLiteral("de"), 5000);
+    window.click();
+    QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_CONNECTED, 5000);
+    window.click();
+    QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_DISCONNECTED, 5000);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }

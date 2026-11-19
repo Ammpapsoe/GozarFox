@@ -26,14 +26,16 @@ public:
     void setRecents(bool enabled);
     void setWarpUdp(bool enabled, bool consent);
     void setChain(const QJsonArray &hops);
+    void toggleConnection();
 
 signals:
     void error(const QString &message);
     void stateChanged(const QJsonObject &state);
+    void visualStateChanged(CONNECT_STATE state);
+    void availabilityChanged(bool available);
     void serversReady(const QJsonArray &servers);
 
 private slots:
-    void toggleConnection();
     void handleReply(qint64 id, const QJsonObject &reply);
     void handleFailure(qint64 id, const QString &message);
     void coreStopped();

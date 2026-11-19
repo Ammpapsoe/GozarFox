@@ -35,8 +35,9 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   set(WS_GUI "${WINDSCRIBE_ROOT}/src/client/frontend/gui")
   set(WS_COMMON "${WINDSCRIBE_ROOT}/src/client/client-common")
   add_executable(upstream_background_test
-    homebinder.cpp homebinder.h
+    homebinder.cpp homebinder.h originalhomebinding.h
     tests/upstream_background_test.cpp tests/upstream_shims/categories.cpp
+    ${WS_COMMON}/types/pingtime.cpp
     tests/upstream_shims/backend/preferences/preferences.h
     tests/upstream_shims/languagecontroller.h
     ${WS_GUI}/images.qrc
@@ -56,6 +57,11 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.cpp ${WS_GUI}/connectwindow/backgroundimage/simpleimagechanger.h)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Test)
+  # Compile the binding against the real upstream window declaration, using a
+  # backend stub. This does not compile or instantiate the entire window.
+  add_library(original_window_header_compile OBJECT tests/original_window_header_compile.cpp)
+  target_include_directories(original_window_header_compile BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON})
+  target_link_libraries(original_window_header_compile PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg)
   add_test(NAME upstream_background_test COMMAND upstream_background_test $<TARGET_FILE:fake_core>)
   set_tests_properties(upstream_background_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
