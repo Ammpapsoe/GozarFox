@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/netip"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1139,8 +1138,9 @@ func (a *App) connect(ctx context.Context) error {
 		transport.Close()
 		return err
 	}
-	startTunnel := selectTUNStarter(runtime.GOOS, engine.StartSplitUDPWithFakeDNS, engine.StartSplitUDP)
-	created, err := startTunnel(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
+	// Do not enable synthetic DNS in production until cached addresses from
+	// other VPNs sharing the synthetic range can be distinguished safely.
+	created, err := engine.StartSplitUDP(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
 	if err != nil {
 		if warpNow != nil {
 			_ = warpNow.Close()
