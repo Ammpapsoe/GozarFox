@@ -158,6 +158,14 @@ class Words {
   String get connectionError => pick(
       'اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.',
       'Could not reach the server. Check your internet connection.');
+  String get fakeDnsStorageBusy => pick(
+        'فضای DNS امن در حال استفاده است. برنامه‌های دیگر گذر را ببندید و دوباره تلاش کنید.',
+        'Secure DNS storage is in use. Close other Gozar instances and try again.',
+      );
+  String get fakeDnsStorageError => pick(
+        'ذخیره‌سازی DNS امن در دسترس نیست یا آسیب دیده است؛ اتصال برای جلوگیری از مسیریابی اشتباه متوقف شد. فایل‌ها را حذف نکنید و در صورت ادامه با پشتیبانی تماس بگیرید.',
+        'Secure DNS storage is unavailable or damaged. The connection was stopped to prevent misrouting. Do not delete its files; contact support if the problem persists.',
+      );
   String get adminRequired => pick(
       'برای اتصال، برنامه به دسترسی مدیر سیستم نیاز دارد.',
       'The tunnel needs administrator privileges.');

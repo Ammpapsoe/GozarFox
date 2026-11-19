@@ -33,11 +33,13 @@ func (e *Engine) publishDNS(query []byte, udp bool, write func([]byte) error) er
 	if len(answer) > 65535 {
 		return errors.New("DNS answer too large")
 	}
-	if err := write(answer); err != nil {
-		return err
-	}
+	// Learn direct-routing answers before publication: the client may open a
+	// connection as soon as its response is written on another thread.
 	if e.split != nil {
 		e.split.Learn(query, answer)
+	}
+	if err := write(answer); err != nil {
+		return err
 	}
 	e.down.Add(int64(len(answer)))
 	return nil

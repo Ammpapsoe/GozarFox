@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/geo"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -64,6 +65,31 @@ func TestFakeDNSLifecycleFailedStartupReleasesOwner(t *testing.T) {
 	_, err := startUDPManaged("", nil, []netip.Addr{}, nil, nil, nil, nil, nil, owner)
 	if err == nil || owner.closes.Load() != 1 {
 		t.Fatal("invalid startup did not close its owner", err)
+	}
+}
+
+func TestFakeDNSLifecycleLearnsDirectAddressBeforePublishing(t *testing.T) {
+	rules, err := geo.Parse([]byte("direct.example\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, err := newFakeDNS(rules.Direct)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{fakeDNS: fake, split: rules, dns: fakeUDPResolver{answer: func(q dnsmessage.Message) (dnsmessage.Message, error) {
+		return syntheticUDPAnswer(q, [4]byte{1, 1, 1, 1}), nil
+	}}}
+	for _, udp := range []bool{false, true} {
+		err = e.publishDNS(fakeQuery(t, "direct.example", dnsmessage.TypeA), udp, func([]byte) error {
+			if !rules.DirectAddress(netip.MustParseAddr("1.1.1.1")) {
+				return errors.New("direct route not learned before response write")
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

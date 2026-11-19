@@ -2,6 +2,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/netip"
 	"runtime"
@@ -145,8 +146,8 @@ type Engine struct {
 	direct Dialer
 	split  *geo.Rules
 	dns    resolver
-	// FakeDNS is prepared before traffic starts; the managed path is not yet
-	// used by the application. The durable owner outlives all DNS publication.
+	// FakeDNS is prepared before traffic starts. Its durable owner outlives all
+	// DNS publication and is released only after in-flight answers are drained.
 	fakeDNS          *fakeDNS
 	fakeOwner        io.Closer
 	dnsPublishMu     sync.RWMutex
@@ -178,7 +179,7 @@ func StartSplitUDP(proxyHost string, dial, direct Dialer, protect []netip.Addr, 
 
 // StartSplitUDPWithFakeDNS opens the machine-wide namespace before installing
 // tunnel routes. Failure is fatal; it never resets or falls back to real DNS.
-// The application does not call this until the full path is validated.
+// Storage errors are reported to the application without falling back.
 func StartSplitUDPWithFakeDNS(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
@@ -189,7 +190,7 @@ func StartSplitUDPWithFakeDNS(proxyHost string, dial, direct Dialer, protect []n
 	}
 	fake, owner, err := openProductionMachineFakeDNS(directName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("FakeDNS storage unavailable: %w", err)
 	}
 	return startUDPManaged(proxyHost, dial, protect, nil, direct, split, udpDial, fake, owner)
 }

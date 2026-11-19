@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1138,7 +1139,8 @@ func (a *App) connect(ctx context.Context) error {
 		transport.Close()
 		return err
 	}
-	created, err := engine.StartSplitUDP(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
+	startTunnel := selectTUNStarter(runtime.GOOS, engine.StartSplitUDPWithFakeDNS, engine.StartSplitUDP)
+	created, err := startTunnel(chosen.target.Host, dial, direct, chosen.keep, split, udpDial)
 	if err != nil {
 		if warpNow != nil {
 			_ = warpNow.Close()

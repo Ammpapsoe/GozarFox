@@ -42,6 +42,7 @@ class FakeCore extends Core {
   String exit = '';
   String device = '';
   bool disconnectFailure = false;
+  String? connectFailure;
   bool captchaDone = false;
   int loginCalls = 0;
   Map<String, dynamic>? lastAuth;
@@ -122,7 +123,12 @@ class FakeCore extends Core {
       warpUdp = params['enabled'] as bool;
     }
     if (method == 'chain') chain = (params!['hops'] as List).cast<String>();
-    if (method == 'connect') live = true;
+    if (method == 'connect') {
+      if (connectFailure != null) {
+        return CoreReply(state: current, error: connectFailure);
+      }
+      live = true;
+    }
     if (method == 'disconnect') {
       if (disconnectFailure) {
         return CoreReply(state: current, error: 'disconnect failed');
@@ -376,6 +382,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.live, isTrue);
     expect(tester.widget<InkWell>(find.byKey(const ValueKey('home-mode-tun'))).onTap, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connection mode reports unsafe DNS storage without connecting', (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = FakeCore(signedIn: true, language: 'en')
+      ..connectFailure = 'FakeDNS storage unavailable: damaged marker';
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Connect').first);
+    await tester.pumpAndSettle();
+    expect(core.live, isFalse);
+    expect(find.textContaining('Secure DNS storage is unavailable or damaged'), findsOneWidget);
+    expect(find.textContaining('Do not delete its files'), findsOneWidget);
+    core.connectFailure = 'FakeDNS storage unavailable: machine FakeDNS already in use';
+    await tester.tap(find.byTooltip('Connect').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Secure DNS storage is in use'), findsOneWidget);
+    expect(core.live, isFalse);
     expect(tester.takeException(), isNull);
   });
 

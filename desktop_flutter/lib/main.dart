@@ -493,6 +493,13 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         lower.contains('core not running')) {
       return words.coreStopped;
     }
+    if (lower.contains('fakedns storage unavailable')) {
+      if (lower.contains('in use') || lower.contains('storage lock') ||
+          lower.contains('being used by another process')) {
+        return words.fakeDnsStorageBusy;
+      }
+      return words.fakeDnsStorageError;
+    }
     if (lower.contains('administrator') || lower.contains('needs root')) {
       return Platform.isWindows
           ? words.windowsAdminRequired
