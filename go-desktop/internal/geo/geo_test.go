@@ -46,6 +46,22 @@ func TestLearnedDNSAddress(t *testing.T) {
 	}
 }
 
+func TestLearnedZeroTTLDoesNotCreateDirectBypass(t *testing.T) {
+	rules, err := Parse([]byte("direct.example\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := dnsmessage.MustNewName("direct.example.")
+	q := dnsmessage.Message{Header: dnsmessage.Header{ID: 7}, Questions: []dnsmessage.Question{{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}}}
+	a := dnsmessage.Message{Header: dnsmessage.Header{ID: 7, Response: true}, Questions: q.Questions, Answers: []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 0}, Body: &dnsmessage.AResource{A: [4]byte{1, 1, 1, 1}}}}}
+	qw, _ := q.Pack()
+	aw, _ := a.Pack()
+	rules.Learn(qw, aw)
+	if rules.DirectAddress(netip.MustParseAddr("1.1.1.1")) {
+		t.Fatal("zero-TTL DNS answer created direct route")
+	}
+}
+
 func TestReplaceKeepsLastGoodList(t *testing.T) {
 	rules := Default()
 	if err := rules.Replace([]byte("# comment\nexample.ir\nbad_domain\n")); err == nil {

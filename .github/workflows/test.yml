@@ -336,6 +336,9 @@ jobs:
       - name: Test FakeDNS mapping, journal and UDP
         working-directory: go-desktop
         run: go test ./internal/engine -run '^(TestFakeDNS|TestJournalFakeDNS)' -count=1
+      - name: Test bounded real-DNS cache and routing TTL
+        working-directory: go-desktop
+        run: go test ./internal/dnsproxy ./internal/geo -run '^(TestResponseCache|TestLearned)' -count=1 -v
 
   focused-fakedns-live-windows:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}

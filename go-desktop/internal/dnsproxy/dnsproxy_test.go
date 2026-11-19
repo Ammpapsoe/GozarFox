@@ -102,8 +102,9 @@ func TestResolveUsesTLSOverTheProvidedDialer(t *testing.T) {
 		w.Header().Set("Content-Type", "application/dns-message")
 		_, _ = w.Write(answerFor(t, body))
 	}))
-	for _, id := range []uint16{0x1234, 0x5678} {
-		wire := query(t, id, "example.org.", dnsmessage.TypeA)
+	for index, id := range []uint16{0x1234, 0x5678} {
+		name := []string{"example.org.", "other.example.org."}[index]
+		wire := query(t, id, name, dnsmessage.TypeA)
 		got, err := r.Resolve(wire)
 		if err != nil {
 			t.Fatal(err)

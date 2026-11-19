@@ -33,6 +33,7 @@ type Resolver struct {
 	client    *http.Client
 	servers   []string
 	timeout   time.Duration
+	cache     *responseCache
 }
 
 func New(dial func(host string, port int) (io.ReadWriteCloser, error)) *Resolver {
@@ -43,6 +44,7 @@ func New(dial func(host string, port int) (io.ReadWriteCloser, error)) *Resolver
 		cancel:  cancel,
 		servers: append([]string(nil), servers...),
 		timeout: 8 * time.Second,
+		cache:   newResponseCache(),
 	}
 	r.transport = &http.Transport{
 		DialContext:           r.dial,
@@ -69,6 +71,12 @@ func (r *Resolver) Resolve(query []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := r.ctx.Err(); err != nil {
+		return nil, err
+	}
+	if answer, ok := r.cache.get(query); ok {
+		return answer, nil
+	}
 	var last error
 	for _, server := range r.servers {
 		answer, err := r.exchange(server, query)
@@ -76,6 +84,7 @@ func (r *Resolver) Resolve(query []byte) ([]byte, error) {
 			err = checkAnswer(question, answer)
 		}
 		if err == nil {
+			r.cache.put(query, answer)
 			return answer, nil
 		}
 		last = err
@@ -166,6 +175,7 @@ func (r *Resolver) dial(ctx context.Context, network, address string) (net.Conn,
 
 func (r *Resolver) Close() {
 	r.cancel()
+	r.cache.clear()
 	r.transport.CloseIdleConnections()
 }
 

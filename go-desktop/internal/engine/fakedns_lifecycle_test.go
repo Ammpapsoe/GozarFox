@@ -78,7 +78,9 @@ func TestFakeDNSLifecycleLearnsDirectAddressBeforePublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := &Engine{fakeDNS: fake, split: rules, dns: fakeUDPResolver{answer: func(q dnsmessage.Message) (dnsmessage.Message, error) {
-		return syntheticUDPAnswer(q, [4]byte{1, 1, 1, 1}), nil
+		answer := syntheticUDPAnswer(q, [4]byte{1, 1, 1, 1})
+		answer.Answers[1].Header.TTL = 60
+		return answer, nil
 	}}}
 	for _, udp := range []bool{false, true} {
 		err = e.publishDNS(fakeQuery(t, "direct.example", dnsmessage.TypeA), udp, func([]byte) error {

@@ -25,7 +25,7 @@ const maxLearned = 8192
 var defaultPrefixes = append(parsePrefixes(irIPv4), parsePrefixes(irIPv6)...)
 
 type Rules struct {
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 	domains  map[string]struct{}
 	learned  map[netip.Addr]learnedEntry
 	prefixes []netip.Prefix
@@ -207,7 +207,12 @@ func (r *Rules) Learn(query, answer []byte) {
 			continue
 		}
 		ttl := time.Duration(resource.Header.TTL) * time.Second
-		if ttl <= 0 || ttl > 5*time.Minute {
+		// A zero-TTL answer must never create a five-minute direct bypass.
+		// This also applies to answers near expiry from the DNS forward cache.
+		if ttl <= 0 {
+			continue
+		}
+		if ttl > 5*time.Minute {
 			ttl = 5 * time.Minute
 		}
 		if len(r.learned) >= maxLearned {
