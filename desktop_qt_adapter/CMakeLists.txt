@@ -60,7 +60,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   target_sources(upstream_background_test PRIVATE
     tests/upstream_shims/backend/backend.h tests/upstream_shims/tooltip_service.cpp
     ${WS_GUI}/tooltips/tooltipcontroller.h
-    ${WS_COMMON}/types/protocol.cpp
+    tests/upstream_protocol.cpp
     ${WS_GUI}/graphicresources/fontdescr.cpp ${WS_GUI}/graphicresources/fontmanager.cpp
     ${WS_GUI}/utils/textshadow.cpp
     ${WS_GUI}/commongraphics/commongraphics.cpp
