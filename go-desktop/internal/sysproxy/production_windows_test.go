@@ -23,6 +23,12 @@ import (
 // The actual production watchdog launches the current executable. Teach this
 // test executable the same internal entry point; no real account is used.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "--internal-lan-proxy-watchdog" {
+		if err := runExperimentalLANWatchdog(); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--internal-proxy-watchdog" {
 		if err := RunRecoveryWatchdog(); err != nil {
 			os.Exit(1)

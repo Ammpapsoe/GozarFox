@@ -111,11 +111,15 @@ type recoveryWatchdog struct {
 }
 
 func launchRecoveryWatchdog() (*recoveryWatchdog, error) {
+	return launchWatchdog("--internal-proxy-watchdog")
+}
+
+func launchWatchdog(mode string) (*recoveryWatchdog, error) {
 	executable, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(executable, "--internal-proxy-watchdog")
+	cmd := exec.Command(executable, mode)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
