@@ -78,6 +78,13 @@ func TestSystemProxyProductionConnectRestore(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	if got := readLiveValues(t, b); !reflect.DeepEqual(got, desired(port)) {
+		for _, name := range proxyNames {
+			want := desired(port)[name]
+			value := got[name]
+			if value != want {
+				t.Errorf("WinINet setting %s differs: got kind=%s number=%d textlen=%d; want kind=%s number=%d textlen=%d", name, value.Kind, value.Number, len(value.Text), want.Kind, want.Number, len(want.Text))
+			}
+		}
 		t.Fatal("WinINet settings do not point to the live listener")
 	}
 	if err := session.Close(); err != nil {
