@@ -354,6 +354,47 @@ jobs:
           GOZAR_LIVE_TUN_TEST: '1'
           GOZAR_FAKEDNS_PRODUCTION_STORAGE_TEST: '1'
         run: go test ./internal/engine -run '^TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage)$' -count=1 -v -timeout=120s
+      - name: Check machine identity across two Windows administrator accounts
+        working-directory: go-desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:ProgramData 'GozarFox-FakeDNS-Machine-v1'
+          $key = 'HKLM:\SOFTWARE\GozarFox\FakeDNSMachineV1'
+          if ((Test-Path $root) -or (Test-Path $key)) { throw 'Refusing to touch pre-existing production DNS state' }
+          $id = [guid]::NewGuid().ToString('N').Substring(0,10)
+          $user = 'gztest' + $id
+          $work = Join-Path $env:ProgramData ('GozarFox-FakeDNS-CI-' + $id)
+          $owned = $false
+          $createdUser = $false
+          try {
+            New-Item -ItemType Directory -Path $work | Out-Null
+            go test -c -o "$work\engine.test.exe" ./internal/engine
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to compile helper' }
+            $password = ConvertTo-SecureString ('Aa1!' + [guid]::NewGuid().ToString('N') + 'zZ2!') -AsPlainText -Force
+            New-LocalUser -Name $user -Password $password -PasswordNeverExpires | Out-Null
+            $createdUser = $true
+            Add-LocalGroupMember -Group 'Administrators' -Member $user
+            $credential = [pscredential]::new("$env:COMPUTERNAME\$user", $password)
+            $env:GOZAR_FAKEDNS_CROSS_USER = '1'
+            $owned = $true
+            $first = & "$work\engine.test.exe" '-test.v' '-test.run=^TestFakeDNSCrossUserWindowsHelper$' '-test.timeout=45s' 2>&1
+            if ($LASTEXITCODE -ne 0) { $first | Write-Host; throw 'First account failed' }
+            $process = Start-Process -FilePath "$work\engine.test.exe" -WorkingDirectory $work -Credential $credential -LoadUserProfile -ArgumentList '-test.v','-test.run=^TestFakeDNSCrossUserWindowsHelper$','-test.timeout=45s' -RedirectStandardOutput "$work\second.out" -RedirectStandardError "$work\second.err" -PassThru -Wait
+            $second = Get-Content "$work\second.out"
+            if ($process.ExitCode -ne 0) { $second | Write-Host; Get-Content "$work\second.err" | Write-Host; throw 'Second account failed' }
+            $a = @($first | Where-Object { $_ -match '^IDENTITY (\S+) (\S+)$' })
+            $b = @($second | Where-Object { $_ -match '^IDENTITY (\S+) (\S+)$' })
+            if ($a.Count -ne 1 -or $b.Count -ne 1) { throw 'Missing identity evidence' }
+            $aa = $a[0].ToString().Split(' '); $bb = $b[0].ToString().Split(' ')
+            if ($aa[1] -eq $bb[1] -or $aa[2] -ne $bb[2]) { throw 'Distinct accounts did not share the same DNS identity' }
+            Write-Host 'Distinct administrator SIDs recovered the same synthetic address.'
+          } finally {
+            Remove-Item Env:GOZAR_FAKEDNS_CROSS_USER -ErrorAction SilentlyContinue
+            if ($createdUser) { Remove-LocalUser -Name $user -ErrorAction SilentlyContinue }
+            if ($owned) { Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue; Remove-Item -Recurse -Force $key -ErrorAction SilentlyContinue }
+            Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+          }
 
   focused-fakedns-live-linux:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}

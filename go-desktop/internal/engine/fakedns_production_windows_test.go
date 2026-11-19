@@ -4,6 +4,7 @@ package engine
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,28 @@ import (
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
+
+// This helper is invoked sequentially under two different local administrator
+// identities on the disposable runner. The workflow compares SID and address.
+func TestFakeDNSCrossUserWindowsHelper(t *testing.T) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" || os.Getenv("GOZAR_FAKEDNS_CROSS_USER") != "1" {
+		t.Skip("requires disposable cross-account CI")
+	}
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake, owner, err := openProductionMachineFakeDNS(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	address, err := fake.address("cross-account.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("IDENTITY %s %s\n", user.User.Sid.String(), address.String())
+}
 
 // The exact machine-wide path and HKLM marker must be exercised only on a
 // disposable CI runner. Refuse to run if either already exists; never delete
