@@ -21,7 +21,7 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
 }
 
 void HomeBinder::setEnabled() {
-    const bool available = core_ && core_->running() && signedIn_ && mutatingId_ < 0 && !connecting_;
+    const bool available = core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && !connecting_;
     if (button_) button_->setClickable(available);
     emit availabilityChanged(available);
 }
@@ -39,7 +39,11 @@ void HomeBinder::refresh() {
     // periodic requests while a connection or another state call is pending.
     if (!core_ || !core_->running() || stateId_ >= 0 || mutatingId_ >= 0) return;
     stateId_ = core_->request(QStringLiteral("state"));
-    if (stateId_ < 0) emit error(QStringLiteral("core state unavailable"));
+    if (stateId_ < 0) {
+        stateKnown_ = false;
+        setEnabled();
+        emit error(QStringLiteral("core state unavailable"));
+    }
 }
 
 void HomeBinder::loadServers() {
@@ -49,14 +53,14 @@ void HomeBinder::loadServers() {
 }
 
 void HomeBinder::sendMutation(const QString &method, const QJsonObject &params) {
-    if (!core_ || !core_->running() || !signedIn_ || connecting_ || mutatingId_ >= 0) return;
+    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_ || connecting_ || mutatingId_ >= 0) return;
     mutatingId_ = core_->request(method, params);
     if (mutatingId_ < 0) emit error(QStringLiteral("cannot send core request"));
     setEnabled();
 }
 
 void HomeBinder::toggleConnection() {
-    if (!core_ || !core_->running() || !signedIn_ || mutatingId_ >= 0 || connecting_) return;
+    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_ || mutatingId_ >= 0 || connecting_) return;
     const bool disconnect = live_;
     const auto id = core_->request(disconnect ? QStringLiteral("disconnect") : QStringLiteral("connect"));
     if (id < 0) { emit error(QStringLiteral("cannot send connection request")); return; }
@@ -102,7 +106,16 @@ void HomeBinder::setChain(const QJsonArray &hops) {
 }
 
 void HomeBinder::applyState(const QJsonObject &state) {
-    // Missing/incomplete data must not manufacture a signed-in or live state.
+    // Unknown connection state must never be interpreted as disconnected.
+    if (!state.value(QStringLiteral("signed_in")).isBool() ||
+        !state.value(QStringLiteral("live")).isBool() ||
+        !state.value(QStringLiteral("connecting")).isBool()) {
+        stateKnown_ = false;
+        setEnabled();
+        emit error(QStringLiteral("invalid core state; connection state unknown"));
+        return;
+    }
+    stateKnown_ = true;
     signedIn_ = state.value(QStringLiteral("signed_in")).toBool(false);
     live_ = state.value(QStringLiteral("live")).toBool(false);
     connecting_ = state.value(QStringLiteral("connecting")).toBool(false);
@@ -121,13 +134,20 @@ void HomeBinder::applyState(const QJsonObject &state) {
 }
 
 void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
+    const bool needsState = mutatingId_ == id || stateId_ == id;
     if (mutatingId_ == id) mutatingId_ = -1;
     if (stateId_ == id) stateId_ = -1;
     const bool serversReply = serversId_ == id;
     if (serversReply) serversId_ = -1;
     const auto state = reply.value(QStringLiteral("state"));
     if (state.isObject()) applyState(state.toObject());
-    else setEnabled();
+    else {
+        if (needsState) {
+            stateKnown_ = false;
+            emit error(QStringLiteral("core reply has no state; connection state unknown"));
+        }
+        setEnabled();
+    }
     const QString message = reply.value(QStringLiteral("error")).toString();
     if (!message.isEmpty()) emit error(message);
     else if (serversReply) {
@@ -138,6 +158,7 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
 }
 
 void HomeBinder::handleFailure(qint64 id, const QString &message) {
+    if (id == mutatingId_ || id == stateId_) stateKnown_ = false;
     if (id == mutatingId_) mutatingId_ = -1;
     if (id == stateId_) stateId_ = -1;
     if (id == serversId_) serversId_ = -1;
@@ -146,6 +167,7 @@ void HomeBinder::handleFailure(qint64 id, const QString &message) {
 }
 
 void HomeBinder::coreStopped() {
+    stateKnown_ = false;
     signedIn_ = false;
     connecting_ = false;
     mutatingId_ = stateId_ = serversId_ = -1;

@@ -46,6 +46,7 @@ private slots:
     void originalWindowConnectWithFakeCore();
     void locationsMapAndSelection();
     void originalWindowReadsRealCoreState();
+    void incompleteStateDisablesMutations();
     void cleanupTestCase();
 };
 
@@ -334,6 +335,29 @@ void UpstreamBackgroundTest::originalWindowReadsRealCoreState() {
     QVERIFY(!state.value("live").toBool());
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 10000);
+}
+
+void UpstreamBackgroundTest::incompleteStateDisablesMutations() {
+    qputenv("FAKE_CORE_OMIT_LIVE", "1");
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    QSignalSpy ready(&bridge, &CoreBridge::ready), replies(&bridge, &CoreBridge::reply);
+    QSignalSpy errors(&binder, &HomeBinder::error), availability(&binder, &HomeBinder::availabilityChanged);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    const bool started = bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE"));
+    QTRY_VERIFY_WITH_TIMEOUT(!ready.isEmpty(), 5000);
+    qunsetenv("FAKE_CORE_OMIT_LIVE");
+    QVERIFY(started);
+    QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
+    QVERIFY(!availability.isEmpty());
+    QVERIFY(!availability.last().at(0).toBool());
+    const int count = replies.size();
+    binder.toggleConnection();
+    binder.setMode(QStringLiteral("system-proxy"));
+    QTest::qWait(150);
+    QCOMPARE(replies.size(), count);
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }
 
 void UpstreamBackgroundTest::cleanupTestCase() {

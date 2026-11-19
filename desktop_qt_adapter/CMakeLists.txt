@@ -81,6 +81,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/connectwindow/ipaddressitem/octetitem.cpp
     ${WS_GUI}/commongraphics/footerbackground.cpp
     ${WS_GUI}/commonwidgets/scrollbar.cpp
+    ${WS_GUI}/commonwidgets/textbuttonwidget.cpp
     ${WS_GUI}/locationswindow/locationswindow.cpp
     ${WS_GUI}/locationswindow/widgetlocations/configfooterinfo.cpp
     ${WS_GUI}/locationswindow/widgetlocations/emptylistwidget.cpp

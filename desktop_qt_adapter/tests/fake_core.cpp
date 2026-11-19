@@ -40,10 +40,11 @@ int main(int argc, char **argv) {
             else warpUdp = params.value("enabled").toBool();
         }
         if (method == "chain") chain = params.value("hops").toArray();
-        const QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode},
+        QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode},
                                 {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
                                 {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},
                                 {"server", QJsonObject{{"code", countryCode}}}};
+        if (qEnvironmentVariableIsSet("FAKE_CORE_OMIT_LIVE")) state.remove(QStringLiteral("live"));
         QJsonValue payload = request.value("params");
         if (method == "servers") payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
         QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
