@@ -234,14 +234,18 @@ func (j *fileDNSJournal) Initialize(start uint32) error {
 }
 
 func (j *fileDNSJournal) Append(name string) error {
+	return j.AppendBatch([]string{name})
+}
+
+// AppendBatch flushes all history records, then their checkpoints, before
+// acknowledging any name. Recovery either preserves every complete record or
+// fails closed on a partial one. No address is returned on an uncertain write.
+func (j *fileDNSJournal) AppendBatch(names []string) error {
 	if j == nil || j.failed || !j.loaded {
 		return errors.New("synthetic DNS journal is not ready")
 	}
-	if !fakeDomain(name) || len(j.names) >= int(fakeCount) {
-		return errors.New("invalid synthetic DNS allocation")
-	}
-	if _, ok := j.names[name]; ok {
-		return errors.New("duplicate synthetic DNS allocation")
+	if len(names) == 0 || len(names) > fakeDNSBatchLimit || len(j.names)+len(names) > int(fakeCount) {
+		return errors.New("invalid synthetic DNS batch size")
 	}
 	info, err := j.history.Stat()
 	if err != nil {
@@ -255,31 +259,51 @@ func (j *fileDNSJournal) Append(name string) error {
 		j.failed = true
 		return errors.New("synthetic DNS journal changed unexpectedly")
 	}
-	if info.Size()+int64(1+len(name)+sha256.Size) > dnsFileLimit {
+	seen := make(map[string]struct{}, len(names))
+	var records, checkpoints []byte
+	hashes := make([][sha256.Size]byte, 0, len(names))
+	previous := j.hashes[len(j.hashes)-1]
+	for i, name := range names {
+		if !fakeDomain(name) {
+			return errors.New("invalid synthetic DNS allocation")
+		}
+		if _, ok := j.names[name]; ok {
+			return errors.New("duplicate synthetic DNS allocation")
+		}
+		if _, ok := seen[name]; ok {
+			return errors.New("duplicate synthetic DNS batch allocation")
+		}
+		seen[name] = struct{}{}
+		sequence := uint32(len(j.hashes) + i)
+		hash := dnsEntryHash(previous, sequence, name)
+		records = append(records, byte(len(name)))
+		records = append(records, []byte(name)...)
+		records = append(records, hash[:]...)
+		checkpoints = append(checkpoints, dnsCheckpoint(sequence, hash)...)
+		hashes = append(hashes, hash)
+		previous = hash
+	}
+	if info.Size()+int64(len(records)) > dnsFileLimit || anchorInfo.Size()+int64(len(checkpoints)) > dnsAnchorLimit {
 		return errors.New("synthetic DNS history size limit reached")
 	}
-	sequence := uint32(len(j.hashes))
-	hash := dnsEntryHash(j.hashes[len(j.hashes)-1], sequence, name)
-	record := make([]byte, 1+len(name)+sha256.Size)
-	record[0] = byte(len(name))
-	copy(record[1:], name)
-	copy(record[1+len(name):], hash[:])
-	if err = dnsAppend(j.history, record); err == nil {
+	if err = dnsAppend(j.history, records); err == nil {
 		err = j.sync(j.history)
 	}
 	if err == nil {
-		err = dnsAppend(j.anchor, dnsCheckpoint(sequence, hash))
+		err = dnsAppend(j.anchor, checkpoints)
 	}
 	if err == nil {
 		err = j.sync(j.anchor)
 	}
 	if err != nil {
 		j.failed = true
-		return fmt.Errorf("persist synthetic DNS allocation: %w", err)
+		return fmt.Errorf("persist synthetic DNS allocations: %w", err)
 	}
-	j.hashes = append(j.hashes, hash)
-	j.names[name] = struct{}{}
-	j.historySize += int64(len(record))
-	j.anchorSize += dnsCheckpointSize
+	j.hashes = append(j.hashes, hashes...)
+	for _, name := range names {
+		j.names[name] = struct{}{}
+	}
+	j.historySize += int64(len(records))
+	j.anchorSize += int64(len(checkpoints))
 	return nil
 }

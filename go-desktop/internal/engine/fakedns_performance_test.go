@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -53,6 +54,27 @@ func TestFakeDNSDurableAllocationDiagnostic(t *testing.T) {
 		}
 		repeat = append(repeat, time.Since(start))
 	}
+	concurrent := make([]netip.Addr, count)
+	failures := make([]error, count)
+	var wg sync.WaitGroup
+	barrier := make(chan struct{})
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-barrier
+			concurrent[i], failures[i] = f.address(fmt.Sprintf("parallel-%02d.example", i))
+		}(i)
+	}
+	started := time.Now()
+	close(barrier)
+	wg.Wait()
+	parallelTime := time.Since(started)
+	for i, err := range failures {
+		if err != nil {
+			t.Fatalf("parallel %d: %v", i, err)
+		}
+	}
 	if err := owner.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +89,13 @@ func TestFakeDNSDurableAllocationDiagnostic(t *testing.T) {
 			t.Fatalf("reopened mapping %s: %q %t %t", want, name, synthetic, known)
 		}
 	}
+	for i, want := range concurrent {
+		name, synthetic, known := reopened.lookup(want)
+		if !synthetic || !known || name != fmt.Sprintf("parallel-%02d.example", i) {
+			t.Fatalf("reopened concurrent mapping %s: %q %t %t", want, name, synthetic, known)
+		}
+	}
+	t.Logf("%d concurrent durable allocations completed in %s (isolated disk test, no WAN)", count, parallelTime)
 	show := func(samples []time.Duration) (time.Duration, time.Duration) {
 		sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
 		return samples[len(samples)/2], samples[(len(samples)*95+99)/100-1]

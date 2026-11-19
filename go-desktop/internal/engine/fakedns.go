@@ -26,6 +26,9 @@ type fakeDNS struct {
 	direct    func(string) bool
 	journal   fakeDNSJournal
 	writeErr  error
+	pending   map[string]*fakeDNSPending
+	queue     []*fakeDNSPending
+	batching  bool
 }
 
 const fakeCount uint32 = (1 << 17) - 2
@@ -88,6 +91,9 @@ func fakeDomain(s string) bool {
 }
 
 func (f *fakeDNS) address(name string) (netip.Addr, error) {
+	if journal, ok := f.journal.(batchDNSJournal); ok {
+		return f.batchAddress(name, journal)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if address, ok := f.byName[name]; ok {
