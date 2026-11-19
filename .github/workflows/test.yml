@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      system_proxy_only:
+        description: Run only focused system-proxy tests
+        required: false
+        type: boolean
+        default: false
       windows_live_tun:
         description: Run the privileged Windows kernel TUN integration test
         required: false
@@ -42,7 +47,7 @@ permissions:
 
 jobs:
   android-native-pipeline-probe:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_native_pipeline_probe }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.android_native_pipeline_probe) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -66,7 +71,7 @@ jobs:
           sudo unshare --net --fork -- python3 tools/hev_pipeline_probe.py "$RUNNER_TEMP/hev-fd-probe"
 
   build-kotlin-warp-live-probe:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_kotlin_warp_live_probe }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.build_kotlin_warp_live_probe) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -85,7 +90,7 @@ jobs:
           retention-days: 1
 
   build-warp-live-probe:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_warp_live_probe }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.build_warp_live_probe) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -107,7 +112,7 @@ jobs:
           retention-days: 1
 
   android-recovery-emulator:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.android_recovery_emulator) }}
     # Historical signed APKs must be restored to a CI-only draft in this
     # repository; GitHub requires push access to read draft release assets.
     permissions:
@@ -187,6 +192,7 @@ jobs:
           if-no-files-found: ignore
 
   relay-worker:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -212,6 +218,7 @@ jobs:
           fi
 
   desktop-core-cross-build:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -233,6 +240,7 @@ jobs:
           GOOS=${TARGET%-*} GOARCH=${TARGET#*-} go build -trimpath -o "$RUNNER_TEMP/gozar-core" ./cmd/gozar
 
   windows-proxy-registry:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
@@ -246,6 +254,7 @@ jobs:
         run: go test ./internal/sysproxy -count=1
 
   windows-mode-contract:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -258,8 +267,34 @@ jobs:
         working-directory: go-desktop
         run: go test ./internal/config ./internal/app ./internal/rpc -run '^TestConnectionMode' -count=1
 
+
+  focused-system-proxy:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test proxy transaction and lifecycle
+        working-directory: go-desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./internal/sysproxy -count=1
+          go test ./internal/app ./internal/rpc -run '^(TestConnectionMode|TestSystemProxy)' -count=1
+          if [ "${{ runner.os }}" = Linux ]; then
+            go test -race ./internal/sysproxy ./internal/localproxy ./internal/app ./internal/rpc -count=1
+          fi
+
   windows-live-tun:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_live_tun }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (github.event_name == 'workflow_dispatch' && inputs.windows_live_tun) }}
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -330,7 +365,7 @@ jobs:
           exit 1
 
   desktop-ui:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) && (!(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -352,6 +387,7 @@ jobs:
           flutter test
 
   desktop-update:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -365,6 +401,7 @@ jobs:
         run: go test ./internal/update ./internal/rpc -count=1
 
   desktop-protocols:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -407,6 +444,7 @@ jobs:
           exit "$status"
 
   release-tools:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -415,6 +453,7 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
   core:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -436,6 +475,7 @@ jobs:
           if-no-files-found: warn
 
   app:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.system_proxy_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
