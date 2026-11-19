@@ -36,6 +36,15 @@ func windowsMachineTestParent(t *testing.T) string {
 	return path
 }
 
+func platformFakeDNSMachineStorage(t *testing.T) func() (*fakeDNS, io.Closer, error) {
+	t.Helper()
+	parent := windowsMachineTestParent(t)
+	return func() (*fakeDNS, io.Closer, error) {
+		fake, owner, err := openWindowsMachineDNSStorage(parent, nil)
+		return fake, owner, err
+	}
+}
+
 func TestFakeDNSMachineWindowsStableIdentityAndLock(t *testing.T) {
 	parent := windowsMachineTestParent(t)
 	t.Setenv("USERPROFILE", filepath.Join(parent, "user-one"))

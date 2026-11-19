@@ -352,7 +352,35 @@ jobs:
         shell: pwsh
         env:
           GOZAR_LIVE_TUN_TEST: '1'
-        run: go test ./internal/engine -run '^TestFakeDNSLiveWindowsReconnect$' -count=1 -v -timeout=120s
+        run: go test ./internal/engine -run '^TestFakeDNSLiveKernelReconnect$' -count=1 -v -timeout=120s
+
+  focused-fakedns-live-linux:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test FakeDNS reconnect through isolated kernel TUN and a local relay
+        working-directory: go-desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -c -o "$RUNNER_TEMP/fakedns-live.test" ./internal/engine
+          sudo mkdir -p /dev/net
+          if [ ! -c /dev/net/tun ]; then sudo mknod /dev/net/tun c 10 200; fi
+          sudo unshare --net --mount --fork -- env GOZAR_LIVE_TUN_TEST=1 TEST_BINARY="$RUNNER_TEMP/fakedns-live.test" bash -eu -c '
+            mount --make-rprivate /
+            temp=$(mktemp)
+            trap "rm -f $temp" EXIT
+            printf "nameserver 127.0.0.1\n" > "$temp"
+            mount --bind "$temp" /etc/resolv.conf
+            ip link set lo up
+            "$TEST_BINARY" -test.v -test.run="^TestFakeDNSLiveKernelReconnect$" -test.timeout=120s
+          '
 
   focused-mode-ui:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && !inputs.fakedns_only }}

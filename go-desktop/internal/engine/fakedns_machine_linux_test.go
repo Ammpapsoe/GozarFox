@@ -14,6 +14,15 @@ import (
 	"time"
 )
 
+func platformFakeDNSMachineStorage(t *testing.T) func() (*fakeDNS, io.Closer, error) {
+	t.Helper()
+	parent := t.TempDir()
+	return func() (*fakeDNS, io.Closer, error) {
+		fake, owner, err := openLinuxMachineDNSStorage(parent, nil)
+		return fake, owner, err
+	}
+}
+
 func TestFakeDNSMachineLinuxStableIdentityAndLock(t *testing.T) {
 	parent := t.TempDir()
 	t.Setenv("HOME", filepath.Join(parent, "user-one"))

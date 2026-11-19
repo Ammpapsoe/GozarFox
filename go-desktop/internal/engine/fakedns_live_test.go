@@ -1,4 +1,4 @@
-//go:build windows
+//go:build linux || windows
 
 package engine
 
@@ -16,17 +16,17 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 )
 
-// This runs on a disposable privileged Windows CI runner. It uses a real Wintun
+// This runs on a disposable privileged CI environment. It uses a real TUN
 // interface and OS routing but a local echo peer and fake DNS/upstream relay;
 // it is not an internet, Mozilla, packet-loss or performance comparison.
-func TestFakeDNSLiveWindowsReconnect(t *testing.T) {
+func TestFakeDNSLiveKernelReconnect(t *testing.T) {
 	if os.Getenv("GOZAR_LIVE_TUN_TEST") != "1" {
-		t.Skip("requires isolated privileged Windows TUN")
+		t.Skip("requires isolated privileged kernel TUN")
 	}
 	if err := wintun.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	parent := windowsMachineTestParent(t)
+	open := platformFakeDNSMachineStorage(t)
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestFakeDNSLiveWindowsReconnect(t *testing.T) {
 		return newEchoDatagramTunnel(), nil
 	}
 	startSession := func() *Engine {
-		fake, owner, err := openWindowsMachineDNSStorage(parent, nil)
+		fake, owner, err := open()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +67,7 @@ func TestFakeDNSLiveWindowsReconnect(t *testing.T) {
 		return e
 	}
 	first := startSession()
-	if _, owner, err := openWindowsMachineDNSStorage(parent, nil); err == nil {
+	if _, owner, err := open(); err == nil {
 		_ = owner.Close()
 		t.Fatal("live session did not retain lock")
 	}
