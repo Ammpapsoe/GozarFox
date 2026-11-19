@@ -42,8 +42,14 @@ internal class FoxUdpAssociate(
     private val dns: () -> FoxDnsBridge?,
     private val openUdp: (String, Int) -> FoxDatagramPipe?,
     private val count: ((Boolean, Long) -> Unit)?,
-    private val stale: () -> Boolean
+    private val stale: () -> Boolean,
+    // True only when reserve() succeeded on behalf of this instance.
+    // Standalone relays used by tests do not own a global reservation.
+    private val hasReservation: Boolean = false,
+    private val idleMillis: Long = 90_000L,
+    private val sweepMillis: Long = 5_000L
 ) : AutoCloseable {
+    init { require(idleMillis in 1..Int.MAX_VALUE.toLong() && sweepMillis in 1..Int.MAX_VALUE.toLong()) }
 
     companion object {
         // 64 flows per association was the tightest UDP limit in the app: a
@@ -56,10 +62,8 @@ internal class FoxUdpAssociate(
         private const val QUEUE = 32
         private const val BYTES_CAP = 8L * 1024 * 1024
         private const val MAX_ASSOCIATIONS = 256
-        private const val IDLE_MS = 90_000L
         /** Largest UDP payload a single datagram can carry over IPv4. */
         private const val MAX_DATAGRAM = 65_507
-        private const val SWEEP_MS = 5_000L
         private val open = AtomicLong(0)
 
         /** Reserve a slot; false when the device already runs too many associations. */
@@ -71,6 +75,7 @@ internal class FoxUdpAssociate(
             }
         }
         fun release() { open.updateAndGet { if (it > 0) it - 1 else 0 } }
+        internal fun reservationCount(): Long = open.get()
     }
 
     private val lock = Any()
@@ -80,17 +85,31 @@ internal class FoxUdpAssociate(
     private val bytesQueued = AtomicLong(0)
     @Volatile private var peer: SocketAddress? = null
     private val running = AtomicBoolean(false)
+    private val lifecycle = Any()
+    private var closed = false
     private val pendingBytesBudget = BYTES_CAP
 
     fun start() {
-        running.set(true)
-        socket.soTimeout = SWEEP_MS.toInt()
-        thread(isDaemon = true, name = "fox-udp") { readLoop() }
+        try {
+            synchronized(lifecycle) {
+                if (closed || running.get()) return
+                socket.soTimeout = sweepMillis.toInt()
+                running.set(true)
+                thread(isDaemon = true, name = "fox-udp") { readLoop() }
+            }
+        } catch (e: Exception) {
+            close()
+            throw e
+        }
     }
 
     override fun close() {
-        if (!running.getAndSet(false)) return
-        release()
+        synchronized(lifecycle) {
+            if (closed) return
+            closed = true
+            running.set(false)
+        }
+        if (hasReservation) release()
         val open = synchronized(lock) {
             val snapshot = lanes.keys.toList()
             lanes.clear()
@@ -111,6 +130,8 @@ internal class FoxUdpAssociate(
     private fun readLoop() {
         val max = 65535
         val stash = ByteArray(max)
+        val sweepInterval = TimeUnit.MILLISECONDS.toNanos(sweepMillis)
+        var nextSweep = System.nanoTime() + sweepInterval
         while (running.get()) {
             val packet = DatagramPacket(stash, stash.size)
             try {
@@ -118,13 +139,22 @@ internal class FoxUdpAssociate(
             } catch (_: SocketTimeoutException) {
                 if (stale()) { close(); return }
                 sweep()
+                nextSweep = System.nanoTime() + sweepInterval
                 continue
             } catch (_: Exception) {
+                close()
                 return
             }
             if (!running.get()) return
             peer = packet.socketAddress
             if (stale()) { close(); return }
+            // Receiving continuously must not postpone cleanup of unrelated
+            // idle flows indefinitely.
+            val now = System.nanoTime()
+            if (now - nextSweep >= 0) {
+                sweep()
+                nextSweep = now + sweepInterval
+            }
             // Copy out: handling may hand the payload to background workers.
             val data = packet.data.copyOf(packet.length)
             handle(data, packet.length)
@@ -265,7 +295,7 @@ internal class FoxUdpAssociate(
             val buffer = ByteArray(MAX_DATAGRAM)
             try {
                 while (running.get()) {
-                    direct.soTimeout = IDLE_MS.toInt()
+                    direct.soTimeout = idleMillis.toInt()
                     val incoming = DatagramPacket(buffer, buffer.size)
                     try {
                         direct.receive(incoming)
@@ -305,9 +335,9 @@ internal class FoxUdpAssociate(
     }
 
     private fun sweep() {
-        val now = System.currentTimeMillis()
+        val now = System.nanoTime()
         val idle = synchronized(lock) {
-            val staleFlows = flows.values.filter { now - it.idleAt > IDLE_MS }
+            val staleFlows = flows.values.filter { now - it.idleAt > TimeUnit.MILLISECONDS.toNanos(idleMillis) }
             staleFlows.forEach { flows.remove("${it.host}:${it.port}", it) }
             staleFlows
         }
@@ -321,26 +351,29 @@ internal class FoxUdpAssociate(
         private val addressBytes: ByteArray
     ) {
         private val queue = ArrayBlockingQueue<ByteArray>(QUEUE)
-        @Volatile var idleAt: Long = System.currentTimeMillis()
+        @Volatile var idleAt: Long = System.nanoTime()
             private set
         private val closed = AtomicBoolean(false)
+        // Serializes attach, enqueue and teardown so a late open or queued
+        // datagram cannot escape after the flow has been closed.
+        private val lifecycle = Any()
         private var pipe: FoxDatagramPipe? = null
 
         init {
             thread(isDaemon = true, name = "fox-udp-flow") { pump() }
         }
 
-        fun enqueue(payload: ByteArray): Boolean {
-            if (closed.get() || !running.get()) return false
+        fun enqueue(payload: ByteArray): Boolean = synchronized(lifecycle) {
+            if (closed.get() || !running.get()) return@synchronized false
             val size = payload.size.toLong()
             while (true) {
                 val queued = bytesQueued.get()
-                if (size > pendingBytesBudget - queued) return false
+                if (size > pendingBytesBudget - queued) return@synchronized false
                 if (bytesQueued.compareAndSet(queued, queued + size)) break
             }
             val accepted = queue.offer(payload)
-            if (accepted) idleAt = System.currentTimeMillis() else bytesQueued.addAndGet(-size)
-            return accepted
+            if (accepted) idleAt = System.nanoTime() else bytesQueued.addAndGet(-size)
+            accepted
         }
 
         private fun pump() {
@@ -352,12 +385,18 @@ internal class FoxUdpAssociate(
             } catch (_: Exception) {
                 null
             }
-            if (opened == null || closed.get() || !running.get() || stale()) {
-                try { opened?.close() } catch (_: Exception) { }
+            if (opened == null) { close(); return }
+            val attached = synchronized(lifecycle) {
+                if (closed.get() || !running.get() || stale()) false else {
+                    pipe = opened
+                    true
+                }
+            }
+            if (!attached) {
+                try { opened.close() } catch (_: Exception) { }
                 close()
                 return
             }
-            pipe = opened
             val header = replyHeader(atyp, addressBytes, port)
             thread(isDaemon = true, name = "fox-udp-in") {
                 while (running.get() && !closed.get()) {
@@ -368,7 +407,7 @@ internal class FoxUdpAssociate(
                     } ?: break
                     if (!running.get() || closed.get()) break
                     sendSocks(payload, header)
-                    idleAt = System.currentTimeMillis()
+                    idleAt = System.nanoTime()
                 }
                 close()
             }
@@ -385,17 +424,20 @@ internal class FoxUdpAssociate(
                     close()
                     return
                 }
-                idleAt = System.currentTimeMillis()
+                idleAt = System.nanoTime()
             }
         }
 
         fun close() {
-            if (!closed.compareAndSet(false, true)) return
-            while (true) {
-                val leftover = queue.poll() ?: break
-                bytesQueued.addAndGet(-leftover.size.toLong())
+            val previous = synchronized(lifecycle) {
+                if (!closed.compareAndSet(false, true)) return
+                while (true) {
+                    val leftover = queue.poll() ?: break
+                    bytesQueued.addAndGet(-leftover.size.toLong())
+                }
+                pipe.also { pipe = null }
             }
-            try { pipe?.close() } catch (_: Exception) { }
+            try { previous?.close() } catch (_: Exception) { }
             synchronized(lock) { flows.remove("$host:$port", this) }
         }
     }

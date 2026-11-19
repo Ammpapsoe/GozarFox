@@ -289,7 +289,8 @@ class FoxProxy(
                 }
             },
             count = if (countTraffic) { inbound, bytes -> FoxLink.count(inbound, bytes) } else null,
-            stale = { !activeEpoch(acceptedEpoch) }
+            stale = { !activeEpoch(acceptedEpoch) },
+            hasReservation = true
         )
         val accepted = synchronized(connections) {
             if (!running || paused || epoch != acceptedEpoch) {
@@ -304,19 +305,20 @@ class FoxProxy(
             reject(0x05)
             return
         }
-        val bnd = relay.localPort
-        output.write(
-            byteArrayOf(
-                0x05, 0x00, 0x00, 0x01,
-                127, 0, 0, 1,
-                (bnd ushr 8).toByte(), (bnd and 255).toByte()
-            )
-        )
-        output.flush()
-        association.start()
-        // The control connection carries no data; its EOF is the signal that
-        // the client closed the association.
         try {
+            val bnd = relay.localPort
+            output.write(
+                byteArrayOf(
+                    0x05, 0x00, 0x00, 0x01,
+                    127, 0, 0, 1,
+                    (bnd ushr 8).toByte(), (bnd and 255).toByte()
+                )
+            )
+            output.flush()
+            association.start()
+            // The control connection carries no data; its EOF is the signal
+            // that the client closed the association. The finally also covers
+            // a failed SOCKS reply or a failed relay start.
             val one = ByteArray(1)
             while (input.read(one) != -1) { }
         } catch (_: Exception) {
