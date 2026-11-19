@@ -361,7 +361,7 @@ jobs:
         env:
           GOZAR_LIVE_TUN_TEST: '1'
           GOZAR_FAKEDNS_PRODUCTION_STORAGE_TEST: '1'
-        run: go test ./internal/engine -run '^(TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage|ForeignCollisionLiveKernelDemonstration)|TestDNSRealLiveKernelReconnect)$' -count=1 -v -timeout=150s
+        run: go test ./internal/engine -run '^(TestFakeDNS(LiveKernelReconnect|ProductionWindowsStorage|ForeignCollisionLiveKernelDemonstration|WindowsSystemCacheDiagnostic)|TestDNSRealLiveKernelReconnect)$' -count=1 -v -timeout=180s
       - name: Check machine identity across two Windows administrator accounts
         working-directory: go-desktop
         shell: pwsh
