@@ -14,8 +14,11 @@ type proxyJournal interface {
 }
 
 // recoverProxy must run under the ownership lock before a new activation. A
-// conflict or I/O failure leaves the journal intact for an explicit retry; it
-// never overwrites externally changed settings knowingly.
+// conflict retains the journal. A failed journal write or clear may have taken
+// effect despite returning an error; the caller must stop and explicitly retry
+// recovery before performing any other changes. The restore refuses to
+// overwrite values it recognises as externally changed, but its reads and
+// writes are not an atomic transaction against other programs.
 func recoverProxy(store proxyStore, journal proxyJournal) error {
 	snapshot, err := journal.Load()
 	if err != nil {
