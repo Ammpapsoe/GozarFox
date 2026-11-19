@@ -32,8 +32,15 @@ func main() {
 	selftest := flag.Bool("selftest", false, "")
 	showVersion := flag.Bool("version", false, "")
 	clearProxy := flag.Bool("clear-proxy", false, "explicitly clear system proxy settings")
+	watchdog := flag.Bool("internal-proxy-watchdog", false, "")
 	flag.Parse()
 
+	if *watchdog {
+		if err := sysproxy.RunRecoveryWatchdog(); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	switch {
 	case *showVersion:
 		fmt.Println("Gozar " + version)
