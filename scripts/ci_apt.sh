@@ -21,27 +21,7 @@ for target in "${targets[@]}"; do
   if ! curl -fsSL --connect-timeout 5 --max-time 15 --range 0-4095 --resolve "$host:$port:$ip" -o /dev/null "$mirror/$probe"; then
     continue
   fi
-  sudo python3 - "$mirror" "$host" "$ip" <<'PY'
-from pathlib import Path
-import re
-import sys
-mirror, host, ip = sys.argv[1:]
-pattern = re.compile(r'https?://(?:(?:azure|us)\.archive\.ubuntu\.com|archive\.ubuntu\.com|security\.ubuntu\.com)/ubuntu')
-for path in Path('/etc/apt').rglob('*'):
-    if not path.is_file():
-        continue
-    try:
-        text = path.read_text()
-    except (UnicodeDecodeError, PermissionError):
-        continue
-    updated = pattern.sub(mirror, text)
-    if updated != text:
-        path.write_text(updated)
-hosts = Path('/etc/hosts')
-lines = [line for line in hosts.read_text().splitlines() if host not in line.split()[1:]]
-lines.append(f'{ip} {host}')
-hosts.write_text('\n'.join(lines) + '\n')
-PY
+  sudo python3 scripts/ci_apt_sources.py "$mirror" "$host" "$ip"
   printf 'Using Ubuntu mirror %s at %s\n' "$mirror" "$ip"
   if sudo timeout 180 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 "$@"; then
     exit 0
