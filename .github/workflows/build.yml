@@ -45,7 +45,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Test Android security, tunnel and interface
         env:
-          SKIP_LOGIN_AND_GRAPHICS: ${{ (github.ref == 'refs/tags/v1.19.0' || inputs.skip_graphics_tests) && 'true' || 'false' }}
+          SKIP_LOGIN_AND_GRAPHICS: ${{ (inputs.skip_graphics_tests) && 'true' || 'false' }}
         run: bash ./gradlew :core:test :app:testDebugUnitTest --no-daemon -PgozarSkipLoginAndGraphics="$SKIP_LOGIN_AND_GRAPHICS"
       - name: Signing key
         if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.validate_release) }}
@@ -197,7 +197,7 @@ jobs:
         shell: bash
         run: |
           skip='^$'
-          if [ "${{ github.ref == 'refs/tags/v1.19.0' || inputs.skip_graphics_tests }}" = 'true' ]; then
+          if [ "${{ inputs.skip_graphics_tests }}" = 'true' ]; then
             skip='(?i)(sign.?in|login|signup|unblock|blocked.*sign|verification.*session|session.*verification)'
           fi
           go test -skip "$skip" ./...
@@ -261,7 +261,7 @@ jobs:
           flutter pub get
           flutter analyze
       - name: Test interface only
-        if: ${{ matrix.platform == 'linux' && github.ref != 'refs/tags/v1.19.0' && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'linux' && !inputs.skip_graphics_tests }}
         working-directory: desktop_flutter
         shell: bash
         run: flutter test --reporter expanded
@@ -318,7 +318,7 @@ jobs:
             "$(cygpath -w "$PWD/../packaging/windows/gozar.nsi")"
           ls -lh out/*
       - name: Verify native Windows window with simulated core
-        if: ${{ matrix.platform == 'windows' && github.ref != 'refs/tags/v1.19.0' && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'windows' && !inputs.skip_graphics_tests }}
         working-directory: desktop_flutter
         shell: pwsh
         run: |
@@ -387,7 +387,7 @@ jobs:
           done < <(find "$EXTRACTED/Contents/Frameworks" -mindepth 1 -maxdepth 1 -type d -name '*.framework' -print0)
           ls -lh out/*
       - name: Verify native macOS window with simulated core
-        if: ${{ matrix.platform == 'darwin' && github.ref != 'refs/tags/v1.19.0' && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'darwin' && !inputs.skip_graphics_tests }}
         working-directory: desktop_flutter
         shell: bash
         run: |
@@ -431,7 +431,7 @@ jobs:
       - name: Auto selection, failover, split tunneling and idle proofs
         run: |
           skip='^$'
-          if [ "${{ github.ref == 'refs/tags/v1.19.0' || inputs.skip_graphics_tests }}" = 'true' ]; then
+          if [ "${{ inputs.skip_graphics_tests }}" = 'true' ]; then
             skip='(?i)(sign.?in|login|signup|unblock|blocked.*sign|verification.*session|session.*verification)'
           fi
           go test -skip "$skip" ./internal/app ./internal/engine ./internal/geo ./internal/killswitch ./internal/tunnel -count=1

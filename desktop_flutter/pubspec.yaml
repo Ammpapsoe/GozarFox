@@ -1,7 +1,7 @@
 name: gozar
 description: Gozar desktop
 publish_to: 'none'
-version: 1.18.3+69
+version: 1.19.0+69
 
 environment:
   sdk: ^3.13.5

@@ -199,6 +199,8 @@ class ReleaseToolsTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
         packages = workflow.split("  packages:\n", 1)[1].split("\n  publish:\n", 1)[0]
         self.assertIn("inputs.validate_release", packages)
+        # A release tag must not silently receive weaker UI or login tests.
+        self.assertNotIn("refs/tags/v1.19.0", workflow)
         sentinel = workflow.split("  release-validation-complete:\n", 1)[1]
         self.assertIn("needs: [publish]", sentinel)
         self.assertIn("VALIDATION_RESULT", sentinel)

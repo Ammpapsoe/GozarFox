@@ -19,7 +19,7 @@ import (
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/tundev"
 )
 
-const version = "1.18.3"
+const version = "1.19.0"
 
 func main() {
 	log.SetOutput(io.Discard)
