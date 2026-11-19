@@ -4,7 +4,59 @@ import (
 	"errors"
 	"io"
 	"net/netip"
+
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/dnsproxy"
 )
+
+// publishDNS holds a read lock through actual network publication, not just
+// allocation: Stop cannot release ownership while an answer is still being
+// written. After closure every subsequent request fails without publishing.
+func (e *Engine) publishDNS(query []byte, udp bool, write func([]byte) error) error {
+	e.dnsPublishMu.RLock()
+	defer e.dnsPublishMu.RUnlock()
+	if e.dnsPublishClosed {
+		return errors.New("DNS publication stopped")
+	}
+	answer, err := e.resolveDNS(query)
+	if err != nil {
+		answer = dnsproxy.Failure(query)
+	}
+	if udp {
+		answer = dnsproxy.LimitUDP(query, answer)
+	}
+	if len(answer) == 0 {
+		if udp {
+			return nil
+		}
+		return errors.New("empty DNS answer")
+	}
+	if len(answer) > 65535 {
+		return errors.New("DNS answer too large")
+	}
+	if err := write(answer); err != nil {
+		return err
+	}
+	if e.split != nil {
+		e.split.Learn(query, answer)
+	}
+	e.down.Add(int64(len(answer)))
+	return nil
+}
+
+func (e *Engine) closeDNSPublication() error {
+	e.dnsPublishMu.Lock()
+	defer e.dnsPublishMu.Unlock()
+	if e.dnsPublishClosed {
+		return nil
+	}
+	e.dnsPublishClosed = true
+	if e.fakeOwner == nil {
+		return nil
+	}
+	err := e.fakeOwner.Close()
+	e.fakeOwner = nil
+	return err
+}
 
 // resolveDNS is shared by the UDP and TCP DNS handlers. A handled synthetic
 // allocation failure becomes SERVFAIL at the caller, never a real-IP fallback.

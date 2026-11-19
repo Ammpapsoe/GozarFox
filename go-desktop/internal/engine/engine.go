@@ -145,18 +145,21 @@ type Engine struct {
 	direct Dialer
 	split  *geo.Rules
 	dns    resolver
-	// fakeDNS is injected only by tests until reconnect identity and UDP
-	// handling are ready for production. Never swap it after traffic starts.
-	fakeDNS         *fakeDNS
-	udpDial         DatagramDialer
-	udpMu           sync.Mutex
-	udpClosing      bool
-	udpReservations int
-	udpFlows        map[*datagramFlow]struct{}
-	down            atomic.Int64
-	up              atomic.Int64
-	routeMu         sync.Mutex
-	once            sync.Once
+	// FakeDNS is prepared before traffic starts; the managed path is not yet
+	// used by the application. The durable owner outlives all DNS publication.
+	fakeDNS          *fakeDNS
+	fakeOwner        io.Closer
+	dnsPublishMu     sync.RWMutex
+	dnsPublishClosed bool
+	udpDial          DatagramDialer
+	udpMu            sync.Mutex
+	udpClosing       bool
+	udpReservations  int
+	udpFlows         map[*datagramFlow]struct{}
+	down             atomic.Int64
+	up               atomic.Int64
+	routeMu          sync.Mutex
+	once             sync.Once
 }
 
 func Start(proxyHost string, dial Dialer, protect []netip.Addr) (*Engine, error) {
@@ -173,11 +176,44 @@ func StartSplitUDP(proxyHost string, dial, direct Dialer, protect []netip.Addr, 
 	return startUDP(proxyHost, dial, protect, nil, direct, split, udpDial)
 }
 
+// StartSplitUDPWithFakeDNS opens the machine-wide namespace before installing
+// tunnel routes. Failure is fatal; it never resets or falls back to real DNS.
+// The application does not call this until the full path is validated.
+func StartSplitUDPWithFakeDNS(proxyHost string, dial, direct Dialer, protect []netip.Addr, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
+	if !tundev.Privileged() {
+		return nil, errors.New("the tunnel needs administrator rights")
+	}
+	var directName func(string) bool
+	if split != nil {
+		directName = split.Direct
+	}
+	fake, owner, err := openProductionMachineFakeDNS(directName)
+	if err != nil {
+		return nil, err
+	}
+	return startUDPManaged(proxyHost, dial, protect, nil, direct, split, udpDial, fake, owner)
+}
+
 func start(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules) (*Engine, error) {
 	return startUDP(proxyHost, dial, protect, testResolver, direct, split, nil)
 }
 
 func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules, udpDial DatagramDialer) (*Engine, error) {
+	return startUDPManaged(proxyHost, dial, protect, testResolver, direct, split, udpDial, nil, nil)
+}
+
+// The fake storage is exclusively owned by the engine, including every startup
+// failure path. It must be installed before the device routes traffic.
+func startUDPManaged(proxyHost string, dial Dialer, protect []netip.Addr, testResolver resolver, direct Dialer, split *geo.Rules, udpDial DatagramDialer, fake *fakeDNS, owner io.Closer) (*Engine, error) {
+	started := false
+	defer func() {
+		if !started && owner != nil {
+			_ = owner.Close()
+		}
+	}()
+	if (fake == nil) != (owner == nil) {
+		return nil, errors.New("invalid managed FakeDNS ownership")
+	}
 	if !tundev.Privileged() {
 		return nil, errors.New("the tunnel needs administrator rights")
 	}
@@ -240,7 +276,7 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 		{Destination: header.IPv6EmptySubnet, NIC: 1},
 	})
 
-	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver, udpDial: udpDial}
+	engine := &Engine{stack: created, device: device, dial: dial, direct: direct, split: split, dns: testResolver, udpDial: udpDial, fakeDNS: fake, fakeOwner: owner}
 	if engine.dns == nil {
 		engine.dns = dnsproxy.New(dial)
 	}
@@ -256,9 +292,13 @@ func startUDP(proxyHost string, dial Dialer, protect []netip.Addr, testResolver 
 		engine.dns.Close()
 		device.Close()
 		created.Close()
+		created.Wait()
+		engine.closeDNSPublication()
+		owner = nil // closeDNSPublication already released the owner
 		return nil, err
 	}
 	_ = proxyHost
+	started = true
 	return engine, nil
 }
 
@@ -335,21 +375,15 @@ func (e *Engine) handleUDP(request *udp.ForwarderRequest) {
 				return
 			}
 			query := append([]byte{}, buffer[:count]...)
-			answer, err := e.resolveDNS(query)
-			if err != nil {
-				answer = dnsproxy.Failure(query)
-			}
-			answer = dnsproxy.LimitUDP(query, answer)
-			if len(answer) == 0 {
-				continue
-			}
-			if _, err := conn.Write(answer); err != nil {
+			if err := e.publishDNS(query, true, func(answer []byte) error {
+				n, err := conn.Write(answer)
+				if err == nil && n != len(answer) {
+					return io.ErrShortWrite
+				}
+				return err
+			}); err != nil {
 				return
 			}
-			if e.split != nil {
-				e.split.Learn(query, answer)
-			}
-			e.down.Add(int64(len(answer)))
 		}
 	}()
 }
@@ -443,6 +477,9 @@ func (e *Engine) Stop() {
 			e.stack.Close()
 			e.stack.Wait()
 		}
+		// Drain any response being written before releasing the durable owner;
+		// later requests are rejected rather than publishing stale identities.
+		e.closeDNSPublication()
 		time.Sleep(200 * time.Millisecond)
 	})
 }
@@ -462,23 +499,18 @@ func (e *Engine) serveDNS(local io.ReadWriteCloser) {
 		if _, err := io.ReadFull(local, query); err != nil {
 			return
 		}
-		answer, err := e.resolveDNS(query)
-		if err != nil {
-			answer = dnsproxy.Failure(query)
-		}
-		if len(answer) == 0 || len(answer) > 65535 {
+		if err := e.publishDNS(query, false, func(answer []byte) error {
+			framed := make([]byte, 2+len(answer))
+			framed[0] = byte(len(answer) >> 8)
+			framed[1] = byte(len(answer))
+			copy(framed[2:], answer)
+			n, err := local.Write(framed)
+			if err == nil && n != len(framed) {
+				return io.ErrShortWrite
+			}
+			return err
+		}); err != nil {
 			return
 		}
-		if e.split != nil {
-			e.split.Learn(query, answer)
-		}
-		framed := make([]byte, 2+len(answer))
-		framed[0] = byte(len(answer) >> 8)
-		framed[1] = byte(len(answer))
-		copy(framed[2:], answer)
-		if _, err := local.Write(framed); err != nil {
-			return
-		}
-		e.down.Add(int64(len(answer)))
 	}
 }

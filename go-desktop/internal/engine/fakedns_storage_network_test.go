@@ -29,6 +29,7 @@ func TestFakeDNSStorageCachedAddressAcrossVirtualSessions(t *testing.T) {
 	defer owner.Close()
 	client, firstEngine, _ := virtualNetwork(t, &mockResolver{})
 	firstEngine.fakeDNS = first
+	firstEngine.fakeOwner = owner
 	dnsAddress := &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFrom4([4]byte{1, 1, 1, 1}), Port: 53}
 	dns, err := gonet.DialUDP(client, nil, dnsAddress, ipv4.ProtocolNumber)
 	if err != nil {
@@ -53,7 +54,7 @@ func TestFakeDNSStorageCachedAddressAcrossVirtualSessions(t *testing.T) {
 		t.Fatal("expected A response")
 	}
 	cached := answer.A
-	if err := owner.Close(); err != nil {
+	if err := firstEngine.closeDNSPublication(); err != nil {
 		t.Fatal(err)
 	}
 

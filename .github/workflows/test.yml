@@ -337,6 +337,23 @@ jobs:
         working-directory: go-desktop
         run: go test ./internal/engine -run '^(TestFakeDNS|TestJournalFakeDNS)' -count=1
 
+  focused-fakedns-live-windows:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test FakeDNS reconnect through real Wintun and a local relay
+        working-directory: go-desktop
+        shell: pwsh
+        env:
+          GOZAR_LIVE_TUN_TEST: '1'
+        run: go test ./internal/engine -run '^TestFakeDNSLiveWindowsReconnect$' -count=1 -v -timeout=120s
+
   focused-mode-ui:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && !inputs.fakedns_only }}
     runs-on: ubuntu-latest
