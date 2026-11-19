@@ -507,8 +507,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Verification code'), findsOneWidget);
     await tester.enterText(find.byType(TextField).at(2), '123456');
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify and sign in'));
+    final verifyButton = find.widgetWithText(FilledButton, 'Verify and sign in');
+    await tester.ensureVisible(verifyButton);
     await tester.pumpAndSettle();
+    await tester.tap(verifyButton);
+    await tester.pumpAndSettle();
+    expect(core.signedIn, isTrue);
     expect(find.text('Gozar'), findsOneWidget);
     expect(core.requests, isNot(contains('connect')));
   });
@@ -526,14 +530,21 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).at(2), 'ABC123');
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify and sign in'));
+    final verifyButton = find.widgetWithText(FilledButton, 'Verify and sign in');
+    await tester.ensureVisible(verifyButton);
     await tester.pumpAndSettle();
+    await tester.tap(verifyButton);
+    await tester.pumpAndSettle();
+    expect(core.loginCalls, 2);
     expect(
         tester.widget<TextField>(find.byType(TextField).at(2)).controller!.text,
         isEmpty);
     await tester.enterText(find.byType(TextField).at(2), '123456');
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify and sign in'));
+    await tester.ensureVisible(verifyButton);
     await tester.pumpAndSettle();
+    await tester.tap(verifyButton);
+    await tester.pumpAndSettle();
+    expect(core.signedIn, isTrue);
     expect(find.text('Gozar'), findsOneWidget);
     expect(core.requests, isNot(contains('connect')));
   });
