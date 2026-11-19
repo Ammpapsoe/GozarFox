@@ -16,7 +16,7 @@ MANUAL = """
 >
 > **The automated Apps Script login test was not run for this release.** This version was published as Stable with manual approval.
 >
-> Scope of the approval: the Android tunnel engine was proven by real-engine TUN/SOCKS5 probes and the emulator suites, and the desktop by the Go core tests. The interactive sign-in page was exercised end to end up to Mozilla's emailed-code step, which no unattended test in this repository can complete.
+> This approval does not imply that account sign-in, physical-device networking, or real-world performance was independently verified for this commit. Consult the release validation results for the tests actually performed.
 """
 
 AUTOMATED = """

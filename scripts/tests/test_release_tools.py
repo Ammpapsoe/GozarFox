@@ -230,6 +230,14 @@ class ReleaseToolsTest(unittest.TestCase):
         # approved without weakening the gate.
         self.assertIn('select(.name == "Build" and .event == "workflow_dispatch" and .conclusion == "success")', publish)
         self.assertLess(publish.index("approve_runs="), publish.index('if [ "$MANUAL_APPROVE" != "1" ]'))
+        self.assertIn('/actions/runs/$id/artifacts?per_page=100', publish)
+        self.assertIn('.name == "stable-manual-approval" and .expired == false', publish)
+        self.assertIn('if [ "$markers" -eq 1 ]; then MANUAL_APPROVE=1', publish)
+        self.assertNotIn('if [ "$approve_runs" -gt 0 ]', publish)
+        sentinel = workflow.split("  release-validation-complete:\n", 1)[1]
+        self.assertIn("if: ${{ inputs.manual_approve }}", sentinel)
+        self.assertIn("name: stable-manual-approval", sentinel)
+        self.assertLess(sentinel.index('if [ "$VALIDATION_RESULT" != success ]'), sentinel.index("Record explicit manual approval after validation"))
         # The release body must disclose which evidence applied.
         self.assertIn("scripts/release_notes_note.py --manual-approval", publish)
         self.assertIn("scripts/release_notes_note.py --automated", publish)

@@ -622,8 +622,13 @@ jobs:
           # this repository may read that mailbox. A stable tag must therefore be
           # released either with automated evidence or with an explicit human
           # approval -- the release notes always say which one applied.
-          approve_runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '[.workflow_runs[] | select(.name == "Build" and .event == "workflow_dispatch" and .conclusion == "success")] | length')
-          if [ "$approve_runs" -gt 0 ]; then MANUAL_APPROVE=1; fi
+          approve_runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100" --jq '.workflow_runs[] | select(.name == "Build" and .event == "workflow_dispatch" and .conclusion == "success") | .id')
+          for id in $approve_runs; do
+            # Only an explicitly approved, successful validation dispatch emits
+            # this marker. A successful ordinary Build is not an approval.
+            markers=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts?per_page=100" --jq '[.artifacts[] | select(.name == "stable-manual-approval" and .expired == false)] | length')
+            if [ "$markers" -eq 1 ]; then MANUAL_APPROVE=1; break; fi
+          done
           if [ "$MANUAL_APPROVE" != "1" ]; then
             echo "::error::Release requires successful Apps Script login/Pass and signup-code tests for this exact commit, or a successful workflow_dispatch run of Build with manual_approve enabled on the same commit"
             exit 1
@@ -847,3 +852,20 @@ jobs:
             echo "::error::Release validation was skipped or failed: $VALIDATION_RESULT"
             exit 1
           fi
+      - name: Record explicit manual approval after validation
+        if: ${{ inputs.manual_approve }}
+        env:
+          APPROVAL_SHA: ${{ github.sha }}
+          APPROVAL_ACTOR: ${{ github.actor }}
+          APPROVAL_RUN: ${{ github.run_id }}
+        run: |
+          umask 077
+          printf 'commit=%s\nactor=%s\nrun=%s\n' "$APPROVAL_SHA" "$APPROVAL_ACTOR" "$APPROVAL_RUN" > "$RUNNER_TEMP/stable-manual-approval.txt"
+      - name: Upload explicit approval record
+        if: ${{ inputs.manual_approve }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-manual-approval
+          path: ${{ runner.temp }}/stable-manual-approval.txt
+          if-no-files-found: error
+          retention-days: 90
