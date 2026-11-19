@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/wintun"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 )
 
 // This is a diagnostic measurement, not a performance gate or a comparison
@@ -82,6 +84,15 @@ func TestLiveKernelTCPThroughput(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(e.Stop)
+	// This changes the isolated test stack only; the production default stays
+	// untouched until a controlled comparison establishes safety and benefit.
+	if os.Getenv("GOZAR_PERF_DISABLE_RACK") == "1" {
+		recovery := tcpip.TCPRecovery(0)
+		if err := e.stack.SetTransportProtocolOption(tcp.ProtocolNumber, &recovery); err != nil {
+			t.Fatalf("disable test-only RACK: %s", err)
+		}
+		t.Log("diagnostic override: TCP RACK disabled")
+	}
 	conn, err := net.DialTimeout("tcp4", "198.18.0.80:443", 10*time.Second)
 	if err != nil {
 		t.Fatal(err)

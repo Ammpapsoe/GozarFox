@@ -262,12 +262,30 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally { Pop-Location }
       - name: Measure current local Wintun path
+        id: current_throughput
+        continue-on-error: true
         shell: pwsh
         run: |
           $env:GOZAR_LIVE_TUN_TEST = '1'
           $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
           & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=1' '-test.timeout=100s'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Diagnose current local path without RACK (test-only)
+        id: no_rack_throughput
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $env:GOZAR_LIVE_TUN_TEST = '1'
+          $env:GOZAR_PROTECT_TEST_IP = '203.0.113.42'
+          $env:GOZAR_PERF_DISABLE_RACK = '1'
+          & "$env:RUNNER_TEMP/gozar-live-tun.test.exe" '-test.v' '-test.run=^TestLiveKernelTCPThroughput$' '-test.count=1' '-test.timeout=100s'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Report production-default diagnostic failure
+        if: ${{ steps.current_throughput.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          Write-Error 'The production-default Wintun diagnostic failed; see individual steps for the test-only RACK comparison.'
+          exit 1
 
   desktop-ui:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests) }}
