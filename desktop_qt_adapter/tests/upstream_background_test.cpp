@@ -16,6 +16,7 @@ class UpstreamBackgroundTest : public QObject {
 private slots:
     void sourceFlagFollowsSimulatedCore();
     void upstreamPowerButtonTriggersSimulatedCore();
+    void serverAndSettingsUseCoreResponses();
     void cleanupTestCase();
 };
 
@@ -88,6 +89,49 @@ void UpstreamBackgroundTest::upstreamPowerButtonTriggersSimulatedCore() {
     QTRY_COMPARE_WITH_TIMEOUT(clicked.size(), 1, 5000);
     QTRY_COMPARE_WITH_TIMEOUT(replies.size(), 2, 5000);
     QVERIFY(replies.at(1).at(1).toJsonObject().value("state").toObject().value("live").toBool());
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
+    Preferences preferences;
+    ConnectWindow::Background background(nullptr, &preferences);
+    ConnectWindow::ConnectButton button;
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, &background, &button);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy servers(&binder, &HomeBinder::serversReady);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    binder.loadServers();
+    QTRY_COMPARE_WITH_TIMEOUT(servers.size(), 1, 5000);
+    QCOMPARE(servers.first().at(0).toJsonArray().first().toObject().value("code").toString(), QStringLiteral("DE"));
+
+    states.clear();
+    binder.selectServer(QStringLiteral("test.example"), QStringLiteral("DE"));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
+    states.clear();
+    binder.setMode(QStringLiteral("system-proxy"));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("mode").toString(), QStringLiteral("system-proxy"));
+    states.clear();
+    binder.setKillSwitch(true);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(states.last().at(0).toJsonObject().value("kill_switch").toBool(), true);
+
+    // A live tunnel locks mode/server changes. No request should be sent.
+    QVERIFY(bridge.request(QStringLiteral("connect")) > 0);
+    QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
+    states.clear();
+    binder.setMode(QStringLiteral("tun"));
+    binder.selectServer(QStringLiteral("other.example"), QStringLiteral("CA"));
+    QVERIFY(bridge.request(QStringLiteral("state")) > 0);
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    const auto locked = states.last().at(0).toJsonObject();
+    QCOMPARE(locked.value("mode").toString(), QStringLiteral("system-proxy"));
+    QCOMPARE(locked.value("server").toObject().value("code").toString(), QStringLiteral("DE"));
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }

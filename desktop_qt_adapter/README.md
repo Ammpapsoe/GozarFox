@@ -11,8 +11,7 @@ tunnel.
 
 The unmodified GUI, frontend-common and client-common sources and license are
 copied to `vendor/windscribe` from Windscribe/Desktop-App `v2.26.2`, commit
-`5578945964760be0bf234c506fdbcbcfe07c974d`. A full clone is at
-`/home/user/Windscribe-Desktop`; `fetch-upstream.sh` reproduces a clean full
+`5578945964760be0bf234c506fdbcbcfe07c974d`. `fetch-upstream.sh` reproduces a clean full
 checkout elsewhere and refuses an existing directory. Its source is
 GPL v2; the exact applicable version, component licences, font and artwork
 terms, trademarks and compatibility with Gozar's AGPL components require
@@ -65,14 +64,16 @@ background and connect-button classes to Gozar's RPC. It requests state, sends
 connection and server-selection commands, and feeds the returned country code
 and connection state to those original widgets. It is **not** yet integrated
 into the complete window or Flutter login, and must not be used with a real VPN.
-The new binder and GitHub Actions workflow have not yet been tested.
+The prior revision was tested on GitHub Actions with a fake core and isolated
+upstream widgets on Windows, Linux and macOS. This is not an end-to-end UI test.
 
 The UI tests use a simulated core. For a separate, optional real-core check,
 build the Gozar 1.19.0 core, configure with `-DGOZAR_REAL_CORE=/path/to/core`
 and run CTest. The `realcore_smoke` test launches it with a temporary config,
 reads its version/state and shuts it down; it does not sign in or connect.
-None of these tests exercise the complete Windscribe UI, real login, TUN,
-Windows or macOS.
+None of these tests exercise the complete Windscribe UI, real login or a real
+VPN connection. The real-core smoke test runs on the three GitHub Actions
+platforms, but checks only state, version and shutdown.
 
 ## Remaining work before any release
 
