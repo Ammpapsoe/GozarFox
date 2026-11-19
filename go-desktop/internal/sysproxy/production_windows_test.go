@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/windows/registry"
 )
 
 // The actual production watchdog launches the current executable. Teach this
@@ -64,8 +66,36 @@ func productionTestBackend(t *testing.T) (*windowsBackend, map[string]ProxyValue
 	return b, readLiveValues(t, b)
 }
 
+func readLiveConnectionValues(t *testing.T) map[string]string {
+	t.Helper()
+	key, err := registry.OpenKey(registry.CURRENT_USER, settingsKey+`\Connections`, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Close()
+	names, err := key.ReadValueNames(-1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := make(map[string]string, len(names))
+	for _, name := range names {
+		n, kind, err := key.GetValue(name, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data := make([]byte, n)
+		n, kind, err = key.GetValue(name, data)
+		if err != nil || n != len(data) {
+			t.Fatal("could not read connection setting")
+		}
+		values[name] = fmt.Sprintf("%d:%x", kind, data)
+	}
+	return values
+}
+
 func TestSystemProxyProductionConnectRestore(t *testing.T) {
 	b, before := productionTestBackend(t)
+	beforeConnections := readLiveConnectionValues(t)
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +104,17 @@ func TestSystemProxyProductionConnectRestore(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 	session, err := StartSystemProxy(context.Background(), port)
 	if err != nil {
+		afterConnections := readLiveConnectionValues(t)
+		for name, value := range beforeConnections {
+			if afterConnections[name] != value {
+				t.Errorf("WinINet connection setting %s changed during failed startup", name)
+			}
+		}
+		for name := range afterConnections {
+			if _, ok := beforeConnections[name]; !ok {
+				t.Errorf("WinINet connection setting %s appeared during failed startup", name)
+			}
+		}
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
