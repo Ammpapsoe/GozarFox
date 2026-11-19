@@ -87,9 +87,20 @@ func setTCP[T any](created *stack.Stack, value T) error {
 }
 
 func tuneTCP(created *stack.Stack) error {
+	return tuneTCPForPlatform(created, runtime.GOOS)
+}
+
+func tuneTCPForPlatform(created *stack.Stack, platform string) error {
+	// On the Windows Wintun path, sustained downloads stalled with RACK in
+	// the real-device CI diagnostic. With it disabled five runs completed.
+	// Keep other platforms unchanged; loss and WAN behavior still need study.
+	recovery := tcpip.TCPRecovery(tcpip.TCPRACKLossDetection)
+	if platform == "windows" {
+		recovery = 0
+	}
 	for _, option := range []func() error{
 		func() error { return setTCP(created, tcpip.TCPSACKEnabled(true)) },
-		func() error { return setTCP(created, tcpip.TCPRecovery(tcpip.TCPRACKLossDetection)) },
+		func() error { return setTCP(created, recovery) },
 		func() error { return setTCP(created, tcpip.TCPModerateReceiveBufferOption(true)) },
 		func() error { return setTCP(created, tcpip.TCPDelayEnabled(false)) },
 		func() error { return setTCP(created, tcpip.TCPMinRTOOption(200*time.Millisecond)) },
