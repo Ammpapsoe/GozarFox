@@ -93,11 +93,41 @@ func applyProxy(store proxyStore, snapshot ProxySnapshot) error {
 		return err
 	}
 	want := desired(snapshot.Port)
+	// Recheck after the journal is durable: the user or another application
+	// may have changed a setting since capture. This is not atomic against
+	// non-cooperating writers, so it reduces but cannot eliminate the race.
+	for _, name := range proxyNames {
+		current, err := store.Read(name)
+		if err != nil {
+			return err
+		}
+		if current != snapshot.Previous[name] {
+			return fmt.Errorf("proxy setting %s changed before activation", name)
+		}
+	}
+	currentEnable, err := store.Read("ProxyEnable")
+	if err != nil {
+		return err
+	}
+	if currentEnable != snapshot.Previous["ProxyEnable"] {
+		return errors.New("proxy setting ProxyEnable changed before activation")
+	}
 	if err := store.Write("ProxyEnable", number(0)); err != nil {
 		return err
 	}
 	for _, name := range []string{"ProxyServer", "ProxyOverride", "AutoConfigURL", "AutoDetect", "ProxyEnable"} {
-		if err := store.Write(name, want[name]); err != nil {
+		expected := snapshot.Previous[name]
+		if name == "ProxyEnable" {
+			expected = number(0)
+		}
+		current, err := store.Read(name)
+		if err == nil && current != expected {
+			err = fmt.Errorf("proxy setting %s changed during activation", name)
+		}
+		if err == nil {
+			err = store.Write(name, want[name])
+		}
+		if err != nil {
 			if rollback := restoreProxy(store, snapshot); rollback != nil {
 				return fmt.Errorf("apply proxy: %v; rollback: %w", err, rollback)
 			}

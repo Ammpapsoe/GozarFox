@@ -64,10 +64,17 @@ func (s *Server) Close() error {
 	}
 	s.closed = true
 	s.cancel()
+	connections := make([]net.Conn, 0, len(s.active))
 	for conn := range s.active {
-		_ = conn.Close()
+		connections = append(connections, conn)
 	}
 	s.mu.Unlock()
+	// Close both halves of hijacked tunnels. Closing only the client leaves a
+	// half-closed upstream stream and bridge goroutine alive if the remote peer
+	// waits indefinitely; never call user-supplied stream Close under s.mu.
+	for _, conn := range connections {
+		_ = conn.Close()
+	}
 	s.transport.CloseIdleConnections()
 	return s.http.Close()
 }
@@ -296,8 +303,16 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.active[local] = struct{}{}
+	s.active[remote] = struct{}{}
 	s.mu.Unlock()
-	defer func() { _ = local.Close(); _ = remote.Close(); s.mu.Lock(); delete(s.active, local); s.mu.Unlock() }()
+	defer func() {
+		_ = local.Close()
+		_ = remote.Close()
+		s.mu.Lock()
+		delete(s.active, local)
+		delete(s.active, remote)
+		s.mu.Unlock()
+	}()
 	if _, err := buffered.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 		return
 	}
