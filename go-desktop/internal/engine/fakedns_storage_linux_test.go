@@ -14,8 +14,17 @@ import (
 	"time"
 )
 
+func linuxPrivateTestRoot(t *testing.T) string {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "private")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func TestFakeDNSStorageLinuxIdentityAndLock(t *testing.T) {
-	root := t.TempDir()
+	root := linuxPrivateTestRoot(t)
 	f, session, err := openLinuxDNSStorage(root, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -44,9 +53,9 @@ func TestFakeDNSStorageLinuxIdentityAndLock(t *testing.T) {
 }
 
 func TestFakeDNSStorageLinuxRefusesMissingOrUnsafeHistory(t *testing.T) {
-	for _, scenario := range []string{"missing history", "empty history", "missing directory", "missing marker", "symlink", "unsafe file", "unsafe root"} {
+	for _, scenario := range []string{"missing history", "missing checkpoint", "empty history", "missing directory", "missing marker", "truncated marker", "symlink", "hardlink", "unsafe file", "unsafe root"} {
 		t.Run(scenario, func(t *testing.T) {
-			root := t.TempDir()
+			root := linuxPrivateTestRoot(t)
 			_, session, err := openLinuxDNSStorage(root, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -59,6 +68,8 @@ func TestFakeDNSStorageLinuxRefusesMissingOrUnsafeHistory(t *testing.T) {
 			switch scenario {
 			case "missing history":
 				err = os.Remove(history)
+			case "missing checkpoint":
+				err = os.Remove(filepath.Join(storage, dnsCheckpointName))
 			case "empty history":
 				err = os.Truncate(history, 0)
 				if err == nil {
@@ -68,6 +79,10 @@ func TestFakeDNSStorageLinuxRefusesMissingOrUnsafeHistory(t *testing.T) {
 				err = os.RemoveAll(storage)
 			case "missing marker":
 				err = os.Remove(filepath.Join(root, dnsMarkerName))
+			case "truncated marker":
+				err = os.Truncate(filepath.Join(root, dnsMarkerName), 4)
+			case "hardlink":
+				err = os.Link(history, filepath.Join(root, "history-link"))
 			case "symlink":
 				err = os.Remove(history)
 				if err == nil {
@@ -108,7 +123,7 @@ func TestFakeDNSStorageLinuxCrashChild(t *testing.T) {
 }
 
 func TestFakeDNSStorageLinuxReopensAfterOwnerKilled(t *testing.T) {
-	root := t.TempDir()
+	root := linuxPrivateTestRoot(t)
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
