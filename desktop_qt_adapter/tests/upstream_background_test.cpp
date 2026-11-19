@@ -1,6 +1,7 @@
 #include "corebridge.h"
 #include "homebinder.h"
 #include "originalhomebinding.h"
+#include "originalpowerbinding.h"
 #include "originallocationsbinding.h"
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
@@ -231,11 +232,14 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
     bindOriginalHomeWindow(window, &binder);
+    QVERIFY(bindOriginalPowerControl(window, &binder));
+    QVERIFY(!power->isClickable()); // state is not known yet
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy clicks(window, &ConnectWindow::ConnectWindowItem::connectClick);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QVERIFY(power->isClickable());
     binder.selectServer(QStringLiteral("de.example"), QStringLiteral("DE"));
     QTRY_COMPARE_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"), 5000);
     const QPoint clickPos = view.mapFromScene(power->mapToScene(power->boundingRect().center()));
@@ -244,6 +248,7 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+    QVERIFY(!power->isClickable());
 }
 
 void UpstreamBackgroundTest::locationsMapAndSelection() {
@@ -346,12 +351,24 @@ void UpstreamBackgroundTest::originalWindowReadsRealCoreState() {
 }
 
 void UpstreamBackgroundTest::incompleteStateDisablesMutations() {
-    qputenv("FAKE_CORE_OMIT_LIVE", "1");
+    Preferences preferences;
+    PreferencesHelper helper;
+    QGraphicsScene scene;
+    auto *window = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
+    scene.addItem(window);
+    window->setClickable(true);
+    ConnectWindow::ConnectButton *power = nullptr;
+    for (auto *item : window->childItems())
+        if (auto *candidate = dynamic_cast<ConnectWindow::ConnectButton *>(item)) power = candidate;
+    QVERIFY(power);
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
+    QVERIFY(bindOriginalPowerControl(window, &binder));
+    QVERIFY(!power->isClickable());
     QSignalSpy ready(&bridge, &CoreBridge::ready), replies(&bridge, &CoreBridge::reply);
     QSignalSpy errors(&binder, &HomeBinder::error), availability(&binder, &HomeBinder::availabilityChanged);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    qputenv("FAKE_CORE_OMIT_LIVE", "1");
     const bool started = bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE"));
     QTRY_VERIFY_WITH_TIMEOUT(!ready.isEmpty(), 5000);
     qunsetenv("FAKE_CORE_OMIT_LIVE");
@@ -359,6 +376,7 @@ void UpstreamBackgroundTest::incompleteStateDisablesMutations() {
     QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
     QVERIFY(!availability.isEmpty());
     QVERIFY(!availability.last().at(0).toBool());
+    QVERIFY(!power->isClickable());
     const int count = replies.size();
     binder.toggleConnection();
     binder.setMode(QStringLiteral("system-proxy"));

@@ -81,11 +81,15 @@ binding does not enable the window's controls.
 
 `LocationCatalog` converts Gozar server snapshots to the upstream location
 model's types and maps selected IDs back to actual hostnames. It rejects
-identifier collisions and clears stale choices on malformed snapshots. GitHub
-Actions tested it with the original upstream location model and a simulated
-locations window/core on Windows, Linux and macOS. The actual locations window,
-other tabs, automatic best-server selection and persisted favorites are not
-integrated by this test.
+identifier collisions, ambiguous hostname targets, and clears stale choices on
+malformed snapshots. GitHub Actions exercised the original `LocationsWindow`
+and original location model using a simulated core on Windows, Linux and macOS.
+Other tabs, automatic best-server selection and persisted favorites are not
+integrated by this test. `bindOriginalPowerControl` is an experimental adapter
+for the original power button: it disables it when the core state is unknown,
+signed out or changing. Install it after any call to the original window's
+`setClickable`, which controls every button. It does not integrate or sanitize
+the other upstream controls, and it must not yet be shipped with a real VPN.
 
 The Gozar `kill_switch` field is an opt-in for firewall rules on the next TUN
 connection, not Windscribe's current firewall state. Do not bind it to the

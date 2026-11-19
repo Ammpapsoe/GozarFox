@@ -20,8 +20,12 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
     if (core->running()) refresh();
 }
 
+bool HomeBinder::isAvailable() const {
+    return core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && !connecting_;
+}
+
 void HomeBinder::setEnabled() {
-    const bool available = core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && !connecting_;
+    const bool available = isAvailable();
     if (button_) button_->setClickable(available);
     emit availabilityChanged(available);
 }

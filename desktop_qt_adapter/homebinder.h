@@ -27,6 +27,7 @@ public:
     void setWarpUdp(bool enabled, bool consent);
     void setChain(const QJsonArray &hops);
     void toggleConnection();
+    bool isAvailable() const;
 
 signals:
     void error(const QString &message);
