@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gozar/core.dart';
 import 'package:gozar/main.dart';
+import 'package:gozar/strings.dart';
+import 'package:gozar/windscribe_home.dart';
 
 class FakeCore extends Core {
   FakeCore({
@@ -351,6 +353,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(core.lastWarp, {'enabled': false, 'consent': false});
     expect(core.warpUdp, isFalse);
+  });
+
+  testWidgets('home connection mode changes choice and locks while connected', (tester) async {
+    tester.view.physicalSize = const Size(360, 360);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = FakeCore(signedIn: true, language: 'en');
+    await tester.pumpWidget(GozarApp(core: core));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-mode-tun')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-mode-proxy-only')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-mode-system-proxy')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-mode-proxy-only')));
+    await tester.pumpAndSettle();
+    expect(core.mode, 'proxy-only');
+    expect(core.requests, isNot(contains('connect')));
+    await tester.tap(find.byTooltip('Connect').first);
+    await tester.pumpAndSettle();
+    expect(core.live, isTrue);
+    expect(tester.widget<InkWell>(find.byKey(const ValueKey('home-mode-tun'))).onTap, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home connection mode offers all three choices on Windows', (tester) async {
+    tester.view.physicalSize = const Size(360, 360);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    String? selected;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: WindscribeHome(
+      words: const Words(false), live: false, connecting: false, busy: false,
+      city: 'Auto', code: null, downloadLabel: '', uploadLabel: '',
+      sessionLabel: '', deviceLabel: '', exitLabel: '', usageLabel: '',
+      statusText: 'Disconnected', protocolText: 'TUN', killSwitch: false,
+      limit: 0, remaining: 0, mode: 'tun', systemProxyAvailable: true,
+      onModeChanged: (mode) => selected = mode,
+      onToggle: () {}, onServers: () {}, onSettings: () {},
+    ))));
+    await tester.pumpAndSettle();
+    for (final mode in ['tun', 'proxy-only', 'system-proxy']) {
+      await tester.tap(find.byKey(ValueKey('home-mode-$mode')));
+      expect(selected, mode);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('connection mode selection does not connect or change system proxy', (tester) async {

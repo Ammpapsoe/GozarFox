@@ -36,6 +36,9 @@ class WindscribeHome extends StatefulWidget {
     required this.killSwitch,
     required this.limit,
     required this.remaining,
+    required this.mode,
+    required this.systemProxyAvailable,
+    required this.onModeChanged,
     required this.onToggle,
     required this.onServers,
     required this.onSettings,
@@ -59,6 +62,9 @@ class WindscribeHome extends StatefulWidget {
   final bool killSwitch;
   final int limit;
   final int remaining;
+  final String mode;
+  final bool systemProxyAvailable;
+  final ValueChanged<String> onModeChanged;
   final VoidCallback onToggle;
   final VoidCallback onServers;
   final VoidCallback onSettings;
@@ -124,6 +130,7 @@ class _WindscribeHomeState extends State<WindscribeHome>
         _header(),
         const SizedBox(height: 6),
         _cityAndStatus(),
+        _connectionModes(),
         Expanded(child: Center(child: _connectButton())),
         _infoPanel(),
         if (widget.fault.isNotEmpty)
@@ -260,6 +267,72 @@ class _WindscribeHomeState extends State<WindscribeHome>
           ],
         ),
       );
+
+  Widget _connectionModes() {
+    final locked = widget.busy || widget.live || widget.connecting;
+    final choices = [
+      ('tun', 'TUN'),
+      ('proxy-only', widget.words.modeProxyOnly),
+      ('system-proxy', widget.words.modeSystemProxy),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: Container(
+        height: 34,
+        decoration: BoxDecoration(
+          color: const Color(0x30000000),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0x22FFFFFF)),
+        ),
+        child: Row(children: [
+          for (final (value, label) in choices)
+            Expanded(
+              child: Builder(builder: (context) {
+                final selected = widget.mode == value;
+                final supported = value != 'system-proxy' || widget.systemProxyAvailable;
+                final enabled = !locked && supported;
+                final tip = !supported
+                    ? widget.words.modeSystemProxyDetail
+                    : locked
+                        ? widget.words.modeChangeDisconnect
+                        : label;
+                return Tooltip(
+                  message: tip,
+                  child: Semantics(
+                    button: true,
+                    selected: selected,
+                    enabled: enabled,
+                    child: Material(
+                      color: selected ? const Color(0xFF2866A2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        key: ValueKey('home-mode-$value'),
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: enabled ? () => widget.onModeChanged(value) : null,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(label,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                      color: enabled || selected ? Colors.white : const Color(0x66DFEEFF),
+                                      fontSize: 11,
+                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+        ]),
+      ),
+    );
+  }
 
   Widget _connectButton() {
     const diameter = 176.0;

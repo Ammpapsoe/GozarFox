@@ -301,7 +301,7 @@ jobs:
           go test ./internal/app ./internal/rpc -run '^(TestConnectionMode|TestSystemProxy)' -count=1
           if [ "${{ runner.os }}" = Linux ]; then
             go test -race ./internal/sysproxy ./internal/localproxy ./internal/app ./internal/rpc -count=1
-            go test ./internal/engine -run '^TestFakeDNSHistory' -count=1
+            go test ./internal/engine -run '^(TestFakeDNS|TestJournalFakeDNS)' -count=1
           fi
       - name: Test real WinINet settings (disposable runner only)
         if: ${{ runner.os == 'Windows' }}

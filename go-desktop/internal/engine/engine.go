@@ -298,9 +298,9 @@ func (e *Engine) handleTCP(request *tcp.ForwarderRequest) {
 func (e *Engine) listenUDP(created *stack.Stack) {
 	forwarder := udp.NewForwarder(created, e.handleUDP)
 	created.SetTransportProtocolHandler(udp.ProtocolNumber, func(id stack.TransportEndpointID, packet *stack.PacketBuffer) bool {
-		if id.LocalPort != 53 && e.syntheticAddress(id.LocalAddress.String()) {
-			// The datagram relay accepts real IP addresses, not domain names.
-			// Never transmit a synthetic address as though it were real.
+		if id.LocalPort != 53 && !e.allowSyntheticDatagram(id.LocalAddress.String()) {
+			// Unknown synthetic addresses and identities whose routing policy
+			// changed must not reach the datagram relay or a direct socket.
 			return false
 		}
 		if id.LocalPort != 53 && !e.reserveDatagram() {

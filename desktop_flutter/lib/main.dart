@@ -686,9 +686,19 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         _ => words.modeTun,
       };
 
+  Future<void> _setConnectionMode(String mode) async {
+    if (_busy || _windowClosing || _state.live || _state.connecting || _connectionBusy || mode == _state.mode) return;
+    setState(() => _busy = true);
+    try {
+      await _requestSetting('mode', {'mode': mode});
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _chooseConnectionMode() async {
     if (_state.live || _state.connecting) {
-      await _info(words.connectionMode, words.switchDisconnect);
+      await _info(words.connectionMode, words.modeChangeDisconnect);
       return;
     }
     final choice = await showDialog<String>(
@@ -724,9 +734,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
         ],
       ),
     );
-    if (choice != null && choice != _state.mode) {
-      await _requestSetting('mode', {'mode': choice});
-    }
+    if (choice != null) await _setConnectionMode(choice);
   }
 
   Future<void> _editChain() async {
@@ -1892,8 +1900,11 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           : words.usageUnavailable,
       statusText: status,
       protocolText: server != null && server.port > 0
-          ? 'TUN · Relay ${server.port}'
-          : 'TUN',
+          ? '${_modeLabel(_state.mode)} · Relay ${server.port}'
+          : _modeLabel(_state.mode),
+      mode: _state.mode,
+      systemProxyAvailable: Platform.isWindows,
+      onModeChanged: (mode) => unawaited(_setConnectionMode(mode)),
       killSwitch: _state.killSwitch,
       limit: _state.limit,
       remaining: _state.remaining,

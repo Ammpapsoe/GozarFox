@@ -118,10 +118,8 @@ func TestFakeDNSUDPDoesNotLeakSyntheticAddress(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine.fakeDNS = fake
-	addr, err := fake.address("example.org")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// An unknown synthetic identity is rejected before opening any flow.
+	addr := netip.MustParseAddr("198.18.0.0")
 	remote := &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFrom4(addr.As4()), Port: 443}
 	conn, err := gonet.DialUDP(client, nil, remote, ipv4.ProtocolNumber)
 	if err != nil {

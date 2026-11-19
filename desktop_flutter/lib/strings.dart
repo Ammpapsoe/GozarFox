@@ -58,6 +58,9 @@ class Words {
   String get settingsSections => pick('بخش‌های تنظیمات', 'Settings sections');
   String get connectionSettings => pick('اتصال', 'Connection');
   String get connectionMode => pick('حالت اتصال', 'Connection mode');
+  String get modeChangeDisconnect => pick(
+      'برای تغییر حالت، ابتدا اتصال را قطع کنید.',
+      'Disconnect before changing the connection mode.');
   String get modeTun => pick('تونل سیستم', 'System tunnel');
   String get modeProxyOnly => pick('فقط پراکسی', 'Proxy only');
   String get modeSystemProxy => pick('پراکسی سیستم', 'System proxy');

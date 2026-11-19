@@ -156,7 +156,13 @@ func absentDatagram(remote DatagramTunnel) bool {
 func (e *Engine) relayDatagrams(flow *datagramFlow, host string, port int) {
 	defer e.forgetDatagram(flow)
 	defer flow.close()
-	remote, err := e.udpDial(host, port)
+	// Resolve synthetic addresses only through tunneled DNS. The relay must
+	// never see the reserved synthetic address as a real destination.
+	target, err := e.resolveDatagramTarget(host)
+	if err != nil {
+		return
+	}
+	remote, err := e.udpDial(target, port)
 	if err != nil || absentDatagram(remote) {
 		if !absentDatagram(remote) {
 			_ = remote.Close()
