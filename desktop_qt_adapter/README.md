@@ -45,13 +45,13 @@ ctest --test-dir /tmp/gozar-qt-check --output-on-failure
 ```
 
 The tests cover request IDs, JSON response/parameters, core failure, malformed
-responses, missing executable and shutdown. An optional offscreen test compiles
-Windscribe's **actual unmodified background and image transition code and
-resources**, links them to the adapter and exercises simulated server-country
-and connection-state responses. The same test also instantiates the actual
-unmodified Windscribe connect button and sends a simulated RPC on mouse click.
-Test-only shims replace upstream preferences and other non-visual services.
-Run it using:
+responses, missing executable and shutdown. An optional offscreen test builds
+the original upstream `ConnectWindowItem` and its visible children, background,
+image-transition code and resources. With test-only shims for preferences,
+persistence and tooltips, a mouse click on the actual window's connection
+button sends an RPC to a simulated core. The separate background test exercises
+simulated country and connection state changes. These checks do not build the
+complete desktop application. Run them using:
 
 ```
 cmake -S desktop_qt_adapter -B /tmp/gozar-qt-source-check -G Ninja -DBUILD_UPSTREAM_SMOKE_TEST=ON
@@ -59,20 +59,17 @@ cmake --build /tmp/gozar-qt-source-check
 ctest --test-dir /tmp/gozar-qt-source-check --output-on-failure
 ```
 
-`HomeBinder` is an experimental adapter connecting the original upstream
-background and connect-button classes to Gozar's RPC. It requests state, sends
-connection and server-selection commands, and feeds the returned country code
-and connection state to those original widgets. It is **not** yet integrated
-into the complete window or Flutter login, and must not be used with a real VPN.
-The prior revision was tested on GitHub Actions with a fake core and isolated
-upstream widgets on Windows, Linux and macOS. This is not an end-to-end UI test.
-The settings RPC wrappers were also tested with the fake core on all three
-platforms. The experimental `bindOriginalHomeWindow` template additionally maps
-core connection and location states into the actual upstream
+`HomeBinder` is an experimental adapter connecting original upstream widgets
+to Gozar's RPC. It requests state, sends connection and server-selection
+commands, and feeds the returned country code and connection state to those
+widgets. The experimental `bindOriginalHomeWindow` uses the real upstream
 `ConnectWindowItem` public methods and forwards its connect click. GitHub
-Actions compiled the original window implementation and binding with backend
-stubs on all three platforms; its runtime binding test uses a fake window. It
-is not a complete window build or a real VPN integration. The upstream window's
+Actions built and ran that original window with test-only backend services on
+Windows, Linux and macOS. The click and settings tests use a fake core; another
+window test reads state from the real, signed-out 1.19.0 core in an isolated
+configuration and requests shutdown. It is **not** an end-to-end UI test,
+integrated Flutter login, complete application or real VPN integration.
+It must not be used with a real VPN. The upstream window's
 protocol widget defaults to WireGuard/443, which does not describe Gozar; it
 must be corrected or disabled before this binding is shown to users. The
 binding does not enable the window's controls.
@@ -85,13 +82,13 @@ upstream UI includes more translation files; those other UI translations need
 an independent persistence strategy. `warp_udp` requires explicit user consent.
 Unsupported controls must not silently claim success.
 
-The UI tests use a simulated core. For a separate, optional real-core check,
-build the Gozar 1.19.0 core, configure with `-DGOZAR_REAL_CORE=/path/to/core`
-and run CTest. The `realcore_smoke` test launches it with a temporary config,
-reads its version/state and shuts it down; it does not sign in or connect.
-None of these tests exercise the complete Windscribe UI, real login or a real
-VPN connection. The real-core smoke test runs on the three GitHub Actions
-platforms, but checks only state, version and shutdown.
+The interactive UI tests use a simulated core. For the separate real-core
+smoke check, build the Gozar 1.19.0 core, configure with
+`-DGOZAR_REAL_CORE=/path/to/core` and run CTest. `realcore_smoke` checks
+version/state and shutdown using a temporary config. The original-window
+state check also runs when `GOZAR_CI_TEST_CORE` is set. Neither test signs in
+or connects. None exercise the complete Windscribe UI, real login or a real
+VPN connection.
 
 ## Remaining work before any release
 
