@@ -37,7 +37,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
     tests/upstream_background_test.cpp tests/upstream_shims/categories.cpp
-    ${WS_COMMON}/types/pingtime.cpp
+    tests/upstream_pingtime.cpp
     tests/upstream_shims/backend/preferences/preferences.h
     tests/upstream_shims/languagecontroller.h
     ${WS_GUI}/images.qrc
