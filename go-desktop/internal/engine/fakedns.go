@@ -24,6 +24,8 @@ type fakeDNS struct {
 	start     uint32
 	allocated uint32
 	direct    func(string) bool
+	journal   fakeDNSJournal
+	writeErr  error
 }
 
 const fakeCount uint32 = (1 << 17) - 2
@@ -91,13 +93,24 @@ func (f *fakeDNS) address(name string) (netip.Addr, error) {
 	if address, ok := f.byName[name]; ok {
 		return address, nil
 	}
+	if !fakeDomain(name) {
+		return netip.Addr{}, errors.New("invalid synthetic DNS name")
+	}
+	if f.writeErr != nil {
+		return netip.Addr{}, f.writeErr
+	}
 	if f.allocated >= fakeCount {
 		return netip.Addr{}, errors.New("synthetic DNS address pool exhausted")
 	}
-	// Exclude the first and last address of the reserved range.
-	offset := 1 + (f.start+f.allocated)%fakeCount
-	value := uint32(198)<<24 | uint32(18)<<16 | offset
-	address := netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)})
+	if f.journal != nil {
+		if err := f.journal.Append(name); err != nil {
+			// An error may still mean the write reached storage. Stop new
+			// allocations until the journal is reopened and validated.
+			f.writeErr = errors.New("synthetic DNS journal failed; restart required")
+			return netip.Addr{}, f.writeErr
+		}
+	}
+	address := fakeAddressAt(f.start, f.allocated)
 	f.byName[name] = address
 	f.byAddr[address] = name
 	f.allocated++
