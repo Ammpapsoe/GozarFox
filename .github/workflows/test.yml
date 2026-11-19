@@ -339,6 +339,11 @@ jobs:
       - name: Test bounded real-DNS cache and routing TTL
         working-directory: go-desktop
         run: go test ./internal/dnsproxy ./internal/geo -run '^(TestResponseCache|TestLearned)' -count=1 -v
+      - name: Measure durable FakeDNS allocations on disposable runner
+        working-directory: go-desktop
+        env:
+          GOZAR_FAKEDNS_PERF_TEST: '1'
+        run: go test ./internal/engine -run '^TestFakeDNSDurableAllocationDiagnostic$' -count=1 -v
 
   focused-fakedns-live-windows:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.system_proxy_only && inputs.fakedns_only && inputs.windows_live_tun }}
