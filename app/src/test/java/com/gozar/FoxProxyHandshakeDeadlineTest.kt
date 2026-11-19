@@ -6,6 +6,9 @@ import java.io.DataInputStream
 import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -63,6 +66,59 @@ class FoxProxyHandshakeDeadlineTest {
             }
         } finally {
             proxy.stop()
+        }
+    }
+
+    @Test
+    fun completedTcpTunnelDoesNotInheritHandshakeDeadline() {
+        val closed = CountDownLatch(1)
+        val writes = LinkedBlockingQueue<ByteArray>()
+        val tunnel = object : FoxPipe {
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                closed.await(10, TimeUnit.SECONDS)
+                return -1
+            }
+            override fun write(buffer: ByteArray, offset: Int, length: Int) {
+                writes.offer(buffer.copyOfRange(offset, offset + length))
+            }
+            override fun close() { closed.countDown() }
+        }
+        val place = FoxLocation("", "", "", "local-test.invalid", 443, false)
+        val proxy = FoxProxy(0, forceTunnel = true, countTraffic = false,
+            nameOf = { null }, tunnelScope = { FoxLink.TransportScope(place, 1L) },
+            scopeCurrent = { true }, tunnelConnect = { _, _, _, _, _ -> tunnel },
+            handshakeTimeoutMillis = 1000, pass = { "test-token" })
+        assertTrue(proxy.start())
+        try {
+            Socket("127.0.0.1", proxy.boundPort()).use { socket ->
+                socket.soTimeout = 3000
+                val auth = proxy.sessionCredential().toByteArray(Charsets.UTF_8)
+                val host = "test.invalid".toByteArray(Charsets.US_ASCII)
+                val request = ByteArrayOutputStream().apply {
+                    write(byteArrayOf(5, 1, 2))
+                    write(1)
+                    write(auth.size)
+                    write(auth)
+                    write(auth.size)
+                    write(auth)
+                    write(byteArrayOf(5, 1, 0, 3, host.size.toByte()))
+                    write(host)
+                    write(byteArrayOf(1, 0xbb.toByte()))
+                }.toByteArray()
+                socket.getOutputStream().write(request)
+                socket.getOutputStream().flush()
+                val reply = ByteArray(14)
+                DataInputStream(socket.getInputStream()).readFully(reply)
+                assertArrayEquals(byteArrayOf(5, 2, 1, 0, 5, 0), reply.copyOfRange(0, 6))
+                Thread.sleep(1500)
+                val payload = byteArrayOf(1, 2, 3)
+                socket.getOutputStream().write(payload)
+                socket.getOutputStream().flush()
+                assertArrayEquals(payload, writes.poll(3, TimeUnit.SECONDS))
+            }
+        } finally {
+            proxy.stop()
+            closed.countDown()
         }
     }
 
