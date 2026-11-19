@@ -16,6 +16,7 @@ internal class ProxyHandshakeInput(
     init { require(timeoutMillis > 0) }
     private val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis.toLong())
     private var finished = false
+    private var currentTimeout = -1
 
     private fun prepareRead() {
         if (finished) return
@@ -24,7 +25,13 @@ internal class ProxyHandshakeInput(
         // Round up so a positive sub-millisecond remainder is not interpreted
         // as an infinite socket timeout. Recompute on every read.
         val millis = TimeUnit.NANOSECONDS.toMillis(remaining - 1) + 1
-        socket.soTimeout = millis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val nextTimeout = millis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        // Headers are parsed one byte at a time from a buffered stream; avoid
+        // a socket option syscall per byte when the deadline hasn't changed.
+        if (currentTimeout != nextTimeout) {
+            socket.soTimeout = nextTimeout
+            currentTimeout = nextTimeout
+        }
     }
 
     fun finish() {
