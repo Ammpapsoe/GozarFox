@@ -187,10 +187,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Future<void> _start() async {
     try {
       await _core.start();
-      var reply = await _core.call('state');
-      if (reply.state?.mode != 'tun' && reply.state?.live == false) {
-        reply = await _core.call('mode', {'tunnel': true});
-      }
+      final reply = await _core.call('state');
       if (!mounted) return;
       setState(() {
         _state = reply.state ?? const CoreState();

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/app"
+	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/config"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/fxa"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/systemaccounts"
 	"github.com/Ammpapsoe/GozarFox/go-desktop/internal/update"
@@ -321,11 +322,23 @@ func (s *Server) handle(request Request) Response {
 		}
 	case "mode":
 		var body struct {
-			Tunnel bool `json:"tunnel"`
+			Mode   *config.ConnectionMode `json:"mode"`
+			Tunnel *bool                  `json:"tunnel"`
 		}
-		json.Unmarshal(request.Params, &body)
-		if err := s.app.SetMode(body.Tunnel); err != nil {
-			response.Error = err.Error()
+		if json.Unmarshal(request.Params, &body) != nil || (body.Mode == nil) == (body.Tunnel == nil) {
+			response.Error = "invalid connection mode request"
+		} else if body.Tunnel != nil && !*body.Tunnel {
+			// Old clients could not select a working non-TUN mode. Do not
+			// reinterpret their false as permission to change proxy settings.
+			response.Error = "legacy non-TUN mode is unsupported"
+		} else {
+			mode := config.ModeTUN
+			if body.Mode != nil {
+				mode = *body.Mode
+			}
+			if err := s.app.SetMode(mode); err != nil {
+				response.Error = err.Error()
+			}
 		}
 	case "quit":
 		s.app.Close()

@@ -89,6 +89,7 @@ type App struct {
 	pendingKind     string
 	unblockFor      string
 	engine          *engine.Engine
+	modeLease       *modeLease // accessed only while connectionMu is held
 	transport       *tunnel.Manager
 	warp            *warp.Auto
 	stage           string
@@ -115,7 +116,6 @@ type App struct {
 
 func New(version string) *App {
 	cfg := config.Load()
-	cfg.FullTunnel = true
 	if cfg.Recents && cfg.LastServer != "" {
 		cfg.Server = cfg.LastServer
 	} else {
@@ -199,10 +199,10 @@ func (a *App) State() State {
 }
 
 func (a *App) mode() string {
-	if a.cfg.FullTunnel {
-		return "tun"
+	if a.cfg.Mode == "" {
+		return string(config.ModeTUN)
 	}
-	return "proxy"
+	return string(a.cfg.Mode)
 }
 
 func (a *App) sampler() {
@@ -295,14 +295,21 @@ func (a *App) SetServer(key string) error {
 	return errors.New("server not found")
 }
 
-func (a *App) SetMode(tunMode bool) error {
-	if !tunMode {
-		return errors.New("only TUN mode is supported")
+// SetMode changes only the saved choice. It does not start a connection or
+// change system proxy settings. A live or connecting session must end first.
+func (a *App) SetMode(mode config.ConnectionMode) error {
+	if err := mode.Validate(); err != nil {
+		return err
 	}
+	a.connectionMu.Lock()
+	defer a.connectionMu.Unlock()
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.live || a.connecting || a.modeLease != nil {
+		return errors.New("disconnect before changing the connection mode")
+	}
 	next := a.cfg
-	next.FullTunnel = true
+	next.Mode = mode
 	if err := config.Save(next); err != nil {
 		return err
 	}
@@ -847,6 +854,27 @@ func (a *App) connectLocked() error {
 		a.mu.Unlock()
 		return nil
 	}
+	mode := a.cfg.Mode
+	if mode == "" {
+		mode = config.ModeTUN
+	}
+	plan, err := planForMode(mode)
+	if err != nil {
+		a.mu.Unlock()
+		return err
+	}
+	// Until the proxy lifecycle is implemented, fail before network, TUN or
+	// system-proxy changes. Never silently connect using another mode.
+	if !plan.tun {
+		a.mu.Unlock()
+		return errors.New("selected connection mode is not implemented yet")
+	}
+	lease, err := processModeOwnership.acquire(mode)
+	if err != nil {
+		a.mu.Unlock()
+		return err
+	}
+	a.modeLease = lease
 	ctx, cancel := context.WithCancel(context.Background())
 	a.connectCancel = cancel
 	a.connecting = true
@@ -855,7 +883,7 @@ func (a *App) connectLocked() error {
 	a.stage = "در حال اتصال…"
 	a.mu.Unlock()
 
-	err := a.connect(ctx)
+	err = a.connect(ctx)
 	a.mu.Lock()
 	a.connectCancel = nil
 	if err == nil && ctx.Err() != nil {
@@ -1137,6 +1165,10 @@ func (a *App) teardown() {
 	if killActive {
 		_ = killswitch.Disable()
 	}
+	// Release ownership only after this mode's resources have been torn down.
+	lease := a.modeLease
+	a.modeLease = nil
+	lease.release()
 }
 
 func (a *App) cancelConnectionAttempt() {

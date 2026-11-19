@@ -245,6 +245,19 @@ jobs:
         working-directory: go-desktop
         run: go test ./internal/sysproxy -count=1
 
+  windows-mode-contract:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - name: Test Windows mode contract and proxy non-mutation
+        working-directory: go-desktop
+        run: go test ./internal/config ./internal/app ./internal/rpc -run '^TestConnectionMode' -count=1
+
   windows-live-tun:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.windows_live_tun }}
     runs-on: windows-2022
@@ -370,7 +383,7 @@ jobs:
           if [ "${{ github.event_name == 'workflow_dispatch' && inputs.skip_graphics_tests }}" = 'true' ]; then
             skip='(?i)(sign.?in|login|signup|unblock|blocked.*sign|verification.*session|session.*verification)'
           fi
-          go test -skip "$skip" -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app ./internal/localproxy ./internal/sysproxy -count=1 2>&1 | tee "$log"
+          go test -skip "$skip" -race ./internal/relay ./internal/fxa ./internal/masque ./internal/tunnel ./internal/engine ./internal/warp ./internal/config ./internal/app ./internal/rpc ./internal/localproxy ./internal/sysproxy -count=1 2>&1 | tee "$log"
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then

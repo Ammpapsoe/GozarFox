@@ -30,25 +30,25 @@ func (a Account) ID() string {
 }
 
 type Config struct {
-	Email           string    `json:"email"`
-	UID             string    `json:"uid"`
-	Access          string    `json:"access"`
-	Refresh         string    `json:"refresh"`
-	ExpiresAt       int64     `json:"expires_at"`
-	Accounts        []Account `json:"accounts,omitempty"`
-	Server          string    `json:"server"`
-	Language        string    `json:"language"`
-	Theme           string    `json:"theme"`
-	Recents         bool      `json:"recents"`
-	LastServer      string    `json:"last_server"`
-	SettingsVersion int       `json:"settings_version"`
-	FullTunnel      bool      `json:"full_tunnel"`
-	KillSwitch      bool      `json:"kill_switch"`
-	SplitTunnel     bool      `json:"split_tunnel"`
-	BypassLAN       bool      `json:"bypass_lan"`
-	WarpUDP         bool      `json:"warp_udp"`
-	Bypass          []string  `json:"bypass"`
-	Chain           []string  `json:"chain"`
+	Email           string         `json:"email"`
+	UID             string         `json:"uid"`
+	Access          string         `json:"access"`
+	Refresh         string         `json:"refresh"`
+	ExpiresAt       int64          `json:"expires_at"`
+	Accounts        []Account      `json:"accounts,omitempty"`
+	Server          string         `json:"server"`
+	Language        string         `json:"language"`
+	Theme           string         `json:"theme"`
+	Recents         bool           `json:"recents"`
+	LastServer      string         `json:"last_server"`
+	SettingsVersion int            `json:"settings_version"`
+	Mode            ConnectionMode `json:"connection_mode"`
+	KillSwitch      bool           `json:"kill_switch"`
+	SplitTunnel     bool           `json:"split_tunnel"`
+	BypassLAN       bool           `json:"bypass_lan"`
+	WarpUDP         bool           `json:"warp_udp"`
+	Bypass          []string       `json:"bypass"`
+	Chain           []string       `json:"chain"`
 	// The authenticated server snapshot is public data, but sealing prevents
 	// a modified cache from directing an account's bearer pass to a new host.
 	ServerCache string `json:"server_cache,omitempty"`
@@ -69,7 +69,7 @@ func Dir() string {
 func path() string { return filepath.Join(Dir(), "config.json") }
 
 func defaults() Config {
-	return Config{FullTunnel: true, KillSwitch: false, SplitTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
+	return Config{Mode: ModeTUN, KillSwitch: false, SplitTunnel: true, Theme: "system", SettingsVersion: 1, Port: 10810}
 }
 
 func (c Config) ActiveAccount() Account {
@@ -157,6 +157,13 @@ func Load() Config {
 		return fresh
 	}
 	loaded.unsealTokens()
+	// Earlier versions forced TUN regardless of the old full_tunnel boolean.
+	// Preserve actual behaviour, not the stale boolean's historical intent.
+	// Keep unknown non-empty modes so Connect can fail closed and a user can
+	// explicitly choose a supported value; never silently start a different one.
+	if loaded.Mode == "" {
+		loaded.Mode = ModeTUN
+	}
 	if loaded.Port == 0 {
 		loaded.Port = fresh.Port
 	}
@@ -181,6 +188,12 @@ func Load() Config {
 
 func Save(current Config) error {
 	final := current.WithCurrentAccount()
+	if final.Mode == "" {
+		final.Mode = ModeTUN
+	}
+	if err := final.Mode.Validate(); err != nil {
+		return err
+	}
 	// A saved config has settled the settings-2 migration; loading an
 	// unsaved one may still re-apply the safe defaults until then.
 	if final.SettingsVersion < 2 {

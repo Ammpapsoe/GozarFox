@@ -24,7 +24,7 @@ func sandbox(t *testing.T) string {
 
 func TestTokensAreNotWrittenInPlaintext(t *testing.T) {
 	target := sandbox(t)
-	saved := Config{Email: "person@example.test", UID: "uid", Access: "access-token-value", Refresh: "refresh-token-value", FullTunnel: true, Port: 10810, Theme: "system"}
+	saved := Config{Email: "person@example.test", UID: "uid", Access: "access-token-value", Refresh: "refresh-token-value", Mode: ModeTUN, Port: 10810, Theme: "system"}
 	if err := Save(saved); err != nil {
 		t.Fatal(err)
 	}

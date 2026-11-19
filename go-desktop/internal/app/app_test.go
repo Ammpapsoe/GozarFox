@@ -28,7 +28,9 @@ func TestStartupUsesTunWithoutChangingSystemProxy(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "gsettings"), command, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := config.Save(config.Config{FullTunnel: false, Port: 10810}); err != nil {
+	// Historically the false value was ignored by startup. Migration must not
+	// silently switch existing installations into a new network mode.
+	if err := os.WriteFile(filepath.Join(config.Dir(), "config.json"), []byte(`{"full_tunnel":false,"port":10810}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	current := New("test")
@@ -36,10 +38,7 @@ func TestStartupUsesTunWithoutChangingSystemProxy(t *testing.T) {
 	if state := current.State(); state.Mode != "tun" {
 		t.Fatalf("got mode %q, want tun", state.Mode)
 	}
-	if err := current.SetMode(false); err == nil {
-		t.Fatal("proxy mode should be rejected")
-	}
-	if err := current.SetMode(true); err != nil {
+	if err := current.SetMode(config.ModeTUN); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
