@@ -25,6 +25,7 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
     QMap<QString, types::Location> grouped;
     QHash<int, QString> countriesById;
     QHash<int, QString> citiesById;
+    QHash<QString, QByteArray> targetsByHost;
     QHash<LocationID, Selection> selections;
     auto fail = [error](const QString &message) {
         if (error) *error = message;
@@ -38,6 +39,15 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
         const QString city = object.value(QStringLiteral("city")).toString().trimmed();
         const QString host = object.value(QStringLiteral("host")).toString().trimmed();
         if (code.isEmpty() || host.isEmpty()) return fail(QStringLiteral("server missing country code or hostname"));
+        // The unchanged Go RPC selects by hostname, not by port or display
+        // location. Distinct entries sharing a hostname cannot be selected
+        // reliably: SetServer resolves the first match. Never misdirect a click.
+        const QString normalizedHost = host.toCaseFolded();
+        const QByteArray target = QJsonDocument(QJsonArray{code, country, city,
+            object.value(QStringLiteral("port"))}).toJson(QJsonDocument::Compact);
+        if (targetsByHost.contains(normalizedHost) && targetsByHost.value(normalizedHost) != target)
+            return fail(QStringLiteral("server hostname is ambiguous"));
+        targetsByHost.insert(normalizedHost, target);
         const int countryId = stableId(QJsonArray{QStringLiteral("country"), code});
         if (countriesById.contains(countryId) && countriesById.value(countryId) != code)
             return fail(QStringLiteral("country identifier collision"));
@@ -75,6 +85,12 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
         }
         it->cities.append(item);
         selections.insert(item.id, choice);
+    }
+    // SetServer also accepts country codes in the same string field. Reject
+    // snapshots where a hostname could be interpreted as a country code.
+    for (auto it = grouped.cbegin(); it != grouped.cend(); ++it) {
+        if (targetsByHost.contains(it.key().toCaseFolded()))
+            return fail(QStringLiteral("server hostname conflicts with a country code"));
     }
     locations_.reserve(grouped.size());
     for (auto it = grouped.cbegin(); it != grouped.cend(); ++it) locations_.append(it.value());

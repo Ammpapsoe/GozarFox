@@ -261,6 +261,14 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QVERIFY(!catalog.replace(QJsonArray{QJsonObject{{"code", "DE"}}}));
     QVERIFY(catalog.locations().isEmpty());
     QVERIFY(!catalog.selection(caId, &choice));
+    QJsonObject sameHostOtherPort = germany;
+    sameHostOtherPort.insert(QStringLiteral("port"), 444);
+    QVERIFY(!catalog.replace(QJsonArray{germany, sameHostOtherPort}));
+    QVERIFY(catalog.locations().isEmpty());
+    QJsonObject codeAsHost = canada;
+    codeAsHost.insert(QStringLiteral("host"), QStringLiteral("de"));
+    QVERIFY(!catalog.replace(QJsonArray{germany, codeAsHost}));
+    QVERIFY(catalog.locations().isEmpty());
 
     QTemporaryDir settingsDir;
     QVERIFY(settingsDir.isValid());
@@ -300,7 +308,7 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QTest::mouseClick(items, Qt::LeftButton, Qt::NoModifier, QPoint(120, row + row / 2));
     QTRY_COMPARE_WITH_TIMEOUT(selections.size(), 1, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
-    QCOMPARE(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"));
+    QTRY_COMPARE_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"), 5000);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }
