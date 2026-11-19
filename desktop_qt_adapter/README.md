@@ -94,8 +94,12 @@ model's types and maps selected IDs back to actual hostnames. It rejects
 identifier collisions, ambiguous hostname targets, and clears stale choices on
 malformed snapshots. GitHub Actions exercised the original `LocationsWindow`
 and original location model using a simulated core on Windows, Linux and macOS.
+The binding invalidates the previous catalogue on refresh, account change,
+unknown state or core exit; old entries cannot be used if a refresh fails.
 Other tabs, automatic best-server selection and persisted favorites are not
-integrated by this test. `bindOriginalLocationsNavigation` is an unverified
+integrated by this test. Rejecting an unsupported tab signal alone does not
+undo the upstream menu's own selected-tab state; that still needs fixing before
+this UI can be shipped. `bindOriginalLocationsNavigation` is an unverified
 adapter for the original MainWindowController expansion/collapse API; it has not
 been exercised with the real controller. `bindOriginalPowerControl` is an
 experimental adapter for the original power button: it disables it when the core state is unknown,
@@ -112,9 +116,11 @@ the core's language. The consolidated GitHub check compiled and loaded all 23
 original language catalogs on Windows, Linux and macOS; it also checked a
 Persian string, Persian RTL direction, German LTR direction, and rejected an
 unknown language. That does not establish visual RTL correctness or translation
-completeness across the full UI. The production preferences page is not yet
-connected to this adapter. `warp_udp` requires explicit user consent.
-Unsupported controls must not silently claim success.
+completeness across the full UI. `OriginalLanguageBinding` attaches the
+original settings combo-box to the UI language choice, but the full preferences
+page is not connected. The original page's language handler must be detached or
+replaced rather than run alongside it. `warp_udp` requires explicit user
+consent. Unsupported controls must not silently claim success.
 
 `OriginalModeBinding` is an experimental adapter for the upstream preferences
 combo-box API, not a complete preferences page. It only displays confirmed core

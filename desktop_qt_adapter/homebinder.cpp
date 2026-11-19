@@ -18,6 +18,7 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
     connect(core, &CoreBridge::reply, this, &HomeBinder::handleReply);
     connect(core, &CoreBridge::failed, this, &HomeBinder::handleFailure);
     connect(core, &CoreBridge::stopped, this, &HomeBinder::coreStopped);
+    connect(this, &HomeBinder::serversInvalidated, this, [this] { ++catalogueRevision_; });
     if (button) connect(button, &ConnectWindow::ConnectButton::clicked, this, &HomeBinder::toggleConnection);
     refreshTimer_.setInterval(2000);
     connect(&refreshTimer_, &QTimer::timeout, this, &HomeBinder::refresh);
@@ -59,13 +60,20 @@ void HomeBinder::refresh() {
     stateId_ = core_->request(QStringLiteral("state"));
     if (stateId_ < 0) {
         stateKnown_ = false;
+        lastState_ = {};
+        emit serversInvalidated();
         setEnabled();
         emit error(QStringLiteral("core state unavailable"));
     }
 }
 
 void HomeBinder::loadServers() {
-    if (!core_ || !core_->running() || !signedIn_ || serversId_ >= 0) return;
+    if (!core_ || !core_->running() || !stateKnown_ || !signedIn_ || serversId_ >= 0) return;
+    // Never leave an old account's or previous fetch's destinations clickable
+    // while a fresh snapshot is pending or if the request subsequently fails.
+    emit serversInvalidated();
+    requestedCatalogueRevision_ = catalogueRevision_;
+    serversEmail_ = lastState_.value(QStringLiteral("email")).toString();
     serversId_ = core_->request(QStringLiteral("servers"));
     if (serversId_ < 0) emit error(QStringLiteral("cannot load servers"));
 }
@@ -166,13 +174,20 @@ void HomeBinder::applyState(const QJsonObject &state) {
         !state.value(QStringLiteral("connecting")).isBool()) {
         stateKnown_ = false;
         lastState_ = {};
+        emit serversInvalidated();
         setEnabled();
         emit error(QStringLiteral("invalid core state; connection state unknown"));
         return;
     }
+    const bool previousKnown = stateKnown_;
+    const bool previousSignedIn = signedIn_;
+    const QString previousEmail = lastState_.value(QStringLiteral("email")).toString();
     stateKnown_ = true;
     lastState_ = state;
     signedIn_ = state.value(QStringLiteral("signed_in")).toBool(false);
+    const QString email = state.value(QStringLiteral("email")).toString();
+    if (!signedIn_ || (previousKnown && previousSignedIn && previousEmail != email))
+        emit serversInvalidated();
     live_ = state.value(QStringLiteral("live")).toBool(false);
     connecting_ = state.value(QStringLiteral("connecting")).toBool(false);
     const auto server = state.value(QStringLiteral("server")).toObject();
@@ -198,26 +213,45 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
     const auto state = reply.value(QStringLiteral("state"));
     if (state.isObject()) applyState(state.toObject());
     else {
-        if (needsState) {
+        if (needsState || serversReply) {
             stateKnown_ = false;
+            lastState_ = {};
+            emit serversInvalidated();
             emit error(QStringLiteral("core reply has no state; connection state unknown"));
         }
         setEnabled();
     }
-    const QString message = reply.value(QStringLiteral("error")).toString();
-    if (!message.isEmpty()) emit error(message);
-    else if (serversReply) {
+    const QJsonValue errorValue = reply.value(QStringLiteral("error"));
+    const bool malformedError = !errorValue.isUndefined() && !errorValue.isNull() && !errorValue.isString();
+    const QString message = errorValue.toString();
+    if (malformedError) {
+        if (needsState) { stateKnown_ = false; lastState_ = {}; }
+        if (serversReply || needsState) emit serversInvalidated();
+        setEnabled();
+        emit error(QStringLiteral("invalid core error field"));
+    } else if (!message.isEmpty()) {
+        if (serversReply) emit serversInvalidated();
+        emit error(message);
+    } else if (serversReply) {
         const auto servers = reply.value(QStringLiteral("reply"));
-        if (servers.isArray()) emit serversReady(servers.toArray());
-        else emit error(QStringLiteral("invalid server list"));
+        if (stateKnown_ && signedIn_ && catalogueRevision_ == requestedCatalogueRevision_ &&
+            lastState_.value(QStringLiteral("email")).toString() == serversEmail_ && servers.isArray()) {
+            emit serversReady(servers.toArray());
+        } else {
+            emit serversInvalidated();
+            emit error(QStringLiteral("server list unavailable or account changed"));
+        }
     }
 }
 
 void HomeBinder::handleFailure(qint64 id, const QString &message) {
-    if (id == mutatingId_ || id == stateId_) stateKnown_ = false;
+    const bool losesState = id == mutatingId_ || id == stateId_;
+    if (losesState) { stateKnown_ = false; lastState_ = {}; }
     if (id == mutatingId_) mutatingId_ = -1;
     if (id == stateId_) stateId_ = -1;
-    if (id == serversId_) serversId_ = -1;
+    const bool losesServers = id == serversId_;
+    if (losesServers) serversId_ = -1;
+    if (losesState || losesServers) emit serversInvalidated();
     setEnabled();
     emit error(message);
 }
@@ -228,6 +262,8 @@ void HomeBinder::coreStopped() {
     signedIn_ = false;
     connecting_ = false;
     mutatingId_ = stateId_ = serversId_ = -1;
+    serversEmail_.clear();
+    emit serversInvalidated();
     setEnabled();
     // Never claim the tunnel disconnected solely because its controller died.
     if (!stopAcknowledged_)

@@ -9,12 +9,21 @@
 template<class Window, class Manager>
 void bindOriginalLocations(Window *window, Manager *manager, HomeBinder *binder, LocationCatalog *catalog) {
     Q_ASSERT(window && manager && binder && catalog);
+    const auto invalidate = [manager, catalog] {
+        catalog->replace(QJsonArray());
+        manager->updateLocations(LocationID(), {});
+    };
+    invalidate();
+    QObject::connect(binder, &HomeBinder::serversInvalidated, manager, invalidate);
+    QObject::connect(binder, &QObject::destroyed, manager, invalidate);
+    const QPointer<HomeBinder> safeBinder(binder);
     QObject::connect(binder, &HomeBinder::serversReady, manager,
-                     [manager, binder, catalog](const QJsonArray &servers) {
+                     [manager, safeBinder, catalog](const QJsonArray &servers) {
+        if (!safeBinder) return;
         QString error;
         if (!catalog->replace(servers, &error)) {
             manager->updateLocations(LocationID(), {});
-            emit binder->error(error);
+            emit safeBinder->error(error);
             return;
         }
         // Gozar's automatic-server selection is not mapped to Windscribe's

@@ -19,6 +19,8 @@ int main(int argc, char **argv) {
     QJsonArray chain;
     bool killSwitch = false;
     bool live = false;
+    int serverRequests = 0;
+    const bool failLaterServers = qEnvironmentVariableIsSet("FAKE_CORE_SERVERS_FAIL_AFTER_FIRST");
     const bool quitError = qEnvironmentVariableIsSet("FAKE_CORE_QUIT_ERROR");
     while (std::fgets(line, sizeof(line), stdin)) {
         const auto request = QJsonDocument::fromJson(line).object();
@@ -49,7 +51,11 @@ int main(int argc, char **argv) {
                                 {"server", QJsonObject{{"code", countryCode}}}};
         if (qEnvironmentVariableIsSet("FAKE_CORE_OMIT_LIVE")) state.remove(QStringLiteral("live"));
         QJsonValue payload = request.value("params");
-        if (method == "servers") payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
+        if (method == "servers") {
+            ++serverRequests;
+            if (failLaterServers && serverRequests > 1) error = QStringLiteral("server refresh failed");
+            else payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
+        }
         QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
         if (!error.isEmpty()) response.insert("error", error);
         const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';

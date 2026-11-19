@@ -33,7 +33,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   set(WS_FRONTEND_COMMON "${WINDSCRIBE_ROOT}/src/client/frontend/frontend-common")
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
-    uilanguage.cpp uilanguage.h
+    uilanguage.cpp uilanguage.h originallanguagebinding.h
     ${WS_FRONTEND_COMMON}/languagecontroller.cpp ${WS_FRONTEND_COMMON}/languagecontroller.h
     ${WS_COMMON}/utils/languagesutil.cpp
     locationcatalog.cpp locationcatalog.h originallocationsbinding.h

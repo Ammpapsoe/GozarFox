@@ -37,6 +37,8 @@ signals:
     void visualStateChanged(CONNECT_STATE state);
     void availabilityChanged(bool available);
     void serversReady(const QJsonArray &servers);
+    // Invalidates the old catalogue before refresh or when access is lost.
+    void serversInvalidated();
 
 private slots:
     void handleReply(qint64 id, const QJsonObject &reply);
@@ -55,6 +57,9 @@ private:
     qint64 mutatingId_ = -1;
     qint64 stateId_ = -1;
     qint64 serversId_ = -1;
+    QString serversEmail_;
+    quint64 catalogueRevision_ = 0;
+    quint64 requestedCatalogueRevision_ = 0;
     QTimer refreshTimer_;
     bool stateKnown_ = false;
     bool stopAcknowledged_ = false;

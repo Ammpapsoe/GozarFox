@@ -6,6 +6,7 @@
 #include "originalpowerbinding.h"
 #include "originalnavigationbinding.h"
 #include "originalmodebinding.h"
+#include "originallanguagebinding.h"
 #include "originallocationsbinding.h"
 #include "originallocationcontrols.h"
 #include "connectwindow/background.h"
@@ -421,7 +422,12 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy selections(&window, &LocationsWindow::selected);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
-    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QSignalSpy ready(&bridge, &CoreBridge::ready);
+    qputenv("FAKE_CORE_SERVERS_FAIL_AFTER_FIRST", "1");
+    const bool started = bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE"));
+    QTRY_VERIFY_WITH_TIMEOUT(!ready.isEmpty(), 5000);
+    qunsetenv("FAKE_CORE_SERVERS_FAIL_AFTER_FIRST");
+    QVERIFY(started);
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     binder.loadServers();
     QTRY_COMPARE_WITH_TIMEOUT(manager.locationsModel()->rowCount(), 1, 5000);
@@ -453,6 +459,12 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QCOMPARE(errors.size(), errorCount + 1);
     emit home->locationsClick();
     QVERIFY(navigation.isLocationsExpanded());
+    // Refresh begins by invalidating the previous entries. The second fake
+    // fetch fails, so an old ID must never remain selectable afterward.
+    QCOMPARE(manager.locationsModel()->rowCount(), 0);
+    QVERIFY(!catalog.selection(selectedId, nullptr));
+    QTRY_VERIFY_WITH_TIMEOUT(errors.size() > errorCount + 1, 5000);
+    QCOMPARE(manager.locationsModel()->rowCount(), 0);
     emit home->locationsClick();
     QVERIFY(!navigation.isLocationsExpanded());
     navigation.current_ = FakeNavigationController::WINDOW_ID_OTHER;
@@ -562,6 +574,35 @@ void UpstreamBackgroundTest::originalLanguagesAndDirection() {
     QVERIFY(uiLanguage.apply(QStringLiteral("de")));
     QCOMPARE(QApplication::layoutDirection(), Qt::LeftToRight);
     QCOMPARE(QCoreApplication::translate("ConnectWindow::LocationsButton", "Locations"), QStringLiteral("Orte"));
+    QVERIFY(uiLanguage.apply(QStringLiteral("en")));
+
+    // Exercise the original settings combo's real menu selection slot. This
+    // deliberately does not instantiate the full Windscribe settings page.
+    Preferences preferences;
+    ConnectWindow::Background parent(nullptr, &preferences);
+    PreferencesWindow::ComboBoxItem languageItem(&parent);
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    QSignalSpy errors(&binder, &HomeBinder::error);
+    OriginalLanguageBinding<PreferencesWindow::ComboBoxItem> binding(&languageItem, &uiLanguage, &binder);
+    QCOMPARE(languageItem.currentItem().toString(), QStringLiteral("en"));
+    QVERIFY(QMetaObject::invokeMethod(&languageItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("Persian")), Q_ARG(QVariant, QVariant(QStringLiteral("fa")))));
+    QTRY_COMPARE_WITH_TIMEOUT(uiLanguage.choice(), QStringLiteral("fa"), 5000);
+    QCOMPARE(languageItem.currentItem().toString(), QStringLiteral("fa"));
+    QCOMPARE(LanguageController::instance().getLanguage(), QStringLiteral("fa"));
+    QCOMPARE(QApplication::layoutDirection(), Qt::RightToLeft);
+    QVERIFY(QMetaObject::invokeMethod(&languageItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("Invalid")), Q_ARG(QVariant, QVariant(QStringLiteral("invalid")))));
+    QTRY_COMPARE_WITH_TIMEOUT(errors.size(), 1, 5000);
+    QCOMPARE(languageItem.currentItem().toString(), QStringLiteral("fa"));
+    QCOMPARE(uiLanguage.choice(), QStringLiteral("fa"));
+    QVERIFY(QMetaObject::invokeMethod(&languageItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("Deutsch")), Q_ARG(QVariant, QVariant(QStringLiteral("de")))));
+    QTRY_COMPARE_WITH_TIMEOUT(languageItem.currentItem().toString(), QStringLiteral("de"), 5000);
+    QCOMPARE(QApplication::layoutDirection(), Qt::LeftToRight);
+    QSettings afterChoice(path, QSettings::IniFormat);
+    QCOMPARE(afterChoice.value(QStringLiteral("OriginalQtUI/language")).toString(), QStringLiteral("de"));
     QVERIFY(uiLanguage.apply(QStringLiteral("en")));
 }
 
