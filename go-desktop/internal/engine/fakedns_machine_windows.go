@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -55,22 +54,7 @@ func (s *windowsMachineDNSStorage) Close() error {
 }
 
 func dnsWindowsMachineSecurity() (string, *windows.SecurityAttributes, error) {
-	admin, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
-	if err != nil {
-		return "", nil, err
-	}
-	member, err := windows.GetCurrentProcessToken().IsMember(admin)
-	if err != nil {
-		return "", nil, err
-	}
-	if !member {
-		return "", nil, errors.New("machine FakeDNS requires elevated administrator")
-	}
-	sd, err := windows.SecurityDescriptorFromString("O:BAD:P(A;;FA;;;BA)(A;;FA;;;SY)")
-	if err != nil {
-		return "", nil, err
-	}
-	return admin.String(), &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}, nil
+	return dnsWindowsMachineAttributes("FA")
 }
 
 // A shared, protected root plus an independently checked marker gives all

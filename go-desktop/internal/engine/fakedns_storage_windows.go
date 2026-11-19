@@ -77,7 +77,11 @@ func dnsWindowsVerify(h windows.Handle, sid string, attrs *windows.SecurityAttri
 	if isDirectory != directory || (!directory && info.NumberOfLinks != 1) {
 		return errors.New("invalid FakeDNS file type or link count")
 	}
-	sd, err := windows.GetSecurityInfo(h, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+	return dnsWindowsVerifySecurity(h, windows.SE_FILE_OBJECT, sid, attrs)
+}
+
+func dnsWindowsVerifySecurity(h windows.Handle, objectType windows.SE_OBJECT_TYPE, sid string, attrs *windows.SecurityAttributes) error {
+	sd, err := windows.GetSecurityInfo(h, objectType, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		return err
 	}
