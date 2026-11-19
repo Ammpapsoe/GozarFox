@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +112,41 @@ func TestRegistryJournalRecoversAfterProcessKilled(t *testing.T) {
 	}
 	if current, err := store.Read("ProxyServer"); err != nil || current != desired(23456)["ProxyServer"] {
 		t.Fatalf("child did not install expected test state: %#v, %v", current, err)
+	}
+	// A third party can change a value while the app is dead. Recovery must
+	// report the conflict and preserve both that change and our backup.
+	external := text("external.invalid:8999")
+	if err := store.Write("ProxyServer", external); err != nil {
+		t.Fatal(err)
+	}
+	beforeConflict := make(map[string]ProxyValue, len(proxyNames))
+	for _, name := range proxyNames {
+		value, err := store.Read(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		beforeConflict[name] = value
+	}
+	if err := recoverProxy(store, journal); err == nil || !strings.Contains(err.Error(), "changed externally") {
+		t.Fatalf("crash recovery must report the conflict: %v", err)
+	}
+	afterConflict := make(map[string]ProxyValue, len(proxyNames))
+	for _, name := range proxyNames {
+		value, err := store.Read(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		afterConflict[name] = value
+	}
+	if !reflect.DeepEqual(beforeConflict, afterConflict) {
+		t.Fatal("conflicting recovery modified the isolated settings")
+	}
+	if snapshot, err := journal.Load(); err != nil || snapshot == nil {
+		t.Fatal("conflicting recovery lost the crash backup", err)
+	}
+	// Simulate the user resolving the conflict and explicitly retry recovery.
+	if err := store.Write("ProxyServer", desired(23456)["ProxyServer"]); err != nil {
+		t.Fatal(err)
 	}
 	if err := recoverProxy(store, journal); err != nil {
 		t.Fatal(err)
