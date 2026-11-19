@@ -28,5 +28,17 @@ void bindOriginalHomeWindow(Window *window, HomeBinder *binder) {
         const QString code = server.value(QStringLiteral("code")).toString().toLower();
         // No ping measurement exists in the Gozar state; do not invent one.
         window->updateLocationInfo(country, city, code, PingTime(), false);
+        // Gozar's exit address belongs to its transport. In proxy modes it
+        // does not necessarily describe the whole machine, so do not place it
+        // in the original UI's system-IP widget there. This upstream widget
+        // renders IPv4 only and shows its own placeholder for other values.
+        const bool systemTunnel = state.value(QStringLiteral("live")).toBool(false) &&
+            !state.value(QStringLiteral("connecting")).toBool(true) &&
+            state.value(QStringLiteral("mode")).toString() == QLatin1String("tun");
+        window->updateMyIp(systemTunnel ? state.value(QStringLiteral("exit")).toString() : QString());
+    });
+    QObject::connect(binder, &HomeBinder::availabilityChanged, window,
+                     [window, binder](bool) {
+        if (binder->currentState().isEmpty()) window->updateMyIp(QString());
     });
 }

@@ -83,7 +83,11 @@ It must not be used with a real VPN. The upstream window's
 protocol widget defaults to WireGuard/443, which does not describe Gozar; it
 must be corrected or disabled before this binding is shown to users. The
 separate experimental power binding controls only the connection button; it
-does not make the other window controls functional.
+does not make the other window controls functional. The experimental home
+binding feeds the core-reported exit address to the original IP widget only
+while a TUN connection is live; it clears it for proxy modes, disconnect or
+unknown state. The upstream IP widget displays IPv4 only; it does not prove
+that other processes route through the connection.
 
 `LocationCatalog` converts Gozar server snapshots to the upstream location
 model's types and maps selected IDs back to actual hostnames. It rejects
@@ -115,9 +119,10 @@ Unsupported controls must not silently claim success.
 `OriginalModeBinding` is an experimental adapter for the upstream preferences
 combo-box API, not a complete preferences page. It only displays confirmed core
 state, disables changes while connected or unavailable, and refuses system
-proxy outside Windows. Its runtime test uses a stand-in control; the original
-combo-box API is only compile-checked. It has not been connected to the
-application or validated with a real VPN.
+proxy outside Windows. The integration scenario exercises both a stand-in and
+the original combo-box and menu-selection logic against a fake core; it does not
+exercise a complete preferences window or visual mouse interaction. It has not
+been connected to the application or validated with a real VPN.
 
 The interactive UI tests use a simulated core. For the separate real-core
 smoke check, build the Gozar 1.19.0 core, configure with

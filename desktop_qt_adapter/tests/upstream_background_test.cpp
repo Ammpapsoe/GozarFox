@@ -13,6 +13,7 @@
 #include "connectwindow/connectwindowitem.h"
 #include "locations/locationsmodel_manager.h"
 #include "locationswindow/locationswindow.h"
+#include "preferenceswindow/comboboxitem.h"
 #include "locations/view/locationsview.h"
 #include "commongraphics/commongraphics.h"
 #include "dpiscalemanager.h"
@@ -34,9 +35,11 @@ class FakeOriginalWindow : public QObject {
     Q_OBJECT
 public:
     QString countryCode;
+    QString displayedIp;
     CONNECT_STATE state = CONNECT_STATE_DISCONNECTED;
     void updateConnectState(const types::ConnectState &value) { state = value.connectState; }
     void updateLocationInfo(const QString &, const QString &, const QString &code, PingTime, bool) { countryCode = code; }
+    void updateMyIp(const QString &ip) { displayedIp = ip; }
     void click() { emit connectClick(); }
 signals:
     void connectClick();
@@ -85,6 +88,7 @@ private slots:
     void sourceFlagFollowsSimulatedCore();
     void upstreamPowerButtonTriggersSimulatedCore();
     void serverAndSettingsUseCoreResponses();
+    void originalModeControlWithFakeCore();
     void originalWindowPublicApiBindingWithFakeWindow();
     void originalWindowConnectWithFakeCore();
     void locationsMapAndSelection();
@@ -260,6 +264,49 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     QVERIFY(!modeItem.populated_);
 }
 
+void UpstreamBackgroundTest::originalModeControlWithFakeCore() {
+    Preferences preferences;
+    ConnectWindow::Background parent(nullptr, &preferences);
+    PreferencesWindow::ComboBoxItem modeItem(&parent);
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    OriginalModeBinding<PreferencesWindow::ComboBoxItem> modeBinding(&modeItem, &binder);
+    QSignalSpy states(&binder, &HomeBinder::stateChanged);
+    QSignalSpy errors(&binder, &HomeBinder::error);
+    QSignalSpy stopped(&bridge, &CoreBridge::stopped);
+    QVERIFY(!modeItem.hasItems());
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(modeItem.currentItem().toString(), QStringLiteral("tun"));
+
+    // Exercise the original menu's selection slot and signal ordering. This is
+    // not a visual mouse or complete preferences-window interaction test.
+    QVERIFY(QMetaObject::invokeMethod(&modeItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("Proxy only")), Q_ARG(QVariant, QVariant(QStringLiteral("proxy-only")))));
+    QCOMPARE(modeItem.currentItem().toString(), QStringLiteral("tun"));
+    QTRY_COMPARE_WITH_TIMEOUT(modeItem.currentItem().toString(), QStringLiteral("proxy-only"), 5000);
+
+#ifndef Q_OS_WIN
+    const int beforeUnsupported = errors.size();
+    QVERIFY(QMetaObject::invokeMethod(&modeItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("System proxy")), Q_ARG(QVariant, QVariant(QStringLiteral("system-proxy")))));
+    QCOMPARE(errors.size(), beforeUnsupported + 1);
+    QCOMPARE(modeItem.currentItem().toString(), QStringLiteral("proxy-only"));
+#endif
+
+    QVERIFY(bridge.request(QStringLiteral("connect")) > 0);
+    QTRY_VERIFY_WITH_TIMEOUT(binder.currentState().value(QStringLiteral("live")).toBool(), 5000);
+    const int beforeLocked = errors.size();
+    QVERIFY(QMetaObject::invokeMethod(&modeItem, "onMenuItemSelected", Qt::DirectConnection,
+        Q_ARG(QString, QStringLiteral("System tunnel")), Q_ARG(QVariant, QVariant(QStringLiteral("tun")))));
+    QCOMPARE(errors.size(), beforeLocked + 1);
+    QCOMPARE(modeItem.currentItem().toString(), QStringLiteral("proxy-only"));
+    QCOMPARE(binder.currentState().value(QStringLiteral("mode")).toString(), QStringLiteral("proxy-only"));
+    bridge.shutdown();
+    QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+    QVERIFY(!modeItem.hasItems());
+}
+
 void UpstreamBackgroundTest::originalWindowPublicApiBindingWithFakeWindow() {
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
@@ -273,8 +320,15 @@ void UpstreamBackgroundTest::originalWindowPublicApiBindingWithFakeWindow() {
     QTRY_COMPARE_WITH_TIMEOUT(window.countryCode, QStringLiteral("de"), 5000);
     window.click();
     QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_CONNECTED, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(window.displayedIp, QStringLiteral("203.0.113.10"), 5000);
     window.click();
     QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_DISCONNECTED, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(window.displayedIp.isEmpty(), 5000);
+    binder.setMode(QStringLiteral("proxy-only"));
+    QTRY_COMPARE_WITH_TIMEOUT(binder.currentState().value(QStringLiteral("mode")).toString(), QStringLiteral("proxy-only"), 5000);
+    window.click();
+    QTRY_COMPARE_WITH_TIMEOUT(window.state, CONNECT_STATE_CONNECTED, 5000);
+    QVERIFY(window.displayedIp.isEmpty()); // proxy exit is not the host's IP
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
 }

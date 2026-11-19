@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
         }
         if (method == "chain") chain = params.value("hops").toArray();
         QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode},
+                                {"exit", live ? QStringLiteral("203.0.113.10") : QString()},
                                 {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
                                 {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},
                                 {"server", QJsonObject{{"code", countryCode}}}};

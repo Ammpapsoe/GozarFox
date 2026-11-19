@@ -67,6 +67,14 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/commongraphics/commongraphics.cpp
     ${WS_GUI}/commongraphics/iconbutton.cpp ${WS_GUI}/commongraphics/textbutton.cpp
     ${WS_GUI}/commongraphics/togglebutton.cpp
+    # Actual original preferences combo and its menu, tested with a fake core.
+    ${WS_GUI}/preferenceswindow/comboboxitem.cpp ${WS_GUI}/preferenceswindow/comboboxitem.h
+    ${WS_GUI}/commongraphics/baseitem.cpp ${WS_GUI}/commongraphics/baseitem.h
+    ${WS_GUI}/commongraphics/texticonbutton.cpp ${WS_GUI}/commongraphics/texticonbutton.h
+    ${WS_GUI}/commonwidgets/combomenuwidget.cpp ${WS_GUI}/commonwidgets/combomenuwidget.h
+    ${WS_GUI}/commonwidgets/combomenuwidgetbutton.cpp ${WS_GUI}/commonwidgets/combomenuwidgetbutton.h
+    ${WS_GUI}/commonwidgets/verticalscrollbarwidget.cpp ${WS_GUI}/commonwidgets/verticalscrollbarwidget.h
+    ${WS_GUI}/utils/makecustomshadow.cpp
     ${WS_GUI}/loginwindow/blockableqlineedit.cpp
     ${WS_GUI}/commonwidgets/custommenulineedit.cpp ${WS_GUI}/commonwidgets/custommenuwidget.cpp
     ${WS_GUI}/commonwidgets/iconbuttonwidget.cpp
