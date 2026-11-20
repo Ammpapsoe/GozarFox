@@ -48,7 +48,7 @@ void TextIconButton::paint(QPainter *painter, const QStyleOptionGraphicsItem *op
     {
         elidedText = fm.elidedText(text_, Qt::ElideRight, availableWidth, 0);
     }
-    painter->drawText(boundingRect().adjusted(spacerWidth_*G_SCALE, yOffset_*G_SCALE, 0, 0), Qt::AlignVCenter, elidedText);
+    painter->drawText(boundingRect().adjusted(spacerWidth_*G_SCALE, yOffset_*G_SCALE, 0, 0), Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute, elidedText);
 
     // Right Arrow
     painter->setOpacity(curIconOpacity_);

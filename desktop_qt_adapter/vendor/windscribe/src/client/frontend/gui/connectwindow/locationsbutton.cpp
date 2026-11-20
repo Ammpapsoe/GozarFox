@@ -81,7 +81,7 @@ void LocationsButton::paint(QPainter *painter, const QStyleOptionGraphicsItem *o
         QFont font = FontManager::instance().getFont(15,  QFont::Normal);
         painter->setFont(font);
         painter->setPen(curTextColor_);
-        painter->drawText(QRect(boundingRect().left() + 40*G_SCALE, boundingRect().top(), boundingRect().width(), boundingRect().height()), Qt::AlignVCenter, tr("Locations"));
+        painter->drawText(QRect(boundingRect().left() + 40*G_SCALE, boundingRect().top(), boundingRect().width(), boundingRect().height()), Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute, tr("Locations"));
     }
 }
 

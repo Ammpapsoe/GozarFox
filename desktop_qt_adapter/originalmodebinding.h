@@ -58,9 +58,13 @@ private:
 #else
             const QString system = fa ? QStringLiteral("\u067e\u0631\u0627\u06a9\u0633\u06cc \u0633\u06cc\u0633\u062a\u0645 (\u0641\u0642\u0637 \u0648\u06cc\u0646\u062f\u0648\u0632)") : QStringLiteral("System proxy (Windows only)");
 #endif
-            const QList<QPair<QString, QVariant>> choices{
-                {tun, QStringLiteral("tun")}, {proxy, QStringLiteral("proxy-only")},
-                {system, QStringLiteral("system-proxy")}};
+            QList<QPair<QString, QVariant>> choices{{tun, QStringLiteral("tun")}, {proxy, QStringLiteral("proxy-only")}};
+#ifdef Q_OS_WIN
+            choices.append({system, QStringLiteral("system-proxy")});
+#else
+            // Show a migrated value honestly, but don't offer it as a new choice.
+            if (mode == QLatin1String("system-proxy")) choices.append({system, QStringLiteral("system-proxy")});
+#endif
             item_->setLabelCaption(fa ? QStringLiteral("\u062d\u0627\u0644\u062a \u0627\u062a\u0635\u0627\u0644") : QStringLiteral("Connection mode"));
             item_->setItems(choices, mode);
             confirmed_ = mode;

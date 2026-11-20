@@ -101,8 +101,9 @@ compiled CI fixture is hardwired to the fake core; a signed-out probe runs the r
 isolated profile with controls disabled. Real login and real connection have
 not been tested. Missing system-wide ownership, crash/recovery, verification
 of OS cleanup and complete settings remain release blockers. The experimental
-resource map now includes the upstream font expected by FontManager; its
-redistribution rights remain unverified. CI can produce a hash inventory of
+resource map includes the upstream font expected by FontManager; its
+redistribution rights remain unverified. Qt 6.8+ also registers the existing
+Gozar Vazirmatn family for Arabic-script fallback with a bundled OFL notice. CI can produce a hash inventory of
 resources in that map, which is not a complete software bill of materials or
 rights clearance. The preliminary distribution
 review is in `RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. See
@@ -165,14 +166,18 @@ unknown state. The upstream IP widget displays IPv4 only; it does not prove
 that other processes route through the connection.
 
 `LocationCatalog` converts Gozar server snapshots to the upstream location
-model's types and maps selected IDs back to actual hostnames. It rejects
-identifier collisions, ambiguous hostname targets, and clears stale choices on
-malformed snapshots. GitHub Actions exercised the original `LocationsWindow`
+model's types and maps selected IDs back to actual hostnames. It preserves
+unambiguous rows when a hostname cannot identify a single manual destination.
+The Mozilla recommendation becomes an Automatic row calling the unchanged
+core's AUTO key rather than hostname selection. Manual rows sharing a host
+with a recommendation are withheld: the core persists only the hostname and
+cannot distinguish the two. The adapter still rejects identifier collisions
+and clears stale choices on malformed snapshots. GitHub Actions exercised the original `LocationsWindow`
 and original location model using a simulated core on Windows, Linux and macOS.
 The binding invalidates the previous catalogue on refresh, account change,
 unknown state or core exit; old entries cannot be used if a refresh fails.
-Other tabs, automatic best-server selection and persisted favorites are not
-integrated. The modified upstream menu can restrict interaction to all/search
+Other tabs and persisted favorites are not integrated. The explicit
+Automatic row does not claim that it knows the next chosen endpoint. The modified upstream menu can restrict interaction to all/search
 before it changes the tab or persistence; it hides unsupported tabs, maps the
 right-arrow shortcut to search, and normalizes an unsupported persisted tab.
 The isolated Qt test covers the menu slots, keyboard and persisted state; this
@@ -196,8 +201,10 @@ Persian string, Persian RTL direction, German LTR direction, and rejected an
 unknown language. That does not establish visual RTL correctness or translation
 completeness across the full UI. `OriginalLanguageBinding` attaches the
 original settings combo-box to the UI language choice, but the full preferences
-page is not connected. The original page's language handler must be detached or
-replaced rather than run alongside it. `warp_udp` requires explicit user
+page is not connected. The experimental candidate now uses original sidebar tabs, preference groups,
+combo boxes and switches on Gozar-specific General, Connection and Appearance
+pages. The full upstream preferences controller is not linked. The login theme
+setting affects the existing Flutter UI, not the still-dark Qt pages. `warp_udp` requires explicit user
 consent. Unsupported controls must not silently claim success.
 
 `OriginalModeBinding` is an experimental adapter for the upstream preferences

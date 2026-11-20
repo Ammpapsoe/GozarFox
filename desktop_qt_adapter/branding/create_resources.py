@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--logo', required=True, type=Path)
     parser.add_argument('--font', required=True, type=Path)
+    parser.add_argument('--fallback-font-dir', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
@@ -60,6 +61,13 @@ def main():
         raise ValueError('font escapes upstream GUI directory')
     font_entry = ET.SubElement(root.find('qresource'), 'file', alias=font_alias)
     font_entry.text = font.as_posix()
+    fallback_resource = ET.SubElement(root, 'qresource', prefix='/gozar-fonts')
+    for weight in ('regular', 'medium', 'semibold', 'bold'):
+        filename = f'vazirmatn_{weight}.ttf'
+        entry = ET.SubElement(fallback_resource, 'file', alias=filename)
+        entry.text = (args.fallback_font_dir / filename).resolve(strict=True).as_posix()
+    entry = ET.SubElement(fallback_resource, 'file', alias='VAZIRMATN-OFL.txt')
+    entry.text = (Path(__file__).parent / 'VAZIRMATN-OFL.txt').resolve(strict=True).as_posix()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root)
     ET.ElementTree(root).write(args.output, encoding='utf-8', xml_declaration=True)

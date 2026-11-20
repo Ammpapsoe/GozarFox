@@ -68,7 +68,14 @@ int main(int argc, char **argv) {
         if (method == "servers") {
             ++serverRequests;
             if (failLaterServers && serverRequests > 1) error = QStringLiteral("server refresh failed");
-            else payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
+            else if (qEnvironmentVariableIsSet("GOZAR_FAKE_LAYOUT_CATALOG")) {
+                payload = QJsonArray{
+                    QJsonObject{{"code", "REC"}, {"country", "Recommended"}, {"city", "Recommended"}, {"host", "shared.example"}, {"port", 2499}, {"recommended", true}},
+                    QJsonObject{{"code", "US"}, {"country", "CatchAll Anycast"}, {"city", "USA"}, {"host", "shared.example"}, {"port", 2499}},
+                    QJsonObject{{"code", "DE"}, {"country", "Germany"}, {"city", "Berlin"}, {"host", "de.example"}, {"port", 2499}},
+                    QJsonObject{{"code", "NL"}, {"country", "Netherlands"}, {"city", "Netherlands"}, {"host", "nl.example"}, {"port", 2499}},
+                    QJsonObject{{"code", "GB"}, {"country", "United Kingdom"}, {"city", "United Kingdom"}, {"host", "gb.example"}, {"port", 2499}}};
+            } else payload = QJsonArray{QJsonObject{{"code", "DE"}, {"host", "test.example"}}};
         }
         QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
         if (!error.isEmpty()) response.insert("error", error);

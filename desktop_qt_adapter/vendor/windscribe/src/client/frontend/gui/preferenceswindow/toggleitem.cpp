@@ -72,7 +72,7 @@ void ToggleItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
                                               0,
                                               -PREFERENCES_MARGIN_X*G_SCALE,
                                               -(boundingRect().height() - PREFERENCE_GROUP_ITEM_HEIGHT*G_SCALE)),
-                      Qt::AlignLeft | Qt::AlignVCenter,
+                      Qt::AlignLeft | Qt::AlignAbsolute | Qt::AlignVCenter,
                       elidedText);
 
     // If there's a description draw it
@@ -84,7 +84,7 @@ void ToggleItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
         painter->drawText(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE,
                                                   boundingRect().height() - PREFERENCES_MARGIN_Y*G_SCALE - descHeight_,
                                                   -descRightMargin_,
-                                                  0), Qt::AlignLeft | Qt::TextWordWrap, desc_);
+                                                  0), Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap, desc_);
     }
 }
 
@@ -186,7 +186,7 @@ void ToggleItem::updatePositions()
 
     QFontMetrics fm(FontManager::instance().getFont(12, QFont::Normal));
     descHeight_ = fm.boundingRect(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE, 0, -descRightMargin_, 0).toRect(),
-                                  Qt::AlignLeft | Qt::TextWordWrap,
+                                  Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap,
                                   desc_).height();
 
     if (descUrl_.isEmpty()) {

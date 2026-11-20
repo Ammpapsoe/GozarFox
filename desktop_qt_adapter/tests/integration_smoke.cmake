@@ -20,6 +20,7 @@ if(DEFINED QT_READONLY_PROBE AND NOT QT_READONLY_PROBE STREQUAL "" AND DEFINED R
 endif()
 if(DEFINED QT_HANDOFF_FIXTURE AND NOT QT_HANDOFF_FIXTURE STREQUAL "")
   run_check("handoff candidate and simulated connection lifecycle" "${QT_HANDOFF_FIXTURE}" "--ci-scripted")
+  run_check("frameless layout, preferences and locations navigation" "${QT_HANDOFF_FIXTURE}" "--ci-layout")
 endif()
 if(DEFINED QT_HANDOFF_CANDIDATE AND NOT QT_HANDOFF_CANDIDATE STREQUAL "" AND
    DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")

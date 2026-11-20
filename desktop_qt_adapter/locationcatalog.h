@@ -13,6 +13,7 @@ class LocationCatalog {
 public:
     struct Selection { QString host; QString countryCode; };
 
+    static QString automaticLabel();
     bool replace(const QJsonArray &servers, QString *error = nullptr);
     const QVector<types::Location> &locations() const { return locations_; }
     bool selection(const LocationID &id, Selection *result) const;

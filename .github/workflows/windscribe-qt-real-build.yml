@@ -81,6 +81,7 @@ jobs:
           windeployqt --release --no-translations --dir "$folder" "$folder/gozar-original-ui.exe"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/branding/VAZIRMATN-OFL.txt "$folder/"
           cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$folder/"
           mkdir -p ../qt-build-output
           python -c 'import shutil,sys; shutil.make_archive(sys.argv[1], "zip", root_dir=sys.argv[2])' ../qt-build-output/Gozar-Qt-EXPERIMENTAL-Windows-x64 "$folder"
@@ -107,6 +108,7 @@ jobs:
           printf '[Paths]\nPrefix = qt\nLibraries = lib\nPlugins = plugins\n' > "$folder/qt.conf"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/branding/VAZIRMATN-OFL.txt "$folder/"
           cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$folder/"
           mkdir -p ../qt-build-output
           tar -C build/linux/x64/release -cJf ../qt-build-output/Gozar-Qt-EXPERIMENTAL-Linux-x64.tar.xz bundle
@@ -127,6 +129,7 @@ jobs:
           macdeployqt "$app" -executable="$app/Contents/MacOS/gozar-original-ui"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$app/Contents/Resources/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$app/Contents/Resources/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/branding/VAZIRMATN-OFL.txt "$app/Contents/Resources/"
           cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$app/Contents/Resources/"
           codesign --force --deep --sign - "$app"
           mkdir -p ../qt-build-output

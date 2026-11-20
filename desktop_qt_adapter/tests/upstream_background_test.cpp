@@ -122,7 +122,12 @@ void UpstreamBackgroundTest::gozarWordmarkReplacesOriginalResource() {
     QVERIFY(!QFile::exists(QStringLiteral(":/gif/windscribe_spinner.gif")));
     const int font = QFontDatabase::addApplicationFont(QStringLiteral(":/resources/fonts/ibmplexsans.ttf"));
     QVERIFY(font >= 0);
-    QVERIFY(!QFontDatabase::applicationFontFamilies(font).isEmpty());
+    QVERIFY(QFontDatabase::applicationFontFamilies(font).contains(QStringLiteral("IBM Plex Sans")));
+    const int fallback = QFontDatabase::addApplicationFont(QStringLiteral(":/gozar-fonts/vazirmatn_regular.ttf"));
+    QVERIFY(fallback >= 0);
+    QVERIFY(QFontDatabase::applicationFontFamilies(fallback).contains(QStringLiteral("Vazirmatn")));
+    QVERIFY(QFile::exists(QStringLiteral(":/gozar-fonts/VAZIRMATN-OFL.txt")));
+    QVERIFY(QFontDatabase::removeApplicationFont(fallback));
     QVERIFY(QFontDatabase::removeApplicationFont(font));
 }
 
@@ -448,12 +453,26 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     QVERIFY(!catalog.selection(caId, &choice));
     QJsonObject sameHostOtherPort = germany;
     sameHostOtherPort.insert(QStringLiteral("port"), 444);
-    QVERIFY(!catalog.replace(QJsonArray{germany, sameHostOtherPort}));
-    QVERIFY(catalog.locations().isEmpty());
+    QVERIFY(catalog.replace(QJsonArray{germany, sameHostOtherPort, canada}));
+    QCOMPARE(catalog.locations().size(), 1);
+    QVERIFY(catalog.selection(caId, &choice));
     QJsonObject codeAsHost = canada;
     codeAsHost.insert(QStringLiteral("host"), QStringLiteral("de"));
-    QVERIFY(!catalog.replace(QJsonArray{germany, codeAsHost}));
-    QVERIFY(catalog.locations().isEmpty());
+    QVERIFY(catalog.replace(QJsonArray{germany, codeAsHost}));
+    QCOMPARE(catalog.locations().size(), 1);
+    QVERIFY(!catalog.selection(caId, &choice));
+    const QJsonObject rec{{"code", "REC"}, {"country", "Recommended"}, {"city", "Recommended"}, {"host", "shared.example"}, {"port", 2499}, {"recommended", true}};
+    const QJsonObject anycast{{"code", "US"}, {"country", "CatchAll Anycast"}, {"city", "USA"}, {"host", "shared.example"}, {"port", 2499}};
+    for (const auto &snapshot : {QJsonArray{rec, anycast, germany}, QJsonArray{germany, anycast, rec}}) {
+        QVERIFY(catalog.replace(snapshot));
+        QCOMPARE(catalog.locations().size(), 2);
+        const auto &automatic = catalog.locations().at(0);
+        QCOMPARE(automatic.shortName, QStringLiteral("AUTO"));
+        QVERIFY(catalog.selection(automatic.cities.at(0).id, &choice));
+        QVERIFY(choice.host.isEmpty());
+        QCOMPARE(choice.countryCode, QStringLiteral("AUTO"));
+        QCOMPARE(catalog.locations().at(1).shortName, QStringLiteral("DE"));
+    }
 
     QTemporaryDir settingsDir;
     QVERIFY(settingsDir.isValid());

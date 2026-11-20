@@ -96,7 +96,7 @@ void ComboBoxItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
         fm.height()
     );
 
-    painter->drawText(boundingRect().adjusted(xOffset, curCaptionY_, -PREFERENCES_MARGIN_X*G_SCALE, 0), Qt::AlignLeft, elidedText);
+    painter->drawText(boundingRect().adjusted(xOffset, curCaptionY_, -PREFERENCES_MARGIN_X*G_SCALE, 0), Qt::AlignLeft | Qt::AlignAbsolute, elidedText);
 
     // Draw spinner in place of button if in progress
     if (inProgress_) {
@@ -120,7 +120,7 @@ void ComboBoxItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *opti
         painter->drawText(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE,
                                                   boundingRect().height() - PREFERENCES_MARGIN_Y*G_SCALE - descHeight_,
                                                   -descRightMargin_,
-                                                  0), Qt::AlignLeft | Qt::TextWordWrap, desc_);
+                                                  0), Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap, desc_);
     }
 }
 
@@ -323,7 +323,7 @@ void ComboBoxItem::updatePositions()
 
     QFontMetrics fm(FontManager::instance().getFont(12, QFont::Normal));
     descHeight_ = fm.boundingRect(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE, 0, -descRightMargin_, 0).toRect(),
-                                  Qt::AlignLeft | Qt::TextWordWrap,
+                                  Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap,
                                   desc_).height();
 
     if (descUrl_.isEmpty()) {

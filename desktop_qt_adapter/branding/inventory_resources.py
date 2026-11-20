@@ -26,12 +26,15 @@ def main():
         raise ValueError('not a Qt resource map')
     rows, seen = [], set()
     for resource in root.findall('qresource'):
-        if resource.get('prefix', '/') != '/':
+        prefix = resource.get('prefix', '/')
+        if prefix not in ('/', '/gozar-fonts'):
             raise ValueError('unexpected resource prefix')
         for entry in resource:
             if entry.tag != 'file' or not entry.text:
                 raise ValueError('unexpected resource entry')
             alias = entry.get('alias')
+            if alias and prefix != '/':
+                alias = prefix.lstrip('/') + '/' + alias
             if not alias or alias in seen:
                 raise ValueError('missing or duplicate resource alias')
             seen.add(alias)
@@ -44,7 +47,8 @@ def main():
                     digest.update(chunk)
             rows.append((alias, path.relative_to(repository).as_posix(), path.stat().st_size,
                          digest.hexdigest(), 'NOT REVIEWED'))
-    required = {'svg/LOGO.svg', 'resources/fonts/ibmplexsans.ttf'}
+    required = {'svg/LOGO.svg', 'resources/fonts/ibmplexsans.ttf',
+                'gozar-fonts/vazirmatn_regular.ttf', 'gozar-fonts/VAZIRMATN-OFL.txt'}
     if not required.issubset(seen) or 'gif/windscribe_spinner.gif' in seen:
         raise ValueError('expected simulation resources are missing or unexpectedly present')
     args.output.parent.mkdir(parents=True, exist_ok=True)

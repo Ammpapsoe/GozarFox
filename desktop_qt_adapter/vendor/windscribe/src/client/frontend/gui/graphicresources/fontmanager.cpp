@@ -5,6 +5,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QColor>
+#include <QDebug>
 #include <QFontMetrics>
 #include "utils/ws_assert.h"
 #include "dpiscalemanager.h"
@@ -14,7 +15,7 @@ QFont FontManager::getFontWithCustomScale(double scale, double size, int weight,
     WS_ASSERT(QApplication::instance()->thread() == QThread::currentThread());
 
     QFont font;
-    font.setFamily("IBM Plex Sans");
+    font.setFamily(plexFamily_);
     font.setPixelSize(size * scale);
     font.setWeight(QFont::Weight(weight));
     font.setStretch(stretch);
@@ -34,7 +35,7 @@ QFont FontManager::getFont(const FontDescr &fd)
 
 QString FontManager::getFontStyleSheet(double size, int weight)
 {
-    QString s = QString("font-family: IBM Plex Sans;font-size: %1px").arg(size*G_SCALE);
+    QString s = QString("font-family: \"%1\"; font-size: %2px").arg(plexFamily_).arg(size*G_SCALE);
 
     s += ";font-weight: " + QString::number(weight);
     return s;
@@ -123,7 +124,25 @@ QColor FontManager::getSeaGreenColor()
 
 FontManager::FontManager()
 {
-    QFontDatabase::addApplicationFont(":/resources/fonts/ibmplexsans.ttf");
+    const int plex = QFontDatabase::addApplicationFont(QStringLiteral(":/resources/fonts/ibmplexsans.ttf"));
+    const auto plexFamilies = QFontDatabase::applicationFontFamilies(plex);
+    if (plexFamilies.isEmpty()) {
+        qWarning() << "Gozar Qt: IBM Plex Sans could not be registered";
+        plexFamily_ = QApplication::font().family();
+    } else {
+        plexFamily_ = plexFamilies.first();
+    }
+    QString fallback;
+    for (const auto *weight : {"regular", "medium", "semibold", "bold"}) {
+        const auto path = QStringLiteral(":/gozar-fonts/vazirmatn_%1.ttf").arg(QString::fromLatin1(weight));
+        const int id = QFontDatabase::addApplicationFont(path);
+        const auto families = QFontDatabase::applicationFontFamilies(id);
+        if (families.isEmpty()) qWarning() << "Gozar Qt: fallback font could not be registered:" << path;
+        else fallback = families.first();
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    if (!fallback.isEmpty()) QFontDatabase::addApplicationFallbackFontFamily(QChar::Script_Arabic, fallback);
+#endif
 }
 
 FontManager::~FontManager()

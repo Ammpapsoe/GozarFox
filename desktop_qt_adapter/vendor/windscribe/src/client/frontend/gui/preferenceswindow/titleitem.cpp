@@ -29,14 +29,14 @@ void TitleItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option,
     painter->setFont(font);
     painter->setPen(Qt::white);
     painter->setOpacity(OPACITY_SEVENTY);
-    painter->drawText(boundingRect().adjusted(0, 0, -PREFERENCES_MARGIN_X*G_SCALE, 0), Qt::AlignLeft, title_);
+    painter->drawText(boundingRect().adjusted(0, 0, -PREFERENCES_MARGIN_X*G_SCALE, 0), Qt::AlignLeft | Qt::AlignAbsolute, title_);
 
     if (!linkText_.isEmpty()) {
         painter->setOpacity(OPACITY_FULL);
         painter->setPen(currentLinkColor_);
         int width = QFontMetrics(font).horizontalAdvance(linkText_);
         linkRect_ = QRectF(boundingRect().width() - width, 0, width, ACCOUNT_TITLE_HEIGHT*G_SCALE);
-        painter->drawText(linkRect_, Qt::AlignRight, linkText_);
+        painter->drawText(linkRect_, Qt::AlignRight | Qt::AlignAbsolute, linkText_);
     }
 
     font.setLetterSpacing(QFont::AbsoluteSpacing, oldLetterSpacing);

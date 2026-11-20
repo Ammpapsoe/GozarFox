@@ -1,9 +1,12 @@
 #include "locationcatalog.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QSet>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include "languagecontroller.h"
 
 namespace {
 // Original location models require stable positive numeric ids. Gozar supplies
@@ -15,6 +18,11 @@ int stableId(const QJsonArray &parts) {
     const quint32 value = (quint32(p[0]) << 24 | quint32(p[1]) << 16 | quint32(p[2]) << 8 | quint32(p[3])) & 0x7fffffffU;
     return value == 0 ? 1 : int(value);
 }
+}
+
+QString LocationCatalog::automaticLabel() {
+    return LanguageController::instance().getLanguage() == QLatin1String("fa") ? QStringLiteral("انتخاب خودکار")
+        : QCoreApplication::translate("GozarLocations", "Automatic");
 }
 
 bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
@@ -31,23 +39,45 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
         if (error) *error = message;
         return false;
     };
+    QSet<QString> ambiguousHosts;
+    QSet<QString> automaticHosts;
+    QSet<QString> countryKeys{QStringLiteral("auto"), QStringLiteral("rec")};
     for (const auto &value : servers) {
         if (!value.isObject()) return fail(QStringLiteral("invalid server entry"));
-        const QJsonObject object = value.toObject();
+        const auto row = value.toObject();
+        const QString code = row.value(QStringLiteral("code")).toString().trimmed().toUpper();
+        const QString host = row.value(QStringLiteral("host")).toString().trimmed().toCaseFolded();
+        if (code.isEmpty() || host.isEmpty()) return fail(QStringLiteral("server missing country code or hostname"));
+        // REC is an alias for automatic selection, not a manual endpoint.
+        if (code == QLatin1String("REC") || code == QLatin1String("AUTO") || row.value(QStringLiteral("recommended")).toBool()) {
+            automaticHosts.insert(host);
+            continue;
+        }
+        countryKeys.insert(code.toCaseFolded());
+        const auto target = QJsonDocument(QJsonArray{code,
+            row.value(QStringLiteral("country")).toString().trimmed(),
+            row.value(QStringLiteral("city")).toString().trimmed(),
+            row.value(QStringLiteral("port"))}).toJson(QJsonDocument::Compact);
+        const auto existing = targetsByHost.constFind(host);
+        if (existing != targetsByHost.cend() && *existing != target) ambiguousHosts.insert(host);
+        targetsByHost.insert(host, target);
+    }
+    QJsonArray rows = servers;
+    if (!automaticHosts.isEmpty()) rows.append(QJsonObject{{"code", "AUTO"}});
+    for (qsizetype index = 0; index < rows.size(); ++index) {
+        const auto object = rows.at(index).toObject();
+        const bool automatic = index == servers.size();
         const QString code = object.value(QStringLiteral("code")).toString().trimmed().toUpper();
-        const QString country = object.value(QStringLiteral("country")).toString().trimmed();
+        if (!automatic && (code == QLatin1String("REC") || code == QLatin1String("AUTO") ||
+                           object.value(QStringLiteral("recommended")).toBool())) continue;
+        const QString country = automatic ? automaticLabel()
+                                          : object.value(QStringLiteral("country")).toString().trimmed();
         const QString city = object.value(QStringLiteral("city")).toString().trimmed();
         const QString host = object.value(QStringLiteral("host")).toString().trimmed();
-        if (code.isEmpty() || host.isEmpty()) return fail(QStringLiteral("server missing country code or hostname"));
-        // The unchanged Go RPC selects by hostname, not by port or display
-        // location. Distinct entries sharing a hostname cannot be selected
-        // reliably: SetServer resolves the first match. Never misdirect a click.
-        const QString normalizedHost = host.toCaseFolded();
-        const QByteArray target = QJsonDocument(QJsonArray{code, country, city,
-            object.value(QStringLiteral("port"))}).toJson(QJsonDocument::Compact);
-        if (targetsByHost.contains(normalizedHost) && targetsByHost.value(normalizedHost) != target)
-            return fail(QStringLiteral("server hostname is ambiguous"));
-        targetsByHost.insert(normalizedHost, target);
+        const auto key = host.toCaseFolded();
+        // The 1.19.0 core resolves and persists only a hostname. Do not show
+        // a manual choice when that hostname can resolve to an automatic alias.
+        if (!automatic && (automaticHosts.contains(key) || ambiguousHosts.contains(key) || countryKeys.contains(key))) continue;
         const int countryId = stableId(QJsonArray{QStringLiteral("country"), code});
         if (countriesById.contains(countryId) && countriesById.value(countryId) != code)
             return fail(QStringLiteral("country identifier collision"));
@@ -58,7 +88,7 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
             location.id = LocationID::createTopApiLocationId(countryId);
             location.idNum = countryId;
             location.name = country.isEmpty() ? code : country;
-            location.countryCode = code.toLower();
+            location.countryCode = automatic ? QString() : code.toLower();
             location.shortName = code;
             it = grouped.insert(code, location);
         } else if (!country.isEmpty() && it->name != country) {
@@ -72,9 +102,9 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
         citiesById.insert(cityId, identityKey);
         types::City item;
         item.idNum = cityId;
-        item.city = city.isEmpty() ? host : city;
+        item.city = automatic ? country : (city.isEmpty() ? host : city);
         item.nick = host;
-        item.id = LocationID::createApiLocationId(countryId, item.city, item.nick);
+        item.id = LocationID::createApiLocationId(countryId, automatic ? QStringLiteral("AUTO") : item.city, item.nick);
         item.health = -1; // Gozar does not supply server load.
         const Selection choice{host, code};
         if (selections.contains(item.id)) {
@@ -85,12 +115,6 @@ bool LocationCatalog::replace(const QJsonArray &servers, QString *error) {
         }
         it->cities.append(item);
         selections.insert(item.id, choice);
-    }
-    // SetServer also accepts country codes in the same string field. Reject
-    // snapshots where a hostname could be interpreted as a country code.
-    for (auto it = grouped.cbegin(); it != grouped.cend(); ++it) {
-        if (targetsByHost.contains(it.key().toCaseFolded()))
-            return fail(QStringLiteral("server hostname conflicts with a country code"));
     }
     locations_.reserve(grouped.size());
     for (auto it = grouped.cbegin(); it != grouped.cend(); ++it) locations_.append(it.value());

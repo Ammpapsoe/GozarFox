@@ -30,7 +30,8 @@ void bindOriginalHomeWindow(Window *window, HomeBinder *binder) {
         const QString city = server.value(QStringLiteral("city")).toString();
         const QString code = server.value(QStringLiteral("code")).toString().toLower();
         // No ping measurement exists in the Gozar state; do not invent one.
-        window->updateLocationInfo(country, city, code, PingTime(), false);
+        window->updateLocationInfo(country, country.compare(city, Qt::CaseInsensitive) == 0 ? QString() : city,
+                                   code, PingTime(), false);
         // Gozar's exit address belongs to its transport. In proxy modes it
         // does not necessarily describe the whole machine, so do not place it
         // in the original UI's system-IP widget there. This upstream widget

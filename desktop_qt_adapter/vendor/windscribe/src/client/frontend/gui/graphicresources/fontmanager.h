@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QSharedPointer>
 #include <QColor>
+#include <QString>
 #include "fontdescr.h"
 
 // manages fonts, use different fonts, depending current language
@@ -40,6 +41,7 @@ public:
     QColor getSeaGreenColor();
 
 private:
+    QString plexFamily_;
     FontManager();
     ~FontManager();
 };

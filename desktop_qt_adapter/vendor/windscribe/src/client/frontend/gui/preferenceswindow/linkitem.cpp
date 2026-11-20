@@ -63,7 +63,7 @@ void LinkItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, 
     if (type_ == LinkType::EXTERNAL_LINK || type_ == LinkType::SUBPAGE_LINK) {
         linkTextPosX -= 19*G_SCALE;
     }
-    painter->drawText(boundingRect().adjusted(linkTextPosX, yOffset_*G_SCALE, -PREFERENCES_MARGIN_X*G_SCALE, yOffset_*G_SCALE - (boundingRect().height() - PREFERENCE_GROUP_ITEM_HEIGHT*G_SCALE)), Qt::AlignLeft | Qt::AlignVCenter, linkText_);
+    painter->drawText(boundingRect().adjusted(linkTextPosX, yOffset_*G_SCALE, -PREFERENCES_MARGIN_X*G_SCALE, yOffset_*G_SCALE - (boundingRect().height() - PREFERENCE_GROUP_ITEM_HEIGHT*G_SCALE)), Qt::AlignLeft | Qt::AlignAbsolute | Qt::AlignVCenter, linkText_);
 
     // arrow or external link
     QSharedPointer<IndependentPixmap> p;
@@ -116,7 +116,7 @@ void LinkItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, 
                                               yOffset_*G_SCALE,
                                               -PREFERENCES_MARGIN_X*G_SCALE,
                                               yOffset_*G_SCALE - (boundingRect().height() - PREFERENCE_GROUP_ITEM_HEIGHT*G_SCALE)),
-                      Qt::AlignLeft | Qt::AlignVCenter,
+                      Qt::AlignLeft | Qt::AlignAbsolute | Qt::AlignVCenter,
                       title);
 
     // If there's a description draw it
@@ -128,7 +128,7 @@ void LinkItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, 
         painter->drawText(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE,
                                                   boundingRect().height() - PREFERENCES_MARGIN_Y*G_SCALE - descHeight_,
                                                   -descRightMargin_,
-                                                  0), Qt::AlignLeft | Qt::TextWordWrap, desc_);
+                                                  0), Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap, desc_);
     }
 }
 
@@ -287,7 +287,7 @@ void LinkItem::updatePositions()
 
     QFontMetrics fm(FontManager::instance().getFont(12, QFont::Normal));
     descHeight_ = fm.boundingRect(boundingRect().adjusted(PREFERENCES_MARGIN_X*G_SCALE, 0, -descRightMargin_, 0).toRect(),
-                                  Qt::AlignLeft | Qt::TextWordWrap,
+                                  Qt::AlignLeft | Qt::AlignAbsolute | Qt::TextWordWrap,
                                   desc_).height();
 
     if (descUrl_.isEmpty()) {
