@@ -9,6 +9,7 @@ class CityItemDelegate : public IItemDelegate
 
 public:
     virtual ~CityItemDelegate() {}
+    void setGozarPresentation() { gozarPresentation_ = true; }
     void paint(QPainter *painter, const ItemStyleOption &option, const QModelIndex &index, const IItemCacheData *cacheData) const override;
     IItemCacheData *createCacheData(const QModelIndex &index) const override;
     void updateCacheData(const QModelIndex &index, IItemCacheData *cacheData) const override;
@@ -21,6 +22,7 @@ public:
     void tooltipLeaveEvent(int tooltipId) const override;
 
 private:
+    bool gozarPresentation_ = false;
     const int kCityItemMaxWidth = 202;
     const int kCityCaptionMaxWidth = 102;
 

@@ -11,3 +11,8 @@ Gozar modifications in src/client/frontend/gui/connectwindow:
 Gozar FontManager also verifies registration and adds the Gozar Vazirmatn Arabic-script fallback.
 Default upstream connect-window behavior remains when these optional restrictions are not requested.
 Development snapshot only; not a release.
+
+Gozar-specific opt-in presentation also allows the existing Favourites tab,
+filters unsupported original preference tabs, hosts the stock native tray
+locations menu, suppresses unavailable latency/IP details in the existing
+city delegates, and displays real Gozar core telemetry in ConnectWindowItem.

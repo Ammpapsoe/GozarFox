@@ -9,7 +9,7 @@
 // The modified upstream menu must reject unsupported tabs before changing
 // visual or persisted state; filtering the outgoing signal alone is too late.
 inline bool bindOriginalLocationControls(ConnectWindow::ConnectWindowItem *home,
-                                         LocationsWindow *locations, HomeBinder *binder) {
+                                         LocationsWindow *locations, HomeBinder *binder, bool favourites = false) {
     Q_ASSERT(home && locations && binder);
     if (home->thread() != locations->thread() || home->thread() != binder->thread()) {
         emit binder->error(QStringLiteral("location controls must share the GUI thread"));
@@ -44,13 +44,14 @@ inline bool bindOriginalLocationControls(ConnectWindow::ConnectWindowItem *home,
                      locations, &LocationsWindow::onLocationsKeyPressed, Qt::DirectConnection);
     const QPointer<HomeBinder> safeBinder(binder);
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::locationTabClicked,
-                     locations, [locations, safeBinder](LOCATION_TAB tab) {
-        if (tab == LOCATION_TAB_ALL_LOCATIONS || tab == LOCATION_TAB_SEARCH_LOCATIONS) {
+                     locations, [locations, safeBinder, favourites](LOCATION_TAB tab) {
+        if (tab == LOCATION_TAB_ALL_LOCATIONS || tab == LOCATION_TAB_SEARCH_LOCATIONS ||
+            (favourites && tab == LOCATION_TAB_FAVORITE_LOCATIONS)) {
             locations->setTab(tab);
         } else if (safeBinder) {
             emit safeBinder->error(QStringLiteral("location tab is not supported by Gozar yet"));
         }
     });
-    menu->restrictToGozarLocations();
+    menu->restrictToGozarLocations(favourites);
     return true;
 }

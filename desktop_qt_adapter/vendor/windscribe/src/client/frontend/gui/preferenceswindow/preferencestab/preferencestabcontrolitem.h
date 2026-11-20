@@ -2,7 +2,7 @@
 
 #include <QGraphicsObject>
 #include <QTimer>
-#include "backend/preferences/preferenceshelper.h"
+class PreferencesHelper;
 #include "commongraphics/iconbutton.h"
 #include "preferencestabtypes.h"
 #include "tabbutton.h"
@@ -27,6 +27,8 @@ public:
 
     void setInSubpage(bool inSubpage);
     void setLoggedIn(bool loggedIn);
+    void restrictToGozar();
+    void setGozarQuitVisible(bool visible);
 
 public slots:
     void onIsExternalConfigModeChanged(bool bIsExternalConfigMode);
@@ -54,6 +56,7 @@ private:
     TabButton *quitButton_;
     QList<TabButton *> buttonList_;
 
+    bool gozarOnly_ = false;
     bool loggedIn_;
     bool isExternalConfigMode_;
     int height_;

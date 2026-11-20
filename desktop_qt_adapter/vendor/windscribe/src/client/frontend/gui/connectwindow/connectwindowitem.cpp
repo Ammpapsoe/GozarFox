@@ -2,6 +2,8 @@
 
 #include <QCursor>
 #include <QGraphicsScene>
+#include <QGraphicsSimpleTextItem>
+#include "graphicresources/fontmanager.h"
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsView>
 #include <QPainter>
@@ -172,8 +174,8 @@ void ConnectWindowItem::setClickable(bool isClickable)
     preferencesButton_->setClickable(isClickable);
     firewallButton_->setClickable(isClickable && !gozarStatusRestricted_);
     locationsButton_->setClickable(isClickable);
-    networkTrustButton_->setClickable(isClickable);
-    logoButton_->setClickable(isClickable);
+    networkTrustButton_->setClickable(isClickable && !gozarStatusRestricted_);
+    logoButton_->setClickable(isClickable && !gozarStatusRestricted_);
 
     firewallInfo_->setClickableHoverable(false, isClickable && !gozarStatusRestricted_);
     connectStateProtocolPort_->setHoverable(isClickable && !gozarStatusRestricted_);
@@ -191,6 +193,22 @@ void ConnectWindowItem::setGozarNavigationClickable(bool isClickable)
 void ConnectWindowItem::restrictGozarStatus()
 {
     gozarStatusRestricted_ = true;
+    networkTrustButton_->hide();
+    networkTrustButton_->setClickable(false);
+    logoButton_->setClickable(false); // retain wordmark, not Windscribe notifications
+    dotMenuButton_->hide();
+    dotMenuButton_->setClickable(false);
+    ipUtilsMenu_->hide();
+    ipAddressItem_->hide();
+    if (!gozarState_) {
+        gozarState_ = new QGraphicsSimpleTextItem(this);
+        gozarRates_ = new QGraphicsSimpleTextItem(this);
+        gozarDetails_ = new QGraphicsSimpleTextItem(this);
+        for (auto *item : {gozarState_, gozarRates_, gozarDetails_}) {
+            item->setZValue(1);
+            item->setAcceptedMouseButtons(Qt::NoButton);
+        }
+    }
     connectStateProtocolPort_->setClickableHoverable(false, false);
     connectStateProtocolPort_->setEnabled(false);
     connectStateProtocolPort_->hide();
@@ -201,6 +219,16 @@ void ConnectWindowItem::restrictGozarStatus()
     firewallInfo_->setEnabled(false);
     firewallInfo_->hide();
     firewallLabel_->hide();
+    updatePositions();
+}
+
+void ConnectWindowItem::setGozarTelemetry(const QString &state, const QString &rates, const QString &details)
+{
+    if (!gozarState_) return;
+    if (gozarState_->text() != state) gozarState_->setText(state);
+    if (gozarRates_->text() != rates) gozarRates_->setText(rates);
+    if (gozarDetails_->text() != details) gozarDetails_->setText(details);
+    gozarState_->setBrush(prevConnectState_.connectState == CONNECT_STATE_CONNECTED ? QColor(23, 233, 173) : QColor(187, 199, 216));
 }
 
 QRegion ConnectWindowItem::getMask()
@@ -591,6 +619,18 @@ void ConnectWindowItem::updatePositions()
         firewallButton_->setPos(16*G_SCALE, 235*G_SCALE);
         firewallInfo_->setPos(65*G_SCALE, 238*G_SCALE);
     }
+    if (gozarState_) {
+        auto &fonts = FontManager::instance();
+        gozarState_->setFont(fonts.getFont(13, QFont::DemiBold));
+        gozarRates_->setFont(fonts.getFont(13, QFont::DemiBold));
+        gozarDetails_->setFont(fonts.getFont(12, QFont::Normal));
+        gozarRates_->setBrush(QColor(232, 240, 252));
+        gozarDetails_->setBrush(QColor(187, 199, 216));
+        const auto y = cityName1Text_->y();
+        gozarState_->setPos(16 * G_SCALE, y - 26 * G_SCALE);
+        gozarRates_->setPos(16 * G_SCALE, y + 34 * G_SCALE);
+        gozarDetails_->setPos(16 * G_SCALE, y + 53 * G_SCALE);
+    }
 }
 
 void ConnectWindowItem::updateShortenedText()
@@ -731,6 +771,7 @@ void ConnectWindowItem::onIpAddressWidthChanged(int width)
 
 void ConnectWindowItem::onDotMenuButtonClick()
 {
+    if (gozarStatusRestricted_) return;
     dotMenuButton_->setVisible(false);
     ipAddressItem_->setVisible(false);
     showIpUtilsMenu(true);
@@ -843,8 +884,8 @@ void ConnectWindowItem::onIpUtilsMenuAnimationFinished()
     // If hiding animation is finished, show dotMenuButton_ and ipAddressItem_
     if (ipUtilsMenu_->pos().x() >= boundingRect().width()) {
         ipUtilsMenu_->setVisible(false);
-        dotMenuButton_->setVisible(true);
-        ipAddressItem_->setVisible(true);
+        dotMenuButton_->setVisible(!gozarStatusRestricted_);
+        ipAddressItem_->setVisible(!gozarStatusRestricted_);
     }
 }
 
@@ -883,8 +924,8 @@ void ConnectWindowItem::hideIpUtilsMenu(bool animate)
         ipUtilsMenuAnimation_->start();
     } else {
         ipUtilsMenu_->setVisible(false);
-        dotMenuButton_->setVisible(true);
-        ipAddressItem_->setVisible(true);
+        dotMenuButton_->setVisible(!gozarStatusRestricted_);
+        ipAddressItem_->setVisible(!gozarStatusRestricted_);
         updatePositions();
     }
 }

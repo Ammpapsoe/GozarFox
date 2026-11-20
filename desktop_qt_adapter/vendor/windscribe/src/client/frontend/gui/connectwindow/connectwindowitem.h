@@ -1,5 +1,7 @@
 #pragma once
 
+class QGraphicsSimpleTextItem;
+
 #include <QGraphicsObject>
 #include <QVariantAnimation>
 
@@ -31,6 +33,7 @@ public:
     // Gozar does not expose Windscribe's protocol/port or firewall state.
     // Hide and disable those displays rather than presenting fabricated values.
     void restrictGozarStatus();
+    void setGozarTelemetry(const QString &state, const QString &rates, const QString &details);
     // Enables only navigation handled by the integrating Gozar shell. The
     // connection button is independently controlled by its binder.
     void setGozarNavigationClickable(bool isClickable);
@@ -154,6 +157,9 @@ private:
     QString dataTransferred_;
 
     bool isFirewallAlwaysOn_;
+    QGraphicsSimpleTextItem *gozarState_ = nullptr;
+    QGraphicsSimpleTextItem *gozarRates_ = nullptr;
+    QGraphicsSimpleTextItem *gozarDetails_ = nullptr;
     bool gozarStatusRestricted_ = false;
     bool isPremium_;
     bool isIpUtilsEnabled_;

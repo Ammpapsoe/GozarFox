@@ -7,14 +7,18 @@
 
 class HomeBinder;
 class UiLanguage;
-namespace PreferencesWindow { class PreferenceGroup; class ComboBoxItem; class TitleItem; class TabButton; }
+class PreferencesHelper;
+namespace PreferencesWindow { class PreferenceGroup; class ComboBoxItem; class TitleItem; class PreferencesTabControlItem; }
 
 // Gozar's settings model, rendered with Windscribe's original preference rows.
 class GozarPreferences : public QGraphicsView {
+    Q_OBJECT
 public:
-    GozarPreferences(HomeBinder *binder, UiLanguage *language, bool readOnly);
+    GozarPreferences(HomeBinder *binder, UiLanguage *language, PreferencesHelper *helper, bool readOnly);
     void fitPanel(int width, int maxHeight);
     void retranslate();
+signals:
+    void quitRequested();
 
 private:
     QGraphicsScene scene_;
@@ -24,7 +28,7 @@ private:
     PreferencesWindow::PreferenceGroup *general_;
     PreferencesWindow::PreferenceGroup *appearance_;
     PreferencesWindow::ComboBoxItem *theme_;
-    QList<PreferencesWindow::TabButton *> tabs_;
+    PreferencesWindow::PreferencesTabControlItem *tabs_;
     int page_ = 0;
     void showPage(int page);
     void editProxyChain();

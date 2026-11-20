@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFile>
+#include <QDateTime>
 #include <QThread>
 #include <cstdio>
 
@@ -63,6 +64,17 @@ int main(int argc, char **argv) {
                                 {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
                                 {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},
                                 {"server", QJsonObject{{"code", countryCode}}}};
+        if (qEnvironmentVariableIsSet("GOZAR_FAKE_LAYOUT_CATALOG")) {
+            auto place = state.value("server").toObject();
+            if (countryCode == QLatin1String("GB")) {
+                place.insert("country", "United Kingdom");
+                place.insert("city", "London");
+            }
+            state.insert("server", place);
+            state.insert("rate_down", live ? 1572864 : 0);
+            state.insert("rate_up", live ? 262144 : 0);
+            state.insert("since", live ? QDateTime::currentSecsSinceEpoch() - 154 : 0);
+        }
         if (qEnvironmentVariableIsSet("FAKE_CORE_OMIT_LIVE")) state.remove(QStringLiteral("live"));
         QJsonValue payload = request.value("params");
         if (method == "servers") {

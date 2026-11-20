@@ -43,7 +43,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg" "${WS_GUI}/resources/fonts/ibmplexsans.ttf")
   set(GOZAR_FA_FONT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../desktop_flutter/assets/fonts")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/branding/VAZIRMATN-OFL.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/branding/VAZIRMATN-OFL.txt" "${CMAKE_CURRENT_SOURCE_DIR}/../desktop_flutter/assets/gozar.png"
     "${GOZAR_FA_FONT_DIR}/vazirmatn_regular.ttf" "${GOZAR_FA_FONT_DIR}/vazirmatn_medium.ttf"
     "${GOZAR_FA_FONT_DIR}/vazirmatn_semibold.ttf" "${GOZAR_FA_FONT_DIR}/vazirmatn_bold.ttf")
   execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/branding/create_resources.py"
@@ -51,6 +51,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     --logo "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg"
     --font "${WS_GUI}/resources/fonts/ibmplexsans.ttf"
     --fallback-font-dir "${GOZAR_FA_FONT_DIR}"
+    --app-icon "${CMAKE_CURRENT_SOURCE_DIR}/../desktop_flutter/assets/gozar.png"
     --output "${GOZAR_TEST_QRC}"
     RESULT_VARIABLE resource_result ERROR_VARIABLE resource_error)
   if(NOT resource_result EQUAL 0)
@@ -99,6 +100,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/preferenceswindow/titleitem.cpp ${WS_GUI}/preferenceswindow/titleitem.h
     ${WS_GUI}/preferenceswindow/linkitem.cpp ${WS_GUI}/preferenceswindow/linkitem.h
     ${WS_GUI}/preferenceswindow/toggleitem.cpp ${WS_GUI}/preferenceswindow/toggleitem.h
+    ${WS_GUI}/preferenceswindow/preferencestab/preferencestabcontrolitem.cpp ${WS_GUI}/preferenceswindow/preferencestab/preferencestabcontrolitem.h
     ${WS_GUI}/preferenceswindow/preferencestab/tabbutton.cpp ${WS_GUI}/preferenceswindow/preferencestab/tabbutton.h
     ${WS_GUI}/commongraphics/dividerline.cpp ${WS_GUI}/commongraphics/dividerline.h
     ${WS_GUI}/commongraphics/baseitem.cpp ${WS_GUI}/commongraphics/baseitem.h
@@ -124,6 +126,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_GUI}/commongraphics/footerbackground.cpp
     ${WS_GUI}/commonwidgets/scrollbar.cpp
     ${WS_GUI}/commonwidgets/textbuttonwidget.cpp
+    ${WS_GUI}/systemtray/locationstraymenunative.cpp ${WS_GUI}/systemtray/locationstraymenunative.h
     ${WS_GUI}/locationswindow/locationswindow.cpp
     ${WS_GUI}/locationswindow/widgetlocations/configfooterinfo.cpp
     ${WS_GUI}/locationswindow/widgetlocations/emptylistwidget.cpp
@@ -159,6 +162,8 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   list(REMOVE_ITEM gozar_widget_sources tests/upstream_background_test.cpp "${GOZAR_TEST_QRC}")
   set_property(TARGET upstream_background_test PROPERTY SOURCES tests/upstream_background_test.cpp "${GOZAR_TEST_QRC}")
   add_library(gozar_test_widgets OBJECT ${gozar_widget_sources})
+  set_source_files_properties(${WS_GUI}/preferenceswindow/preferencestab/preferencestabcontrolitem.cpp
+    PROPERTIES COMPILE_DEFINITIONS GOZAR_QT_UI)
   target_include_directories(gozar_test_widgets BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(gozar_test_widgets PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(gozar_test_widgets PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
@@ -181,7 +186,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   # shims and are not the full original controller. The real-core candidate is
   # not installed or packaged. Its CI sibling is hardwired to fake_core.
   foreach(handoff_target IN ITEMS gozar_qt_handoff_candidate gozar_qt_handoff_fixture)
-    add_executable(${handoff_target} development/qt_handoff_candidate.cpp gozarpreferences.cpp gozarpreferences.h "${GOZAR_TEST_QRC}" $<TARGET_OBJECTS:gozar_test_widgets>)
+    add_executable(${handoff_target} development/qt_handoff_candidate.cpp gozarpreferences.cpp gozarpreferences.h gozartray.cpp gozartray.h "${GOZAR_TEST_QRC}" $<TARGET_OBJECTS:gozar_test_widgets>)
     target_include_directories(${handoff_target} BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
     target_compile_definitions(${handoff_target} PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
     target_link_libraries(${handoff_target} PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)

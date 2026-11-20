@@ -154,7 +154,7 @@ void LocationsTab::paintEvent(QPaintEvent *event)
 
         painter.setPen(Qt::white);
         painter.setOpacity(OPACITY_SEVENTY);
-        painter.drawText(QRect(baseX, baseY, geometry().width() - 32*G_SCALE, headerHeight()*G_SCALE), Qt::AlignLeft, text);
+        painter.drawText(QRect(baseX, baseY, geometry().width() - 32*G_SCALE, headerHeight()*G_SCALE), Qt::AlignLeft | Qt::AlignAbsolute, text);
 
         QFontMetrics fm(font);
         int textWidth = fm.horizontalAdvance(text);
@@ -172,7 +172,7 @@ void LocationsTab::paintEvent(QPaintEvent *event)
         painter.setPen(Qt::white);
         QFont countFont = FontManager::instance().getFont(12, QFont::Normal);
         painter.setFont(countFont);
-        painter.drawText(QRect(countX, baseY, geometry().width() - countX, headerHeight()*G_SCALE), Qt::AlignLeft, QString::number(count));
+        painter.drawText(QRect(countX, baseY, geometry().width() - countX, headerHeight()*G_SCALE), Qt::AlignLeft | Qt::AlignAbsolute, QString::number(count));
     }
 }
 

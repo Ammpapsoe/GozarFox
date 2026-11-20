@@ -20,6 +20,7 @@ public:
     ~LocationsView() override;
 
     void setModel(QAbstractItemModel *model);
+    void setGozarPresentation();
     void setShowLocationLoad(bool isShowLocationLoad);
     void setShowCountryFlagForCity(bool isShowCountryFlagForCity);
     void updateScaling();

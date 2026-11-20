@@ -25,7 +25,7 @@ public:
 
     // Gozar integration: its current backend implements only all/search.
     // Apply before the queued restore of the persisted tab can run.
-    void restrictToGozarLocations();
+    void restrictToGozarLocations(bool favourites = false);
     LOCATION_TAB currentTab() const { return curTab_; }
 
     bool handleKeyPressEvent(QKeyEvent *event);
@@ -74,7 +74,8 @@ private:
     LOCATION_TAB prevTab_ = LOCATION_TAB_ALL_LOCATIONS;
 
     bool isExternalConfigMode_;
-    bool gozarAllAndSearchOnly_ = false;
+    bool gozarLocationsOnly_ = false;
+    bool gozarFavourites_ = false;
 
     void updatePositions();
     void updateSelectedTab(IconButton *button);

@@ -5,6 +5,11 @@
 #include <QGraphicsView>
 #include "dpiscalemanager.h"
 #include "languagecontroller.h"
+#ifdef GOZAR_QT_UI
+#include "backend/backend.h"
+#else
+#include "backend/preferences/preferenceshelper.h"
+#endif
 
 namespace PreferencesWindow {
 
@@ -87,6 +92,7 @@ void PreferencesTabControlItem::onLanguageChanged()
         logoutButton_->setText(tr("Log Out"));
     }
     quitButton_->setText(tr("Quit"));
+    for (auto *button : buttonList_) button->setToolTip(button->tab() == TAB_GENERAL ? tr("General") : button->tab() == TAB_CONNECTION ? tr("Connection") : button->tab() == TAB_LOOK_AND_FEEL ? tr("Look & Feel") : QString());
 }
 
 PREFERENCES_TAB_TYPE PreferencesTabControlItem::currentTab()
@@ -97,7 +103,7 @@ PREFERENCES_TAB_TYPE PreferencesTabControlItem::currentTab()
 void PreferencesTabControlItem::setCurrentTab(PREFERENCES_TAB_TYPE tab)
 {
     for (TabButton *btn : buttonList_) {
-        if (btn->tab() == tab) {
+        if (btn->tab() == tab && (!gozarOnly_ || btn->isVisible())) {
             fadeOtherButtons(btn);
             btn->setStickySelection(true);
             btn->setSelected(true);
@@ -132,6 +138,7 @@ void PreferencesTabControlItem::setHeight(int newHeight)
 
 void PreferencesTabControlItem::onTabClicked(PREFERENCES_TAB_TYPE tab, TabButton *button)
 {
+    if (gozarOnly_ && !button->isVisible()) return;
     switch(tab) {
         case TAB_UNDEFINED:
             if (button == logoutButton_) {
@@ -178,6 +185,7 @@ void PreferencesTabControlItem::updateScaling()
 
 void PreferencesTabControlItem::onIsExternalConfigModeChanged(bool bIsExternalConfigMode)
 {
+    if (gozarOnly_) return;
     isExternalConfigMode_ = bIsExternalConfigMode;
     // May change "Log Out" vs "Login"
     onLanguageChanged();
@@ -188,6 +196,24 @@ void PreferencesTabControlItem::onIsExternalConfigModeChanged(bool bIsExternalCo
         onTabClicked(TAB_GENERAL, generalButton_);
     }
     updateTopAnchoredButtonsPos();
+}
+
+void PreferencesTabControlItem::restrictToGozar()
+{
+    gozarOnly_ = true;
+    for (auto *button : {accountButton_, robertButton_, advancedButton_, helpButton_, aboutButton_, logoutButton_}) {
+        button->hide();
+        button->setClickable(false);
+    }
+    updateTopAnchoredButtonsPos();
+    setCurrentTab(TAB_GENERAL);
+}
+
+void PreferencesTabControlItem::setGozarQuitVisible(bool visible)
+{
+    if (!gozarOnly_) return;
+    quitButton_->setVisible(visible);
+    quitButton_->setClickable(visible);
 }
 
 void PreferencesTabControlItem::fadeOtherButtons(TabButton *button)

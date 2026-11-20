@@ -11,6 +11,9 @@
 #include "originallocationcontrols.h"
 #include "originallocationsbinding.h"
 #include "gozarpreferences.h"
+#include "gozartray.h"
+#include "gozartelemetry.h"
+#include "languagecontroller.h"
 #include "dpiscalemanager.h"
 #include "graphicresources/fontmanager.h"
 #include "originalpowerbinding.h"
@@ -20,7 +23,9 @@
 #include "connectwindow/connectwindowitem.h"
 #include "graphicresources/imageresourcessvg.h"
 #include "locations/locationsmodel_manager.h"
+#include "locations/locationsmodel_roles.h"
 #include "locationswindow/locationswindow.h"
+#include "locations/view/locationsview.h"
 
 #include <QApplication>
 #include <QDir>
@@ -86,8 +91,13 @@ int main(int argc, char **argv) {
     }
     int appArgc = 1;
     QApplication app(appArgc, argv);
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    if (isolate) QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, isolated.path());
+    app.setOrganizationName(QStringLiteral("Gozar"));
+    app.setApplicationName(QStringLiteral("OriginalQtExperimental"));
     Q_INIT_RESOURCE(images);
     FontManager::instance();
+    app.setWindowIcon(QIcon(QStringLiteral(":/gozar/app.png")));
 #ifdef GOZAR_HANDOFF_CI_FIXTURE
     const QString coreName = QStringLiteral("fake_core");
 #else
@@ -146,9 +156,11 @@ int main(int argc, char **argv) {
     layout.addWidget(&status);
     gui_locations::LocationsModelManager manager;
     LocationsWindow locations(nullptr, &preferences, &manager);
+    for (auto *view : locations.findChildren<gui_locations::LocationsView *>()) view->setGozarPresentation();
     layout.addWidget(&locations);
     locations.hide();
-    GozarPreferences settingsView(&binder, &language, probe);
+    GozarPreferences settingsView(&binder, &language, &helper, probe);
+    QObject::connect(&settingsView, &GozarPreferences::quitRequested, &shell, &QWidget::close);
     layout.addWidget(&settingsView);
     settingsView.hide();
 
@@ -190,8 +202,25 @@ int main(int argc, char **argv) {
     home->setClickable(false);
     if (!probe) home->setGozarNavigationClickable(true);
     bindOriginalHomeWindow(home, &binder);
+    CONNECT_STATE visualState = CONNECT_STATE_DISCONNECTED;
+    const auto refreshTelemetry = [&] {
+        const auto stats = gozarTelemetry(binder.currentState(), visualState, LanguageController::instance().getLanguage() == QLatin1String("fa"));
+        home->setGozarTelemetry(stats.status, stats.rates, stats.details);
+    };
+    QObject::connect(&binder, &HomeBinder::visualStateChanged, &shell, [&](CONNECT_STATE state) {
+        visualState = state;
+        refreshTelemetry();
+    });
+    QObject::connect(&binder, &HomeBinder::stateChanged, &shell, refreshTelemetry);
+    QObject::connect(&binder, &HomeBinder::availabilityChanged, &shell, refreshTelemetry);
+    QObject::connect(&LanguageController::instance(), &LanguageController::languageChanged, &shell, refreshTelemetry);
+    QTimer clock;
+    clock.setInterval(1000);
+    QObject::connect(&clock, &QTimer::timeout, &shell, refreshTelemetry);
+    clock.start();
+    refreshTelemetry();
     if ((!probe && !bindOriginalPowerControl(home, &binder)) ||
-        !bindOriginalLocationControls(home, &locations, &binder)) return 4;
+        !bindOriginalLocationControls(home, &locations, &binder, true)) return 4;
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::closeClick, &shell, &QWidget::close);
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::minimizeClick, &shell, &QWidget::showMinimized);
     QShortcut escape(QKeySequence(Qt::Key_Escape), &shell);
@@ -220,8 +249,25 @@ int main(int argc, char **argv) {
     });
     QObject::connect(&binder, &HomeBinder::serversReady, &shell, [&] { setStatus({}); });
     bindOriginalLocations(&locations, &manager, &binder, &catalog);
+    GozarTray tray(&binder, &catalog, &manager);
+    const auto showMainWindow = [&] {
+        if (shell.isMinimized() || shell.isHidden()) shell.showNormal();
+        shell.raise();
+        shell.activateWindow();
+    };
+    QObject::connect(&tray, &GozarTray::showRequested, &shell, showMainWindow);
+    QObject::connect(&tray, &GozarTray::preferencesRequested, &shell, [&] {
+        showMainWindow();
+        if (settingsView.isHidden()) emit home->preferencesClick();
+    });
+    QObject::connect(&tray, &GozarTray::quitRequested, &shell, &QWidget::close);
+
     UiCloseGuard closeGuard(&shell, &bridge);
     UiReadiness readiness(&shell, &binder);
+    QObject::connect(&readiness, &UiReadiness::readyForHandoff, &binder, &HomeBinder::loadServers);
+#ifndef GOZAR_HANDOFF_CI_FIXTURE
+    QObject::connect(&readiness, &UiReadiness::readyForHandoff, &tray, &GozarTray::attachIfAvailable);
+#endif
     bool ready = false;
     bool sawSignedOut = false;
     bool shutdownConfirmed = false;
@@ -299,7 +345,7 @@ int main(int argc, char **argv) {
                     if (!screenshots.isEmpty()) shell.grab().save(QDir(screenshots).filePath("compact-home.png"));
                     emit home->preferencesClick();
                     if (!settingsView.isVisible() || locations.isVisible() || settingsView.y() != homeView.height()) return false;
-                    const auto connection = settingsView.mapFromScene(QPointF(28 * G_SCALE, 68 * G_SCALE));
+                    const auto connection = settingsView.mapFromScene(QPointF(32 * G_SCALE, 88 * G_SCALE));
                     QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier, connection);
                     if (settingsView.property("gozarPage").toString() != QStringLiteral("connection")) return false;
                     if (!screenshots.isEmpty()) {
@@ -312,9 +358,41 @@ int main(int argc, char **argv) {
                     wait.start();
                     while (catalog.locations().isEmpty() && wait.elapsed() < 3000) QTest::qWait(20);
                     if (catalog.locations().size() != 4) return false;
+                    const auto id = catalog.locations().at(1).cities.at(0).id;
+                    const auto index = manager.getIndexByLocationId(id);
+                    if (!index.isValid() || !manager.locationsModel()->setData(index, true, gui_locations::kIsFavorite) ||
+                        manager.favoriteCitiesProxyModel()->rowCount() != 1) return false;
+                    tray.rebuild();
+                    auto *trayLocations = tray.menu()->actions().at(1)->menu();
+                    if (!trayLocations || !trayLocations->isEnabled() || trayLocations->actions().size() != 4) return false;
+                    if (!screenshots.isEmpty()) {
+                        tray.menu()->ensurePolished();
+                        tray.menu()->resize(tray.menu()->sizeHint());
+                        tray.menu()->grab().save(QDir(screenshots).filePath("tray-menu.png"));
+                    }
                     if (!screenshots.isEmpty()) shell.grab().save(QDir(screenshots).filePath("server-list.png"));
+                    QKeyEvent right(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+                    if (!home->handleKeyPressEvent(&right)) return false;
+                    if (!screenshots.isEmpty()) {
+                        QTest::qWait(300);
+                        shell.grab().save(QDir(screenshots).filePath("favourites.png"));
+                    }
                     emit home->locationsClick();
-                    return !locations.isVisible() && shell.size() == homeView.size();
+                    if (locations.isVisible() || shell.size() != homeView.size()) return false;
+                    binder.selectServer(QStringLiteral("gb.example"), QStringLiteral("GB"));
+                    wait.restart();
+                    while ((!binder.isAvailable() || binder.currentState().value("server").toObject().value("code").toString() != QLatin1String("GB")) && wait.elapsed() < 3000) QTest::qWait(20);
+                    if (!binder.isAvailable()) return false;
+                    binder.toggleConnection();
+                    wait.restart();
+                    while (!binder.currentState().value("live").toBool() && wait.elapsed() < 3000) QTest::qWait(20);
+                    const auto stats = gozarTelemetry(binder.currentState(), visualState, false);
+                    if (!stats.rates.contains(QStringLiteral("1.5 MiB/s")) || !stats.details.contains(QStringLiteral("203.0.113.10"))) return false;
+                    if (!screenshots.isEmpty()) {
+                        QTest::qWait(450);
+                        shell.grab().save(QDir(screenshots).filePath("connected.png"));
+                    }
+                    return true;
                 };
                 if (!test()) {
                     failed = true;

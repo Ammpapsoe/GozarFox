@@ -140,7 +140,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
     WS_ASSERT(!pixmapCaption.isNull());
 
     // In favorites tab, show city name higher and pinned IP below
-    if (option.isShowCountryFlagForCity() || lid.isStaticIpsLocation()) {
+    if ((!gozarPresentation_ && option.isShowCountryFlagForCity()) || lid.isStaticIpsLocation()) {
         QRect rcCaption(left_offs + 56*G_SCALE,  option.rect.top() + 2*G_SCALE, pixmapCaption.width(), pixmapCaption.height());
         pixmapCaption.draw(rcCaption.left(), rcCaption.top(), painter);
 
@@ -165,7 +165,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
         pixmapCaption.draw(rcCaption.left(), rcCaption.top() + (rcCaption.height() -  pixmapCaption.height()) / 2, painter);
 
         // city text for non-static and non-custom views only (not in favorites tab)
-        if (!lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
+        if (!gozarPresentation_ && !lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
             IndependentPixmap pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
             if (!pixmapNick.isNull()) {
                 QRect rc( rcCaption.left() + rcCaption.width() + 8*G_SCALE,  option.rect.top(), pixmapNick.width(), option.rect.height());
@@ -203,7 +203,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
         xOffset -= errorIcon->width();
         errorIcon->draw(xOffset, top_offs + (option.rect.height() - errorIcon->height()) / 2  - 1*G_SCALE, painter);
         xOffset -= LOCATION_ITEM_MARGIN*G_SCALE;
-    } else {
+    } else if (!gozarPresentation_) {
         // Draw ping icon
         PingTime pingTime = index.data(kPingTime).toInt();
         QSharedPointer<IndependentPixmap> pingIcon = ImageResourcesSvg::instance().getIndependentPixmap(pingIconNameString(pingTime.toConnectionSpeed()));
@@ -241,7 +241,8 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
     // no p2p icon + favorite icon
     // You can't favorite a static ip or custom config location.
     if (!lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
-        if (!showAsPremium && qFuzzyCompare(option.selectedOpacity(), 1.0)) {
+        if (!showAsPremium && (qFuzzyCompare(option.selectedOpacity(), 1.0) ||
+                               (gozarPresentation_ && index.data(kIsFavorite).toBool()))) {
             QSharedPointer<IndependentPixmap> favIcon;
             bool isHoveringFavorite = (option.hoverClickableId() == (int)ClickableRect::kFavorite);
             if (index.data(kIsFavorite).toBool() == true) {
@@ -252,7 +253,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
                 favIcon = ImageResourcesSvg::instance().getIndependentPixmap("locations/FAV_ICON_DESELECTED");
             }
             favIcon->draw(xOffset - favIcon->width(), top_offs + (option.rect.height() - favIcon->height()) / 2, painter);
-        } else if (index.data(kIsShowP2P).toBool()) {
+        } else if (!gozarPresentation_ && index.data(kIsShowP2P).toBool()) {
             painter->setOpacity(OPACITY_FULL);
             QSharedPointer<IndependentPixmap> p2pIcon = ImageResourcesSvg::instance().getIndependentPixmap("locations/NO_P2P_ICON");
             p2pIcon->draw(xOffset - p2pIcon->width(), top_offs + (option.rect.height() - p2pIcon->height()) / 2, painter);
@@ -346,7 +347,7 @@ int CityItemDelegate::isInClickableArea(const ItemStyleOption &option, const QMo
 
     QSharedPointer<IndependentPixmap> favIcon = ImageResourcesSvg::instance().getIndependentPixmap("locations/FAV_ICON_SELECTED");
 
-    QRect rc(option.rect.left() + option.rect.width() - favIcon->width() - 59*G_SCALE,
+    QRect rc(option.rect.left() + option.rect.width() - favIcon->width() - (gozarPresentation_ ? 27 : 59)*G_SCALE,
              (option.rect.height() - favIcon->height())/2 + option.rect.top(),
              favIcon->width(), favIcon->height());
     rc.adjust(-2*G_SCALE, -2*G_SCALE, 2*G_SCALE, 2*G_SCALE);    //add a little more area for the convenience of clicking
@@ -380,7 +381,7 @@ int CityItemDelegate::isInTooltipArea(const ItemStyleOption &option, const QMode
     }
 
     // Check if nickname is elided and mouse is over it
-    if (!lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
+    if (!gozarPresentation_ && !lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
         if (nicknameRect(option.rect, cacheData).contains(point)) {
             QString originalNickname = index.data(kDisplayNickname).toString();
             const CityItemDelegateCache *cache = static_cast<const CityItemDelegateCache *>(cacheData);

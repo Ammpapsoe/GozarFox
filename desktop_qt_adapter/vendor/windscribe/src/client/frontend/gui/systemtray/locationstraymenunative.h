@@ -10,7 +10,7 @@ class LocationsTrayMenuNative : public QMenu
 {
     Q_OBJECT
 public:
-    explicit LocationsTrayMenuNative(QWidget *parent, QAbstractItemModel *model);
+    explicit LocationsTrayMenuNative(QWidget *parent, QAbstractItemModel *model, bool showNicknames = true);
 
 signals:
     void locationSelected(const LocationID &lid);
@@ -20,5 +20,5 @@ private slots:
     void onMenuTriggered(QAction *action);
 
 private:
-    void buildMenu(QAbstractItemModel *model);
+    void buildMenu(QAbstractItemModel *model, bool showNicknames);
 };

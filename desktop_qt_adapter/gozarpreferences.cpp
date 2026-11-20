@@ -5,7 +5,7 @@
 #include "preferenceswindow/comboboxitem.h"
 #include "preferenceswindow/linkitem.h"
 #include "preferenceswindow/preferencegroup.h"
-#include "preferenceswindow/preferencestab/tabbutton.h"
+#include "preferenceswindow/preferencestab/preferencestabcontrolitem.h"
 #include "preferenceswindow/titleitem.h"
 #include "preferenceswindow/toggleitem.h"
 #include "dpiscalemanager.h"
@@ -25,7 +25,7 @@ QString local(const char *en, const char *fa) {
 }
 }
 
-GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, bool readOnly)
+GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, PreferencesHelper *helper, bool readOnly)
     : binder_(binder), readOnly_(readOnly) {
     using namespace PreferencesWindow;
     setScene(&scene_);
@@ -44,14 +44,12 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, boo
     scene_.addItem(general_);
     appearance_ = new PreferenceGroup(nullptr);
     scene_.addItem(appearance_);
-    for (const auto &spec : {std::pair{TAB_GENERAL, "preferences/GENERAL_ICON"},
-                            std::pair{TAB_CONNECTION, "preferences/CONNECTION_ICON"},
-                            std::pair{TAB_LOOK_AND_FEEL, "preferences/LOOK_AND_FEEL_ICON"}}) {
-        auto *tab = new TabButton(nullptr, spec.first, QString::fromLatin1(spec.second));
-        scene_.addItem(tab);
-        tabs_.append(tab);
-        connect(tab, &TabButton::tabClicked, this, [this](PREFERENCES_TAB_TYPE page) { showPage(page); });
-    }
+    tabs_ = new PreferencesTabControlItem(nullptr, helper);
+    scene_.addItem(tabs_);
+    tabs_->restrictToGozar();
+    tabs_->setGozarQuitVisible(!readOnly_);
+    connect(tabs_, &PreferencesTabControlItem::currentTabChanged, this, [this](PREFERENCES_TAB_TYPE page) { showPage(page); });
+    connect(tabs_, &PreferencesTabControlItem::quitClick, this, &GozarPreferences::quitRequested);
     auto *mode = new ComboBoxItem(connection_);
     connection_->addItem(mode);
     if (!readOnly_) new OriginalModeBinding<ComboBoxItem>(mode, binder_);
@@ -150,11 +148,6 @@ void GozarPreferences::retranslate() {
         page_ == TAB_LOOK_AND_FEEL ? local("Appearance", "ظاهر") : local("General", "عمومی");
     title_->setTitle(page + QStringLiteral("  ·  ") + local("Experimental", "آزمایشی"));
     title_->update();
-    const QStringList tabNames{local("General", "عمومی"), local("Connection", "اتصال"), local("Appearance", "ظاهر")};
-    for (qsizetype i = 0; i < tabs_.size(); ++i) {
-        tabs_.at(i)->setText(tabNames.at(i));
-        tabs_.at(i)->setToolTip(tabNames.at(i));
-    }
     theme_->setLabelCaption(local("Flutter sign-in theme", "پوستهٔ ورود Flutter"));
     syncTheme();
 }
@@ -166,11 +159,6 @@ void GozarPreferences::showPage(int page) {
     general_->setVisible(page == TAB_GENERAL);
     connection_->setVisible(page == TAB_CONNECTION);
     appearance_->setVisible(page == TAB_LOOK_AND_FEEL);
-    for (auto *tab : tabs_) {
-        const bool selected = tab->tab() == page;
-        tab->setStickySelection(selected);
-        tab->setSelected(selected);
-    }
     retranslate();
     viewport()->update();
 }
@@ -182,11 +170,9 @@ void GozarPreferences::fitPanel(int w, int maxHeight) {
         group->updateScaling();
         group->setPos(60 * G_SCALE, 39 * G_SCALE);
     }
-    for (qsizetype i = 0; i < tabs_.size(); ++i) {
-        tabs_.at(i)->updateScaling();
-        tabs_.at(i)->setPos(14 * G_SCALE, (8 + i * 48) * G_SCALE);
-    }
-    const int contentHeight = qMax(qCeil(156 * G_SCALE), qCeil(connection_->sceneBoundingRect().bottom() + 14 * G_SCALE));
+    const int contentHeight = qMax(qCeil(224 * G_SCALE), qCeil(connection_->sceneBoundingRect().bottom() + 14 * G_SCALE));
+    tabs_->setHeight(contentHeight);
+    tabs_->updateScaling();
     setSceneRect(0, 0, w - 6, contentHeight);
     setFixedSize(w, qBound(1, contentHeight, qMax(1, maxHeight)));
 }

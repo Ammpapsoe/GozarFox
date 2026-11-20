@@ -1,6 +1,7 @@
 #pragma once
 
 #include "homebinder.h"
+#include "locationcatalog.h"
 #include "types/connectstate.h"
 #include "types/pingtime.h"
 
@@ -26,9 +27,10 @@ void bindOriginalHomeWindow(Window *window, HomeBinder *binder) {
     QObject::connect(binder, &HomeBinder::stateChanged, window,
                      [window](const QJsonObject &state) {
         const auto server = state.value(QStringLiteral("server")).toObject();
-        const QString country = server.value(QStringLiteral("country")).toString();
+        QString country = server.value(QStringLiteral("country")).toString();
         const QString city = server.value(QStringLiteral("city")).toString();
         const QString code = server.value(QStringLiteral("code")).toString().toLower();
+        if (country.isEmpty() && !state.value(QStringLiteral("live")).toBool()) country = LocationCatalog::automaticLabel();
         // No ping measurement exists in the Gozar state; do not invent one.
         window->updateLocationInfo(country, country.compare(city, Qt::CaseInsensitive) == 0 ? QString() : city,
                                    code, PingTime(), false);

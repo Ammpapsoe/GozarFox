@@ -1,6 +1,7 @@
 name: Experimental Qt real-core build (NOT a release)
 
-# Explicit build only. No fake core, real account, VPN session or tests run.
+# Offline UI fixtures and signed-out smoke checks run before upload.
+# No real account sign-in or live tunnel is exercised.
 # Artifacts are development builds for deliberate owner evaluation, not a
 # release or a determination that distribution obligations are satisfied.
 on:
@@ -39,10 +40,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-python@v5
         with:
-          go-version: '1.26.11'
-          cache-dependency-path: go-desktop/go.sum
+          python-version: '3.12'
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
@@ -59,12 +59,48 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev patchelf
-      - name: Build only the Qt real-core candidate
+      - name: Verify and extract the official Gozar 1.19.0 core
+        shell: bash
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          filename=gozar-core
+          if [[ "$PLATFORM" == windows ]]; then filename=gozar-core.exe; fi
+          core="${RUNNER_TEMP}/official-gozar/${filename}"
+          python desktop_qt_adapter/fetch-release-core.py "$ARTIFACT" "$core"
+          echo "GOZAR_OFFICIAL_CORE=$core" >> "$GITHUB_ENV"
+      - name: Build and verify the Qt integration
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-build" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release
-          cmake --build "${RUNNER_TEMP}/qt-build" --config Release --target gozar_qt_handoff_candidate --parallel 2
+          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-build" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGOZAR_REAL_CORE="$GOZAR_OFFICIAL_CORE"
+          cmake --build "${RUNNER_TEMP}/qt-build" --config Release --parallel 2
+          ctest --test-dir "${RUNNER_TEMP}/qt-build" -C Release --output-on-failure
+      - name: Capture actual Qt UI with fixture data
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          fixture="${RUNNER_TEMP}/qt-build/gozar_qt_handoff_fixture"
+          if [[ "$RUNNER_OS" == Windows ]]; then fixture="${RUNNER_TEMP}/qt-build/Release/gozar_qt_handoff_fixture.exe"; fi
+          output="${RUNNER_TEMP}/gozar-ui-screenshots"
+          mkdir -p "$output/en" "$output/fa"
+          GOZAR_VISUAL_DIR="$output/en" "$fixture" --ci-layout
+          GOZAR_VISUAL_DIR="$output/fa" GOZAR_VISUAL_FARSI=1 "$fixture" --ci-layout
+          for locale in en fa; do
+            for image in compact-home connected connection-settings server-list favourites tray-menu; do
+              test -s "$output/$locale/$image.png"
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gozar-qt-screenshots-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/gozar-ui-screenshots
+          if-no-files-found: error
+          retention-days: 7
       - name: Build Windows development bundle
         if: matrix.platform == 'windows'
         shell: bash
@@ -77,7 +113,7 @@ jobs:
           test -n "$runner"
           folder=$(dirname "$runner")
           cp "${RUNNER_TEMP}/qt-build/Release/gozar-original-ui.exe" "$folder/gozar-original-ui.exe"
-          (cd ../go-desktop && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags='-s -w -H=windowsgui' -o "../desktop_flutter/$folder/gozar-core.exe" ./cmd/gozar)
+          cp "$GOZAR_OFFICIAL_CORE" "$folder/gozar-core.exe"
           windeployqt --release --no-translations --dir "$folder" "$folder/gozar-original-ui.exe"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
@@ -95,7 +131,7 @@ jobs:
           flutter build linux --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
           folder=build/linux/x64/release/bundle
           cp "${RUNNER_TEMP}/qt-build/gozar-original-ui" "$folder/gozar-original-ui"
-          (cd ../go-desktop && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "../desktop_flutter/$folder/gozar-core" ./cmd/gozar)
+          cp "$GOZAR_OFFICIAL_CORE" "$folder/gozar-core"
           mkdir -p "$folder/qt/lib" "$folder/qt/plugins"
           cp -a "$QT_ROOT_DIR"/lib/libQt6*.so* "$folder/qt/lib/"
           for pattern in 'libicu*.so*' 'libxcb*.so*'; do
@@ -116,7 +152,6 @@ jobs:
         if: matrix.platform == 'darwin'
         shell: bash
         env:
-          GOARCH: ${{ matrix.arch }}
           ARTIFACT: ${{ matrix.artifact }}
         run: |
           set -euo pipefail
@@ -125,7 +160,7 @@ jobs:
           flutter build macos --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
           app=build/macos/Build/Products/Release/Gozar.app
           cp "${RUNNER_TEMP}/qt-build/gozar-original-ui" "$app/Contents/MacOS/gozar-original-ui"
-          (cd ../go-desktop && CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" go build -trimpath -ldflags='-s -w' -o "../desktop_flutter/$app/Contents/MacOS/gozar-core" ./cmd/gozar)
+          cp "$GOZAR_OFFICIAL_CORE" "$app/Contents/MacOS/gozar-core"
           macdeployqt "$app" -executable="$app/Contents/MacOS/gozar-original-ui"
           cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$app/Contents/Resources/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$app/Contents/Resources/WINDSCRIBE-GPL-2-LICENSE.txt"
@@ -139,4 +174,4 @@ jobs:
           name: gozar-qt-real-core-${{ matrix.artifact }}-EXPERIMENTAL-NOT-RELEASE
           path: qt-build-output/*
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7

@@ -62,6 +62,12 @@ LocationsView::~LocationsView()
     delete cityItemDelegate_;
 }
 
+void LocationsView::setGozarPresentation()
+{
+    cityItemDelegate_->setGozarPresentation();
+    setShowLocationLoad(false);
+}
+
 void LocationsView::setShowLocationLoad(bool isShowLocationLoad)
 {
     widget_->setShowLocationLoad(isShowLocationLoad);

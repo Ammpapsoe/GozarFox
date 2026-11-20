@@ -4,13 +4,13 @@
 #include "dpiscalemanager.h"
 #include "locations/locationsmodel_roles.h"
 
-LocationsTrayMenuNative::LocationsTrayMenuNative(QWidget *parent, QAbstractItemModel *model) :
+LocationsTrayMenuNative::LocationsTrayMenuNative(QWidget *parent, QAbstractItemModel *model, bool showNicknames) :
     QMenu(parent)
 {
     // building the menu once in the constructor
     // we do not need to rebuild the menu when the model changes because the menu will rebuild again when the menu is shown again
     // if something changes while the menu is being displayed, it is not critical
-    buildMenu(model);
+    buildMenu(model, showNicknames);
 }
 
 void LocationsTrayMenuNative::onMenuActionTriggered(bool checked)
@@ -26,7 +26,7 @@ void LocationsTrayMenuNative::onMenuTriggered(QAction *action)
     emit locationSelected(qvariant_cast<LocationID>(action->data()));
 }
 
-void LocationsTrayMenuNative::buildMenu(QAbstractItemModel *model)
+void LocationsTrayMenuNative::buildMenu(QAbstractItemModel *model, bool showNicknames)
 {
     clear();
     int rowCount = model->rowCount();
@@ -47,7 +47,7 @@ void LocationsTrayMenuNative::buildMenu(QAbstractItemModel *model)
 
         QString nick = mi.data(gui_locations::kDisplayNickname).toString();
         QString rootVisibleName = mi.data().toString();
-        if (!nick.isEmpty()) {
+        if (showNicknames && !nick.isEmpty()) {
             rootVisibleName += " - " + nick;
         }
         bool bRootShowAsPremium = mi.data(gui_locations::kIsShowAsPremium).toBool();
@@ -83,7 +83,9 @@ void LocationsTrayMenuNative::buildMenu(QAbstractItemModel *model)
             for (int cityInd = 0; cityInd < childsCount; ++cityInd)
             {
                 QModelIndex cityMi = model->index(cityInd, 0, mi);
-                QString visibleName = cityMi.data().toString() + " - " + cityMi.data(gui_locations::kDisplayNickname).toString();
+                QString visibleName = cityMi.data().toString();
+                const QString cityNick = cityMi.data(gui_locations::kDisplayNickname).toString();
+                if (showNicknames && !cityNick.isEmpty()) visibleName += " - " + cityNick;
                 if (cityMi.data(gui_locations::kIsShowAsPremium).toBool()) {
                     visibleName += " (Pro)";
                 }

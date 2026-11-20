@@ -27,7 +27,7 @@ def main():
     rows, seen = [], set()
     for resource in root.findall('qresource'):
         prefix = resource.get('prefix', '/')
-        if prefix not in ('/', '/gozar-fonts'):
+        if prefix not in ('/', '/gozar-fonts', '/gozar'):
             raise ValueError('unexpected resource prefix')
         for entry in resource:
             if entry.tag != 'file' or not entry.text:
@@ -48,7 +48,7 @@ def main():
             rows.append((alias, path.relative_to(repository).as_posix(), path.stat().st_size,
                          digest.hexdigest(), 'NOT REVIEWED'))
     required = {'svg/LOGO.svg', 'resources/fonts/ibmplexsans.ttf',
-                'gozar-fonts/vazirmatn_regular.ttf', 'gozar-fonts/VAZIRMATN-OFL.txt'}
+                'gozar/app.png', 'gozar-fonts/vazirmatn_regular.ttf', 'gozar-fonts/VAZIRMATN-OFL.txt'}
     if not required.issubset(seen) or 'gif/windscribe_spinner.gif' in seen:
         raise ValueError('expected simulation resources are missing or unexpectedly present')
     args.output.parent.mkdir(parents=True, exist_ok=True)
