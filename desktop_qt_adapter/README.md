@@ -75,8 +75,14 @@ original Qt home widget and reads signed-out state from an isolated real core;
 it has no login or active controls, uses test backend shims and is not a
 production application. It accepts only `--ci-readonly <core-path>` and cannot
 serve as the launcher target. No complete Qt application executable is built
-or packaged yet. The preliminary distribution review is in
-`RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. The entry point
+or packaged yet. The CI-only `gozar_qt_simulator` assembles the actual home,
+locations and mode/language controls into an experimental shell, exercises
+fake-core server selection, mode, connect/disconnect and guarded close, and can
+accept a simulated Flutter handoff. It runs only against the sibling fake core,
+uses test backend shims and is not the complete original controller or a
+shippable VPN app. Never package this simulator as a real product. The
+preliminary distribution review is in `RELEASE-LICENSE-REVIEW.md`; it is not
+legal clearance. The entry point
 remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-time
 opt-in for future integration builds, not permission to distribute this WIP.
 A caller must not launch the next owner on an unconfirmed result. The fallback

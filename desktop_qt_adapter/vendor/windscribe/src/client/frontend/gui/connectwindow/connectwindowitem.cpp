@@ -180,6 +180,14 @@ void ConnectWindowItem::setClickable(bool isClickable)
     connectStateProtocolPort_->setClickable(isClickable && !gozarStatusRestricted_);
 }
 
+void ConnectWindowItem::setGozarNavigationClickable(bool isClickable)
+{
+    closeButton_->setClickable(isClickable);
+    minimizeButton_->setClickable(isClickable);
+    preferencesButton_->setClickable(isClickable);
+    locationsButton_->setClickable(isClickable);
+}
+
 void ConnectWindowItem::restrictGozarStatus()
 {
     gozarStatusRestricted_ = true;

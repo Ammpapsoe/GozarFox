@@ -6,6 +6,7 @@ Gozar modifications in src/client/frontend/gui/connectwindow:
 - locationsmenu.cpp and locationsmenu.h optionally restrict tabs to all/search
   before state changes and persisted-tab restoration.
 - connectwindowitem.cpp and connectwindowitem.h optionally hide and disable the
-  upstream protocol/firewall displays, whose semantics differ from Gozar.
+  upstream protocol/firewall displays, whose semantics differ from Gozar, and
+  expose an opt-in method to enable only supported shell navigation controls.
 Default upstream behavior remains when these optional restrictions are not requested.
 Development snapshot only; not a release.

@@ -31,6 +31,9 @@ public:
     // Gozar does not expose Windscribe's protocol/port or firewall state.
     // Hide and disable those displays rather than presenting fabricated values.
     void restrictGozarStatus();
+    // Enables only navigation handled by the integrating Gozar shell. The
+    // connection button is independently controlled by its binder.
+    void setGozarNavigationClickable(bool isClickable);
 
     QRegion getMask();
     QPixmap getShadowPixmap();

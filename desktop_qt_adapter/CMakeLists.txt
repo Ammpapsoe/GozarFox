@@ -154,10 +154,17 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   target_include_directories(gozar_qt_readonly_probe BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(gozar_qt_readonly_probe PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(gozar_qt_readonly_probe PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
+  # CI-only integrated simulated shell; it is deliberately coupled to the
+  # fake core and test backend shims, never install or release this target.
+  add_executable(gozar_qt_simulator development/qt_simulator.cpp "${GOZAR_TEST_QRC}" $<TARGET_OBJECTS:gozar_test_widgets>)
+  target_include_directories(gozar_qt_simulator BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+  target_compile_definitions(gozar_qt_simulator PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
+  target_link_libraries(gozar_qt_simulator PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
   # Compile upstream translations unchanged and embed them at the exact path
   # expected by the original LanguageController.
   file(GLOB WS_TRANSLATIONS CONFIGURE_DEPENDS "${WS_GUI}/translations/ws_desktop_*.ts")
-  qt_add_translations(upstream_background_test TS_FILES ${WS_TRANSLATIONS} RESOURCE_PREFIX "/translations")
+  qt_add_translations(TARGETS upstream_background_test gozar_qt_simulator
+    TS_FILES ${WS_TRANSLATIONS} RESOURCE_PREFIX "/translations")
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
   add_library(original_window_header_compile OBJECT
@@ -178,7 +185,8 @@ if(BUILD_TESTING)
     "-DREAL_CORE=${GOZAR_REAL_CORE}")
   if(BUILD_UPSTREAM_SMOKE_TEST)
     list(APPEND integration_args "-DUPSTREAM_TEST=$<TARGET_FILE:upstream_background_test>"
-      "-DQT_READONLY_PROBE=$<TARGET_FILE:gozar_qt_readonly_probe>")
+      "-DQT_READONLY_PROBE=$<TARGET_FILE:gozar_qt_readonly_probe>"
+      "-DQT_SIMULATOR=$<TARGET_FILE:gozar_qt_simulator>")
   endif()
   add_test(NAME gozar_integration_smoke COMMAND "${CMAKE_COMMAND}" ${integration_args}
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_smoke.cmake")
