@@ -27,7 +27,21 @@ permissions:
   actions: read
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check release layout, tag, notes and distribution review
+        shell: bash
+        run: bash scripts/check_official_build_preflight.sh
+
   android:
+    needs: [preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -150,6 +164,7 @@ jobs:
           if-no-files-found: error
 
   desktop:
+    needs: [preflight]
     strategy:
       fail-fast: false
       matrix:
@@ -480,6 +495,7 @@ jobs:
           if-no-files-found: error
 
   proof:
+    needs: [preflight]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -503,6 +519,7 @@ jobs:
         run: go test ./internal/engine -run '^TestIdleFiveMinutesSoak$' -count=1 -timeout 10m
 
   cores:
+    needs: [preflight]
     strategy:
       fail-fast: false
       matrix:
@@ -760,8 +777,8 @@ jobs:
         run: |
           set -e
           test -n "$GPG_PRIVATE_KEY"
-          printf '%s\n' "$GPG_PRIVATE_KEY" > "$RUNNER_TEMP/gpg.asc"
-          gpg --batch --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --import "$RUNNER_TEMP/gpg.asc"
+          # Import from stdin, rather than leaving private key data as a runner file.
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --import
           FPR=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
           if [ "$FPR" != 'E20479907B23A61FC7BD252EC5F49406E92B2564' ]; then
             echo "::error::OpenPGP signing key does not match the published Gozar key"

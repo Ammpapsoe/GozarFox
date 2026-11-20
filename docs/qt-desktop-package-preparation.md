@@ -30,8 +30,10 @@ packaging targets are outside this desktop preparation workflow.
 
 `packaging/desktop-release-ui` explicitly selects Qt: an unsuccessful Qt
 preflight must not fall back to Flutter. The existing `Build` matrix uses the
-same Qt packaging/staging logic as validation, and the official signing job
-rechecks distribution prerequisites before accessing repository signing keys.
+same Qt packaging/staging logic as validation. Its top-level preflight
+blocks jobs that could access signing keys (including Android) until the
+distribution check passes. It also rejects a mismatched tag or draft notes
+on a tag event. The official publish job rechecks distribution prerequisites.
 No approval record is supplied by this change. An authorized reviewer must
 record the result in `packaging/qt-distribution-approval.json` for the exact
 version, with `decision: "approved"`, `review_reference`,
@@ -45,3 +47,8 @@ and 25 MB for each macOS archive. Non-Qt limits are unchanged.
 The draft `1.20.0` notes report the last measured output sizes. The checks-only
 workflow still stores evidence, not public release assets. The version bump
 changes declarations only and must be rebuilt and verified before signing.
+
+The existing official pipeline uses pinned OpenPGP signatures for release
+files, pinned Ed25519 update-manifest signatures, and the pinned Android
+APK signing certificate. These do not provide Windows Authenticode or macOS
+Developer ID/notarization; the current Mac layout uses only ad-hoc codesign.
