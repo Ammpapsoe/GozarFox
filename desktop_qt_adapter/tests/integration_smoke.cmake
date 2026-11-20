@@ -20,4 +20,5 @@ if(DEFINED QT_READONLY_PROBE AND NOT QT_READONLY_PROBE STREQUAL "" AND DEFINED R
 endif()
 if(DEFINED QT_SIMULATOR AND NOT QT_SIMULATOR STREQUAL "")
   run_check("simulated original Qt home, locations, mode and connection lifecycle" "${QT_SIMULATOR}" "--ci-simulate")
+  run_check("interactive simulation startup and guarded close" "${QT_SIMULATOR}" "--ci-demo")
 endif()

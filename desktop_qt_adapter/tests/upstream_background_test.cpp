@@ -24,6 +24,7 @@
 #include "graphicresources/imageresourcessvg.h"
 #include <QApplication>
 #include <QFile>
+#include <QFontDatabase>
 #include <QSvgRenderer>
 #include <QGraphicsScene>
 #include <QGraphicsView>
@@ -119,6 +120,10 @@ void UpstreamBackgroundTest::gozarWordmarkReplacesOriginalResource() {
     QVERIFY(renderer.isValid());
     QCOMPARE(renderer.defaultSize(), QSize(107, 17));
     QVERIFY(!QFile::exists(QStringLiteral(":/gif/windscribe_spinner.gif")));
+    const int font = QFontDatabase::addApplicationFont(QStringLiteral(":/resources/fonts/ibmplexsans.ttf"));
+    QVERIFY(font >= 0);
+    QVERIFY(!QFontDatabase::applicationFontFamilies(font).isEmpty());
+    QVERIFY(QFontDatabase::removeApplicationFont(font));
 }
 
 void UpstreamBackgroundTest::sourceFlagFollowsSimulatedCore() {

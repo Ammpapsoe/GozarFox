@@ -78,11 +78,18 @@ serve as the launcher target. No complete Qt application executable is built
 or packaged yet. The CI-only `gozar_qt_simulator` assembles the actual home,
 locations and mode/language controls into an experimental shell, exercises
 fake-core server selection, mode, connect/disconnect and guarded close, and can
-accept a simulated Flutter handoff. It runs only against the sibling fake core,
-uses test backend shims and is not the complete original controller or a
-shippable VPN app. Never package this simulator as a real product. The
-preliminary distribution review is in `RELEASE-LICENSE-REVIEW.md`; it is not
-legal clearance. The entry point
+accept a simulated Flutter handoff. Its `--demo` argument opens an interactive
+simulation; it is labelled prominently and uses an isolated temporary profile.
+The adjacent `fake_core` fixture is the only core it can start. `--ci-demo`
+checks that demo's startup and guarded close without human input. These are
+development features, not a production VPN: the application uses test backend
+shims and is not the complete original controller. Never package this simulator
+as a real product. The experimental resource map now includes the upstream font
+expected by FontManager; its redistribution rights remain unverified. CI can
+produce a hash inventory of resources in that map, which is not a complete
+software bill of materials or rights clearance. The preliminary distribution
+review is in `RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. See
+`PACKAGING-PLAN.md` for the blocked cross-platform release plan. The entry point
 remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-time
 opt-in for future integration builds, not permission to distribute this WIP.
 A caller must not launch the next owner on an unconfirmed result. The fallback

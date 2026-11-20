@@ -37,10 +37,11 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   set(GOZAR_TEST_QRC "${CMAKE_CURRENT_BINARY_DIR}/images.qrc")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${WS_GUI}/images.qrc" "${CMAKE_CURRENT_SOURCE_DIR}/branding/create_resources.py"
-    "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg")
+    "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg" "${WS_GUI}/resources/fonts/ibmplexsans.ttf")
   execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/branding/create_resources.py"
     --source "${WS_GUI}/images.qrc"
     --logo "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg"
+    --font "${WS_GUI}/resources/fonts/ibmplexsans.ttf"
     --output "${GOZAR_TEST_QRC}"
     RESULT_VARIABLE resource_result ERROR_VARIABLE resource_error)
   if(NOT resource_result EQUAL 0)

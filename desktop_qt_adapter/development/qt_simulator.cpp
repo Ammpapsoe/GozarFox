@@ -23,8 +23,10 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QLabel>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
@@ -36,7 +38,9 @@ int main(int argc, char **argv) {
     if (argc != 2) return 2;
     const QByteArray argument(argv[1]);
     const bool handoff = argument == "--handoff-stdio-v1";
-    if (!handoff && argument != "--ci-simulate") return 2;
+    const bool demo = argument == "--demo" || argument == "--ci-demo";
+    const bool ciDemo = argument == "--ci-demo";
+    if (!handoff && !demo && argument != "--ci-simulate") return 2;
     QTemporaryDir isolated;
     if (!isolated.isValid()) return 3;
     const QByteArray profile = isolated.path().toUtf8();
@@ -45,6 +49,7 @@ int main(int argc, char **argv) {
     int appArgc = 1;
     QApplication app(appArgc, argv);
     Q_INIT_RESOURCE(images);
+    if (!QFile::exists(QStringLiteral(":/resources/fonts/ibmplexsans.ttf"))) return 9;
 #ifdef Q_OS_WIN
     const QString fakePath = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("fake_core.exe"));
 #else
@@ -61,6 +66,9 @@ int main(int argc, char **argv) {
     QWidget shell;
     shell.setWindowTitle(QStringLiteral("Gozar — simulated integration, not a VPN"));
     QVBoxLayout layout(&shell);
+    QLabel warning(QStringLiteral("SIMULATION ONLY — fake account and fake connection; no VPN"));
+    warning.setWordWrap(true);
+    layout.addWidget(&warning);
     QGraphicsScene homeScene;
     auto *home = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
     homeScene.addItem(home);
@@ -135,6 +143,12 @@ int main(int argc, char **argv) {
             std::fputs("GOZAR_QT_READY_V1\n", stdout);
             std::fflush(stdout);
         }
+        if (demo) {
+            // The interactive demo waits for the user. CI exercises its
+            // startup and guarded shutdown without requiring human input.
+            if (ciDemo) QTimer::singleShot(300, &shell, [&] { shell.close(); });
+            return;
+        }
         stage = Servers;
         QTimer::singleShot(50, &shell, [&] { emit home->locationsClick(); });
     });
@@ -174,13 +188,14 @@ int main(int argc, char **argv) {
             QTimer::singleShot(300, &shell, [&] { shell.close(); });
         }
     });
-    QTimer::singleShot(25000, &shell, [&] { if (!finished) fail(); });
+    if (!demo || ciDemo)
+        QTimer::singleShot(25000, &shell, [&] { if (!confirmedShutdown) fail(); });
     shell.show();
     readiness.markUiInitialized(); // this marks the simulated shell, not a production UI
     if (!bridge.start(fakePath)) return 8;
     const int result = app.exec();
     ImageResourcesSvg::instance().finishGracefully();
-    if (result != 0 || !finished || !confirmedShutdown || failed) return 1;
+    if (result != 0 || (!demo && !finished) || !confirmedShutdown || failed) return 1;
     if (!handoff) std::fputs("GOZAR_SIMULATION_OK\n", stdout);
     return 0;
 }

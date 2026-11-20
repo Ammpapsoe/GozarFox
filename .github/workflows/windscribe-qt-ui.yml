@@ -57,6 +57,19 @@ jobs:
           cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-check" \
             -DBUILD_UPSTREAM_SMOKE_TEST=ON \
             -DGOZAR_REAL_CORE="${GOZAR_CI_TEST_CORE}"
+      - name: Inventory simulation resource inputs (not release approval)
+        shell: bash
+        run: |
+          python desktop_qt_adapter/branding/inventory_resources.py \
+            --qrc "${RUNNER_TEMP}/qt-check/images.qrc" \
+            --repository "${GITHUB_WORKSPACE}" \
+            --output "${RUNNER_TEMP}/qt-resource-inventory.csv"
+      - uses: actions/upload-artifact@v4
+        if: matrix.qt_host == 'linux'
+        with:
+          name: qt-development-resource-inventory-not-release
+          path: ${{ runner.temp }}/qt-resource-inventory.csv
+          if-no-files-found: error
       - name: Build
         shell: bash
         run: cmake --build "${RUNNER_TEMP}/qt-check" --config Release --parallel 2

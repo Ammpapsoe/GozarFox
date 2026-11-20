@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--logo', required=True, type=Path)
+    parser.add_argument('--font', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     args = parser.parse_args()
     source = args.source.resolve(strict=True)
@@ -48,6 +49,17 @@ def main():
             entry.text = path.as_posix()
     if replaced != 1 or removed != 1:
         raise ValueError('upstream branding resources changed; review before continuing')
+    # FontManager references this alias from a separate upstream resource map.
+    # Include only the font, not the upstream application/tray icon set. This
+    # development resource is not an assertion of redistribution rights.
+    font_alias = 'resources/fonts/ibmplexsans.ttf'
+    if font_alias in seen:
+        raise ValueError('font alias already exists; review the upstream resource map')
+    font = args.font.resolve(strict=True)
+    if not font.is_relative_to(source.parent):
+        raise ValueError('font escapes upstream GUI directory')
+    font_entry = ET.SubElement(root.find('qresource'), 'file', alias=font_alias)
+    font_entry.text = font.as_posix()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ET.indent(root)
     ET.ElementTree(root).write(args.output, encoding='utf-8', xml_declaration=True)
