@@ -280,11 +280,11 @@ class CoreReply {
 enum CoreHandoffResult { ready, busy, signedOut, connected, unconfirmed }
 
 class Core {
-  Core({this.executablePath, Future<Process> Function(String, List<String>)? processStarter})
-      : _processStarter = processStarter;
+  Core({this.executablePath, this.processStarter});
 
   final String? executablePath;
-  final Future<Process> Function(String, List<String>)? _processStarter;
+  // Injectable only to control the OS spawn boundary in tests.
+  final Future<Process> Function(String, List<String>)? processStarter;
   Process? _process;
   Future<void>? _starting;
   int _nextId = 0;
@@ -340,7 +340,7 @@ class Core {
   Future<void> _startOnce() async {
     final path = _findBinary();
     if (path == null) throw StateError('core not found');
-    final starter = _processStarter;
+    final starter = processStarter;
     final process = starter == null
         ? await Process.start(path, const ['--rpc'])
         : await starter(path, const ['--rpc']);

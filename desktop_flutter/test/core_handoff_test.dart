@@ -31,6 +31,7 @@ void main() {
     });
     final first = core.start();
     final second = core.start();
+    await Future<void>.delayed(Duration.zero);
     expect(launches, 1);
     permit.complete();
     await Future.wait([first, second]);
