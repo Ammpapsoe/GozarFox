@@ -216,10 +216,12 @@ exercise a complete preferences window or visual mouse interaction. It has not
 been connected to the application or validated with a real VPN.
 
 The interactive UI tests use a simulated core. For the separate real-core
-smoke check, build the Gozar 1.19.0 core, configure with
+smoke check, build the Gozar core from this checkout, configure with
 `-DGOZAR_REAL_CORE=/path/to/core` and run CTest. `realcore_smoke` checks
 version/state and shutdown using a temporary config. The original-window
-state check also runs when `GOZAR_CI_TEST_CORE` is set. Neither test signs in
+state check also runs when `GOZAR_CI_TEST_CORE` is set. CTest verifies the RPC
+version against the Go source in this checkout; for a pinned published core,
+also configure `-DGOZAR_EXPECTED_CORE_VERSION=<version>`. Neither test signs in
 or connects. None exercise the complete Windscribe UI, real login or a real
 VPN connection.
 

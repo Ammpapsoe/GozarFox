@@ -52,6 +52,7 @@ jobs:
           bash scripts/ci_apt.sh update -qq
           bash scripts/ci_apt.sh install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev patchelf libxcb-cursor0 libxkbcommon-x11-0
       - name: Build exact checkout core, Qt and tests
+        id: native_tests
         shell: bash
         run: |
           set -euo pipefail
@@ -66,6 +67,14 @@ jobs:
           python desktop_qt_adapter/branding/inventory_resources.py \
             --qrc "$RUNNER_TEMP/production-layout-qt/images.qrc" --repository "$GITHUB_WORKSPACE" \
             --output "$RUNNER_TEMP/packaging-evidence/qt-source-resources.csv"
+      - name: Preserve CTest diagnostics after a failed native test
+        if: ${{ failure() && steps.native_tests.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: qt-ctest-diagnostics-${{ matrix.label }}
+          path: ${{ runner.temp }}/production-layout-qt/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Stage native packages with existing Qt handoff
         shell: bash
         run: bash scripts/stage_desktop_qt_packages.sh

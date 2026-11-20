@@ -31,7 +31,9 @@ void RealCoreSmoke::stateAndQuit() {
     const QJsonObject response = replies.first().at(1).toJsonObject();
     QVERIFY(response.value("error").toString().isEmpty());
     const auto state = response.value("state").toObject();
-    QCOMPARE(state.value("version").toString(), QStringLiteral("1.19.0"));
+    const QString expectedVersion = qEnvironmentVariable("GOZAR_CI_EXPECTED_CORE_VERSION");
+    QVERIFY2(!expectedVersion.isEmpty(), "CTest must supply the expected real-core RPC version");
+    QCOMPARE(state.value("version").toString(), expectedVersion);
     QCOMPARE(state.value("signed_in").toBool(), false);
     QCOMPARE(state.value("live").toBool(), false);
     bridge.shutdown();

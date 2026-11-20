@@ -608,7 +608,9 @@ void UpstreamBackgroundTest::originalWindowReadsRealCoreState() {
     QVERIFY(bridge.start(corePath));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 10000);
     const auto state = states.last().at(0).toJsonObject();
-    QCOMPARE(state.value("version").toString(), QStringLiteral("1.19.0"));
+    const QString expectedVersion = qEnvironmentVariable("GOZAR_CI_EXPECTED_CORE_VERSION");
+    QVERIFY2(!expectedVersion.isEmpty(), "CTest must supply the expected real-core RPC version");
+    QCOMPARE(state.value("version").toString(), expectedVersion);
     QVERIFY(!state.value("signed_in").toBool());
     QVERIFY(!state.value("live").toBool());
     bridge.shutdown();

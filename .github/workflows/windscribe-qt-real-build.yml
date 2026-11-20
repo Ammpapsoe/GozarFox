@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-build" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGOZAR_REAL_CORE="$GOZAR_OFFICIAL_CORE"
+          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-build" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGOZAR_REAL_CORE="$GOZAR_OFFICIAL_CORE" -DGOZAR_EXPECTED_CORE_VERSION=1.19.0
           cmake --build "${RUNNER_TEMP}/qt-build" --config Release --parallel 2
           ctest --test-dir "${RUNNER_TEMP}/qt-build" -C Release --output-on-failure
       - name: Capture actual Qt UI with fixture data
