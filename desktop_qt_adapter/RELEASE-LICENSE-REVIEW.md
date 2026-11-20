@@ -16,7 +16,7 @@ Scope: proposed original Windscribe Qt GUI + existing Gozar Flutter UI/core; rev
 
 ## Packaging and release gates
 
-1. No release executable exists yet. Do not bundle `fake_core`, `upstream_background_test`, test-only shims, credentials, or CI fixtures. No executable currently meets the requirements for a production Qt package.
+1. No release executable exists yet. The development handoff candidate can start the real core but links test shims and implements only a limited selection of original widgets; it is not the complete original UI and is not a release. Do not bundle `fake_core`, `upstream_background_test`, test-only shims, credentials, or CI fixtures. No executable currently meets the requirements for a production Qt package.
 2. Prepare Windows, Linux and macOS packages only after the complete original UI is bound, unsupported controls are disabled or implemented, lifecycle and independently observed network cleanup have been validated, and actual bundled paths and loader dependencies are verified. Bundle no production login token or password in arguments, logs or artifacts.
 3. Provide the source for exact distributed binaries, modifications, build/install scripts and applicable notices, including dependencies; document reproducibility and licence obligations for each platform. Complete legal/brand review and any required replacement assets or permission **before** public distribution.
 4. Validate install/upgrade/uninstall and signed release artifacts, startup/teardown, crash/recovery, DPI, localisation, and connection flows across all target platforms. Do not sign in/create/activate a real account without explicit owner authorization. Existing simulated and signed-out tests cannot substitute for these tests.

@@ -79,10 +79,10 @@ jobs:
           set -euo pipefail
           ctest --test-dir "${RUNNER_TEMP}/qt-check" -C Release --output-on-failure
           fake="${RUNNER_TEMP}/qt-check/fake_core"
-          qt_fixture="${RUNNER_TEMP}/qt-check/gozar_qt_simulator"
+          qt_fixture="${RUNNER_TEMP}/qt-check/gozar_qt_handoff_fixture"
           if [[ "${RUNNER_OS}" == Windows ]]; then
             fake="${RUNNER_TEMP}/qt-check/Release/fake_core.exe"
-            qt_fixture="${RUNNER_TEMP}/qt-check/Release/gozar_qt_simulator.exe"
+            qt_fixture="${RUNNER_TEMP}/qt-check/Release/gozar_qt_handoff_fixture.exe"
           fi
           export GOZAR_HANDOFF_TEST_CORE="$fake"
           export GOZAR_HANDOFF_TEST_QT="$qt_fixture"
@@ -90,3 +90,17 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test --no-pub test/ui_test.dart test/core_handoff_test.dart test/ui_handoff_test.dart
+      - name: Collect development dependency evidence (not a release SBOM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/qt-dependency-evidence"
+          (cd go-desktop && go list -m -json all > "${RUNNER_TEMP}/qt-dependency-evidence/go-modules.jsons")
+          (cd go-desktop && go list -deps -json ./cmd/gozar > "${RUNNER_TEMP}/qt-dependency-evidence/go-packages.jsons")
+          (cd desktop_flutter && flutter pub deps --json > "${RUNNER_TEMP}/qt-dependency-evidence/flutter-deps.json")
+          cp "${RUNNER_TEMP}/qt-resource-inventory.csv" "${RUNNER_TEMP}/qt-dependency-evidence/resources.csv"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-development-dependency-evidence-${{ matrix.qt_host }}-not-release
+          path: ${{ runner.temp }}/qt-dependency-evidence/
+          if-no-files-found: error

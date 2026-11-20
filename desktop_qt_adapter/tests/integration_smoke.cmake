@@ -18,6 +18,21 @@ endif()
 if(DEFINED QT_READONLY_PROBE AND NOT QT_READONLY_PROBE STREQUAL "" AND DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")
   run_check("standalone original Qt home and signed-out real core" "${QT_READONLY_PROBE}" "--ci-readonly" "${REAL_CORE}")
 endif()
+if(DEFINED QT_HANDOFF_FIXTURE AND NOT QT_HANDOFF_FIXTURE STREQUAL "")
+  run_check("handoff candidate and simulated connection lifecycle" "${QT_HANDOFF_FIXTURE}" "--ci-scripted")
+endif()
+if(DEFINED QT_HANDOFF_CANDIDATE AND NOT QT_HANDOFF_CANDIDATE STREQUAL "" AND
+   DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")
+  # The candidate resolves only a sibling named gozar-core. Copy the unchanged
+  # CI-built core to that temporary build directory, not into a release bundle.
+  get_filename_component(candidate_dir "${QT_HANDOFF_CANDIDATE}" DIRECTORY)
+  file(COPY "${REAL_CORE}" DESTINATION "${candidate_dir}")
+  execute_process(COMMAND "${QT_HANDOFF_CANDIDATE}" "--ci-signed-out"
+    RESULT_VARIABLE candidate_result OUTPUT_VARIABLE candidate_stdout TIMEOUT 45)
+  if(NOT "${candidate_result}" STREQUAL "0" OR candidate_stdout MATCHES "GOZAR_QT_READY_V1")
+    message(FATAL_ERROR "real-core candidate failed signed-out guard: ${candidate_result}")
+  endif()
+endif()
 if(DEFINED QT_SIMULATOR AND NOT QT_SIMULATOR STREQUAL "")
   run_check("simulated original Qt home, locations, mode and connection lifecycle" "${QT_SIMULATOR}" "--ci-simulate")
   run_check("interactive simulation startup and guarded close" "${QT_SIMULATOR}" "--ci-demo")

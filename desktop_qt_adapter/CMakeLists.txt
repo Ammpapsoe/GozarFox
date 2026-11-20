@@ -162,10 +162,21 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   target_include_directories(gozar_qt_simulator BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(gozar_qt_simulator PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(gozar_qt_simulator PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
+  # Both handoff candidates remain DEVELOPMENT ONLY: they link test backend
+  # shims and are not the full original controller. The real-core candidate is
+  # not installed or packaged. Its CI sibling is hardwired to fake_core.
+  foreach(handoff_target IN ITEMS gozar_qt_handoff_candidate gozar_qt_handoff_fixture)
+    add_executable(${handoff_target} development/qt_handoff_candidate.cpp "${GOZAR_TEST_QRC}" $<TARGET_OBJECTS:gozar_test_widgets>)
+    target_include_directories(${handoff_target} BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+    target_compile_definitions(${handoff_target} PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
+    target_link_libraries(${handoff_target} PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
+  endforeach()
+  target_compile_definitions(gozar_qt_handoff_fixture PRIVATE GOZAR_HANDOFF_CI_FIXTURE=1)
   # Compile upstream translations unchanged and embed them at the exact path
   # expected by the original LanguageController.
   file(GLOB WS_TRANSLATIONS CONFIGURE_DEPENDS "${WS_GUI}/translations/ws_desktop_*.ts")
   qt_add_translations(TARGETS upstream_background_test gozar_qt_simulator
+    gozar_qt_handoff_candidate gozar_qt_handoff_fixture
     TS_FILES ${WS_TRANSLATIONS} RESOURCE_PREFIX "/translations")
   # Compile the binding and original window implementation against test-only
   # backend stubs. This does not link or instantiate the whole application.
@@ -188,7 +199,9 @@ if(BUILD_TESTING)
   if(BUILD_UPSTREAM_SMOKE_TEST)
     list(APPEND integration_args "-DUPSTREAM_TEST=$<TARGET_FILE:upstream_background_test>"
       "-DQT_READONLY_PROBE=$<TARGET_FILE:gozar_qt_readonly_probe>"
-      "-DQT_SIMULATOR=$<TARGET_FILE:gozar_qt_simulator>")
+      "-DQT_SIMULATOR=$<TARGET_FILE:gozar_qt_simulator>"
+      "-DQT_HANDOFF_FIXTURE=$<TARGET_FILE:gozar_qt_handoff_fixture>"
+      "-DQT_HANDOFF_CANDIDATE=$<TARGET_FILE:gozar_qt_handoff_candidate>")
   endif()
   add_test(NAME gozar_integration_smoke COMMAND "${CMAKE_COMMAND}" ${integration_args}
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_smoke.cmake")

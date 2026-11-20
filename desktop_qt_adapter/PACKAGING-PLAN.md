@@ -47,6 +47,9 @@ The existing Flutter login and Go engine must remain unchanged.
 `branding/inventory_resources.py` lists paths, sizes and SHA-256 hashes for
 inputs to the generated development `images.qrc`, with rights marked not
 reviewed. It includes the original font and Gozar substitute wordmark; the
-Windscribe spinner is excluded. It does **not** inventory compiled translation
-catalogues, binary dependencies, Qt plugins, Flutter, Go modules or operating
-system packages, and is not a licence determination or production SBOM.
+Windscribe spinner is excluded. The development CI also records Go module and
+package dependency metadata and Flutter dependency metadata per tested OS.
+These are source/build evidence, not an inventory of an actual release package:
+they omit compiled translation catalogues, deployed Qt binaries and plugins,
+platform-specific installer contents and operating-system dependencies. They
+are not a licence determination or production SBOM.
