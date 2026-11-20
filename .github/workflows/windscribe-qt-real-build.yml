@@ -1,0 +1,139 @@
+name: Experimental Qt real-core build (NOT a release)
+
+# Explicit build only. No fake core, real account, VPN session or tests run.
+# Artifacts are development builds for deliberate owner evaluation, not a
+# release or a determination that distribution obligations are satisfied.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  experimental-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            qt_host: windows
+            platform: windows
+            arch: amd64
+            artifact: Windows-x64
+          - os: ubuntu-24.04
+            qt_host: linux
+            platform: linux
+            arch: amd64
+            artifact: Linux-x64
+          - os: macos-15-intel
+            qt_host: mac
+            platform: darwin
+            arch: amd64
+            artifact: macOS-Intel
+          - os: macos-15
+            qt_host: mac
+            platform: darwin
+            arch: arm64
+            artifact: macOS-ARM
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: ${{ matrix.qt_host }}
+          cache: true
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Linux build prerequisites
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev patchelf
+      - name: Build only the Qt real-core candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S desktop_qt_adapter -B "${RUNNER_TEMP}/qt-build" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build "${RUNNER_TEMP}/qt-build" --config Release --target gozar_qt_handoff_candidate --parallel 2
+      - name: Build Windows development bundle
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd desktop_flutter
+          flutter pub get
+          flutter build windows --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
+          runner=$(find build/windows -path '*/runner/Release/gozar.exe' -print -quit)
+          test -n "$runner"
+          folder=$(dirname "$runner")
+          cp "${RUNNER_TEMP}/qt-build/Release/gozar-original-ui.exe" "$folder/gozar-original-ui.exe"
+          (cd ../go-desktop && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags='-s -w -H=windowsgui' -o "../desktop_flutter/$folder/gozar-core.exe" ./cmd/gozar)
+          windeployqt --release --no-translations --dir "$folder" "$folder/gozar-original-ui.exe"
+          cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
+          cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$folder/"
+          mkdir -p ../qt-build-output
+          python -c 'import shutil,sys; shutil.make_archive(sys.argv[1], "zip", root_dir=sys.argv[2])' ../qt-build-output/Gozar-Qt-EXPERIMENTAL-Windows-x64 "$folder"
+      - name: Build Linux development bundle
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd desktop_flutter
+          flutter pub get
+          flutter build linux --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
+          folder=build/linux/x64/release/bundle
+          cp "${RUNNER_TEMP}/qt-build/gozar-original-ui" "$folder/gozar-original-ui"
+          (cd ../go-desktop && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o "../desktop_flutter/$folder/gozar-core" ./cmd/gozar)
+          mkdir -p "$folder/qt/lib" "$folder/qt/plugins"
+          cp -a "$QT_ROOT_DIR"/lib/libQt6*.so* "$folder/qt/lib/"
+          for pattern in 'libicu*.so*' 'libxcb*.so*'; do
+            for item in "$QT_ROOT_DIR"/lib/$pattern; do
+              if [ -e "$item" ]; then cp -a "$item" "$folder/qt/lib/"; fi
+            done
+          done
+          cp -a "$QT_ROOT_DIR"/plugins/. "$folder/qt/plugins/"
+          patchelf --set-rpath '$ORIGIN/qt/lib' "$folder/gozar-original-ui"
+          printf '[Paths]\nPrefix = qt\nLibraries = lib\nPlugins = plugins\n' > "$folder/qt.conf"
+          cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
+          cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$folder/"
+          mkdir -p ../qt-build-output
+          tar -C build/linux/x64/release -cJf ../qt-build-output/Gozar-Qt-EXPERIMENTAL-Linux-x64.tar.xz bundle
+      - name: Build macOS development bundle
+        if: matrix.platform == 'darwin'
+        shell: bash
+        env:
+          GOARCH: ${{ matrix.arch }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          set -euo pipefail
+          cd desktop_flutter
+          flutter pub get
+          flutter build macos --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
+          app=build/macos/Build/Products/Release/Gozar.app
+          cp "${RUNNER_TEMP}/qt-build/gozar-original-ui" "$app/Contents/MacOS/gozar-original-ui"
+          (cd ../go-desktop && CGO_ENABLED=0 GOOS=darwin GOARCH="$GOARCH" go build -trimpath -ldflags='-s -w' -o "../desktop_flutter/$app/Contents/MacOS/gozar-core" ./cmd/gozar)
+          macdeployqt "$app" -executable="$app/Contents/MacOS/gozar-original-ui"
+          cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$app/Contents/Resources/"
+          cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$app/Contents/Resources/WINDSCRIBE-GPL-2-LICENSE.txt"
+          cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$app/Contents/Resources/"
+          codesign --force --deep --sign - "$app"
+          mkdir -p ../qt-build-output
+          tar -C "$(dirname "$app")" -cJf "../qt-build-output/Gozar-Qt-EXPERIMENTAL-${ARTIFACT}.tar.xz" Gozar.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gozar-qt-real-core-${{ matrix.artifact }}-EXPERIMENTAL-NOT-RELEASE
+          path: qt-build-output/*
+          if-no-files-found: error
+          retention-days: 1

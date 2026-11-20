@@ -93,9 +93,11 @@ as a real product. In addition, the uninstalled development target
 `gozar_qt_handoff_candidate` implements the launcher protocol and resolves the
 real `gozar-core` only as a sibling executable. It can control that core after
 a verified signed-in/disconnected readiness state, using the limited widgets
-and **test backend shims**, not the full controller. It is not enabled in the
-Flutter application or packaged for users. Its separately compiled CI fixture
-is hardwired to the fake core; a signed-out probe runs the real core in an
+and **test backend shims**, not the full controller. The default Flutter build
+keeps it disabled. A separate manual, build-only workflow assembles explicitly
+experimental real-core artifacts with the Flutter handoff flag enabled; these
+are not release packages and have not passed the release gates. Its separately
+compiled CI fixture is hardwired to the fake core; a signed-out probe runs the real core in an
 isolated profile with controls disabled. Real login and real connection have
 not been tested. Missing system-wide ownership, crash/recovery, verification
 of OS cleanup and complete settings remain release blockers. The experimental

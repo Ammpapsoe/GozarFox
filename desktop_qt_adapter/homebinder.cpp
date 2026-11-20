@@ -17,6 +17,14 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
     });
     connect(core, &CoreBridge::reply, this, &HomeBinder::handleReply);
     connect(core, &CoreBridge::failed, this, &HomeBinder::handleFailure);
+    connect(core, &CoreBridge::transportError, this, [this](const QString &) {
+        // Invalidate immediately; a fault may be emitted before the process
+        // actually exits or its pending requests are failed.
+        stateKnown_ = false;
+        lastState_ = {};
+        emit serversInvalidated();
+        setEnabled();
+    });
     connect(core, &CoreBridge::stopped, this, &HomeBinder::coreStopped);
     connect(this, &HomeBinder::serversInvalidated, this, [this] { ++catalogueRevision_; });
     if (button) connect(button, &ConnectWindow::ConnectButton::clicked, this, &HomeBinder::toggleConnection);
@@ -210,6 +218,20 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
     if (stateId_ == id) stateId_ = -1;
     const bool serversReply = serversId_ == id;
     if (serversReply) serversId_ = -1;
+    // Validate the error before publishing state or enabling controls. An
+    // error-bearing response is not evidence that the handoff target is ready,
+    // even if it also contains a superficially valid signed-in state.
+    const QJsonValue errorValue = reply.value(QStringLiteral("error"));
+    const bool malformedError = !errorValue.isUndefined() && !errorValue.isNull() && !errorValue.isString();
+    const QString message = errorValue.toString();
+    if (malformedError || !message.isEmpty()) {
+        stateKnown_ = false;
+        lastState_ = {};
+        emit serversInvalidated();
+        setEnabled();
+        emit error(malformedError ? QStringLiteral("invalid core error field") : message);
+        return;
+    }
     const auto state = reply.value(QStringLiteral("state"));
     if (state.isObject()) applyState(state.toObject());
     else {
@@ -221,18 +243,7 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
         }
         setEnabled();
     }
-    const QJsonValue errorValue = reply.value(QStringLiteral("error"));
-    const bool malformedError = !errorValue.isUndefined() && !errorValue.isNull() && !errorValue.isString();
-    const QString message = errorValue.toString();
-    if (malformedError) {
-        if (needsState) { stateKnown_ = false; lastState_ = {}; }
-        if (serversReply || needsState) emit serversInvalidated();
-        setEnabled();
-        emit error(QStringLiteral("invalid core error field"));
-    } else if (!message.isEmpty()) {
-        if (serversReply) emit serversInvalidated();
-        emit error(message);
-    } else if (serversReply) {
+    if (serversReply) {
         const auto servers = reply.value(QStringLiteral("reply"));
         if (stateKnown_ && signedIn_ && catalogueRevision_ == requestedCatalogueRevision_ &&
             lastState_.value(QStringLiteral("email")).toString() == serversEmail_ && servers.isArray()) {

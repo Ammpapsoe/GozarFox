@@ -266,6 +266,10 @@ void UpstreamBackgroundTest::serverAndSettingsUseCoreResponses() {
     errors.clear();
     binder.setWarpUdp(true, false);
     QTRY_VERIFY_WITH_TIMEOUT(!errors.isEmpty(), 5000);
+    QVERIFY(states.isEmpty()); // error-bearing state is not published
+    QVERIFY(!binder.isAvailable());
+    binder.refresh();
+    QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
     QVERIFY(!states.last().at(0).toJsonObject().value("warp_udp").toBool());
     states.clear();
     binder.setWarpUdp(true, true);

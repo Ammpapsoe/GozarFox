@@ -1,0 +1,19 @@
+EXPERIMENTAL DEVELOPMENT BUILD — NOT A RELEASE
+
+This build uses the REAL Gozar core and the existing Flutter login. It contains
+only a limited subset of the original Qt UI and test backend compatibility
+shims. It is not the complete Windscribe desktop application. Real login,
+connection, network cleanup, upgrade and crash recovery have not been verified
+for this integration. It is unsigned or only ad-hoc signed. Its licences and
+assets have not received final distribution review.
+
+Use only for an owner's deliberate manual evaluation. It can change network
+routes and proxy settings and reads the existing Gozar account/configuration.
+Before opening it, quit all other Gozar instances; there is no system-wide
+single-owner guarantee. Do not install over an existing working installation,
+do not redistribute it as a finished product, and have a way to restore your
+network settings. No credentials are included in this package.
+
+Source: https://github.com/Ammpapsoe/GozarFox/tree/wip/original-windscribe-ui
+Licensing review: desktop_qt_adapter/RELEASE-LICENSE-REVIEW.md in that source.
+The included licence files are preliminary and do not establish full compliance.

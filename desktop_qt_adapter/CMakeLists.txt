@@ -172,6 +172,9 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     target_link_libraries(${handoff_target} PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
   endforeach()
   target_compile_definitions(gozar_qt_handoff_fixture PRIVATE GOZAR_HANDOFF_CI_FIXTURE=1)
+  # Match Flutter's fixed sibling path without enabling the opt-in launcher in
+  # release builds. This target is still incomplete and not an installer.
+  set_target_properties(gozar_qt_handoff_candidate PROPERTIES OUTPUT_NAME "gozar-original-ui")
   # Compile upstream translations unchanged and embed them at the exact path
   # expected by the original LanguageController.
   file(GLOB WS_TRANSLATIONS CONFIGURE_DEPENDS "${WS_GUI}/translations/ws_desktop_*.ts")
