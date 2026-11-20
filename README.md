@@ -141,9 +141,9 @@ The copy of its GNU GPL version 2 license text is under
 includes a small set of Windscribe vector assets and the upstream license
 text in `desktop_flutter/assets/windscribe`.
 
-The proposed licensing path is limited to the Qt interface and its adapter;
-it does not relicense the Go engine, the Flutter launcher, or third-party
-work. The presence of upstream license text or a successful packaging build
+The [license scope](LICENSE-SCOPE.md) records an additional GPLv2 option
+for 24 expressly listed Gozar Qt adapter files. It does not relicense the
+Go engine, the Flutter launcher, or third-party work. The presence of upstream license text or a successful packaging build
 is not release approval. See `docs/qt-desktop-license-and-release-checklist.md`
 for the outstanding rights, package, and signing checks.
 

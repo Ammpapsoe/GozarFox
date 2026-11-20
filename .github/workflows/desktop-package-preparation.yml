@@ -83,6 +83,42 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/build_qt_windows_installer.ps1
+      - name: Authenticate tools for the internal Qt AppImage
+        if: matrix.platform == 'linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/fetch_appimage_tools.sh "$RUNNER_TEMP/appimage-tools"
+      - name: Build and validate the requested additional desktop formats
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python scripts/check_qt_release_prerequisites.py --metadata-only)
+          mkdir -p "$RUNNER_TEMP/additional-formats"
+          case "$GOOS" in
+            linux)
+              bundle="$RUNNER_TEMP/desktop-extracted/bundle"
+              file="$RUNNER_TEMP/additional-formats/Gozar-$version-x86_64.AppImage"
+              APPIMAGETOOL="$RUNNER_TEMP/appimage-tools/appimagetool-x86_64.AppImage" \
+                APPIMAGE_RUNTIME_FILE="$RUNNER_TEMP/appimage-tools/runtime-x86_64" \
+                bash scripts/package_appimage.sh "$bundle" "$file" "$version"
+              bash scripts/verify_qt_appimage.sh "$file" "$bundle"
+              ;;
+            darwin)
+              file="$RUNNER_TEMP/additional-formats/Gozar-$PACKAGE_LABEL.dmg"
+              bash scripts/build_qt_macos_dmg.sh "$RUNNER_TEMP/desktop-extracted/Gozar.app" "$file"
+              ;;
+            *) exit 2 ;;
+          esac
+          python - "$file" "$RUNNER_TEMP/packaging-evidence/additional-format.json" <<'PY'
+          import hashlib, json, pathlib, sys
+          path, report = map(pathlib.Path, sys.argv[1:])
+          assert path.is_file() and path.stat().st_size > 0
+          with path.open('rb') as f:
+              digest = hashlib.file_digest(f, 'sha256').hexdigest()
+          report.write_text(json.dumps({'name': path.name, 'bytes': path.stat().st_size,
+                                        'sha256': digest, 'publication_eligible': False}, indent=2) + '\n')
+          PY
       - name: Record package evidence, not release eligibility
         shell: bash
         run: |

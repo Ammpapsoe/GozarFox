@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later OR GPL-2.0-only
 // EXPERIMENTAL, NOT A RELEASE: limited original Qt widgets and test backend
 // shims, not Windscribe's full MainWindow/controller. The normal build starts
 // the sibling real Gozar core after Flutter's handoff; the CI build starts only

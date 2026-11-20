@@ -2,17 +2,11 @@
 
 ## Rights and notices
 
-- The root `LICENSE` remains AGPL-3.0. Replacing it does not grant rights to
-  relicense existing contributions. The proposal is a scoped compatible
-  grant only for the relevant Qt interface code, if the people with rights
-  can authorize it. Do not insert GPLv2 headers or mark this approved before
-  confirming the exact files, their provenance and the scope of that grant.
-- The compiled-input inventory identifies 24 local adapter files, 13 local
-  shims/wrappers and 32 modified Windscribe inputs in the sampled Linux build.
-  No separate compatible grant for the 24 adapter files was evidenced. The
-  first prototype import is `551ca27`; commit history is not proof of ownership.
-  Check the shims and changes for adapted code and retain applicable notices,
-  including file-specific modification notices where required.
+- The root `LICENSE` remains AGPL-3.0. `LICENSE-SCOPE.md` and the headers
+  record a scoped GPLv2 alternative for the 24 named Gozar adapter files,
+  based on the project owner's confirmation. This is not an approval for
+  other code or the complete package. Preserve applicable upstream notices
+  for the 13 shims/wrappers and 32 modified Windscribe inputs.
 - The 429 Qt resource inputs in run `44795363782` include 422 paths in the
   vendored tree. In the Linux checkout those 422 files match the pinned
   upstream bytes. This does not establish a blanket grant for artwork,
@@ -38,10 +32,10 @@
 | Platform | Validated internally | Official-format work still needed |
 | --- | --- | --- |
 | Windows x64 | NSIS Setup EXE and portable ZIP | Use the existing EXE; no MSI required by the EXE-or-MSI choice. Validate install, upgrade, notices and official signatures. |
-| macOS (Intel and Apple Silicon) | Separate `.app` tar.xz archives | DMG is an additional unbuilt format. Plan how it coexists with the update archives, verify extracted bundle/notices, and verify signatures. Prior 25 MB cap applies to tar.xz, not a new DMG. |
-| Linux amd64 | DEB and tar.xz | Verify DEB install/upgrade and notices. Build and verify the Qt-based AppImage in the official derivative package job; not covered by the green native run. |
+| macOS (Intel and Apple Silicon) | Separate `.app` tar.xz archives | DMG creation and mount verification are wired into internal validation, but not yet run. Plan how it coexists with the update archives, verify extracted bundle/notices, and verify signatures. Prior 25 MB cap applies to tar.xz, not a new DMG. |
+| Linux amd64 | DEB and tar.xz | Verify DEB install/upgrade and notices. Qt AppImage build/smoke is wired into validation and the official derivative job, but is not covered by the earlier green native run. |
 
-The staging script already copies the root LICENSE, NOTICE and Windscribe
+The staging script already copies the root LICENSE, LICENSE-SCOPE.md, NOTICE and Windscribe
 GPLv2 text into the Qt layout. Restart from the same reviewed commit and
 verify those files and everything else required in the exact final packages.
 Existing release signing covers detached OpenPGP signatures and signed

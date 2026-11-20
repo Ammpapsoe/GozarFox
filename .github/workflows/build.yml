@@ -151,6 +151,12 @@ jobs:
                   raise SystemExit(f'{path.name} exceeds the {limit} MiB budget: {size}')
               with zipfile.ZipFile(path) as apk:
                   names = set(apk.namelist())
+                  if abi == 'universal':
+                      native = {name.split('/')[1] for name in names
+                                if name.startswith('lib/') and name.count('/') == 2
+                                and name.endswith('.so') and apk.getinfo(name).file_size > 0}
+                      if native != expected - {'universal'}:
+                          raise SystemExit(f'{path.name} has incorrect native ABIs: {sorted(native)}')
                   forbidden = [name for name in names if name.endswith(('libtor.so', 'libgojni.so')) or 'TorService' in name or 'IPtProxy' in name]
                   if forbidden:
                       raise SystemExit(f'{path.name} still contains removed Tor components')
@@ -599,6 +605,9 @@ jobs:
           set -e
           bash scripts/ci_apt.sh update
           bash scripts/ci_apt.sh install -y --no-install-recommends rpm zstd squashfs-tools patchelf fakeroot libarchive-tools elfutils flatpak flatpak-builder
+          if [[ -f packaging/desktop-release-ui ]] && [[ "$(cat packaging/desktop-release-ui)" == qt ]]; then
+            bash scripts/ci_apt.sh install -y libgtk-3-0t64 libxcb-cursor0 libxkbcommon-x11-0
+          fi
       - name: Unpack the Linux bundle
         run: |
           set -e
@@ -622,6 +631,9 @@ jobs:
           set -e
           mkdir -p out
           scripts/package_appimage.sh "$PWD/work/bundle" "$PWD/out/Gozar-$VERSION-x86_64.AppImage" "$VERSION"
+          if [[ -f packaging/desktop-release-ui ]] && [[ "$(cat packaging/desktop-release-ui)" == qt ]]; then
+            bash scripts/verify_qt_appimage.sh "$PWD/out/Gozar-$VERSION-x86_64.AppImage" "$PWD/work/bundle"
+          fi
           scripts/package_snap.sh "$PWD/work/bundle" "$PWD/out/Gozar_${VERSION}_amd64.snap" "$VERSION"
           scripts/package_rpm.sh "$PWD/work/bundle" "$PWD/out" "$VERSION"
           scripts/package_arch.sh "$PWD/work/bundle" "$PWD/out/Gozar-$VERSION-x86_64.pkg.tar.zst" "$VERSION"

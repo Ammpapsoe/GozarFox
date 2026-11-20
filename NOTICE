@@ -91,3 +91,13 @@ This is an attribution and change summary, not a grant for the whole Qt
 executable, a trademark grant or release approval. Preserve applicable
 upstream file notices. File-level rights, modification notices and
 corresponding source delivery remain subject to release review.
+
+Gozar Qt adapter licensing scope
+--------------------------------
+An additional GPLv2-only option applies to the 24 Gozar-owned files
+listed in LICENSE-SCOPE.md and marked with the matching SPDX expression.
+The root AGPL license is unchanged. The Qt resource map references 422
+upstream Windscribe files. The source version and attribution above apply
+to those imported resources; preserve any asset-specific terms. In
+particular, the embedded IBM Plex Sans font declares SIL OFL 1.1, not a
+blanket GPL grant. No trademark grant is implied.

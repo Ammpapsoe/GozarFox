@@ -77,7 +77,7 @@ case "$GOOS" in
     done ;;
   *) exit 2 ;;
 esac
-cp "$root"/{LICENSE,NOTICE,WINTUN-LICENSE.txt,QUIC-GO-LICENSE.txt,QPACK-LICENSE.txt,GO-DEPS-LICENSES.txt} "$notices/"
+cp "$root"/{LICENSE,LICENSE-SCOPE.md,NOTICE,WINTUN-LICENSE.txt,QUIC-GO-LICENSE.txt,QPACK-LICENSE.txt,GO-DEPS-LICENSES.txt} "$notices/"
 cp "$root/desktop_qt_adapter/vendor/windscribe/LICENSE" "$notices/WINDSCRIBE-GPL-2-LICENSE.txt"
 cp "$root/desktop_qt_adapter/branding/VAZIRMATN-OFL.txt" "$notices/"
 # Validate a temporary, extracted bundle, not a binary that can accidentally
