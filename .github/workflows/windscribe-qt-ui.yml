@@ -2,6 +2,12 @@ name: Windscribe Qt UI integration (experimental)
 
 on:
   workflow_dispatch:
+    inputs:
+      real_build_only:
+        description: Build experimental real-core bundles without running tests or the fake core
+        required: false
+        type: boolean
+        default: true
   push:
     branches:
       - 'wip/original-windscribe-ui'
@@ -10,7 +16,11 @@ permissions:
   contents: read
 
 jobs:
+  real-core-build:
+    if: ${{ inputs.real_build_only == true }}
+    uses: ./.github/workflows/windscribe-qt-real-build.yml
   ui-transport:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.real_build_only == false }}
     strategy:
       fail-fast: false
       matrix:
