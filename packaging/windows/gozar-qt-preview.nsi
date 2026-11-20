@@ -33,7 +33,7 @@ FunctionEnd
 Section "Preview"
   SetShellVarContext current
   SetOutPath "$INSTDIR"
-  File /r "${SOURCE}/*"
+  File /r "${PAYLOAD_PATTERN}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\Gozar Qt Experimental.lnk" "$INSTDIR\gozar.exe"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${PRODUCT}"

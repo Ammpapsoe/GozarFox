@@ -131,7 +131,7 @@ jobs:
           $removal = Join-Path $env:RUNNER_TEMP 'gozar-qt-remove.nsh'
           python packaging/windows/nsis-preview-payload.py $stage $removal
           if ($LASTEXITCODE -ne 0) { throw 'Failed to generate uninstall manifest' }
-          & $compiler /V2 "/DSOURCE=$stage" "/DREMOVE_PAYLOAD=$removal" "/DOUTPUT=$out\Gozar-Qt-Experimental-Windows-x64-Setup.exe" "/DICON_FILE=$env:GITHUB_WORKSPACE\desktop_flutter\windows\runner\resources\app_icon.ico" packaging/windows/gozar-qt-preview.nsi
+          & $compiler /V2 "/DPAYLOAD_PATTERN=$stage\*.*" "/DREMOVE_PAYLOAD=$removal" "/DOUTPUT=$out\Gozar-Qt-Experimental-Windows-x64-Setup.exe" "/DICON_FILE=$env:GITHUB_WORKSPACE\desktop_flutter\windows\runner\resources\app_icon.ico" packaging/windows/gozar-qt-preview.nsi
           if ($LASTEXITCODE -ne 0) { throw 'Failed to compile setup EXE' }
       - name: Install, smoke-test with unchanged core, and uninstall
         if: matrix.platform == 'windows'
