@@ -20,8 +20,10 @@ public:
     void retranslate();
 signals:
     void quitRequested();
+    void pageChanged();
     void addAccountRequested();
     void accountDialogOpened(QDialog *dialog);
+    void detailDialogOpened(QDialog *dialog);
 
 private:
     QGraphicsScene scene_;
@@ -31,12 +33,23 @@ private:
     PreferencesWindow::PreferenceGroup *general_;
     PreferencesWindow::PreferenceGroup *appearance_;
     PreferencesWindow::PreferenceGroup *account_;
+    PreferencesWindow::PreferenceGroup *about_;
+    PreferencesWindow::LinkItem *update_;
+    PreferencesWindow::LinkItem *project_;
+    PreferencesWindow::LinkItem *version_;
+    PreferencesWindow::LinkItem *support_;
+    PreferencesWindow::LinkItem *routing_;
+    PreferencesWindow::LinkItem *session_;
     PreferencesWindow::LinkItem *email_;
     PreferencesWindow::LinkItem *switch_;
     PreferencesWindow::LinkItem *logout_;
     PreferencesWindow::LinkItem *usage_;
     void showAccounts();
     void syncAccount();
+    void showDonation();
+    void showSession();
+    void checkUpdates();
+    QJsonObject runUpdate(const QString &artifact, bool &ok);
     PreferencesWindow::ComboBoxItem *theme_;
     PreferencesWindow::PreferencesTabControlItem *tabs_;
     int page_ = 0;

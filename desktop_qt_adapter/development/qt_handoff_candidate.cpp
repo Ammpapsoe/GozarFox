@@ -38,6 +38,8 @@
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QLineEdit>
+#include <QListWidget>
+#include <QClipboard>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QScreen>
@@ -217,11 +219,24 @@ int main(int argc, char **argv) {
                        qBound(area.top(), shell.y(), qMax(area.top(), area.bottom() - shell.height() + 1)));
         }
     };
-    const auto setStatus = [&](const QString &message) {
+    QObject::connect(&settingsView, &GozarPreferences::pageChanged, &shell, fitWindow);
+    QString commandNotice, stateNotice;
+    const auto showStatus = [&] {
+        const auto message = commandNotice.isEmpty() ? stateNotice : commandNotice;
+        if (status.text() == message && status.isHidden() == message.isEmpty()) return;
         status.setText(message);
         status.setVisible(!message.isEmpty());
         fitWindow();
     };
+    const auto setStatus = [&](const QString &message) { commandNotice = message; showStatus(); };
+    QObject::connect(&binder, &HomeBinder::stateChanged, &shell, [&](const QJsonObject &state) {
+        const auto fault = state.value(QStringLiteral("fault")).toString();
+        const bool admin = state.value(QStringLiteral("needs_admin")).toBool();
+        const bool fa = LanguageController::instance().getLanguage() == QLatin1String("fa");
+        stateNotice = !fault.isEmpty() ? fault : admin ? QString::fromUtf8(fa
+            ? "این حالت اتصال به دسترسی مدیر سیستم نیاز دارد." : "This connection mode requires administrator privileges.") : QString();
+        showStatus();
+    });
     QObject::connect(&locations, &LocationsWindow::heightChanged, &shell, fitWindow);
     auto &dpi = DpiScaleManager::instance();
     const auto rescale = [&] { home->updateScaling(); locations.updateScaling(); fitWindow(); };
@@ -469,6 +484,82 @@ int main(int argc, char **argv) {
                         QTest::qWait(450);
                         shell.grab().save(QDir(screenshots).filePath("connected.png"));
                     }
+                    // Keep the mock connection live through all update-only RPCs.
+                    emit home->preferencesClick();
+                    const auto clickRow = [&](const QString &name) {
+                        for (auto *item : settingsView.scene()->items()) {
+                            const auto *object = item->toGraphicsObject();
+                            if (!object || object->objectName() != name || !item->isVisible()) continue;
+                            settingsView.ensureVisible(item, 0, 0);
+                            QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                                settingsView.mapFromScene(item->sceneBoundingRect().center()));
+                            return true;
+                        }
+                        return false;
+                    };
+                    const auto tabAt = [&](qreal y) {
+                        QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                            settingsView.mapFromScene(QPointF(32 * G_SCALE, y * G_SCALE)));
+                    };
+                    bool sawSupport = false, sawSession = false, chosePackage = false, copiedPackage = false;
+                    bool cancelNext = false, requestedCancel = false;
+                    const auto detailsReady = QObject::connect(&settingsView, &GozarPreferences::detailDialogOpened, &shell, [&](QDialog *dialog) {
+                        const auto name = dialog->objectName();
+                        if (name == QLatin1String("updateProgress")) {
+                            if (cancelNext) {
+                                if (auto *cancel = dialog->findChild<QPushButton *>(QStringLiteral("cancelUpdate"))) {
+                                    requestedCancel = true;
+                                    cancel->click();
+                                }
+                            }
+                            return;
+                        }
+                        const auto capture = [&](const QString &file) {
+                            if (!screenshots.isEmpty()) dialog->grab().save(QDir(screenshots).filePath(file));
+                        };
+                        if (name == QLatin1String("sessionDetails")) {
+                            for (const auto *label : dialog->findChildren<QLabel *>()) {
+                                if (label->text().contains(QStringLiteral("gozar-demo0"))) sawSession = true;
+                            }
+                            capture(QStringLiteral("session.png"));
+                        } else if (name == QLatin1String("supportGozar")) {
+                            if (auto *copy = dialog->findChild<QPushButton *>(QStringLiteral("copyDonation"))) {
+                                capture(QStringLiteral("support.png"));
+                                copy->click();
+                                sawSupport = QApplication::clipboard()->text().endsWith(QLatin1String("C2eCL3"));
+                            }
+                        } else if (name == QLatin1String("updatePackages")) {
+                            auto *list = dialog->findChild<QListWidget *>();
+                            auto *download = dialog->findChild<QPushButton *>(QStringLiteral("downloadUpdate"));
+                            if (list && list->count() == 1 && download && !download->isEnabled()) {
+                                list->setCurrentRow(0);
+                                capture(QStringLiteral("updates.png"));
+                                chosePackage = true;
+                                download->click();
+                                return;
+                            }
+                        } else if (name == QLatin1String("updateDownloaded")) {
+                            if (auto *copy = dialog->findChild<QPushButton *>(QStringLiteral("copyUpdatePath"))) {
+                                copy->click();
+                                copiedPackage = QApplication::clipboard()->text().endsWith(QLatin1String("Gozar-desktop-demo.zip"));
+                            }
+                        }
+                        dialog->reject();
+                    });
+                    tabAt(136);
+                    if (!clickRow(QStringLiteral("sessionRow")) || !sawSession) return false;
+                    settingsView.ensureVisible(QRectF(0, 0, 48 * G_SCALE, 280 * G_SCALE), 0, 0);
+                    tabAt(232);
+                    if (settingsView.property("gozarPage").toString() != QStringLiteral("about")) return false;
+                    if (!screenshots.isEmpty()) {
+                        QTest::qWait(300);
+                        shell.grab().save(QDir(screenshots).filePath("about.png"));
+                    }
+                    if (!clickRow(QStringLiteral("supportRow")) || !sawSupport) return false;
+                    if (!clickRow(QStringLiteral("updatesRow")) || !chosePackage || !copiedPackage) return false;
+                    cancelNext = true;
+                    if (!clickRow(QStringLiteral("updatesRow")) || !requestedCancel || !binder.currentState().value("live").toBool()) return false;
+                    QObject::disconnect(detailsReady);
                     bool signedOut = false;
                     const auto observed = QObject::connect(&binder, &HomeBinder::signedOutConfirmed, &shell, [&] { signedOut = true; });
                     binder.signOut();

@@ -91,7 +91,7 @@ jobs:
           GOZAR_VISUAL_DIR="$output/en" "$fixture" --ci-layout
           GOZAR_VISUAL_DIR="$output/fa" GOZAR_VISUAL_FARSI=1 "$fixture" --ci-layout
           for locale in en fa; do
-            for image in compact-home connected connection-settings account account-switcher server-list search favourites tray-menu; do
+            for image in compact-home connected connection-settings account account-switcher server-list search favourites tray-menu about updates session support; do
               test -s "$output/$locale/$image.png"
             done
           done

@@ -92,7 +92,7 @@ void PreferencesTabControlItem::onLanguageChanged()
         logoutButton_->setText(tr("Log Out"));
     }
     quitButton_->setText(tr("Quit"));
-    for (auto *button : buttonList_) button->setToolTip(button->tab() == TAB_GENERAL ? tr("General") : button->tab() == TAB_ACCOUNT ? tr("Account") : button->tab() == TAB_CONNECTION ? tr("Connection") : button->tab() == TAB_LOOK_AND_FEEL ? tr("Look & Feel") : QString());
+    for (auto *button : buttonList_) button->setToolTip(button->tab() == TAB_GENERAL ? tr("General") : button->tab() == TAB_ACCOUNT ? tr("Account") : button->tab() == TAB_CONNECTION ? tr("Connection") : button->tab() == TAB_LOOK_AND_FEEL ? tr("Look & Feel") : button->tab() == TAB_ABOUT ? tr("About") : QString());
 }
 
 PREFERENCES_TAB_TYPE PreferencesTabControlItem::currentTab()
@@ -201,7 +201,7 @@ void PreferencesTabControlItem::onIsExternalConfigModeChanged(bool bIsExternalCo
 void PreferencesTabControlItem::restrictToGozar()
 {
     gozarOnly_ = true;
-    for (auto *button : {robertButton_, advancedButton_, helpButton_, aboutButton_, logoutButton_}) {
+    for (auto *button : {robertButton_, advancedButton_, helpButton_, logoutButton_}) {
         button->hide();
         button->setClickable(false);
     }

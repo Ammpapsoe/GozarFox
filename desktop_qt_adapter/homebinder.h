@@ -22,6 +22,8 @@ public:
     void switchAccount(const QString &id);
     void signOut();
     void refreshUsage();
+    bool requestUpdate(const QString &artifact = {});
+    bool cancelUpdate();
     void setMode(const QString &mode);
     void setKillSwitch(bool enabled);
     void setLanguage(const QString &language);
@@ -35,6 +37,7 @@ public:
     QJsonObject currentState() const;
 
 signals:
+    void updateFinished(const QJsonObject &result, const QString &error);
     void signedOutConfirmed();
     void error(const QString &message);
     void stateChanged(const QJsonObject &state);
@@ -58,6 +61,14 @@ private:
     QPointer<ConnectWindow::Background> background_;
     QPointer<ConnectWindow::ConnectButton> button_;
     CONNECT_STATE visual_ = CONNECT_STATE_DISCONNECTED;
+    qint64 updateId_ = -1;
+    qint64 cancelUpdateId_ = -1;
+    bool updateCancelRequested_ = false;
+    bool updateReplyReceived_ = false;
+    QJsonObject updateResult_;
+    QString updateError_;
+    QString cancelError_;
+    bool handleUpdateReply(qint64 id, const QJsonObject &response, const QString &error);
     qint64 signOutId_ = -1;
     qint64 mutatingId_ = -1;
     qint64 stateId_ = -1;

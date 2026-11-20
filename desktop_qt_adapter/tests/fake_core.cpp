@@ -5,6 +5,8 @@
 #include <QFile>
 #include <QDateTime>
 #include <QThread>
+#include <QDir>
+#include <QTemporaryDir>
 #include <cstdio>
 
 int main(int argc, char **argv) {
@@ -37,12 +39,51 @@ int main(int argc, char **argv) {
     bool killSwitch = false;
     bool live = false;
     int serverRequests = 0;
+    int updateChecks = 0;
+    QJsonValue pendingCheck;
+    QTemporaryDir updateDir;
+    const auto emitResponse = [](const QJsonObject &response) {
+        const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';
+        std::fwrite(bytes.constData(), 1, size_t(bytes.size()), stdout);
+        std::fflush(stdout);
+    };
     const bool failLaterServers = qEnvironmentVariableIsSet("FAKE_CORE_SERVERS_FAIL_AFTER_FIRST");
     const bool quitError = qEnvironmentVariableIsSet("FAKE_CORE_QUIT_ERROR");
     while (std::fgets(line, sizeof(line), stdin)) {
         const auto request = QJsonDocument::fromJson(line).object();
         const auto method = request.value("method").toString();
         if (method == "crash") return 7;
+        if (qEnvironmentVariableIsSet("GOZAR_FAKE_LAYOUT_CATALOG")) {
+            const auto id = request.value("id");
+            if (method == "check_update") {
+                if (++updateChecks == 2) { pendingCheck = id; continue; }
+                emitResponse({{"id", id}, {"reply", QJsonObject{{"version", "1.20.0-demo"}, {"newer", true},
+                    {"artifacts", QJsonArray{QJsonObject{{"id", "fixture-package"}, {"name", "Gozar-desktop-demo.zip"},
+                                                       {"kind", "zip"}, {"size", 15728640}}}}}}});
+                continue;
+            }
+            if (method == "download_update") {
+                const auto path = QDir(updateDir.path()).filePath(QStringLiteral("Gozar-desktop-demo.zip"));
+                QFile file(path);
+                if (request.value("params").toObject().value("id").toString() != QLatin1String("fixture-package") || !file.open(QIODevice::WriteOnly))
+                    emitResponse({{"id", id}, {"error", "signed update operation failed"}});
+                else {
+                    file.write("Fixture only. Not an installation archive.");
+                    file.close();
+                    emitResponse({{"id", id}, {"reply", QJsonObject{{"downloaded_path", path}}}});
+                }
+                continue;
+            }
+            if (method == "cancel_update") {
+                if (pendingCheck.isDouble()) {
+                    // The original operation can complete before cancel's ACK.
+                    emitResponse({{"id", pendingCheck}, {"error", "update operation cancelled"}});
+                    pendingCheck = {};
+                }
+                emitResponse({{"id", id}});
+                continue;
+            }
+        }
         if (method == "invalid") { std::fputs("not-json\n", stdout); std::fflush(stdout); continue; }
         const QJsonObject params = request.value("params").toObject();
         if (method == "switch_account") { activeId = params.value("id").toString(); live = false; }
@@ -72,6 +113,12 @@ int main(int argc, char **argv) {
             const auto email = activeId == QLatin1String("work") ? QStringLiteral("work@example.test") :
                 activeId == QLatin1String("personal") ? QStringLiteral("personal@example.test") : QString();
             state.insert("email", email);
+            state.insert("version", "1.19.0");
+            if (live) {
+                state.insert("device", "gozar-demo0");
+                state.insert("down", 14680064);
+                state.insert("up", 3145728);
+            }
             state.insert("limit", 5368709120LL);
             state.insert("remaining", 2684354560LL);
             state.insert("accounts", QJsonArray{QJsonObject{{"id", "work"}, {"email", "work@example.test"}, {"active", activeId == QLatin1String("work")}},
@@ -81,6 +128,7 @@ int main(int argc, char **argv) {
             if (countryCode == QLatin1String("GB")) {
                 place.insert("country", "United Kingdom");
                 place.insert("city", "London");
+                place.insert("port", 2499);
             }
             state.insert("server", place);
             state.insert("rate_down", live ? 1572864 : 0);
@@ -103,9 +151,7 @@ int main(int argc, char **argv) {
         }
         QJsonObject response{{"id", request.value("id")}, {"state", state}, {"reply", payload}};
         if (!error.isEmpty()) response.insert("error", error);
-        const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';
-        std::fwrite(bytes.constData(), 1, size_t(bytes.size()), stdout);
-        std::fflush(stdout);
+        emitResponse(response);
         if (method == "quit") {
             const int delay = qEnvironmentVariableIntValue("FAKE_CORE_QUIT_DELAY_MS");
             if (delay > 0 && delay <= 5000) QThread::msleep(static_cast<unsigned long>(delay));

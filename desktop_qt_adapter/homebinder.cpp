@@ -138,6 +138,51 @@ void HomeBinder::switchAccount(const QString &id) {
     }
 }
 
+bool HomeBinder::requestUpdate(const QString &artifact) {
+    if (!core_ || !core_->running() || updateId_ >= 0 || cancelUpdateId_ >= 0) return false;
+    updateCancelRequested_ = updateReplyReceived_ = false;
+    updateResult_ = {};
+    updateError_.clear();
+    cancelError_.clear();
+    updateId_ = artifact.isEmpty()
+        ? core_->request(QStringLiteral("check_update"))
+        : core_->request(QStringLiteral("download_update"), {{QStringLiteral("id"), artifact}});
+    return updateId_ >= 0;
+}
+
+bool HomeBinder::cancelUpdate() {
+    if (!core_ || updateId_ < 0) return false;
+    if (updateCancelRequested_) return true;
+    cancelUpdateId_ = core_->request(QStringLiteral("cancel_update"));
+    updateCancelRequested_ = cancelUpdateId_ >= 0;
+    return updateCancelRequested_;
+}
+
+bool HomeBinder::handleUpdateReply(qint64 id, const QJsonObject &response, const QString &failure) {
+    if (id != updateId_ && id != cancelUpdateId_) return false;
+    const auto err = response.value(QStringLiteral("error"));
+    const QString message = !failure.isEmpty() ? failure : err.isUndefined() || err.isString()
+        ? err.toString() : QStringLiteral("invalid update reply");
+    if (id == cancelUpdateId_) {
+        cancelUpdateId_ = -1;
+        cancelError_ = message;
+    } else {
+        updateId_ = -1;
+        updateReplyReceived_ = true;
+        updateError_ = message;
+        updateResult_ = response.value(QStringLiteral("reply")).toObject();
+    }
+    // Do not unlock until both responses arrive; on the stdio transport the
+    // asynchronous operation can finish either before or after cancel's ACK.
+    if (updateReplyReceived_ && cancelUpdateId_ < 0) {
+        updateReplyReceived_ = false;
+        if (updateCancelRequested_ && (!cancelError_.isEmpty() || updateError_ != QLatin1String("update operation cancelled")))
+            emit updateFinished({}, QStringLiteral("cancel unconfirmed"));
+        else emit updateFinished(updateResult_, updateError_);
+    }
+    return true; // Update-only replies never become VPN state or clear the server model.
+}
+
 void HomeBinder::refreshUsage() {
     if (isAvailable()) sendMutation(QStringLiteral("usage"), {});
 }
@@ -234,6 +279,7 @@ void HomeBinder::applyState(const QJsonObject &state) {
 }
 
 void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
+    if (handleUpdateReply(id, reply, {})) return;
     const bool signOutReply = signOutId_ == id;
     if (signOutReply) signOutId_ = -1;
     const bool needsState = mutatingId_ == id || stateId_ == id;
@@ -283,6 +329,7 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
 }
 
 void HomeBinder::handleFailure(qint64 id, const QString &message) {
+    if (handleUpdateReply(id, {}, message)) return;
     if (signOutId_ == id) signOutId_ = -1;
     const bool losesState = id == mutatingId_ || id == stateId_;
     if (losesState) { stateKnown_ = false; lastState_ = {}; }
