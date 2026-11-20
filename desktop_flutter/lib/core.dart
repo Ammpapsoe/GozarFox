@@ -311,6 +311,11 @@ class Core {
 
   Future<void> start() async {
     if (_process != null) return;
+    // A stopped or transferred owner cannot be restarted implicitly: a
+    // partially launched replacement may already own the network state.
+    if (_stopping || _handoffInProgress) {
+      throw StateError('core ownership is stopping or transferred');
+    }
     final path = _findBinary();
     if (path == null) throw StateError('core not found');
     final process = await Process.start(path, const ['--rpc']);

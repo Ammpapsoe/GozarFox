@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gozar/core.dart';
+import 'package:gozar/ui_handoff.dart';
 import 'package:gozar/main.dart';
 import 'package:gozar/strings.dart';
 import 'package:gozar/windscribe_home.dart';
@@ -177,6 +178,31 @@ class FakeCore extends Core {
   void stop() => isRunning = false;
 }
 
+class TransferFakeCore extends FakeCore {
+  TransferFakeCore({super.signedIn = false, this.result = CoreHandoffResult.ready})
+      : super(language: 'en');
+  final CoreHandoffResult result;
+  int handoffs = 0;
+
+  @override
+  Future<CoreHandoffResult> prepareUiHandoff() async {
+    handoffs++;
+    if (result == CoreHandoffResult.ready) isRunning = false;
+    return result;
+  }
+}
+
+class FakeOriginalUiTarget implements OriginalUiTarget {
+  FakeOriginalUiTarget({this.available = true, this.ready = true});
+  final bool available;
+  final bool ready;
+  int launches = 0;
+  @override
+  Future<bool> isAvailable() async => available;
+  @override
+  Future<bool> startAndWaitReady() async { launches++; return ready; }
+}
+
 class SlowStartCore extends FakeCore {
   SlowStartCore() : super(signedIn: true, language: 'en');
 
@@ -239,6 +265,71 @@ Finder _settingsGear() {
 }
 
 void main() {
+  testWidgets('missing experimental Qt target leaves the current home running',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final core = TransferFakeCore(signedIn: true);
+    final target = FakeOriginalUiTarget(available: false);
+    await tester.pumpWidget(GozarApp(core: core, originalUiTarget: target));
+    await tester.pumpAndSettle();
+    expect(core.handoffs, 0);
+    expect(core.running, isTrue);
+    expect(target.launches, 0);
+    expect(find.text('Gozar'), findsOneWidget);
+  });
+
+  testWidgets('existing login can hand off to an injected ready target',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = TransferFakeCore();
+    final target = FakeOriginalUiTarget();
+    await tester.pumpWidget(GozarApp(core: core, originalUiTarget: target));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(0), 'person@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'fake-password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).at(2), '123456');
+    final verify = find.widgetWithText(FilledButton, 'Verify and sign in');
+    await tester.ensureVisible(verify);
+    await tester.pumpAndSettle();
+    await tester.tap(verify);
+    for (var i = 0; i < 5; i++) { await tester.pump(const Duration(milliseconds: 50)); }
+    expect(core.signedIn, isTrue);
+    expect(core.handoffs, 1);
+    expect(core.running, isFalse);
+    expect(target.launches, 1);
+    expect(core.requests, isNot(contains('servers')));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('failed target startup does not resume the old core controls',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = TransferFakeCore(signedIn: true);
+    final target = FakeOriginalUiTarget(ready: false);
+    await tester.pumpWidget(GozarApp(core: core, originalUiTarget: target));
+    await tester.pumpAndSettle();
+    expect(core.handoffs, 1);
+    expect(core.running, isFalse);
+    expect(target.launches, 1);
+    expect(find.textContaining('UI transfer was not confirmed'), findsOneWidget);
+    expect(core.requests, isNot(contains('servers')));
+  });
+
   testWidgets('language can be changed from the native login screen',
       (tester) async {
     tester.view.physicalSize = const Size(480, 740);

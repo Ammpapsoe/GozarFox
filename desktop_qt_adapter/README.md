@@ -39,9 +39,15 @@ instead of killing it immediately. Experimental `shutdownFinished` requires a
 successful quit response with disconnected state and a normal process exit; its
 positive result reflects the core's report, not independent verification of OS
 cleanup. The Dart `prepareUiHandoff` guard likewise refuses connected or unknown
-states and waits for quit acknowledgement and process exit. These are unverified
-integration work and are not wired to the Flutter screen or a Qt launcher. A
-caller must not launch the next owner on an unconfirmed result. The fallback
+states and waits for quit acknowledgement and process exit. Experimental
+`OriginalUiHandoff` can be injected into the unchanged Flutter login flow and
+existing signed-in startup. It checks target availability before shutdown and
+will only invoke the target after the previous core reports successful shutdown
+and exits. A target must acknowledge that its UI is initialized and its own
+core is signed in and disconnected; timeout or failure does not authorize a
+fallback core. The shipped entry point does not provide a Qt target yet, so
+this injection is inactive and does not launch the Qt UI. A caller must not
+launch the next owner on an unconfirmed result. The fallback
 alone does not guarantee successful cleanup after a crash or when the event loop
 exits. The included fake core is only for tests and must never ship as the real
 core.

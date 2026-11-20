@@ -9,6 +9,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core.dart';
+import 'ui_handoff.dart';
 import 'strings.dart';
 import 'windscribe_home.dart';
 import 'theme.dart';
@@ -36,10 +37,12 @@ Future<void> main() async {
 }
 
 class GozarApp extends StatefulWidget {
-  const GozarApp({super.key, this.core, this.windowControls = false});
+  const GozarApp({super.key, this.core, this.windowControls = false, this.originalUiTarget});
 
   final Core? core;
   final bool windowControls;
+  // Experimental injection only. The shipped entry point supplies no target.
+  final OriginalUiTarget? originalUiTarget;
 
   @override
   State<GozarApp> createState() => _GozarAppState();
@@ -100,6 +103,7 @@ class _GozarAppState extends State<GozarApp> with WidgetsBindingObserver {
         home: GozarScreen(
           core: widget.core,
           windowControls: widget.windowControls,
+          originalUiTarget: widget.originalUiTarget,
           persian: _persian,
           language: _language,
           onLanguageChanged: _changeLanguage,
@@ -113,6 +117,7 @@ class GozarScreen extends StatefulWidget {
     super.key,
     this.core,
     required this.windowControls,
+    this.originalUiTarget,
     required this.persian,
     required this.language,
     required this.onLanguageChanged,
@@ -121,6 +126,7 @@ class GozarScreen extends StatefulWidget {
 
   final Core? core;
   final bool windowControls;
+  final OriginalUiTarget? originalUiTarget;
   final bool persian;
   final String language;
   final ValueChanged<String> onLanguageChanged;
@@ -132,6 +138,7 @@ class GozarScreen extends StatefulWidget {
 
 class _GozarScreenState extends State<GozarScreen> with WindowListener {
   late final Core _core;
+  late final OriginalUiHandoff? _originalUiHandoff;
   late final Future<void> _startup;
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -152,6 +159,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   bool _showPassword = false;
   bool _settingsOpen = false;
   bool _windowClosing = false;
+  bool _uiHandoffActive = false;
   String _settingsSection = '';
   String? _captchaImage;
   String? _error;
@@ -163,6 +171,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   void initState() {
     super.initState();
     _core = widget.core ?? Core();
+    final target = widget.originalUiTarget;
+    _originalUiHandoff = target == null ? null : OriginalUiHandoff(_core, target);
     if (widget.windowControls) windowManager.addListener(this);
     _core.onExit = () {
       if (mounted) setState(() => _fatal = 'core disconnected');
@@ -196,6 +206,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       });
       widget.onLanguageChanged(_state.language);
       widget.onThemeChanged(_state.theme);
+      if (_state.signedIn && await _tryOriginalUiHandoff()) return;
+      if (!mounted) return;
       _timer = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
       if (_state.signedIn) {
         unawaited(_loadServers());
@@ -208,6 +220,73 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           _starting = false;
         });
       }
+    }
+  }
+
+  // Optional integration seam only: no production Qt target is packaged yet.
+  // Returns true if the old UI must not resume controlling the network.
+  Future<bool> _tryOriginalUiHandoff() async {
+    final handoff = _originalUiHandoff;
+    if (handoff == null || !mounted || _windowClosing || _uiHandoffActive) return false;
+    _uiHandoffActive = true;
+    setState(() => _starting = true);
+    final result = await handoff.transfer(canLaunch: () => mounted && !_windowClosing);
+    _uiHandoffActive = false;
+    if (!mounted) return true;
+    switch (result) {
+      case OriginalUiHandoffResult.unavailable:
+        setState(() => _starting = false);
+        return false;
+      case OriginalUiHandoffResult.connected:
+        // The preliminary state may have been stale. Refresh it before the
+        // existing UI can expose actions again.
+        try {
+          final reply = await _core.call('state');
+          if (reply.stateVerified && reply.errorVerified && reply.error == null && reply.state != null) {
+            _apply(reply);
+            if (mounted) setState(() => _starting = false);
+            return false;
+          }
+        } on Object {
+          // Fall through to fail closed below.
+        }
+        if (!mounted) return true;
+        setState(() {
+          _starting = false;
+          _fatal = widget.persian ? 'وضعیت اتصال تأیید نشد.' : 'Connection state could not be confirmed.';
+        });
+        return true;
+      case OriginalUiHandoffResult.busy:
+      case OriginalUiHandoffResult.signedOut:
+      case OriginalUiHandoffResult.unconfirmed:
+      case OriginalUiHandoffResult.launchFailed:
+        setState(() {
+          _starting = false;
+          _fatal = widget.persian
+              ? 'انتقال رابط تأیید نشد؛ وضعیت اتصال نامشخص است. برنامه را با احتیاط ببندید.'
+              : 'UI transfer was not confirmed; connection state is unknown. Close the app cautiously.';
+        });
+        return true;
+      case OriginalUiHandoffResult.ready:
+        _timer?.cancel();
+        if (widget.windowControls) {
+          try {
+            _windowClosing = true;
+            await windowManager.setPreventClose(false);
+            await windowManager.close();
+          } on Object {
+            if (mounted) {
+              setState(() {
+                _windowClosing = false;
+                _starting = false;
+                _fatal = widget.persian
+                    ? 'رابط جدید آماده است، اما بستن پنجرهٔ ورود ناموفق بود.'
+                    : 'The new UI is ready, but the login window could not close.';
+              });
+            }
+          }
+        }
+        return true;
     }
   }
 
@@ -311,6 +390,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           _creating = false;
           _adding = false;
           _settingsOpen = false;
+          if (await _tryOriginalUiHandoff()) return;
+          if (!mounted) return;
           unawaited(_loadServers());
           unawaited(_usage());
         }
@@ -354,6 +435,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           _creating = false;
           _adding = false;
           _settingsOpen = false;
+          if (await _tryOriginalUiHandoff()) return;
+          if (!mounted) return;
           unawaited(_loadServers());
           unawaited(_usage());
         }
@@ -1210,6 +1293,7 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   }
 
   void _showSettings() {
+    if (_uiHandoffActive || _starting || _windowClosing) return;
     setState(() {
       _settingsOpen = true;
       _settingsSection = '';
@@ -1232,7 +1316,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   }
 
   Future<void> _closeWindow() async {
-    if (_windowClosing || !widget.windowControls) return;
+    // Do not race a close/disconnect against a transfer of core ownership.
+    if (_windowClosing || _uiHandoffActive || !widget.windowControls) return;
     setState(() => _windowClosing = true);
     try {
       await _startup.timeout(const Duration(seconds: 45));

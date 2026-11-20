@@ -73,4 +73,4 @@ jobs:
           cd desktop_flutter
           flutter pub get
           flutter analyze
-          flutter test --no-pub test/ui_test.dart test/core_handoff_test.dart
+          flutter test --no-pub test/ui_test.dart test/core_handoff_test.dart test/ui_handoff_test.dart
