@@ -1,6 +1,7 @@
-// Internal simulated integration only. This is not the full original
+// Internal development integration only. This is not the full original
 // MainWindow, a production launcher, an installer, or a VPN application.
-// It intentionally starts the sibling fake_core fixture, never gozar-core.
+// Normal modes start only the sibling fake core. The CI-only signed-out mode
+// uses an isolated real core and never enables connection controls.
 #include "corebridge.h"
 #include "homebinder.h"
 #include "locationcatalog.h"
@@ -33,14 +34,18 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <cstdio>
+#include <memory>
 
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
+    if (argc < 2) return 2;
     const QByteArray argument(argv[1]);
+    const bool realSignedOut = argument == "--ci-real-signed-out";
+    if ((realSignedOut && argc != 3) || (!realSignedOut && argc != 2)) return 2;
     const bool handoff = argument == "--handoff-stdio-v1";
     const bool demo = argument == "--demo" || argument == "--ci-demo";
     const bool ciDemo = argument == "--ci-demo";
-    if (!handoff && !demo && argument != "--ci-simulate") return 2;
+    if (!realSignedOut && !handoff && !demo && argument != "--ci-simulate") return 2;
+    const QString realCorePath = realSignedOut ? QString::fromLocal8Bit(argv[2]) : QString();
     QTemporaryDir isolated;
     if (!isolated.isValid()) return 3;
     const QByteArray profile = isolated.path().toUtf8();
@@ -64,9 +69,11 @@ int main(int argc, char **argv) {
     settings.setValue(QStringLiteral("OriginalQtUI/language"), QStringLiteral("en"));
     UiLanguage language(&settings);
     QWidget shell;
-    shell.setWindowTitle(QStringLiteral("Gozar — simulated integration, not a VPN"));
+    shell.setWindowTitle(realSignedOut ? QStringLiteral("Gozar — signed-out core development probe")
+                                       : QStringLiteral("Gozar — simulated integration, not a VPN"));
     QVBoxLayout layout(&shell);
-    QLabel warning(QStringLiteral("SIMULATION ONLY — fake account and fake connection; no VPN"));
+    QLabel warning(realSignedOut ? QStringLiteral("READ-ONLY — isolated signed-out core; no connection controls")
+                                 : QStringLiteral("SIMULATION ONLY — fake account and fake connection; no VPN"));
     warning.setWordWrap(true);
     layout.addWidget(&warning);
     QGraphicsScene homeScene;
@@ -95,13 +102,22 @@ int main(int argc, char **argv) {
     settingsView.hide();
     home->setInternetConnectivity(true);
     home->setClickable(false);
-    home->setGozarNavigationClickable(true);
+    if (!realSignedOut) home->setGozarNavigationClickable(true);
     bindOriginalHomeWindow(home, &binder);
-    if (!bindOriginalPowerControl(home, &binder) ||
+    if ((!realSignedOut && !bindOriginalPowerControl(home, &binder)) ||
         !bindOriginalLocationControls(home, &locations, &binder)) return 4;
     bindOriginalLocations(&locations, &manager, &binder, &catalog);
-    OriginalModeBinding<PreferencesWindow::ComboBoxItem> modeBinding(modeItem, &binder);
-    OriginalLanguageBinding<PreferencesWindow::ComboBoxItem> languageBinding(languageItem, &language, &binder);
+    // The real-core probe is strictly read-only even if a malformed or
+    // unexpectedly signed-in state is reported before it can be rejected.
+    std::unique_ptr<OriginalModeBinding<PreferencesWindow::ComboBoxItem>> modeBinding;
+    std::unique_ptr<OriginalLanguageBinding<PreferencesWindow::ComboBoxItem>> languageBinding;
+    if (realSignedOut) {
+        modeItem->setClickable(false);
+        languageItem->setClickable(false);
+    } else {
+        modeBinding = std::make_unique<OriginalModeBinding<PreferencesWindow::ComboBoxItem>>(modeItem, &binder);
+        languageBinding = std::make_unique<OriginalLanguageBinding<PreferencesWindow::ComboBoxItem>>(languageItem, &language, &binder);
+    }
     ConnectWindow::ConnectButton *power = nullptr;
     for (auto *item : home->childItems())
         if (auto *candidate = dynamic_cast<ConnectWindow::ConnectButton *>(item)) power = candidate;
@@ -125,6 +141,7 @@ int main(int argc, char **argv) {
     Stage stage = Initial;
     bool failed = false;
     bool finished = false;
+    bool sawSignedOutRealCore = false;
     bool confirmedShutdown = false;
     auto fail = [&] {
         failed = true;
@@ -138,7 +155,7 @@ int main(int argc, char **argv) {
     QObject::connect(&bridge, &CoreBridge::shutdownFinished, &app,
                      [&](bool ok, const QString &) { confirmedShutdown = ok; });
     QObject::connect(&readiness, &UiReadiness::readyForHandoff, &shell, [&] {
-        if (stage != Initial) return;
+        if (realSignedOut || stage != Initial) return;
         if (handoff) {
             std::fputs("GOZAR_QT_READY_V1\n", stdout);
             std::fflush(stdout);
@@ -160,6 +177,21 @@ int main(int argc, char **argv) {
         QTimer::singleShot(0, &shell, [&, id] { emit locations.selected(id); });
     });
     QObject::connect(&binder, &HomeBinder::stateChanged, &shell, [&](const QJsonObject &state) {
+        if (realSignedOut) {
+            if (sawSignedOutRealCore || failed) return;
+            const auto signedIn = state.value(QStringLiteral("signed_in"));
+            const auto live = state.value(QStringLiteral("live"));
+            const auto connecting = state.value(QStringLiteral("connecting"));
+            if (!signedIn.isBool() || !live.isBool() || !connecting.isBool() ||
+                signedIn.toBool() || live.toBool() || connecting.toBool() || power->isClickable()) {
+                fail();
+                return;
+            }
+            sawSignedOutRealCore = true;
+            finished = true;
+            QTimer::singleShot(300, &shell, [&] { shell.close(); });
+            return;
+        }
         if (stage == Selection && state.value(QStringLiteral("server")).toObject().value(QStringLiteral("code")).toString() == QLatin1String("DE")) {
             stage = Mode;
             QTimer::singleShot(0, &shell, [&] {
@@ -191,11 +223,12 @@ int main(int argc, char **argv) {
     if (!demo || ciDemo)
         QTimer::singleShot(25000, &shell, [&] { if (!confirmedShutdown) fail(); });
     shell.show();
-    readiness.markUiInitialized(); // this marks the simulated shell, not a production UI
-    if (!bridge.start(fakePath)) return 8;
+    readiness.markUiInitialized(); // this marks the development shell, not a production UI
+    if (!bridge.start(realSignedOut ? realCorePath : fakePath)) return 8;
     const int result = app.exec();
     ImageResourcesSvg::instance().finishGracefully();
-    if (result != 0 || (!demo && !finished) || !confirmedShutdown || failed) return 1;
+    if (result != 0 || (!demo && !finished) || (realSignedOut && !sawSignedOutRealCore) ||
+        !confirmedShutdown || failed) return 1;
     if (!handoff) std::fputs("GOZAR_SIMULATION_OK\n", stdout);
     return 0;
 }

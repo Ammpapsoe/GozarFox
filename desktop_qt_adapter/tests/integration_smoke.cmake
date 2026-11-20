@@ -21,4 +21,14 @@ endif()
 if(DEFINED QT_SIMULATOR AND NOT QT_SIMULATOR STREQUAL "")
   run_check("simulated original Qt home, locations, mode and connection lifecycle" "${QT_SIMULATOR}" "--ci-simulate")
   run_check("interactive simulation startup and guarded close" "${QT_SIMULATOR}" "--ci-demo")
+  # The fake reports signed-in. The signed-out-only harness must reject it,
+  # close gracefully and exit with its explicit failure status, not crash.
+  execute_process(COMMAND "${QT_SIMULATOR}" "--ci-real-signed-out" "${FAKE_CORE}"
+    RESULT_VARIABLE rejected TIMEOUT 45)
+  if(NOT "${rejected}" STREQUAL "1")
+    message(FATAL_ERROR "signed-out-only harness did not reject signed-in state cleanly: ${rejected}")
+  endif()
+  if(DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")
+    run_check("integrated original widgets with isolated signed-out real core" "${QT_SIMULATOR}" "--ci-real-signed-out" "${REAL_CORE}")
+  endif()
 endif()

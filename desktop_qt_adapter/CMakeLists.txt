@@ -155,8 +155,9 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   target_include_directories(gozar_qt_readonly_probe BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(gozar_qt_readonly_probe PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(gozar_qt_readonly_probe PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
-  # CI-only integrated simulated shell; it is deliberately coupled to the
-  # fake core and test backend shims, never install or release this target.
+  # Development shell uses test backend shims and normally a fake core. Its
+  # CI-only real-core mode is isolated and signed-out/read-only. Never install
+  # or release this target as a VPN application.
   add_executable(gozar_qt_simulator development/qt_simulator.cpp "${GOZAR_TEST_QRC}" $<TARGET_OBJECTS:gozar_test_widgets>)
   target_include_directories(gozar_qt_simulator BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(gozar_qt_simulator PRIVATE WS_APP_IDENTIFIER="GozarQtTest")

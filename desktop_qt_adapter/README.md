@@ -80,8 +80,13 @@ locations and mode/language controls into an experimental shell, exercises
 fake-core server selection, mode, connect/disconnect and guarded close, and can
 accept a simulated Flutter handoff. Its `--demo` argument opens an interactive
 simulation; it is labelled prominently and uses an isolated temporary profile.
-The adjacent `fake_core` fixture is the only core it can start. `--ci-demo`
-checks that demo's startup and guarded close without human input. These are
+In its normal demo and handoff modes it starts only the adjacent `fake_core`
+fixture. `--ci-demo` checks that demo's startup and guarded close without human
+input. A separate `--ci-real-signed-out <core-path>` mode renders the assembled
+widgets using an isolated real core, explicitly rejects signed-in/live state,
+does not bind the power control, and waits for confirmed shutdown. The unchanged
+core may perform its own startup discovery and recovery even without a VPN
+connection; this is not proof of zero network or OS side effects. These are
 development features, not a production VPN: the application uses test backend
 shims and is not the complete original controller. Never package this simulator
 as a real product. The experimental resource map now includes the upstream font
