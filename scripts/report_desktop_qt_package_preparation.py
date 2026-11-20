@@ -8,14 +8,11 @@ import re
 import subprocess
 import sys
 
+from check_qt_public_package_sizes import PACKAGE_LIMITS
+
 packages, destination = map(Path, sys.argv[1:])
 label = os.environ['PACKAGE_LABEL']
-expected = {
-    'Windows-x64': ('Gozar-Windows-x64-Setup.exe', 'Gozar-Windows-x64.zip'),
-    'Linux-amd64': ('Gozar-Linux-amd64.deb', 'Gozar-Linux-amd64.tar.xz'),
-    'macOS-Intel': ('Gozar-macOS-Intel.tar.xz',),
-    'macOS-ARM': ('Gozar-macOS-ARM.tar.xz',),
-}[label]
+expected = PACKAGE_LIMITS[label]
 if sorted(p.name for p in packages.iterdir()) != sorted(expected):
     raise SystemExit('Unexpected archive coverage')
 entries = []
@@ -39,10 +36,12 @@ blockers = [
 ]
 if set(versions.values()) != {'1.20.0'}:
     blockers.append('Component versions are unchanged; do not label the binaries 1.20.0.')
-if any(entry['name'].endswith('Windows-x64.zip') and entry['bytes'] >= 45_000_000 for entry in entries):
-    blockers.append('Windows archive is outside the approved 45 MB download budget.')
-if label.startswith('macOS-') and entries[0]['bytes'] >= 25_000_000:
-    blockers.append('macOS archive is outside the approved 25 MB download budget.')
+for entry in entries:
+    ceiling = expected[entry['name']]
+    entry['limit_bytes'] = ceiling
+    entry['within_budget'] = entry['bytes'] < ceiling
+    if not entry['within_budget']:
+        blockers.append(f"{entry['name']} is outside its approved {ceiling:,}-byte download budget.")
 report = {
     'source_commit': subprocess.check_output(('git', 'rev-parse', 'HEAD'), text=True).strip(),
     'platform': label,

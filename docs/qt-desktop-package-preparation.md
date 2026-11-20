@@ -10,13 +10,13 @@ the current Qt target, and the Go core from the exact same checkout. The staging
 
 | Native platform | Local runner output | Validation |
 | --- | --- | --- |
-| Windows amd64 | Standard installer and portable ZIP | Clean install to a path containing spaces, exact core comparison, Qt startup without a session using installed runtime, uninstall and cleanup; approved 45 MB ZIP budget reported |
+| Windows amd64 | Standard installer and portable ZIP | Clean install to a path containing spaces, exact core comparison, Qt startup without a session using installed runtime, uninstall and cleanup; approved ZIP and Setup budgets reported |
 | Linux amd64 | tar.xz and DEB | Extract both packages to temporary paths, compare installed core, launch Qt in an isolated signed-out profile |
 | macOS Intel and Apple Silicon | Separate `.app` archives | Launch the extracted Qt client in isolated signed-out mode and verify ad-hoc bundle signature and main executable architectures |
 
 The Windows installer uses a manifest of staged files when `REMOVE_QT_PAYLOAD`
 is set, rather than recursively removing directories that can contain
-user-added files. This flag is not set in the existing release workflow.
+user-added files. The Qt release and validation paths both use this flag.
 
 The reported SHA-256 and file counts are build evidence, not approval to
 publish. Historical run `44783442294` used version 1.19.0; do not relabel its packages as 1.20.0. Before promotion: resolve distribution rights and exact
@@ -39,9 +39,9 @@ version, with `decision: "approved"`, `review_reference`,
 is a required statement of the review, not a substitute for that review or for
 offering the corresponding source and notices.
 
-The approved limits apply only to the Windows portable ZIP (45 MB) and
-macOS Qt archives (25 MB each). Windows Setup and Linux output still use the
-existing all-output 20 MB gate until a separately approved policy changes it.
+The approved Qt limits are 45 MB for Windows portable ZIP, 35 MB for
+Windows Setup, 50 MB for each Linux archive (`.deb` and `.tar.xz`),
+and 25 MB for each macOS archive. Non-Qt limits are unchanged.
 The draft `1.20.0` notes report the last measured output sizes. The checks-only
 workflow still stores evidence, not public release assets. The version bump
 changes declarations only and must be rebuilt and verified before signing.
