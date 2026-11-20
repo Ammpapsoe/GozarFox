@@ -98,6 +98,6 @@ case "$GOOS" in
     tar -xJf "$out/Gozar-$PACKAGE_LABEL.tar.xz" -C "$RUNNER_TEMP/desktop-extracted"
     extracted="$RUNNER_TEMP/desktop-extracted/Gozar.app"
     codesign --verify --deep --strict "$extracted"
-    env -u QT_PLUGIN_PATH -u QT_QPA_PLATFORM_PLUGIN_PATH -u DYLD_LIBRARY_PATH QT_QPA_PLATFORM=offscreen \
+    env -u QT_PLUGIN_PATH -u QT_QPA_PLATFORM_PLUGIN_PATH -u DYLD_LIBRARY_PATH QT_QPA_PLATFORM=cocoa \
       "$extracted/Contents/MacOS/gozar-original-ui" --ci-signed-out ;;
 esac
