@@ -43,6 +43,7 @@ public:
     QString countryCode;
     QString displayedIp;
     CONNECT_STATE state = CONNECT_STATE_DISCONNECTED;
+    void restrictGozarStatus() {}
     void updateConnectState(const types::ConnectState &value) { state = value.connectState; }
     void updateLocationInfo(const QString &, const QString &, const QString &code, PingTime, bool) { countryCode = code; }
     void updateMyIp(const QString &ip) { displayedIp = ip; }
@@ -372,6 +373,24 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     CoreBridge bridge;
     HomeBinder binder(&bridge, nullptr, nullptr);
     bindOriginalHomeWindow(window, &binder);
+    ConnectWindow::ConnectStateProtocolPort *protocol = nullptr;
+    ToggleButton *firewall = nullptr;
+    for (auto *child : window->childItems()) {
+        if (auto *item = dynamic_cast<ConnectWindow::ConnectStateProtocolPort *>(child)) protocol = item;
+        if (auto *item = dynamic_cast<ToggleButton *>(child)) firewall = item;
+    }
+    QVERIFY(protocol);
+    QVERIFY(firewall);
+    QVERIFY(!protocol->isVisible());
+    QVERIFY(!firewall->isVisible());
+    // The upstream update and global clickable methods used to re-enable the
+    // misleading WireGuard/443 field after we attempted to disable it.
+    window->setClickable(true);
+    window->updateLocationInfo(QStringLiteral("Germany"), QStringLiteral("Berlin"),
+                               QStringLiteral("de"), PingTime(), false);
+    QVERIFY(!protocol->isVisible());
+    QVERIFY(!protocol->isClickable());
+    QVERIFY(!firewall->isClickable());
     QVERIFY(bindOriginalPowerControl(window, &binder));
     QVERIFY(!power->isClickable()); // state is not known yet
     view.hide();

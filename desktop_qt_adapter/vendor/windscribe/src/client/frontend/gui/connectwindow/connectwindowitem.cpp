@@ -170,14 +170,29 @@ void ConnectWindowItem::setClickable(bool isClickable)
 
     connectButton_->setClickable(isClickable);
     preferencesButton_->setClickable(isClickable);
-    firewallButton_->setClickable(isClickable);
+    firewallButton_->setClickable(isClickable && !gozarStatusRestricted_);
     locationsButton_->setClickable(isClickable);
     networkTrustButton_->setClickable(isClickable);
     logoButton_->setClickable(isClickable);
 
-    firewallInfo_->setClickableHoverable(false, isClickable);
-    connectStateProtocolPort_->setHoverable(isClickable);
-    connectStateProtocolPort_->setClickable(isClickable);
+    firewallInfo_->setClickableHoverable(false, isClickable && !gozarStatusRestricted_);
+    connectStateProtocolPort_->setHoverable(isClickable && !gozarStatusRestricted_);
+    connectStateProtocolPort_->setClickable(isClickable && !gozarStatusRestricted_);
+}
+
+void ConnectWindowItem::restrictGozarStatus()
+{
+    gozarStatusRestricted_ = true;
+    connectStateProtocolPort_->setClickableHoverable(false, false);
+    connectStateProtocolPort_->setEnabled(false);
+    connectStateProtocolPort_->hide();
+    firewallButton_->setClickable(false);
+    firewallButton_->setEnabled(false);
+    firewallButton_->hide();
+    firewallInfo_->setClickableHoverable(false, false);
+    firewallInfo_->setEnabled(false);
+    firewallInfo_->hide();
+    firewallLabel_->hide();
 }
 
 QRegion ConnectWindowItem::getMask()
@@ -241,7 +256,7 @@ void ConnectWindowItem::updateLocationInfo(const QString &firstName, const QStri
     connectStateProtocolPort_->setProtocolButtonVisible(!isCustomConfig);
 
     // If the user is in custom config mode, ensure the protocol line is not clickable to prevent display of the protocol selection screen.
-    connectStateProtocolPort_->setClickableHoverable(!isCustomConfig, true);
+    connectStateProtocolPort_->setClickableHoverable(!isCustomConfig && !gozarStatusRestricted_, !gozarStatusRestricted_);
 }
 
 void ConnectWindowItem::updateConnectState(const types::ConnectState &newConnectState)

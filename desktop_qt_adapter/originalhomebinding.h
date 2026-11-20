@@ -6,13 +6,16 @@
 
 // Experimental binding for the actual upstream ConnectWindowItem's public API.
 // The application must keep unsupported controls disabled and must not ship
-// this as a complete home screen. In particular, upstream's protocol and
-// firewall displays do not correspond to Gozar's mode/kill-switch fields.
+// this as a complete home screen. The modified upstream window hides its
+// misleading protocol and firewall displays when this binding is installed.
 // The binder must be constructed without the standalone background/button:
 // the original window itself owns and updates those children.
 template<class Window>
 void bindOriginalHomeWindow(Window *window, HomeBinder *binder) {
     Q_ASSERT(window && binder);
+    // The original protocol/firewall values do not describe Gozar's state.
+    // Restrict them before wiring any state updates or enabling controls.
+    window->restrictGozarStatus();
     QObject::connect(window, &Window::connectClick, binder, &HomeBinder::toggleConnection);
     QObject::connect(binder, &HomeBinder::visualStateChanged, window,
                      [window](CONNECT_STATE state) {

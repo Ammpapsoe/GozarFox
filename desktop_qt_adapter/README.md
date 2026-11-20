@@ -11,9 +11,10 @@ tunnel.
 
 The GUI, frontend-common and client-common sources and license were copied to
 `vendor/windscribe` from Windscribe/Desktop-App `v2.26.2`, commit
-`5578945964760be0bf234c506fdbcbcfe07c974d`. The two `locationsmenu` files have
-since been modified for Gozar as recorded in `vendor/windscribe/UPSTREAM.txt`;
-the other copied source files remain at that pin. `fetch-upstream.sh` reproduces a clean full
+`5578945964760be0bf234c506fdbcbcfe07c974d`. The `locationsmenu` and
+`connectwindowitem` source/header pairs have since been modified for Gozar as
+recorded in `vendor/windscribe/UPSTREAM.txt`; the other copied source files remain
+at that pin. `fetch-upstream.sh` reproduces a clean full
 checkout elsewhere and refuses an existing directory. Its source is
 GPL v2; the exact applicable version, component licences, font and artwork
 terms, trademarks and compatibility with Gozar's AGPL components require
@@ -112,10 +113,12 @@ Windows, Linux and macOS. The click and settings tests use a fake core; another
 window test reads state from the real, signed-out 1.19.0 core in an isolated
 configuration and requests shutdown. It is **not** an end-to-end UI test,
 integrated Flutter login, complete application or real VPN integration.
-It must not be used with a real VPN. The upstream window's
-protocol widget defaults to WireGuard/443, which does not describe Gozar; it
-must be corrected or disabled before this binding is shown to users. The
-separate experimental power binding controls only the connection button; it
+It must not be used with a real VPN. The upstream window's protocol widget
+defaults to WireGuard/443, and its firewall control has different semantics.
+The modified original window hides and disables these displays when the home
+binding is installed, and keeps them disabled after location or clickability
+updates. They are not replacements for implementing real Gozar status/settings.
+The separate experimental power binding controls only the connection button; it
 does not make the other window controls functional. The experimental home
 binding feeds the core-reported exit address to the original IP widget only
 while a TUN connection is live; it clears it for proxy modes, disconnect or

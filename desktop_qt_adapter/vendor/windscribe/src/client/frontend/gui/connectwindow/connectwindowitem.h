@@ -28,6 +28,9 @@ public:
     void updateScaling() override;
 
     void setClickable(bool isClickable);
+    // Gozar does not expose Windscribe's protocol/port or firewall state.
+    // Hide and disable those displays rather than presenting fabricated values.
+    void restrictGozarStatus();
 
     QRegion getMask();
     QPixmap getShadowPixmap();
@@ -148,6 +151,7 @@ private:
     QString dataTransferred_;
 
     bool isFirewallAlwaysOn_;
+    bool gozarStatusRestricted_ = false;
     bool isPremium_;
     bool isIpUtilsEnabled_;
     bool isIpRotateReady_ = true;
