@@ -91,7 +91,7 @@ jobs:
           GOZAR_VISUAL_DIR="$output/en" "$fixture" --ci-layout
           GOZAR_VISUAL_DIR="$output/fa" GOZAR_VISUAL_FARSI=1 "$fixture" --ci-layout
           for locale in en fa; do
-            for image in compact-home connected connection-settings server-list favourites tray-menu; do
+            for image in compact-home connected connection-settings account account-switcher server-list search favourites tray-menu; do
               test -s "$output/$locale/$image.png"
             done
           done
@@ -128,6 +128,7 @@ jobs:
           set -euo pipefail
           cd desktop_flutter
           flutter pub get
+          flutter test --no-pub test/ui_test.dart --name "Qt add-account route defers handoff until Flutter cancel"
           flutter build linux --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
           folder=build/linux/x64/release/bundle
           cp "${RUNNER_TEMP}/qt-build/gozar-original-ui" "$folder/gozar-original-ui"

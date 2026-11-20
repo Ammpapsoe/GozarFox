@@ -7,8 +7,9 @@
 
 class HomeBinder;
 class UiLanguage;
+class QDialog;
 class PreferencesHelper;
-namespace PreferencesWindow { class PreferenceGroup; class ComboBoxItem; class TitleItem; class PreferencesTabControlItem; }
+namespace PreferencesWindow { class PreferenceGroup; class ComboBoxItem; class TitleItem; class LinkItem; class PreferencesTabControlItem; }
 
 // Gozar's settings model, rendered with Windscribe's original preference rows.
 class GozarPreferences : public QGraphicsView {
@@ -19,6 +20,8 @@ public:
     void retranslate();
 signals:
     void quitRequested();
+    void addAccountRequested();
+    void accountDialogOpened(QDialog *dialog);
 
 private:
     QGraphicsScene scene_;
@@ -27,6 +30,13 @@ private:
     PreferencesWindow::PreferenceGroup *connection_;
     PreferencesWindow::PreferenceGroup *general_;
     PreferencesWindow::PreferenceGroup *appearance_;
+    PreferencesWindow::PreferenceGroup *account_;
+    PreferencesWindow::LinkItem *email_;
+    PreferencesWindow::LinkItem *switch_;
+    PreferencesWindow::LinkItem *logout_;
+    PreferencesWindow::LinkItem *usage_;
+    void showAccounts();
+    void syncAccount();
     PreferencesWindow::ComboBoxItem *theme_;
     PreferencesWindow::PreferencesTabControlItem *tabs_;
     int page_ = 0;

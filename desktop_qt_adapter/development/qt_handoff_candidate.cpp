@@ -29,8 +29,15 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QDialog>
+#include <QProcess>
+#include <QFileInfo>
+#include <QPushButton>
+#include <QMessageBox>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QGraphicsProxyWidget>
+#include <QLineEdit>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QScreen>
@@ -156,10 +163,35 @@ int main(int argc, char **argv) {
     layout.addWidget(&status);
     gui_locations::LocationsModelManager manager;
     LocationsWindow locations(nullptr, &preferences, &manager);
+    locations.useHostViewport();
     for (auto *view : locations.findChildren<gui_locations::LocationsView *>()) view->setGozarPresentation();
     layout.addWidget(&locations);
     locations.hide();
     GozarPreferences settingsView(&binder, &language, &helper, probe);
+    enum class FlutterReturn { None, Login, AddAccount };
+    FlutterReturn flutterReturn = FlutterReturn::None;
+#ifdef Q_OS_WIN
+    const auto flutterPath = QDir(app.applicationDirPath()).filePath(QStringLiteral("gozar.exe"));
+#elif defined(Q_OS_MACOS)
+    const auto flutterPath = QDir(app.applicationDirPath()).filePath(QStringLiteral("Gozar"));
+#else
+    const auto flutterPath = QDir(app.applicationDirPath()).filePath(QStringLiteral("gozar"));
+#endif
+#ifndef GOZAR_HANDOFF_CI_FIXTURE
+    const auto returnToFlutter = [&](FlutterReturn kind) {
+        if (!QFileInfo(flutterPath).isFile()) {
+            QMessageBox::warning(&shell, QStringLiteral("Gozar"), QStringLiteral("The bundled Flutter sign-in program could not be found."));
+            return;
+        }
+        if (flutterReturn != FlutterReturn::None) return;
+        flutterReturn = kind;
+        shell.close(); // waits for acknowledged cleanup AND exit via UiCloseGuard
+    };
+    QObject::connect(&settingsView, &GozarPreferences::addAccountRequested, &shell,
+        [&] { returnToFlutter(FlutterReturn::AddAccount); });
+    QObject::connect(&binder, &HomeBinder::signedOutConfirmed, &shell,
+        [&] { returnToFlutter(FlutterReturn::Login); });
+#endif
     QObject::connect(&settingsView, &GozarPreferences::quitRequested, &shell, &QWidget::close);
     layout.addWidget(&settingsView);
     settingsView.hide();
@@ -345,15 +377,41 @@ int main(int argc, char **argv) {
                     if (!screenshots.isEmpty()) shell.grab().save(QDir(screenshots).filePath("compact-home.png"));
                     emit home->preferencesClick();
                     if (!settingsView.isVisible() || locations.isVisible() || settingsView.y() != homeView.height()) return false;
-                    const auto connection = settingsView.mapFromScene(QPointF(32 * G_SCALE, 88 * G_SCALE));
+                    const auto connection = settingsView.mapFromScene(QPointF(32 * G_SCALE, 136 * G_SCALE));
                     QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier, connection);
                     if (settingsView.property("gozarPage").toString() != QStringLiteral("connection")) return false;
                     if (!screenshots.isEmpty()) {
                         QTest::qWait(300); // capture the final state of the original tab animation
                         shell.grab().save(QDir(screenshots).filePath("connection-settings.png"));
                     }
+                    QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                                      settingsView.mapFromScene(QPointF(32 * G_SCALE, 88 * G_SCALE)));
+                    if (settingsView.property("gozarPage").toString() != QStringLiteral("account")) return false;
+                    if (!screenshots.isEmpty()) {
+                        QTest::qWait(300);
+                        shell.grab().save(QDir(screenshots).filePath("account.png"));
+                    }
+                    bool sawAccountPicker = false;
+                    auto dialogReady = QObject::connect(&settingsView, &GozarPreferences::accountDialogOpened, &shell, [&](QDialog *dialog) {
+                        const auto *active = dialog->findChild<QPushButton *>(QStringLiteral("activeAccount"));
+                        auto *choice = dialog->findChild<QPushButton *>(QStringLiteral("savedAccount"));
+                        sawAccountPicker = active && !active->isEnabled() && choice && choice->isEnabled();
+                        if (!screenshots.isEmpty()) dialog->grab().save(QDir(screenshots).filePath("account-switcher.png"));
+                        if (sawAccountPicker) choice->click();
+                        else dialog->reject();
+                    });
+                    QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                                      settingsView.mapFromScene(QPointF(262 * G_SCALE, 108 * G_SCALE)));
+                    QObject::disconnect(dialogReady);
+                    if (!sawAccountPicker) return false;
+                    QElapsedTimer accountWait;
+                    accountWait.start();
+                    while (binder.currentState().value("email").toString() != QLatin1String("personal@example.test") && accountWait.elapsed() < 3000) QTest::qWait(20);
+                    if (binder.currentState().value("email").toString() != QLatin1String("personal@example.test")) return false;
                     emit home->locationsClick();
-                    if (!locations.isVisible() || settingsView.isVisible() || locations.y() != homeView.height()) return false;
+                    const auto *locationsTab = locations.findChild<GuiLocations::LocationsTab *>();
+                    if (!locations.isVisible() || settingsView.isVisible() || locations.y() != homeView.height() ||
+                        !locationsTab || locationsTab->y() != 0 || locationsTab->height() >= locations.height()) return false;
                     QElapsedTimer wait;
                     wait.start();
                     while (catalog.locations().isEmpty() && wait.elapsed() < 3000) QTest::qWait(20);
@@ -371,8 +429,27 @@ int main(int argc, char **argv) {
                         tray.menu()->grab().save(QDir(screenshots).filePath("tray-menu.png"));
                     }
                     if (!screenshots.isEmpty()) shell.grab().save(QDir(screenshots).filePath("server-list.png"));
-                    QKeyEvent right(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
-                    if (!home->handleKeyPressEvent(&right)) return false;
+                    const auto search = homeView.mapFromScene(QPointF(215 * G_SCALE, 211 * G_SCALE));
+                    QTest::mouseClick(homeView.viewport(), Qt::LeftButton, Qt::NoModifier, search);
+                    QTest::qWait(310);
+                    // The QGraphicsProxyWidget owns the editor; use the active scene focus item.
+                    auto *searchProxy = qgraphicsitem_cast<QGraphicsProxyWidget *>(homeScene.focusItem());
+                    auto *searchEditor = searchProxy ? qobject_cast<QLineEdit *>(searchProxy->widget()) : nullptr;
+                    if (!searchEditor || !searchEditor->isVisible()) return false;
+                    QTest::keyClicks(searchEditor, "Berlin");
+                    QTest::qWait(200);
+                    if (searchEditor->text() != QLatin1String("Berlin") || manager.filterLocationsProxyModel()->rowCount() != 1) return false;
+                    if (!screenshots.isEmpty()) shell.grab().save(QDir(screenshots).filePath("search.png"));
+                    QTest::mouseClick(homeView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                                      homeView.mapFromScene(QPointF(285 * G_SCALE, 211 * G_SCALE)));
+                    QTest::qWait(310);
+                    bool favouritesOpened = false;
+                    const auto tabSelected = QObject::connect(home, &ConnectWindow::ConnectWindowItem::locationTabClicked, &shell,
+                        [&](LOCATION_TAB tab) { favouritesOpened = tab == LOCATION_TAB_FAVORITE_LOCATIONS; });
+                    QTest::mouseClick(homeView.viewport(), Qt::LeftButton, Qt::NoModifier,
+                                      homeView.mapFromScene(QPointF(180 * G_SCALE, 211 * G_SCALE)));
+                    QObject::disconnect(tabSelected);
+                    if (!favouritesOpened) return false;
                     if (!screenshots.isEmpty()) {
                         QTest::qWait(300);
                         shell.grab().save(QDir(screenshots).filePath("favourites.png"));
@@ -392,7 +469,16 @@ int main(int argc, char **argv) {
                         QTest::qWait(450);
                         shell.grab().save(QDir(screenshots).filePath("connected.png"));
                     }
-                    return true;
+                    bool signedOut = false;
+                    const auto observed = QObject::connect(&binder, &HomeBinder::signedOutConfirmed, &shell, [&] { signedOut = true; });
+                    binder.signOut();
+                    wait.restart();
+                    while (!signedOut && wait.elapsed() < 3000) QTest::qWait(20);
+                    QObject::disconnect(observed);
+                    const auto finalState = binder.currentState();
+                    const auto saved = finalState.value("accounts").toArray();
+                    return signedOut && !finalState.value("live").toBool() && saved.size() == 1 &&
+                        saved.first().toObject().value("id").toString() == QLatin1String("work");
                 };
                 if (!test()) {
                     failed = true;
@@ -430,5 +516,21 @@ int main(int argc, char **argv) {
 #ifdef GOZAR_HANDOFF_CI_FIXTURE
     if (scripted && stage != Closing) return 1;
 #endif
-    return result == 0 && (probe ? sawSignedOut : ready) && shutdownConfirmed && !failed ? 0 : 1;
+    if (result != 0 || !(probe ? sawSignedOut : ready) || !shutdownConfirmed || failed) return 1;
+#ifndef GOZAR_HANDOFF_CI_FIXTURE
+    if (flutterReturn != FlutterReturn::None) {
+        QProcess flutter;
+        auto env = QProcessEnvironment::systemEnvironment();
+        env.remove(QStringLiteral("GOZAR_QT_OPEN_ADD_ACCOUNT"));
+        if (flutterReturn == FlutterReturn::AddAccount) env.insert(QStringLiteral("GOZAR_QT_OPEN_ADD_ACCOUNT"), QStringLiteral("1"));
+        flutter.setProcessEnvironment(env);
+        flutter.setProgram(flutterPath);
+        flutter.setWorkingDirectory(app.applicationDirPath());
+        if (!flutter.startDetached()) {
+            QMessageBox::warning(nullptr, QStringLiteral("Gozar"), QStringLiteral("The connection is closed, but sign-in could not be reopened. Start Gozar again."));
+            return 1;
+        }
+    }
+#endif
+    return 0;
 }

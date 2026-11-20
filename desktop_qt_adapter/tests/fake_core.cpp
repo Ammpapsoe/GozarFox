@@ -26,6 +26,8 @@ int main(int argc, char **argv) {
     if (app.arguments()[1] != QStringLiteral("--rpc")) return 2;
     char line[65536];
     QString countryCode;
+    QString activeId = QStringLiteral("work");
+    bool signedIn = true;
     QString mode = QStringLiteral("tun");
     QString language;
     QString theme = QStringLiteral("system");
@@ -43,6 +45,8 @@ int main(int argc, char **argv) {
         if (method == "crash") return 7;
         if (method == "invalid") { std::fputs("not-json\n", stdout); std::fflush(stdout); continue; }
         const QJsonObject params = request.value("params").toObject();
+        if (method == "switch_account") { activeId = params.value("id").toString(); live = false; }
+        if (method == "logout") { signedIn = false; live = false; activeId.clear(); }
         if (method == "server") countryCode = params.value("code").toString();
         if (method == "connect") live = true;
         if (method == "disconnect" || method == "quit") live = false;
@@ -59,12 +63,20 @@ int main(int argc, char **argv) {
             else warpUdp = params.value("enabled").toBool();
         }
         if (method == "chain") chain = params.value("hops").toArray();
-        QJsonObject state{{"signed_in", true}, {"live", live}, {"connecting", false}, {"mode", mode},
+        QJsonObject state{{"signed_in", signedIn}, {"live", live}, {"connecting", false}, {"mode", mode},
                                 {"exit", live ? QStringLiteral("203.0.113.10") : QString()},
                                 {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
                                 {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},
                                 {"server", QJsonObject{{"code", countryCode}}}};
         if (qEnvironmentVariableIsSet("GOZAR_FAKE_LAYOUT_CATALOG")) {
+            const auto email = activeId == QLatin1String("work") ? QStringLiteral("work@example.test") :
+                activeId == QLatin1String("personal") ? QStringLiteral("personal@example.test") : QString();
+            state.insert("email", email);
+            state.insert("limit", 5368709120LL);
+            state.insert("remaining", 2684354560LL);
+            state.insert("accounts", QJsonArray{QJsonObject{{"id", "work"}, {"email", "work@example.test"}, {"active", activeId == QLatin1String("work")}},
+                                                 QJsonObject{{"id", "personal"}, {"email", "personal@example.test"}, {"active", activeId == QLatin1String("personal")}}});
+            if (!signedIn) state.insert("accounts", QJsonArray{QJsonObject{{"id", "work"}, {"email", "work@example.test"}, {"active", false}}});
             auto place = state.value("server").toObject();
             if (countryCode == QLatin1String("GB")) {
                 place.insert("country", "United Kingdom");

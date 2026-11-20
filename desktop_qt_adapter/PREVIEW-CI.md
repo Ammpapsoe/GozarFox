@@ -14,10 +14,14 @@ macOS bundles. Each job:
 2. Builds Qt and runs the offline UI fixture plus signed-out official-core
    checks. No account credentials or live VPN connection are used.
 3. Captures screenshots from the actual Qt executable with simulated server
-   and traffic data in English and Persian, and uploads them as a distinct
+   and traffic data plus reserved `example.test` account addresses in English
+   and Persian, and uploads them as a distinct
    artifact. No fixture core is included in the development package.
-4. Stages the unchanged Flutter sign-in sources and Qt candidate for owner
-   evaluation. The macOS bundle is ad-hoc signed during packaging, so its
+4. Stages the existing Flutter sign-in UI and Qt candidate for owner
+   evaluation. The experimental Qt launcher can reopen the Flutter app for
+   sign-out or to open the existing Add Account flow, only after acknowledged
+   shutdown and core exit. The launch flag changes routing, not the form or
+   authentication implementation. The macOS bundle is ad-hoc signed during packaging, so its
    executable signatures need not be byte-for-byte identical to the source
    archive. The Go sources are never modified or rebuilt by this workflow.
 

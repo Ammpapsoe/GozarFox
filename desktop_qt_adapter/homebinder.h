@@ -19,6 +19,9 @@ public:
     void refresh();
     void loadServers();
     void selectServer(const QString &host, const QString &countryCode);
+    void switchAccount(const QString &id);
+    void signOut();
+    void refreshUsage();
     void setMode(const QString &mode);
     void setKillSwitch(bool enabled);
     void setLanguage(const QString &language);
@@ -32,6 +35,7 @@ public:
     QJsonObject currentState() const;
 
 signals:
+    void signedOutConfirmed();
     void error(const QString &message);
     void stateChanged(const QJsonObject &state);
     void visualStateChanged(CONNECT_STATE state);
@@ -49,11 +53,12 @@ private:
     void setVisualState(CONNECT_STATE state);
     void applyState(const QJsonObject &state);
     void setEnabled();
-    void sendMutation(const QString &method, const QJsonObject &params);
+    qint64 sendMutation(const QString &method, const QJsonObject &params);
     QPointer<CoreBridge> core_;
     QPointer<ConnectWindow::Background> background_;
     QPointer<ConnectWindow::ConnectButton> button_;
     CONNECT_STATE visual_ = CONNECT_STATE_DISCONNECTED;
+    qint64 signOutId_ = -1;
     qint64 mutatingId_ = -1;
     qint64 stateId_ = -1;
     qint64 serversId_ = -1;

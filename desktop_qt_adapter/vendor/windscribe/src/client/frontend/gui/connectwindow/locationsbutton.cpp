@@ -125,13 +125,15 @@ void LocationsButton::setTextColor(QColor color)
 void LocationsButton::updateScaling()
 {
     ClickableGraphicsObject::updateScaling();
-    locationsMenu_->setPos(32*G_SCALE, 12*G_SCALE);
     updatePositions();
 }
 
 
 void LocationsButton::updatePositions()
 {
+    // Set on construction as well as DPI changes; otherwise the menu
+    // can start at (0, 0) where the slanted footer has no background.
+    locationsMenu_->setPos(32*G_SCALE, 12*G_SCALE);
     arrowItem_->setPos(212*G_SCALE, 16*G_SCALE);
     setArrowRotation(isExpanded_ ? 180 : 0);
 }

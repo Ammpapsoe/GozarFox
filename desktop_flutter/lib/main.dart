@@ -29,13 +29,14 @@ Future<void> main() async {
     windowButtonVisibility: false,
     title: 'Gozar',
   );
-  // The bundled Qt app does not exist yet. This flag is opt-in for future
-  // integration builds and must remain off for releases until the complete
-  // original UI, lifecycle, packaging, and licensing are ready.
+  // Qt is bundled only in opt-in evaluation builds. Leave this off in releases
+  // until the complete UI, lifecycle, packaging, and licensing are ready.
   const enableOriginalQt = bool.fromEnvironment('GOZAR_EXPERIMENTAL_ORIGINAL_QT');
   runApp(GozarApp(
     windowControls: true,
     originalUiTarget: enableOriginalQt ? OriginalUiProcessTarget.bundled() : null,
+    openAddAccount: enableOriginalQt &&
+        Platform.environment['GOZAR_QT_OPEN_ADD_ACCOUNT'] == '1',
   ));
   unawaited(windowManager.waitUntilReadyToShow(options, () async {
     if (Platform.isWindows) await windowManager.setAsFrameless();
@@ -45,10 +46,17 @@ Future<void> main() async {
 }
 
 class GozarApp extends StatefulWidget {
-  const GozarApp({super.key, this.core, this.windowControls = false, this.originalUiTarget});
+  const GozarApp({
+    super.key,
+    this.core,
+    this.windowControls = false,
+    this.originalUiTarget,
+    this.openAddAccount = false,
+  });
 
   final Core? core;
   final bool windowControls;
+  final bool openAddAccount;
   // Experimental injection only. The shipped entry point supplies no target.
   final OriginalUiTarget? originalUiTarget;
 
@@ -112,6 +120,7 @@ class _GozarAppState extends State<GozarApp> with WidgetsBindingObserver {
           core: widget.core,
           windowControls: widget.windowControls,
           originalUiTarget: widget.originalUiTarget,
+          openAddAccount: widget.openAddAccount,
           persian: _persian,
           language: _language,
           onLanguageChanged: _changeLanguage,
@@ -126,6 +135,7 @@ class GozarScreen extends StatefulWidget {
     this.core,
     required this.windowControls,
     this.originalUiTarget,
+    this.openAddAccount = false,
     required this.persian,
     required this.language,
     required this.onLanguageChanged,
@@ -134,6 +144,7 @@ class GozarScreen extends StatefulWidget {
 
   final Core? core;
   final bool windowControls;
+  final bool openAddAccount;
   final OriginalUiTarget? originalUiTarget;
   final bool persian;
   final String language;
@@ -214,7 +225,14 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
       });
       widget.onLanguageChanged(_state.language);
       widget.onThemeChanged(_state.theme);
-      if (_state.signedIn && await _tryOriginalUiHandoff()) return;
+      // The reverse handoff enters the existing Flutter form only after the
+      // newly started core confirms an idle, signed-in session.
+      if (widget.openAddAccount && reply.stateVerified && reply.errorVerified &&
+          reply.error == null && _state.signedIn && !_state.live && !_state.connecting) {
+        await _beginAddAccount();
+      } else if (_state.signedIn && await _tryOriginalUiHandoff()) {
+        return;
+      }
       if (!mounted) return;
       _timer = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
       if (_state.signedIn) {
@@ -462,8 +480,11 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Future<void> _switchAuthentication() async {
     if (_busy) return;
     setState(() => _busy = true);
+    var cancellationConfirmed = false;
     try {
-      await _core.call('cancel_auth');
+      final reply = await _core.call('cancel_auth');
+      cancellationConfirmed = reply.stateVerified && reply.errorVerified &&
+          reply.error == null && reply.state?.signedIn == true;
     } on Object {
       return;
     } finally {
@@ -988,8 +1009,11 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Future<void> _cancelAdd() async {
     if (_busy) return;
     setState(() => _busy = true);
+    var cancellationConfirmed = false;
     try {
-      await _core.call('cancel_auth');
+      final reply = await _core.call('cancel_auth');
+      cancellationConfirmed = reply.stateVerified && reply.errorVerified &&
+          reply.error == null && reply.state?.signedIn == true;
     } on Object {
       return;
     } finally {
@@ -1009,6 +1033,9 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           _email.text = _state.email;
         });
       }
+    }
+    if (cancellationConfirmed && widget.openAddAccount && mounted && _state.signedIn) {
+      unawaited(_tryOriginalUiHandoff());
     }
   }
 

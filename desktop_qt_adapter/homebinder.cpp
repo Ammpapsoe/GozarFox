@@ -86,18 +86,19 @@ void HomeBinder::loadServers() {
     if (serversId_ < 0) emit error(QStringLiteral("cannot load servers"));
 }
 
-void HomeBinder::sendMutation(const QString &method, const QJsonObject &params) {
+qint64 HomeBinder::sendMutation(const QString &method, const QJsonObject &params) {
     if (!core_ || !core_->running() || !stateKnown_ || !signedIn_) {
         emit error(tr("The core is unavailable or its state is unknown."));
-        return;
+        return -1;
     }
     if (connecting_ || mutatingId_ >= 0) {
         emit error(tr("Wait until the current operation finishes."));
-        return;
+        return -1;
     }
     mutatingId_ = core_->request(method, params);
     if (mutatingId_ < 0) emit error(QStringLiteral("cannot send core request"));
     setEnabled();
+    return mutatingId_;
 }
 
 void HomeBinder::toggleConnection() {
@@ -123,6 +124,26 @@ void HomeBinder::selectServer(const QString &host, const QString &countryCode) {
         return;
     }
     sendMutation(QStringLiteral("server"), {{QStringLiteral("host"), host}, {QStringLiteral("code"), countryCode}});
+}
+
+void HomeBinder::switchAccount(const QString &id) {
+    if (!isAvailable() || id.isEmpty()) return;
+    for (const auto &value : lastState_.value(QStringLiteral("accounts")).toArray()) {
+        const auto account = value.toObject();
+        if (account.value(QStringLiteral("id")).toString() == id && account.value(QStringLiteral("active")).isBool() &&
+            !account.value(QStringLiteral("active")).toBool()) {
+            sendMutation(QStringLiteral("switch_account"), {{QStringLiteral("id"), id}});
+            return;
+        }
+    }
+}
+
+void HomeBinder::refreshUsage() {
+    if (isAvailable()) sendMutation(QStringLiteral("usage"), {});
+}
+
+void HomeBinder::signOut() {
+    if (isAvailable()) signOutId_ = sendMutation(QStringLiteral("logout"), {});
 }
 
 void HomeBinder::setMode(const QString &mode) {
@@ -213,6 +234,8 @@ void HomeBinder::applyState(const QJsonObject &state) {
 }
 
 void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
+    const bool signOutReply = signOutId_ == id;
+    if (signOutReply) signOutId_ = -1;
     const bool needsState = mutatingId_ == id || stateId_ == id;
     if (mutatingId_ == id) mutatingId_ = -1;
     if (stateId_ == id) stateId_ = -1;
@@ -243,6 +266,10 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
         }
         setEnabled();
     }
+    if (signOutReply) {
+        if (stateKnown_ && !signedIn_ && !live_ && !connecting_) emit signedOutConfirmed();
+        else emit error(tr("The core did not confirm sign-out."));
+    }
     if (serversReply) {
         const auto servers = reply.value(QStringLiteral("reply"));
         if (stateKnown_ && signedIn_ && catalogueRevision_ == requestedCatalogueRevision_ &&
@@ -256,6 +283,7 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
 }
 
 void HomeBinder::handleFailure(qint64 id, const QString &message) {
+    if (signOutId_ == id) signOutId_ = -1;
     const bool losesState = id == mutatingId_ || id == stateId_;
     if (losesState) { stateKnown_ = false; lastState_ = {}; }
     if (id == mutatingId_) mutatingId_ = -1;
@@ -268,6 +296,7 @@ void HomeBinder::handleFailure(qint64 id, const QString &message) {
 }
 
 void HomeBinder::coreStopped() {
+    signOutId_ = -1;
     stateKnown_ = false;
     lastState_ = {};
     signedIn_ = false;

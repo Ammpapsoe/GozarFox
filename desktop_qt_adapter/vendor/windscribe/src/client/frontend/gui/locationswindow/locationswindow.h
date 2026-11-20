@@ -22,6 +22,7 @@ public:
 
     void updateLocationsTabGeometry();
     void updateScaling();
+    void useHostViewport() { useHostViewport_ = true; }
 
     void setTab(LOCATION_TAB tab);
 
@@ -72,6 +73,8 @@ private:
     double resizeIconOpacity_;
     QVariantAnimation resizeIconOpacityAnimation_;
 
+    bool useHostViewport_ = false;
+    void fitHostViewport();
     QRect getResizeHandleClickableRect();
     void updateFooterOverlayGeo();
 };

@@ -184,6 +184,7 @@ void LocationsMenu::onLanguageChanged()
     staticIpsLocations_->setTooltip(tr("Static IPs"));
     favoriteLocations_->setTooltip(tr("Favourites"));
     searchLocations_->setTooltip(tr("Search"));
+    if (gozarLocationsOnly_) searchLineEdit_->setPlaceholderText(tr("Search"));
 }
 
 bool LocationsMenu::eventFilter(QObject *object, QEvent *event)
@@ -372,6 +373,7 @@ void LocationsMenu::restrictToGozarLocations(bool favourites)
 {
     if (gozarLocationsOnly_) return;
     gozarLocationsOnly_ = true;
+    onLanguageChanged();
     gozarFavourites_ = favourites;
     isExternalConfigMode_ = false;
     configuredLocations_->setClickable(false);

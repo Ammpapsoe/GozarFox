@@ -192,6 +192,19 @@ class TransferFakeCore extends FakeCore {
   }
 }
 
+class AddAccountTransferCore extends TransferFakeCore {
+  AddAccountTransferCore() : super(signedIn: true);
+
+  @override
+  Future<CoreReply> call(String method, [Map<String, dynamic>? params]) async {
+    final reply = await super.call(method, params);
+    if (method == 'state' || method == 'cancel_auth') {
+      return CoreReply(state: reply.state, stateVerified: true, errorVerified: true);
+    }
+    return reply;
+  }
+}
+
 class ConnectedTransferCore extends TransferFakeCore {
   ConnectedTransferCore() : super(signedIn: true, result: CoreHandoffResult.connected) {
     live = true;
@@ -293,6 +306,37 @@ void main() {
     expect(core.running, isTrue);
     expect(target.launches, 0);
     expect(find.text('Gozar'), findsOneWidget);
+  });
+
+  testWidgets('Qt add-account route defers handoff until Flutter cancel',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final core = AddAccountTransferCore();
+    final target = FakeOriginalUiTarget();
+    await tester.pumpWidget(GozarApp(
+      core: core,
+      originalUiTarget: target,
+      openAddAccount: true,
+    ));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    expect(core.handoffs, 0);
+    expect(target.launches, 0);
+    final cancel = find.text('Cancel');
+    await tester.ensureVisible(cancel);
+    await tester.tap(cancel);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(core.requests, contains('cancel_auth'));
+    expect(core.saved, ['example@example.com']);
+    expect(core.handoffs, 1);
+    expect(target.launches, 1);
+    expect(core.running, isFalse);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('connected handoff waits for fresh state before resuming',

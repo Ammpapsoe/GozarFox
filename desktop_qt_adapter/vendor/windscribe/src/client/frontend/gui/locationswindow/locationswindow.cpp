@@ -80,6 +80,7 @@ void LocationsWindow::setViewportHeight(int unscaledHeight, bool dragging)
         locationsTab_->updateLocationWidgetsGeometry(unscaledHeight);
     }
     locationsTab_->setGeometry(0, 0, WINDOW_WIDTH*G_SCALE, qCeil(locationsTabHeightUnscaled_*G_SCALE));
+    if (useHostViewport_) fitHostViewport();
     borderOverlay_->setGeometry(0, 0, width(), height() - FOOTER_HEIGHT*G_SCALE);
     emit heightChanged();
 }
@@ -100,7 +101,8 @@ void LocationsWindow::updateLocationsTabGeometry()
 
 void LocationsWindow::updateScaling()
 {
-    locationsTab_->updateScaling();
+    if (useHostViewport_) fitHostViewport();
+    else locationsTab_->updateScaling();
 }
 
 void LocationsWindow::setShowLocationLoad(bool showLocationLoad)
@@ -136,9 +138,20 @@ void LocationsWindow::paintEvent(QPaintEvent *event)
 
 void LocationsWindow::resizeEvent(QResizeEvent *event)
 {
-    locationsTab_->move(0, (event->size().height() - tabAndFooterHeight() * G_SCALE));
+    if (useHostViewport_) fitHostViewport();
+    else locationsTab_->move(0, (event->size().height() - tabAndFooterHeight() * G_SCALE));
     borderOverlay_->setGeometry(0, 0, width(), height() - FOOTER_HEIGHT*G_SCALE);
     QWidget::resizeEvent(event);
+}
+
+void LocationsWindow::fitHostViewport()
+{
+    // The Gozar shell can cap the list on a short screen or at high DPI.
+    // Resize the scrollable view instead of moving its header behind the home panel.
+    const int innerHeight = qMax(0, height() - qCeil(FOOTER_HEIGHT * G_SCALE));
+    const int listHeight = qMax(0, qFloor(innerHeight / G_SCALE) - locationsTab_->headerHeight());
+    locationsTab_->setGeometry(0, 0, width(), innerHeight);
+    locationsTab_->updateLocationWidgetsGeometry(listHeight);
 }
 
 void LocationsWindow::mouseMoveEvent(QMouseEvent *event)
@@ -181,7 +194,8 @@ void LocationsWindow::mousePressEvent(QMouseEvent *event)
         bDragPressed_ = true;
         dragPressPt_ = event->globalPosition().toPoint();
         dragInitialVisibleItemsCount_ = getCountVisibleItems();
-        dragInitialViewportHeight_ = locationsTab_->unscaledHeightOfItemViewport();
+        dragInitialViewportHeight_ = useHostViewport_ ? locationsTabHeightUnscaled_ - locationsTab_->headerHeight()
+                                                       : locationsTab_->unscaledHeightOfItemViewport();
 
         QPoint centerBtnDrag = mapToGlobal(middle.center());
         dragInitialBtnDragCenter_ = centerBtnDrag.y();
@@ -195,7 +209,8 @@ void LocationsWindow::mouseReleaseEvent(QMouseEvent *event)
     if (bDragPressed_)
     {
         bDragPressed_ = false;
-        int height = locationsTab_->unscaledHeightOfItemViewport();
+        int height = useHostViewport_ ? locationsTabHeightUnscaled_ - locationsTab_->headerHeight()
+                                      : locationsTab_->unscaledHeightOfItemViewport();
         setViewportHeight(height, true); // Make sure to get final size
         setViewportHeight(height, false);
         PersistentState::instance().setLocationsViewportHeight(height);
