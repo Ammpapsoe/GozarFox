@@ -9,9 +9,11 @@ tunnel.
 
 ## Pinned original UI source
 
-The unmodified GUI, frontend-common and client-common sources and license are
-copied to `vendor/windscribe` from Windscribe/Desktop-App `v2.26.2`, commit
-`5578945964760be0bf234c506fdbcbcfe07c974d`. `fetch-upstream.sh` reproduces a clean full
+The GUI, frontend-common and client-common sources and license were copied to
+`vendor/windscribe` from Windscribe/Desktop-App `v2.26.2`, commit
+`5578945964760be0bf234c506fdbcbcfe07c974d`. The two `locationsmenu` files have
+since been modified for Gozar as recorded in `vendor/windscribe/UPSTREAM.txt`;
+the other copied source files remain at that pin. `fetch-upstream.sh` reproduces a clean full
 checkout elsewhere and refuses an existing directory. Its source is
 GPL v2; the exact applicable version, component licences, font and artwork
 terms, trademarks and compatibility with Gozar's AGPL components require
@@ -128,9 +130,12 @@ and original location model using a simulated core on Windows, Linux and macOS.
 The binding invalidates the previous catalogue on refresh, account change,
 unknown state or core exit; old entries cannot be used if a refresh fails.
 Other tabs, automatic best-server selection and persisted favorites are not
-integrated by this test. Rejecting an unsupported tab signal alone does not
-undo the upstream menu's own selected-tab state; that still needs fixing before
-this UI can be shipped. `bindOriginalLocationsNavigation` is an unverified
+integrated. The modified upstream menu can restrict interaction to all/search
+before it changes the tab or persistence; it hides unsupported tabs, maps the
+right-arrow shortcut to search, and normalizes an unsupported persisted tab.
+The isolated Qt test covers the menu slots, keyboard and persisted state; this
+is not a complete application or a guarantee about unconnected controllers.
+`bindOriginalLocationsNavigation` is an unverified
 adapter for the original MainWindowController expansion/collapse API; it has not
 been exercised with the real controller. `bindOriginalPowerControl` is an
 experimental adapter for the original power button: it disables it when the core state is unknown,

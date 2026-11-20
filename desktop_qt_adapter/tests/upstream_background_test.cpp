@@ -13,6 +13,7 @@
 #include "connectwindow/background.h"
 #include "connectwindow/connectbutton.h"
 #include "connectwindow/connectwindowitem.h"
+#include "backend/persistentstate.h"
 #include "locations/locationsmodel_manager.h"
 #include "locationswindow/locationswindow.h"
 #include "preferenceswindow/comboboxitem.h"
@@ -435,13 +436,44 @@ void UpstreamBackgroundTest::locationsMapAndSelection() {
     Preferences preferences;
     PreferencesHelper helper;
     QGraphicsScene homeScene;
+    // A prior Windscribe configuration can contain a tab Gozar cannot service.
+    PersistentState::instance().setLastLocationTab(LOCATION_TAB_STATIC_IPS_LOCATIONS);
     auto *home = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
     homeScene.addItem(home);
     LocationsWindow window(nullptr, &preferences, &manager);
     window.resize(350, 430);
     window.show();
     bindOriginalLocations(&window, &manager, &binder, &catalog);
-    bindOriginalLocationControls(home, &window, &binder);
+    QVERIFY(bindOriginalLocationControls(home, &window, &binder));
+    ConnectWindow::LocationsMenu *menu = nullptr;
+    for (auto *item : home->childItems()) {
+        if (auto *button = dynamic_cast<ConnectWindow::LocationsButton *>(item))
+            for (auto *child : button->childItems())
+                if (auto *candidate = dynamic_cast<ConnectWindow::LocationsMenu *>(child)) menu = candidate;
+    }
+    QVERIFY(menu);
+    QSignalSpy tabs(menu, &ConnectWindow::LocationsMenu::locationTabClicked);
+    QTRY_COMPARE_WITH_TIMEOUT(PersistentState::instance().lastLocationTab(), LOCATION_TAB_ALL_LOCATIONS, 5000);
+    QCOMPARE(menu->currentTab(), LOCATION_TAB_ALL_LOCATIONS);
+    // Even invoking the original private slots cannot mutate visual/persisted
+    // state or emit unsupported tabs after the restriction is installed.
+    const int initialTabs = tabs.size();
+    QVERIFY(QMetaObject::invokeMethod(menu, "onConfiguredLocationsClicked", Qt::DirectConnection));
+    QVERIFY(QMetaObject::invokeMethod(menu, "onStaticIpsLocationsClicked", Qt::DirectConnection));
+    QVERIFY(QMetaObject::invokeMethod(menu, "onFavoriteLocationsClicked", Qt::DirectConnection));
+    QCOMPARE(tabs.size(), initialTabs);
+    QCOMPARE(menu->currentTab(), LOCATION_TAB_ALL_LOCATIONS);
+    QCOMPARE(PersistentState::instance().lastLocationTab(), LOCATION_TAB_ALL_LOCATIONS);
+    QKeyEvent right(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+    QVERIFY(menu->handleKeyPressEvent(&right));
+    QCOMPARE(menu->currentTab(), LOCATION_TAB_SEARCH_LOCATIONS);
+    QCOMPARE(tabs.size(), initialTabs + 1);
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QVERIFY(menu->handleKeyPressEvent(&escape));
+    QCOMPARE(menu->currentTab(), LOCATION_TAB_ALL_LOCATIONS);
+    QCOMPARE(PersistentState::instance().lastLocationTab(), LOCATION_TAB_ALL_LOCATIONS);
+    menu->setIsExternalConfigMode(true); // unsupported external mode is ignored
+    QCOMPARE(menu->currentTab(), LOCATION_TAB_ALL_LOCATIONS);
     FakeNavigationController navigation(home);
     bindOriginalLocationsNavigation(&navigation, &binder);
     QSignalSpy errors(&binder, &HomeBinder::error);

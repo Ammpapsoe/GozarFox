@@ -23,6 +23,11 @@ public:
 
     void setIsExternalConfigMode(bool isExternalConfigMode);
 
+    // Gozar integration: its current backend implements only all/search.
+    // Apply before the queued restore of the persisted tab can run.
+    void restrictToGozarLocations();
+    LOCATION_TAB currentTab() const { return curTab_; }
+
     bool handleKeyPressEvent(QKeyEvent *event);
     void dismiss();
 
@@ -65,10 +70,11 @@ private:
     QTimer searchTypingDelayTimer_;
 
     QString filterText_;
-    LOCATION_TAB curTab_;
-    LOCATION_TAB prevTab_;
+    LOCATION_TAB curTab_ = LOCATION_TAB_ALL_LOCATIONS;
+    LOCATION_TAB prevTab_ = LOCATION_TAB_ALL_LOCATIONS;
 
     bool isExternalConfigMode_;
+    bool gozarAllAndSearchOnly_ = false;
 
     void updatePositions();
     void updateSelectedTab(IconButton *button);

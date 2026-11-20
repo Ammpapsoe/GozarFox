@@ -52,6 +52,11 @@ LocationsMenu::LocationsMenu(ScalableGraphicsObject *parent)
 
     // Do this when main thread returns to the event loop.  We can't do this now because these events trigger signals which are not connected by parent yet.
     QTimer::singleShot(0, this, [this]() {
+        if (gozarAllAndSearchOnly_) {
+            // Do not restore a tab that the Gozar backend cannot service.
+            onAllLocationsClicked();
+            return;
+        }
         switch(PersistentState::instance().lastLocationTab()) {
         case LOCATION_TAB_CONFIGURED_LOCATIONS:
             onConfiguredLocationsClicked();
@@ -114,6 +119,7 @@ void LocationsMenu::onAllLocationsClicked()
 
 void LocationsMenu::onConfiguredLocationsClicked()
 {
+    if (gozarAllAndSearchOnly_) return;
     updateSelectedTab(configuredLocations_);
     prevTab_ = curTab_;
     curTab_ = LOCATION_TAB_CONFIGURED_LOCATIONS;
@@ -123,6 +129,7 @@ void LocationsMenu::onConfiguredLocationsClicked()
 
 void LocationsMenu::onStaticIpsLocationsClicked()
 {
+    if (gozarAllAndSearchOnly_) return;
     updateSelectedTab(staticIpsLocations_);
     prevTab_ = curTab_;
     curTab_ = LOCATION_TAB_STATIC_IPS_LOCATIONS;
@@ -132,6 +139,7 @@ void LocationsMenu::onStaticIpsLocationsClicked()
 
 void LocationsMenu::onFavoriteLocationsClicked()
 {
+    if (gozarAllAndSearchOnly_) return;
     updateSelectedTab(favoriteLocations_);
     prevTab_ = curTab_;
     curTab_ = LOCATION_TAB_FAVORITE_LOCATIONS;
@@ -229,7 +237,7 @@ void LocationsMenu::hideSearch()
     updatePositions();
 
     // Menu buttons are shown when animation is finished
-    startAnAnimation(searchAnimation_, curSearchPos_, 140, ANIMATION_SPEED_FAST);
+    startAnAnimation(searchAnimation_, curSearchPos_, gozarAllAndSearchOnly_ ? 35 : 140, ANIMATION_SPEED_FAST);
 }
 
 void LocationsMenu::onSearchAnimationValueChanged(const QVariant &value)
@@ -247,9 +255,11 @@ void LocationsMenu::onSearchAnimationFinished()
         updatePositions();
     } else {
         allLocations_->show();
-        configuredLocations_->show();
-        staticIpsLocations_->show();
-        favoriteLocations_->show();
+        if (!gozarAllAndSearchOnly_) {
+            configuredLocations_->show();
+            staticIpsLocations_->show();
+            favoriteLocations_->show();
+        }
         updatePositions();
     }
 }
@@ -328,6 +338,10 @@ bool LocationsMenu::handleLeftKey()
 
 bool LocationsMenu::handleRightKey()
 {
+    if (gozarAllAndSearchOnly_ && curTab_ == LOCATION_TAB_ALL_LOCATIONS) {
+        onSearchLocationsClicked();
+        return true;
+    }
     if (curTab_ == LOCATION_TAB_SEARCH_LOCATIONS) {
         return false;
     }
@@ -351,8 +365,32 @@ void LocationsMenu::dismiss()
     }
 }
 
+void LocationsMenu::restrictToGozarLocations()
+{
+    if (gozarAllAndSearchOnly_) return;
+    gozarAllAndSearchOnly_ = true;
+    isExternalConfigMode_ = false;
+    configuredLocations_->setClickable(false);
+    staticIpsLocations_->setClickable(false);
+    favoriteLocations_->setClickable(false);
+    configuredLocations_->hide();
+    staticIpsLocations_->hide();
+    favoriteLocations_->hide();
+    if (curTab_ != LOCATION_TAB_ALL_LOCATIONS && curTab_ != LOCATION_TAB_SEARCH_LOCATIONS)
+        onAllLocationsClicked();
+    if (prevTab_ != LOCATION_TAB_ALL_LOCATIONS) prevTab_ = LOCATION_TAB_ALL_LOCATIONS;
+    if (curTab_ != LOCATION_TAB_SEARCH_LOCATIONS) {
+        curSearchPos_ = 35;
+        allLocations_->show();
+        searchLocations_->show();
+    }
+    updatePositions();
+}
+
 void LocationsMenu::setIsExternalConfigMode(bool isExternalConfigMode)
 {
+    // Gozar has no custom-config tab; keep the supported controls visible.
+    if (gozarAllAndSearchOnly_) return;
     isExternalConfigMode_ = isExternalConfigMode;
 
     if (isExternalConfigMode) {

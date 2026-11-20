@@ -1,5 +1,9 @@
 Repository: https://github.com/Windscribe/Desktop-App
 Tag: v2.26.2
 Commit: 5578945964760be0bf234c506fdbcbcfe07c974d
-Copied unchanged: src/client/frontend/gui, src/client/frontend/frontend-common, src/client/client-common, LICENSE.
+Copied from upstream: src/client/frontend/gui, src/client/frontend/frontend-common, src/client/client-common, LICENSE.
+Gozar modification: src/client/frontend/gui/connectwindow/locationsmenu.cpp and
+locationsmenu.h were changed to optionally restrict tabs to all/search before
+state changes and persisted-tab restoration. Default upstream behavior remains
+when the optional Gozar restriction is not requested.
 Development snapshot only; not a release.

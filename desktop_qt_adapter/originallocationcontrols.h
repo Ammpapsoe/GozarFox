@@ -6,15 +6,36 @@
 
 // Connect original Windscribe search and keyboard events to the original
 // locations widget. The application still owns expansion/collapse animation.
-// Custom configs, static IPs and favorites are not connected to Gozar; reject
-// those tabs instead of presenting empty or simulated functionality.
-inline void bindOriginalLocationControls(ConnectWindow::ConnectWindowItem *home,
+// The modified upstream menu must reject unsupported tabs before changing
+// visual or persisted state; filtering the outgoing signal alone is too late.
+inline bool bindOriginalLocationControls(ConnectWindow::ConnectWindowItem *home,
                                          LocationsWindow *locations, HomeBinder *binder) {
     Q_ASSERT(home && locations && binder);
-    if (home->thread() != locations->thread()) {
+    if (home->thread() != locations->thread() || home->thread() != binder->thread()) {
         emit binder->error(QStringLiteral("location controls must share the GUI thread"));
-        return;
+        return false;
     }
+    ConnectWindow::LocationsMenu *menu = nullptr;
+    for (auto *item : home->childItems()) {
+        auto *button = dynamic_cast<ConnectWindow::LocationsButton *>(item);
+        if (!button) continue;
+        for (auto *child : button->childItems()) {
+            auto *candidate = dynamic_cast<ConnectWindow::LocationsMenu *>(child);
+            if (!candidate) continue;
+            if (menu) {
+                home->setClickable(false);
+                emit binder->error(QStringLiteral("ambiguous original locations menu"));
+                return false;
+            }
+            menu = candidate;
+        }
+    }
+    if (!menu || menu->property("gozarLocationsBound").toBool()) {
+        home->setClickable(false);
+        emit binder->error(QStringLiteral("original locations menu missing or already bound"));
+        return false;
+    }
+    menu->setProperty("gozarLocationsBound", true);
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::searchFilterChanged,
                      locations, &LocationsWindow::onSearchFilterChanged);
     // The original signal carries a stack-owned QKeyEvent*. Widgets live in the
@@ -30,4 +51,6 @@ inline void bindOriginalLocationControls(ConnectWindow::ConnectWindowItem *home,
             emit safeBinder->error(QStringLiteral("location tab is not supported by Gozar yet"));
         }
     });
+    menu->restrictToGozarLocations();
+    return true;
 }
