@@ -9,6 +9,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'core.dart';
+import 'original_ui_process_target.dart';
 import 'ui_handoff.dart';
 import 'strings.dart';
 import 'windscribe_home.dart';
@@ -28,7 +29,14 @@ Future<void> main() async {
     windowButtonVisibility: false,
     title: 'Gozar',
   );
-  runApp(const GozarApp(windowControls: true));
+  // The bundled Qt app does not exist yet. This flag is opt-in for future
+  // integration builds and must remain off for releases until the complete
+  // original UI, lifecycle, packaging, and licensing are ready.
+  const enableOriginalQt = bool.fromEnvironment('GOZAR_EXPERIMENTAL_ORIGINAL_QT');
+  runApp(GozarApp(
+    windowControls: true,
+    originalUiTarget: enableOriginalQt ? OriginalUiProcessTarget.bundled() : null,
+  ));
   unawaited(windowManager.waitUntilReadyToShow(options, () async {
     if (Platform.isWindows) await windowManager.setAsFrameless();
     await windowManager.show();

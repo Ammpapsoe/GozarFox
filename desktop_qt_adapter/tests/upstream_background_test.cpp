@@ -1,5 +1,6 @@
 #include "corebridge.h"
 #include "homebinder.h"
+#include "uireadiness.h"
 #include "uilanguage.h"
 #include "languagecontroller.h"
 #include "originalhomebinding.h"
@@ -356,11 +357,19 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     bindOriginalHomeWindow(window, &binder);
     QVERIFY(bindOriginalPowerControl(window, &binder));
     QVERIFY(!power->isClickable()); // state is not known yet
+    view.hide();
+    UiReadiness readiness(&view, &binder);
+    QSignalSpy readyToTransfer(&readiness, &UiReadiness::readyForHandoff);
+    readiness.markUiInitialized(); // fixture marks only this isolated window
+    QCOMPARE(readyToTransfer.size(), 0);
     QSignalSpy states(&binder, &HomeBinder::stateChanged);
     QSignalSpy clicks(window, &ConnectWindow::ConnectWindowItem::connectClick);
     QSignalSpy stopped(&bridge, &CoreBridge::stopped);
     QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
     QTRY_VERIFY_WITH_TIMEOUT(!states.isEmpty(), 5000);
+    QCOMPARE(readyToTransfer.size(), 0); // hidden window is not ready
+    view.show();
+    QTRY_COMPARE_WITH_TIMEOUT(readyToTransfer.size(), 1, 5000);
     QVERIFY(power->isClickable());
     binder.selectServer(QStringLiteral("de.example"), QStringLiteral("DE"));
     QTRY_COMPARE_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("server").toObject().value("code").toString(), QStringLiteral("DE"), 5000);
@@ -368,6 +377,7 @@ void UpstreamBackgroundTest::originalWindowConnectWithFakeCore() {
     QTest::mouseClick(view.viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
     QTRY_COMPARE_WITH_TIMEOUT(clicks.size(), 1, 5000);
     QTRY_VERIFY_WITH_TIMEOUT(states.last().at(0).toJsonObject().value("live").toBool(), 5000);
+    QCOMPARE(readyToTransfer.size(), 1);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
     QVERIFY(!power->isClickable());

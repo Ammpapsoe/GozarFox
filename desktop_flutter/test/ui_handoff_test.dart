@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gozar/core.dart';
+import 'package:gozar/original_ui_process_target.dart';
 import 'package:gozar/ui_handoff.dart';
 
 class Target implements OriginalUiTarget {
@@ -93,6 +94,30 @@ void main() {
   });
 
   final fakePath = Platform.environment['GOZAR_HANDOFF_TEST_CORE'];
+  test('process launcher refuses missing executable before stopping core', () async {
+    final core = HandoffCore(CoreHandoffResult.ready);
+    final target = OriginalUiProcessTarget('this-file-does-not-exist-gozar-qt');
+    expect(await OriginalUiHandoff(core, target).transfer(), OriginalUiHandoffResult.unavailable);
+    expect(core.attempts, 0);
+    expect(core.running, isTrue);
+  });
+  test('process launcher rejects invalid or absent readiness and cannot retry', () async {
+    for (final mode in ['invalid', 'oversize', 'exit']) {
+      final target = OriginalUiProcessTarget(fakePath!, environment: {'FAKE_UI_MODE': mode});
+      expect(await target.isAvailable(), isTrue);
+      expect(await target.startAndWaitReady(), isFalse);
+      expect(await target.startAndWaitReady(), isFalse);
+    }
+  }, skip: fakePath == null ? 'Requires the GitHub-built process fixture' : false);
+  test('actual old process exits before separate launcher fixture acknowledges readiness', () async {
+    final core = Core(executablePath: fakePath);
+    await core.start();
+    expect((await core.call('state')).state?.signedIn, isTrue);
+    final target = OriginalUiProcessTarget(fakePath!, environment: {'FAKE_UI_MODE': 'ready'});
+    expect(await OriginalUiHandoff(core, target).transfer(), OriginalUiHandoffResult.ready);
+    expect(core.running, isFalse);
+  }, skip: fakePath == null ? 'Requires the GitHub-built process fixture' : false);
+
   test('actual process exits before target launch is attempted', () async {
     final core = Core(executablePath: fakePath);
     await core.start();

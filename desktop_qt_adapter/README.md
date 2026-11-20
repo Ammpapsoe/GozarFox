@@ -43,11 +43,23 @@ states and waits for quit acknowledgement and process exit. Experimental
 `OriginalUiHandoff` can be injected into the unchanged Flutter login flow and
 existing signed-in startup. It checks target availability before shutdown and
 will only invoke the target after the previous core reports successful shutdown
-and exits. A target must acknowledge that its UI is initialized and its own
-core is signed in and disconnected; timeout or failure does not authorize a
-fallback core. The shipped entry point does not provide a Qt target yet, so
-this injection is inactive and does not launch the Qt UI. A caller must not
-launch the next owner on an unconfirmed result. The fallback
+and exits. `OriginalUiProcessTarget` starts the fixed sibling executable
+`gozar-original-ui` (`.exe` on Windows), passing only `--handoff-stdio-v1`;
+stdout is reserved for the single readiness line `GOZAR_QT_READY_V1`. Its
+preflight verifies a regular file (and executable permission on Unix), but is
+not a signature check and cannot eliminate changes between checking and
+starting. It rejects malformed output and early exit, and never kills the child
+or starts a replacement on timeout. A child must report ready only after its UI
+is initialized and its own core is signed in and disconnected. `UiReadiness`
+provides an experimental Qt-side gate for a visible window and verified core
+state, but the complete application still has to call it only when the UI is
+actually ready and write the protocol line. Visibility does not establish GUI
+correctness or OS cleanup. The process launcher has been exercised only with a
+simulated executable, and the Qt-side gate only in an isolated widget test.
+No real Qt application executable is built or packaged yet. The entry point
+remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-time
+opt-in for future integration builds, not permission to distribute this WIP.
+A caller must not launch the next owner on an unconfirmed result. The fallback
 alone does not guarantee successful cleanup after a crash or when the event loop
 exits. The included fake core is only for tests and must never ship as the real
 core.

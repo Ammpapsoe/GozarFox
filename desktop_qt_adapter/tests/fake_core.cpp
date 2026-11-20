@@ -8,7 +8,21 @@
 
 int main(int argc, char **argv) {
     QCoreApplication app(argc, argv);
-    if (app.arguments().size() != 2 || app.arguments()[1] != QStringLiteral("--rpc")) return 2;
+    if (app.arguments().size() != 2) return 2;
+    if (app.arguments()[1] == QStringLiteral("--handoff-stdio-v1")) {
+        // Test-only process fixture for the Dart launcher's bounded protocol.
+        // It is not a Qt UI and must never be packaged as one.
+        const QByteArray mode = qgetenv("FAKE_UI_MODE");
+        if (mode == "exit") return 0;
+        if (mode == "invalid") std::fputs("NOT_READY\n", stdout);
+        else if (mode == "oversize") std::fputs(QByteArray(140, 'x').constData(), stdout);
+        else if (mode == "ready") std::fputs("GOZAR_QT_READY_V1\n", stdout);
+        else return 2;
+        std::fflush(stdout);
+        QThread::msleep(1200);
+        return 0;
+    }
+    if (app.arguments()[1] != QStringLiteral("--rpc")) return 2;
     char line[65536];
     QString countryCode;
     QString mode = QStringLiteral("tun");
