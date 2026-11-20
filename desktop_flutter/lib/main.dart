@@ -480,11 +480,8 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
   Future<void> _switchAuthentication() async {
     if (_busy) return;
     setState(() => _busy = true);
-    var cancellationConfirmed = false;
     try {
-      final reply = await _core.call('cancel_auth');
-      cancellationConfirmed = reply.stateVerified && reply.errorVerified &&
-          reply.error == null && reply.state?.signedIn == true;
+      await _core.call('cancel_auth');
     } on Object {
       return;
     } finally {
