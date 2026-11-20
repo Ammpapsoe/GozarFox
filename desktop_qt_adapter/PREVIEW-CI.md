@@ -6,8 +6,10 @@ or public distribution approval is implied. If the repository's Actions or
 branch settings block that push event, have an administrator enable it. Do not
 place credentials or signing material in the branch.
 
-The matrix builds Windows x64, Linux x64, and both Intel and Apple Silicon
-macOS bundles. Each job:
+The preview branch runs only the Windows x64 package job. The reusable
+workflow can still build Linux x64 and Intel/Apple Silicon macOS bundles when
+called with `windows_only: false`. No preview push tags or publishes anything.
+Each job:
 
 1. Verifies the published 1.19.0 desktop archive against its pinned SHA-256,
    then extracts only `gozar-core` (`gozar-core.exe` on Windows).
@@ -25,7 +27,18 @@ macOS bundles. Each job:
    executable signatures need not be byte-for-byte identical to the source
    archive. The Go sources are never modified or rebuilt by this workflow.
 
-GitHub artifact names: `gozar-qt-screenshots-*` and
+On Windows the workflow runs Flutter analysis and handoff tests with the built
+fixtures, deploys the real Qt runtime and app-local MSVC runtime, and builds one
+unsigned NSIS setup EXE. A runner smoke installs it, checks its layout and core
+hash, starts the installed Qt in a temporary signed-out profile with the Windows
+Qt plugin, and verifies removal. The EXE is uploaded **only after** the checks:
+`gozar-qt-windows-test-exe` → `Gozar-Qt-Experimental-Windows-x64-Setup.exe`.
+The Actions artifact wrapper is a ZIP containing that single EXE. Sign-in may
+require Microsoft's WebView2 runtime. Quit stable Gozar before opening the
+preview; account/config data are shared even though installed files, Start
+Menu shortcut and uninstall registration are separate.
+
+Other artifact names: `gozar-qt-screenshots-*` and
 `gozar-qt-real-core-*-EXPERIMENTAL-NOT-RELEASE`. The local test results do not
 establish Windows/macOS runtime behavior, independent tunnel cleanup, or legal
 approval. See `EXPERIMENTAL-WARNING.txt` and `RELEASE-LICENSE-REVIEW.md`.

@@ -50,10 +50,12 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVariantAnimation>
 #include <cstdio>
 #ifdef GOZAR_HANDOFF_CI_FIXTURE
 #include <QElapsedTimer>
 #include <QTest>
+#include "preferenceswindow/toggleitem.h"
 #endif
 
 namespace {
@@ -163,12 +165,22 @@ int main(int argc, char **argv) {
     status.setStyleSheet(QStringLiteral("color: #ffe2a7; background: #182232;"));
     status.hide();
     layout.addWidget(&status);
+    QWidget locationsClip;
     gui_locations::LocationsModelManager manager;
     LocationsWindow locations(nullptr, &preferences, &manager);
     locations.useHostViewport();
     for (auto *view : locations.findChildren<gui_locations::LocationsView *>()) view->setGozarPresentation();
-    layout.addWidget(&locations);
-    locations.hide();
+    // Reveal the original window as one panel, rather than resizing its rows on
+    // each frame. The child keeps its full viewport and footer geometry.
+    locationsClip.setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    locations.setParent(&locationsClip);
+    layout.addWidget(&locationsClip);
+    locationsClip.hide();
+    bool locationsExpanded = false;
+    qreal locationsProgress = 0;
+    QVariantAnimation locationsMotion;
+    constexpr int locationsMotionMs = 250; // Windscribe EXPAND_ANIMATION_DURATION
+
     GozarPreferences settingsView(&binder, &language, &helper, probe);
     enum class FlutterReturn { None, Login, AddAccount };
     FlutterReturn flutterReturn = FlutterReturn::None;
@@ -210,6 +222,9 @@ int main(int argc, char **argv) {
         const int statusHeight = status.isHidden() ? 0 : status.heightForWidth(width);
         const int room = qMax(1, available - homeHeight - qMax(0, statusHeight) - 12);
         locations.setFixedSize(width, qMin(room, qCeil(locations.tabAndFooterHeight() * G_SCALE)));
+        const int visibleLocationsHeight = qRound(locations.height() * locationsProgress);
+        locationsClip.setFixedSize(width, visibleLocationsHeight);
+        locations.move(0, visibleLocationsHeight - locations.height());
         if (!settingsView.isHidden()) settingsView.fitPanel(width, room);
         layout.invalidate();
         shell.setFixedSize(width, layout.sizeHint().height());
@@ -272,15 +287,33 @@ int main(int argc, char **argv) {
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::minimizeClick, &shell, &QWidget::showMinimized);
     QShortcut escape(QKeySequence(Qt::Key_Escape), &shell);
     escape.setEnabled(false);
-    const auto setLocations = [&](bool expand) {
-        locations.setVisible(expand);
-        home->updateLocationsState(expand);
-        if (expand) binder.loadServers();
+    const auto renderLocations = [&](qreal progress) {
+        locationsProgress = progress;
+        locationsClip.setVisible(locationsExpanded || progress > 0);
         fitWindow();
+    };
+    QObject::connect(&locationsMotion, &QVariantAnimation::valueChanged, &shell,
+        [&](const QVariant &value) { renderLocations(value.toReal()); });
+    const auto setLocations = [&](bool expand, bool animated) {
+        locationsMotion.stop();
+        locationsExpanded = expand;
+        home->updateLocationsState(expand);
+        locations.setEnabled(expand);
+        if (expand) binder.loadServers();
+        const qreal target = expand ? 1.0 : 0.0;
+        if (!animated || qFuzzyCompare(locationsProgress, target)) {
+            renderLocations(target);
+            return;
+        }
+        renderLocations(locationsProgress);
+        locationsMotion.setDuration(qMax(1, qRound(locationsMotionMs * qAbs(target - locationsProgress))));
+        locationsMotion.setStartValue(locationsProgress);
+        locationsMotion.setEndValue(target);
+        locationsMotion.start();
     };
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::preferencesClick, &shell, [&] {
         const bool open = settingsView.isHidden();
-        setLocations(false);
+        setLocations(false, false);
         settingsView.setVisible(open);
         escape.setEnabled(open);
         fitWindow();
@@ -288,7 +321,7 @@ int main(int argc, char **argv) {
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::locationsClick, &shell, [&] {
         settingsView.hide();
         escape.setEnabled(false);
-        setLocations(locations.isHidden());
+        setLocations(!locationsExpanded, true);
     });
     QObject::connect(&escape, &QShortcut::activated, &shell, [&] {
         // Keep Escape available to the original locations search widget.
@@ -399,6 +432,32 @@ int main(int argc, char **argv) {
                         QTest::qWait(300); // capture the final state of the original tab animation
                         shell.grab().save(QDir(screenshots).filePath("connection-settings.png"));
                     }
+                    const auto settle = [&] {
+                        QElapsedTimer pending;
+                        pending.start();
+                        while (!binder.isAvailable() && pending.elapsed() < 3000) QTest::qWait(20);
+                        return binder.isAvailable();
+                    };
+                    // Proxy modes reject Connect while either persisted TUN option
+                    // is on. Validate they can be cleared without leaving proxy mode.
+                    binder.setKillSwitch(true);
+                    if (!settle()) return false;
+                    binder.setWarpUdp(true, true);
+                    if (!settle()) return false;
+                    binder.setMode(QStringLiteral("proxy-only"));
+                    if (!settle() || binder.currentState().value("mode").toString() != QLatin1String("proxy-only")) return false;
+                    for (const auto *name : {"kill_switch", "warp_udp"}) {
+                        PreferencesWindow::ToggleItem *toggle = nullptr;
+                        for (auto *item : settingsView.scene()->items()) {
+                            auto *candidate = qobject_cast<PreferencesWindow::ToggleItem *>(item->toGraphicsObject());
+                            if (candidate && candidate->objectName() == QLatin1String(name)) { toggle = candidate; break; }
+                        }
+                        if (!toggle || !toggle->isEnabled() || !toggle->isChecked()) return false;
+                        emit toggle->stateChanged(false);
+                        if (!settle() || binder.currentState().value(QLatin1String(name)).toBool() || toggle->isEnabled()) return false;
+                    }
+                    binder.setMode(QStringLiteral("tun"));
+                    if (!settle()) return false;
                     QTest::mouseClick(settingsView.viewport(), Qt::LeftButton, Qt::NoModifier,
                                       settingsView.mapFromScene(QPointF(32 * G_SCALE, 88 * G_SCALE)));
                     if (settingsView.property("gozarPage").toString() != QStringLiteral("account")) return false;
@@ -424,8 +483,10 @@ int main(int argc, char **argv) {
                     while (binder.currentState().value("email").toString() != QLatin1String("personal@example.test") && accountWait.elapsed() < 3000) QTest::qWait(20);
                     if (binder.currentState().value("email").toString() != QLatin1String("personal@example.test")) return false;
                     emit home->locationsClick();
+                    if (!locations.isVisible() || locationsClip.height() == locations.height()) return false;
+                    QTest::qWait(locationsMotionMs + 70);
                     const auto *locationsTab = locations.findChild<GuiLocations::LocationsTab *>();
-                    if (!locations.isVisible() || settingsView.isVisible() || locations.y() != homeView.height() ||
+                    if (!locations.isVisible() || settingsView.isVisible() || locationsClip.y() != homeView.height() || locations.y() != 0 ||
                         !locationsTab || locationsTab->y() != 0 || locationsTab->height() >= locations.height()) return false;
                     QElapsedTimer wait;
                     wait.start();
@@ -470,6 +531,7 @@ int main(int argc, char **argv) {
                         shell.grab().save(QDir(screenshots).filePath("favourites.png"));
                     }
                     emit home->locationsClick();
+                    QTest::qWait(locationsMotionMs + 70);
                     if (locations.isVisible() || shell.size() != homeView.size()) return false;
                     binder.selectServer(QStringLiteral("gb.example"), QStringLiteral("GB"));
                     wait.restart();

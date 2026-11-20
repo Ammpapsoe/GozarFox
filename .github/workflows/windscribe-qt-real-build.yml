@@ -6,6 +6,10 @@ name: Experimental Qt real-core build (NOT a release)
 # release or a determination that distribution obligations are satisfied.
 on:
   workflow_call:
+    inputs:
+      windows_only:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,27 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-2022
-            qt_host: windows
-            platform: windows
-            arch: amd64
-            artifact: Windows-x64
-          - os: ubuntu-24.04
-            qt_host: linux
-            platform: linux
-            arch: amd64
-            artifact: Linux-x64
-          - os: macos-15-intel
-            qt_host: mac
-            platform: darwin
-            arch: amd64
-            artifact: macOS-Intel
-          - os: macos-15
-            qt_host: mac
-            platform: darwin
-            arch: arm64
-            artifact: macOS-ARM
+        include: ${{ fromJSON(inputs.windows_only && '[{"os":"windows-2022","qt_host":"windows","platform":"windows","arch":"amd64","artifact":"Windows-x64"}]' || '[{"os":"windows-2022","qt_host":"windows","platform":"windows","arch":"amd64","artifact":"Windows-x64"},{"os":"ubuntu-24.04","qt_host":"linux","platform":"linux","arch":"amd64","artifact":"Linux-x64"},{"os":"macos-15-intel","qt_host":"mac","platform":"darwin","arch":"amd64","artifact":"macOS-Intel"},{"os":"macos-15","qt_host":"mac","platform":"darwin","arch":"arm64","artifact":"macOS-ARM"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -108,19 +92,58 @@ jobs:
           set -euo pipefail
           cd desktop_flutter
           flutter pub get
+          export GOZAR_HANDOFF_TEST_CORE="${RUNNER_TEMP}/qt-build/Release/fake_core.exe"
+          export GOZAR_HANDOFF_TEST_QT="${RUNNER_TEMP}/qt-build/Release/gozar_qt_handoff_fixture.exe"
+          test -s "$GOZAR_HANDOFF_TEST_CORE" && test -s "$GOZAR_HANDOFF_TEST_QT"
+          flutter analyze
+          flutter test --no-pub test/ui_test.dart test/core_handoff_test.dart test/ui_handoff_test.dart
           flutter build windows --release --dart-define=GOZAR_EXPERIMENTAL_ORIGINAL_QT=true
           runner=$(find build/windows -path '*/runner/Release/gozar.exe' -print -quit)
           test -n "$runner"
-          folder=$(dirname "$runner")
+          folder="${RUNNER_TEMP}/gozar-qt-windows-stage"
+          mkdir -p "$folder"
+          cp -a "$(dirname "$runner")/." "$folder/"
+          find "$folder" -type f \( -iname '*.pdb' -o -iname '*.lib' -o -iname '*.exp' \) -delete
           cp "${RUNNER_TEMP}/qt-build/Release/gozar-original-ui.exe" "$folder/gozar-original-ui.exe"
           cp "$GOZAR_OFFICIAL_CORE" "$folder/gozar-core.exe"
-          windeployqt --release --no-translations --dir "$folder" "$folder/gozar-original-ui.exe"
-          cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
+          windeployqt --release --no-translations --no-compiler-runtime --dir "$folder" "$folder/gozar-original-ui.exe"
+          cp ../LICENSE ../NOTICE ../WINTUN-LICENSE.txt ../QUIC-GO-LICENSE.txt ../QPACK-LICENSE.txt ../GO-DEPS-LICENSES.txt "$folder/"
           cp ../desktop_qt_adapter/vendor/windscribe/LICENSE "$folder/WINDSCRIBE-GPL-2-LICENSE.txt"
           cp ../desktop_qt_adapter/branding/VAZIRMATN-OFL.txt "$folder/"
           cp ../desktop_qt_adapter/EXPERIMENTAL-WARNING.txt "$folder/"
-          mkdir -p ../qt-build-output
-          python -c 'import shutil,sys; shutil.make_archive(sys.argv[1], "zip", root_dir=sys.argv[2])' ../qt-build-output/Gozar-Qt-EXPERIMENTAL-Windows-x64 "$folder"
+      - name: Compile one unsigned experimental Windows setup EXE
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'gozar-qt-windows-stage'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio C++ tools not available' }
+          $redist = Get-ChildItem "$vs\VC\Redist\MSVC" -Directory | Where-Object Name -Match '^\d+\.\d+\.\d+$' | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (!$redist) { throw 'Visual C++ Redistributable files not found' }
+          $crt = Join-Path $redist.FullName 'x64\Microsoft.VC143.CRT'
+          Copy-Item "$crt\*.dll" $stage
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          if (!(Test-Path $compiler)) { choco install nsis --no-progress -y }
+          if (!(Test-Path $compiler)) { throw 'NSIS compiler not available' }
+          $out = Join-Path $env:GITHUB_WORKSPACE 'qt-build-output'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $removal = Join-Path $env:RUNNER_TEMP 'gozar-qt-remove.nsh'
+          python packaging/windows/nsis-preview-payload.py $stage $removal
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to generate uninstall manifest' }
+          & $compiler /V2 "/DSOURCE=$stage" "/DREMOVE_PAYLOAD=$removal" "/DOUTPUT=$out\Gozar-Qt-Experimental-Windows-x64-Setup.exe" "/DICON_FILE=$env:GITHUB_WORKSPACE\desktop_flutter\windows\runner\resources\app_icon.ico" packaging/windows/gozar-qt-preview.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to compile setup EXE' }
+      - name: Install, smoke-test with unchanged core, and uninstall
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./scripts/test_qt_preview_installer.ps1 -Installer ./qt-build-output/Gozar-Qt-Experimental-Windows-x64-Setup.exe -VerifiedCore "$env:GOZAR_OFFICIAL_CORE"
+      - uses: actions/upload-artifact@v4
+        if: matrix.platform == 'windows'
+        with:
+          name: gozar-qt-windows-test-exe
+          path: qt-build-output/Gozar-Qt-Experimental-Windows-x64-Setup.exe
+          if-no-files-found: error
+          retention-days: 7
       - name: Build Linux development bundle
         if: matrix.platform == 'linux'
         shell: bash
@@ -171,6 +194,7 @@ jobs:
           mkdir -p ../qt-build-output
           tar -C "$(dirname "$app")" -cJf "../qt-build-output/Gozar-Qt-EXPERIMENTAL-${ARTIFACT}.tar.xz" Gozar.app
       - uses: actions/upload-artifact@v4
+        if: matrix.platform != 'windows'
         with:
           name: gozar-qt-real-core-${{ matrix.artifact }}-EXPERIMENTAL-NOT-RELEASE
           path: qt-build-output/*

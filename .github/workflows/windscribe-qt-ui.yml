@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       real_build_only:
-        description: Build owner-evaluation bundles using the unchanged official 1.19.0 core; also run integration tests
+        description: Build and test the owner-evaluation Windows x64 setup using the unchanged official 1.19.0 core
         required: false
         type: boolean
         default: true
@@ -19,6 +19,8 @@ jobs:
   real-core-build:
     if: ${{ github.event_name == 'push' || inputs.real_build_only == true }}
     uses: ./.github/workflows/windscribe-qt-real-build.yml
+    with:
+      windows_only: true
   ui-transport:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.real_build_only == false }}
     strategy:

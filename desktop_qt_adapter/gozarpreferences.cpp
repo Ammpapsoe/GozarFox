@@ -148,8 +148,8 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     project_ = new LinkItem(about_, LinkItem::EXTERNAL_LINK, {}, QStringLiteral("https://github.com/Ammpapsoe/GozarFox"));
     support_ = new LinkItem(about_, LinkItem::SUBPAGE_LINK);
     update_->setIcon(art("preferences/UPDATE_CHANNEL"));
-    project_->setIcon(art("preferences/APP_PREFERENCES"));
-    support_->setIcon(art("preferences/CRYPTO"));
+    project_->setIcon(art("update/INFO_ICON"));
+    support_->setIcon(art("locations/FAV_ICON_DESELECTED"));
     about_->addItem(version_);
     about_->addItem(update_);
     about_->addItem(project_);
@@ -194,17 +194,27 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     addToggle(connection_, "kill_switch", "Kill switch (next tunnel)", "قطع اضطراری (تونل بعدی)",
               [this](bool enabled) { binder_->setKillSwitch(enabled); }, true);
     addToggle(connection_, "warp_udp", "WARP UDP (experimental)", "WARP UDP (آزمایشی)", [this](bool enabled) {
+        const auto state = binder_->currentState();
+        const bool live = state.value(QStringLiteral("live")).toBool();
+        const auto reconnect = local("An active tunnel disconnects and reconnects; protection can be interrupted briefly.",
+            "تونل فعال قطع و دوباره برقرار می‌شود؛ ممکن است محافظت برای مدت کوتاهی قطع شود.");
         if (enabled) {
-            QMessageBox dialog(QMessageBox::Question, local("WARP UDP", "WARP UDP"),
-                local("Enable experimental WARP UDP for system tunnels? The change takes effect on reconnect. Confirm only if you accept Cloudflare's terms.",
-                      "WARP UDP آزمایشی برای تونل سیستم فعال شود؟ تغییر در اتصال بعدی اعمال می‌شود. فقط در صورت پذیرش شرایط کلادفلر تأیید کنید."),
-                QMessageBox::Yes | QMessageBox::Cancel, this);
-            auto *terms = dialog.addButton(local("Cloudflare terms", "شرایط کلادفلر"), QMessageBox::HelpRole);
+            const auto consent = local(
+                "A free WARP identity is registered and kept encrypted for reuse; turning this off does not unregister it. Cloudflare processes IPv4 UDP sent through WARP inside the Mozilla tunnel. Selective direct routing is paused while WARP is on. LAN, relay and IPv6 traffic may bypass the tunnel.",
+                "هویت رایگان WARP ثبت و برای استفادهٔ دوباره رمزگذاری و ذخیره می‌شود؛ خاموش‌کردن گزینه آن را حذف نمی‌کند. کلادفلر UDP نسخهٔ IPv4 را که از WARP در تونل موزیلا عبور می‌کند پردازش می‌کند. مسیریابی مستقیم انتخابی هنگام فعال بودن WARP متوقف می‌شود. ترافیک شبکهٔ محلی، رله و IPv6 ممکن است خارج از تونل باشد.");
+            QMessageBox dialog(QMessageBox::Question, local("Enable WARP UDP?", "WARP UDP فعال شود؟"),
+                consent + QStringLiteral("\n\n") + reconnect, QMessageBox::Cancel, this);
+            auto *accept = dialog.addButton(local("Accept Cloudflare’s terms", "پذیرش شرایط کلادفلر"), QMessageBox::AcceptRole);
+            auto *terms = dialog.addButton(local("Read terms", "خواندن شرایط"), QMessageBox::HelpRole);
             connect(terms, &QPushButton::clicked, &dialog, [] {
                 QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.cloudflare.com/application/terms/")));
             });
             dialog.setDefaultButton(QMessageBox::Cancel);
-            if (dialog.exec() != QMessageBox::Yes || dialog.clickedButton() == terms) return;
+            dialog.exec();
+            if (dialog.clickedButton() != accept) return;
+        } else if (live && QMessageBox::question(this, local("Disable WARP UDP?", "WARP UDP غیرفعال شود؟"),
+                    reconnect, QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) {
+            return;
         }
         binder_->setWarpUdp(enabled, enabled);
     }, true);
@@ -223,7 +233,7 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     syncChain();
     session_ = new LinkItem(connection_, LinkItem::SUBPAGE_LINK);
     session_->setObjectName(QStringLiteral("sessionRow"));
-    session_->setIcon(art("preferences/APP_PREFERENCES"));
+    session_->setIcon(art("pingbar/ON_FULL"));
     connection_->addItem(session_);
     connect(session_, &LinkItem::clicked, this, &GozarPreferences::showSession);
     routing_ = new LinkItem(connection_, LinkItem::TEXT_ONLY);
@@ -259,11 +269,14 @@ void GozarPreferences::addToggle(PreferencesWindow::PreferenceGroup *group, cons
                       type == "warp_udp" ? "preferences/PREFERRED_PROTOCOL" : "preferences/LOCATION_ORDER"));
     group->addItem(item);
     const QString name = QString::fromLatin1(key);
+    item->setObjectName(name);
     const auto sync = [this, item, name, tunnelOnly] {
         const auto state = binder_->currentState();
         const auto saved = state.value(name);
         item->setEnabled(!readOnly_ && saved.isBool() && binder_->isAvailable() &&
-                         (!tunnelOnly || state.value(QStringLiteral("mode")).toString() == QLatin1String("tun")));
+                         // In proxy mode an enabled setting blocks Connect. It
+                         // must remain possible to clear it without switching modes.
+                         (!tunnelOnly || saved.toBool() || state.value(QStringLiteral("mode")).toString() == QLatin1String("tun")));
         const QSignalBlocker blocker(item);
         item->setState(saved.toBool());
     };
@@ -446,7 +459,7 @@ void GozarPreferences::showDonation() {
     const auto address = QStringLiteral("UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3"); // same as desktop 1.19.0
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("supportGozar"));
-    auto *body = sheet(dialog, local("Support Gozar", "حمایت از گذر"), "preferences/CRYPTO");
+    auto *body = sheet(dialog, local("Support Gozar", "حمایت از گذر"), "locations/FAV_ICON_DESELECTED");
     plainLabel(dialog, body, local("Support development with TON.", "با رمزارز TON از توسعهٔ گذر حمایت کنید."));
     auto *value = plainLabel(dialog, body, address, true);
     auto fixed = QFontDatabase::systemFont(QFontDatabase::FixedFont);
@@ -473,7 +486,7 @@ void GozarPreferences::showDonation() {
 void GozarPreferences::showSession() {
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("sessionDetails"));
-    auto *body = sheet(dialog, local("Session details", "جزئیات نشست"), "preferences/CONNECTION_MODE");
+    auto *body = sheet(dialog, local("Session details", "جزئیات نشست"), "pingbar/ON_FULL");
     const auto state = binder_->currentState();
     const bool live = state.value(QStringLiteral("live")).toBool();
     const auto mode = state.value(QStringLiteral("mode")).toString();
