@@ -38,6 +38,8 @@ Function .onInit
   SetErrorLevel 2
   Abort
 ok:
+  ; ReadRegStr sets the error flag when there is no previous install.
+  ClearErrors
 FunctionEnd
 
 Function .onVerifyInstDir
@@ -66,6 +68,7 @@ Section "Gozar Qt application and core" Preview
   IfFileExists "$INSTDIR" 0 +3
     SetErrorLevel 2
     Abort "Choose a new folder for the preview."
+  ClearErrors
   SetOutPath "$INSTDIR"
   File /r "${PAYLOAD_PATTERN}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -89,6 +92,7 @@ SectionEnd
 Section "Uninstall"
   SetShellVarContext current
   ; Remove only the known deployed files; never delete a Gozar profile.
+  ClearErrors
   !include "${REMOVE_PAYLOAD}"
   IfErrors 0 +3
     SetErrorLevel 1
