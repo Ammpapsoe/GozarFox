@@ -1,11 +1,16 @@
 package tunnel
 
 import (
+	"context"
 	"errors"
 	"time"
 )
 
 func Latency(host string, port int, samples int, timeout time.Duration) (time.Duration, time.Duration, error) {
+	return LatencyContext(context.Background(), host, port, samples, timeout)
+}
+
+func LatencyContext(ctx context.Context, host string, port int, samples int, timeout time.Duration) (time.Duration, time.Duration, error) {
 	if samples < 1 {
 		samples = 1
 	}
@@ -19,7 +24,10 @@ func Latency(host string, port int, samples int, timeout time.Duration) (time.Du
 	var lastErr error
 	for index := 0; index < samples; index++ {
 		started := time.Now()
-		conn, err := dialTCP(host, port, timeout)
+		if err := ctx.Err(); err != nil {
+			return 0, 0, err
+		}
+		conn, err := dialTCPContext(ctx, host, port, timeout)
 		if err != nil {
 			lastErr = err
 			continue

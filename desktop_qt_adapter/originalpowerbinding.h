@@ -32,11 +32,11 @@ inline bool bindOriginalPowerControl(ConnectWindow::ConnectWindowItem *window, H
     }
     power->setProperty("gozarPowerBound", true);
     QObject::connect(binder, &HomeBinder::availabilityChanged, power,
-                     [power](bool available) { power->setClickable(available); });
+                     [power, binder](bool) { power->setClickable(binder->canTogglePower()); });
     QObject::connect(binder, &QObject::destroyed, power, [power] {
         power->setClickable(false);
         power->setProperty("gozarPowerBound", false);
     });
-    power->setClickable(binder->isAvailable());
+    power->setClickable(binder->canTogglePower());
     return true;
 }

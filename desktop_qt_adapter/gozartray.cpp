@@ -36,10 +36,13 @@ void GozarTray::rebuild() {
     menu_.clear();
     const auto state = binder_->currentState();
     const bool live = state.value(QStringLiteral("live")).toBool();
-    auto *power = menu_.addAction(live ? label("Disconnect", "قطع اتصال") : label("Connect", "اتصال"));
-    power->setEnabled(binder_->isAvailable());
-    connect(power, &QAction::triggered, this, [this, live] {
-        if (binder_->isAvailable() && binder_->currentState().value(QStringLiteral("live")).toBool() == live)
+    const bool cancel = binder_->canCancelConnect();
+    auto *power = menu_.addAction(cancel ? label("Cancel connection", "لغو اتصال") :
+        live ? label("Disconnect", "قطع اتصال") : label("Connect", "اتصال"));
+    power->setEnabled(binder_->canTogglePower());
+    connect(power, &QAction::triggered, this, [this, live, cancel] {
+        if (binder_->canTogglePower() && binder_->canCancelConnect() == cancel &&
+            binder_->currentState().value(QStringLiteral("live")).toBool() == live)
             binder_->toggleConnection();
     });
     const auto addLocationMenu = [this](const QString &title, QAbstractItemModel *model) {

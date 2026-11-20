@@ -25,6 +25,7 @@ public:
     bool requestUpdate(const QString &artifact = {});
     bool cancelUpdate();
     void setMode(const QString &mode);
+    void setProxyPort(int port);
     void setKillSwitch(bool enabled);
     void setLanguage(const QString &language);
     void setTheme(const QString &theme);
@@ -33,6 +34,8 @@ public:
     void setChain(const QJsonArray &hops);
     void toggleConnection();
     bool isAvailable() const;
+    bool canTogglePower() const;
+    bool canCancelConnect() const;
     bool canChangeMode() const;
     QJsonObject currentState() const;
 
@@ -74,6 +77,8 @@ private:
     qint64 switchAccountId_ = -1;
     QString pendingAccountId_;
     qint64 mutatingId_ = -1;
+    qint64 connectId_ = -1;
+    qint64 disconnectId_ = -1;
     qint64 stateId_ = -1;
     qint64 serversId_ = -1;
     QString serversEmail_;

@@ -14,6 +14,12 @@ import (
 // startLocalProxy takes ownership of the verified relay, even on error. It is
 // called with connectionMu held and never touches system proxy or TUN APIs.
 func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chosen pathCandidate, transport *tunnel.Manager, token string) error {
+	if err := ctx.Err(); err != nil {
+		if transport != nil {
+			transport.Close()
+		}
+		return err
+	}
 	a.mu.Lock()
 	port := a.cfg.Port
 	a.mu.Unlock()
@@ -48,9 +54,11 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 			if transport != nil {
 				transport.Close()
 			}
-			a.mu.Lock()
-			a.systemProxyFault = err
-			a.mu.Unlock()
+			if !onlyContextError(err, ctx.Err()) {
+				a.mu.Lock()
+				a.systemProxyFault = err
+				a.mu.Unlock()
+			}
 			return err
 		}
 	}
@@ -107,6 +115,27 @@ func (a *App) startLocalProxy(ctx context.Context, dial localproxy.Dialer, chose
 		}()
 	}
 	return nil
+}
+
+// A cancel without a rollback failure must not poison later attempts. In
+// particular errors.Join(ctx.Err(), nil) still wraps the context error.
+func onlyContextError(err, ctxErr error) bool {
+	if ctxErr == nil || err == nil {
+		return false
+	}
+	if err == ctxErr {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		parts := joined.Unwrap()
+		for _, part := range parts {
+			if !onlyContextError(part, ctxErr) {
+				return false
+			}
+		}
+		return len(parts) > 0
+	}
+	return onlyContextError(errors.Unwrap(err), ctxErr)
 }
 
 // A recovery watchdog failure is fatal to this session: continuing would leave

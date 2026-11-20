@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/netip"
@@ -31,6 +32,10 @@ func autoSelected(code string) bool {
 }
 
 func preparePath(place fxa.Location, hops []tunnel.Hop) pathCandidate {
+	return preparePathContext(context.Background(), place, hops)
+}
+
+func preparePathContext(ctx context.Context, place fxa.Location, hops []tunnel.Hop) pathCandidate {
 	candidate := pathCandidate{
 		place:     place,
 		target:    tunnel.Target{Host: place.Host, Port: place.Port, Chain: hops},
@@ -41,7 +46,7 @@ func preparePath(place fxa.Location, hops []tunnel.Hop) pathCandidate {
 		candidate.probeHost = hops[0].Host
 		candidate.probePort = hops[0].Port
 	}
-	for _, address := range tundev.Neighbours(candidate.probeHost) {
+	for _, address := range tundev.NeighboursContext(ctx, candidate.probeHost) {
 		if !address.Is4() {
 			continue
 		}
@@ -58,11 +63,11 @@ func preparePath(place fxa.Location, hops []tunnel.Hop) pathCandidate {
 	return candidate
 }
 
-func measurePath(candidate *pathCandidate, samples int, timeout time.Duration) {
+func measurePath(ctx context.Context, candidate *pathCandidate, samples int, timeout time.Duration) {
 	if candidate.err != nil {
 		return
 	}
-	candidate.average, candidate.jitter, candidate.err = tunnel.Latency(candidate.probeHost, candidate.probePort, samples, timeout)
+	candidate.average, candidate.jitter, candidate.err = tunnel.LatencyContext(ctx, candidate.probeHost, candidate.probePort, samples, timeout)
 }
 
 func pathScore(candidate pathCandidate) time.Duration {
@@ -85,9 +90,16 @@ func rankPaths(candidates []pathCandidate) []pathCandidate {
 }
 
 func autoCandidates(servers []fxa.Location, hops []tunnel.Hop, samples int, timeout time.Duration, concurrency int) []pathCandidate {
+	return autoCandidatesContext(context.Background(), servers, hops, samples, timeout, concurrency)
+}
+
+func autoCandidatesContext(ctx context.Context, servers []fxa.Location, hops []tunnel.Hop, samples int, timeout time.Duration, concurrency int) []pathCandidate {
 	candidates := make([]pathCandidate, 0, len(servers))
 	for _, place := range servers {
-		candidates = append(candidates, preparePath(place, hops))
+		if ctx.Err() != nil {
+			return nil
+		}
+		candidates = append(candidates, preparePathContext(ctx, place, hops))
 	}
 	if concurrency < 1 {
 		concurrency = 1
@@ -106,7 +118,11 @@ func autoCandidates(servers []fxa.Location, hops []tunnel.Hop, samples int, time
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
-			slots <- struct{}{}
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-slots }()
 			cacheKey := candidates[index].probeHost + ":" + strconv.Itoa(candidates[index].probePort)
 			mu.Lock()
@@ -118,7 +134,7 @@ func autoCandidates(servers []fxa.Location, hops []tunnel.Hop, samples int, time
 				candidates[index].err = cached.err
 				return
 			}
-			measurePath(&candidates[index], samples, timeout)
+			measurePath(ctx, &candidates[index], samples, timeout)
 			mu.Lock()
 			cache[cacheKey] = candidates[index]
 			mu.Unlock()
@@ -149,8 +165,28 @@ func pickLocation(servers []fxa.Location, code string) (fxa.Location, error) {
 }
 
 func verifyPath(candidate pathCandidate, pass string, timeout time.Duration) (*tunnel.Manager, error) {
+	return verifyPathContext(context.Background(), candidate, pass, timeout)
+}
+
+func verifyPathContext(ctx context.Context, candidate pathCandidate, pass string, timeout time.Duration) (*tunnel.Manager, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	transport := tunnel.NewManager(candidate.target)
-	if err := transport.Verify(pass, timeout); err != nil {
+	// The verifier owns only this temporary manager. No stale result can
+	// activate the tunnel, and cancellation closes its connections.
+	result := make(chan error, 1)
+	go func() { result <- transport.Verify(pass, timeout) }()
+	var err error
+	select {
+	case err = <-result:
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
+	if err != nil {
 		transport.Close()
 		return nil, err
 	}
@@ -158,8 +194,15 @@ func verifyPath(candidate pathCandidate, pass string, timeout time.Duration) (*t
 }
 
 func choosePath(candidates []pathCandidate, pass string, timeout time.Duration, verify func(pathCandidate, string, time.Duration) (*tunnel.Manager, error)) (pathCandidate, *tunnel.Manager, error) {
+	return choosePathContext(context.Background(), candidates, pass, timeout, verify)
+}
+
+func choosePathContext(ctx context.Context, candidates []pathCandidate, pass string, timeout time.Duration, verify func(pathCandidate, string, time.Duration) (*tunnel.Manager, error)) (pathCandidate, *tunnel.Manager, error) {
 	var lastErr error
 	for _, candidate := range candidates {
+		if err := ctx.Err(); err != nil {
+			return pathCandidate{}, nil, err
+		}
 		if candidate.err != nil {
 			lastErr = candidate.err
 			continue
@@ -173,6 +216,9 @@ func choosePath(candidates []pathCandidate, pass string, timeout time.Duration, 
 		}
 		log.Printf("gozar: server %s failed: %v", candidate.place.Host, err)
 		lastErr = err
+		if ctx.Err() != nil {
+			return pathCandidate{}, nil, ctx.Err()
+		}
 		if tunnel.IsRefusal(err) {
 			return pathCandidate{}, nil, err
 		}

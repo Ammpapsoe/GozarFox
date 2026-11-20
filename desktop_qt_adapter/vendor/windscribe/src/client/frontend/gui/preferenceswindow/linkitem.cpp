@@ -90,7 +90,14 @@ void LinkItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, 
     int xOffset = PREFERENCES_MARGIN_X*G_SCALE;
     if (icon_) {
         painter->setOpacity(OPACITY_FULL);
-        icon_->draw(PREFERENCES_MARGIN_X*G_SCALE, ((PREFERENCE_GROUP_ITEM_HEIGHT - ICON_HEIGHT) / 2 + yOffset_)*G_SCALE, ICON_WIDTH*G_SCALE, ICON_HEIGHT*G_SCALE, painter);
+        const QRect rect(PREFERENCES_MARGIN_X*G_SCALE, ((PREFERENCE_GROUP_ITEM_HEIGHT - ICON_HEIGHT) / 2 + yOffset_)*G_SCALE, ICON_WIDTH*G_SCALE, ICON_HEIGHT*G_SCALE);
+        if (iconTint_.isValid()) {
+            // Recolor a local copy: these rasterized SVGs are shared with other widgets.
+            IndependentPixmap copy(*icon_);
+            copy.draw(rect.x(), rect.y(), rect.width(), rect.height(), painter, iconTint_);
+        } else {
+            icon_->draw(rect, painter);
+        }
         xOffset = (PREFERENCES_MARGIN_X + 8 + ICON_WIDTH)*G_SCALE;
     } else {
         painter->setOpacity(curTextOpacity_);
@@ -200,8 +207,9 @@ void LinkItem::onOpenUrl()
     QDesktopServices::openUrl(QUrl(url_));
 }
 
-void LinkItem::setIcon(QSharedPointer<IndependentPixmap> icon)
+void LinkItem::setIcon(QSharedPointer<IndependentPixmap> icon, const QColor &tint)
 {
+    iconTint_ = tint;
     icon_ = icon;
     updatePositions();
 }

@@ -164,8 +164,8 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     switch_ = new LinkItem(account_, LinkItem::SUBPAGE_LINK);
     logout_ = new LinkItem(account_, LinkItem::BLANK_LINK);
     usage_ = new LinkItem(account_, LinkItem::BLANK_LINK);
-    email_->setIcon(art("preferences/ACCOUNT_ICON"));
-    logout_->setIcon(art("preferences/LOGOUT_ICON"));
+    email_->setIcon(art("preferences/ACCOUNT_ICON"), Qt::white);
+    logout_->setIcon(art("preferences/LOGOUT_ICON"), Qt::white);
     account_->addItem(email_);
     account_->addItem(switch_);
     account_->addItem(usage_);
@@ -192,6 +192,37 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     mode->setIcon(art("preferences/CONNECTION_MODE"));
     if (!readOnly_) new OriginalModeBinding<ComboBoxItem>(mode, binder_);
     else mode->setClickable(false);
+    auto *proxyPort = new LinkItem(connection_, LinkItem::BLANK_LINK);
+    connection_->addItem(proxyPort);
+    proxyPort->setObjectName(QStringLiteral("localProxyPortRow"));
+    proxyPort->setIcon(art("preferences/PROXY"));
+    const auto proxyMode = [this] {
+        const auto mode = binder_->currentState().value(QStringLiteral("mode")).toString();
+        return mode == QLatin1String("system-proxy") || mode == QLatin1String("proxy-only");
+    };
+    const auto syncPort = [this, proxyPort, proxyMode] {
+        const int port = binder_->currentState().value(QStringLiteral("port")).toInt();
+        proxyPort->setTitle(local("Local proxy port", "پورت پراکسی محلی"));
+        proxyPort->setLinkText(port > 0 ? QStringLiteral("127.0.0.1:%1").arg(port) : QStringLiteral("—"));
+        const int row = connection_->indexOf(proxyPort);
+        if (proxyMode()) connection_->showItems(row, row, PreferenceGroup::FLAG_NO_ANIMATION);
+        else connection_->hideItems(row, row, PreferenceGroup::FLAG_NO_ANIMATION);
+        proxyPort->setEnabled(!readOnly_ && proxyMode() && binder_->canChangeMode());
+    };
+    connect(binder_, &HomeBinder::availabilityChanged, this, syncPort);
+    connect(binder_, &HomeBinder::stateChanged, this, syncPort);
+    connect(&LanguageController::instance(), &LanguageController::languageChanged, this, syncPort);
+    connect(proxyPort, &LinkItem::clicked, this, [this, proxyMode] {
+        if (readOnly_ || !proxyMode() || !binder_->canChangeMode()) return;
+        bool ok = false;
+        const int current = binder_->currentState().value(QStringLiteral("port")).toInt(10810);
+        const int port = QInputDialog::getInt(this, local("Local proxy port", "پورت پراکسی محلی"),
+            local("HTTP/HTTPS proxy listens on 127.0.0.1. Choose a TCP port:",
+                  "پراکسی HTTP/HTTPS روی 127.0.0.1 گوش می‌دهد. پورت TCP را انتخاب کنید:"),
+            qBound(1, current, 65535), 1, 65535, 1, &ok);
+        if (ok && proxyMode() && port != current) binder_->setProxyPort(port);
+    });
+    syncPort();
     addToggle(connection_, "kill_switch", "Kill switch (next tunnel)", "قطع اضطراری (تونل بعدی)",
               [this](bool enabled) { binder_->setKillSwitch(enabled); }, true);
     addToggle(connection_, "warp_udp", "WARP UDP (experimental)", "WARP UDP (آزمایشی)", [this](bool enabled) {

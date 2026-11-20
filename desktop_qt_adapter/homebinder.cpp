@@ -36,8 +36,14 @@ HomeBinder::HomeBinder(CoreBridge *core, ConnectWindow::Background *background,
 }
 
 bool HomeBinder::isAvailable() const {
-    return core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && !connecting_;
+    return core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && connectId_ < 0 && !connecting_;
 }
+
+bool HomeBinder::canCancelConnect() const {
+    return core_ && core_->running() && stateKnown_ && signedIn_ && mutatingId_ < 0 && (connectId_ >= 0 || connecting_);
+}
+
+bool HomeBinder::canTogglePower() const { return isAvailable() || canCancelConnect(); }
 
 bool HomeBinder::canChangeMode() const {
     return isAvailable() && !live_;
@@ -49,7 +55,7 @@ QJsonObject HomeBinder::currentState() const {
 
 void HomeBinder::setEnabled() {
     const bool available = isAvailable();
-    if (button_) button_->setClickable(available);
+    if (button_) button_->setClickable(canTogglePower());
     emit availabilityChanged(available);
 }
 
@@ -64,7 +70,7 @@ void HomeBinder::setVisualState(CONNECT_STATE next) {
 void HomeBinder::refresh() {
     // The Go RPC server processes ordinary calls serially. Avoid piling up
     // periodic requests while a connection or another state call is pending.
-    if (!core_ || !core_->running() || stateId_ >= 0 || mutatingId_ >= 0) return;
+    if (!core_ || !core_->running() || stateId_ >= 0 || mutatingId_ >= 0 || connectId_ >= 0) return;
     stateId_ = core_->request(QStringLiteral("state"));
     if (stateId_ < 0) {
         stateKnown_ = false;
@@ -91,7 +97,7 @@ qint64 HomeBinder::sendMutation(const QString &method, const QJsonObject &params
         emit error(tr("The core is unavailable or its state is unknown."));
         return -1;
     }
-    if (connecting_ || mutatingId_ >= 0) {
+    if (connecting_ || mutatingId_ >= 0 || connectId_ >= 0) {
         emit error(tr("Wait until the current operation finishes."));
         return -1;
     }
@@ -106,14 +112,12 @@ void HomeBinder::toggleConnection() {
         emit error(tr("The core is unavailable or its state is unknown."));
         return;
     }
-    if (mutatingId_ >= 0 || connecting_) {
-        emit error(tr("Wait until the current operation finishes."));
-        return;
-    }
-    const bool disconnect = live_;
+    if (!canTogglePower()) return;
+    const bool disconnect = live_ || canCancelConnect();
     const auto id = core_->request(disconnect ? QStringLiteral("disconnect") : QStringLiteral("connect"));
     if (id < 0) { emit error(QStringLiteral("cannot send connection request")); return; }
-    mutatingId_ = id;
+    if (disconnect) disconnectId_ = mutatingId_ = id;
+    else connectId_ = id;
     setVisualState(disconnect ? CONNECT_STATE_DISCONNECTING : CONNECT_STATE_CONNECTING);
     setEnabled();
 }
@@ -213,6 +217,11 @@ void HomeBinder::setMode(const QString &mode) {
     sendMutation(QStringLiteral("mode"), {{QStringLiteral("mode"), mode}});
 }
 
+void HomeBinder::setProxyPort(int port) {
+    if (!canChangeMode() || port < 1 || port > 65535) return;
+    sendMutation(QStringLiteral("proxy_port"), {{QStringLiteral("port"), port}});
+}
+
 void HomeBinder::setKillSwitch(bool enabled) {
     sendMutation(QStringLiteral("kill_switch"), {{QStringLiteral("enabled"), enabled}});
 }
@@ -273,7 +282,7 @@ void HomeBinder::applyState(const QJsonObject &state) {
     }
     // An older state request may complete while a mutation is in flight;
     // retain the pending animation until that request's own response arrives.
-    if (mutatingId_ < 0)
+    if (mutatingId_ < 0 && connectId_ < 0)
         setVisualState(connecting_ ? CONNECT_STATE_CONNECTING : live_ ? CONNECT_STATE_CONNECTED : CONNECT_STATE_DISCONNECTED);
     setEnabled();
     emit stateChanged(state);
@@ -281,12 +290,17 @@ void HomeBinder::applyState(const QJsonObject &state) {
 
 void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
     if (handleUpdateReply(id, reply, {})) return;
+    const bool connectReply = connectId_ == id;
+    if (connectReply) connectId_ = -1;
+    // Disconnect's response—not a racing Connect error—is authoritative.
+    if (connectReply && disconnectId_ >= 0) return;
+    if (disconnectId_ == id) disconnectId_ = -1;
     const bool switchReply = switchAccountId_ == id;
     const QString targetAccount = switchReply ? pendingAccountId_ : QString();
     if (switchReply) { switchAccountId_ = -1; pendingAccountId_.clear(); }
     const bool signOutReply = signOutId_ == id;
     if (signOutReply) signOutId_ = -1;
-    const bool needsState = mutatingId_ == id || stateId_ == id;
+    const bool needsState = connectReply || mutatingId_ == id || stateId_ == id;
     if (mutatingId_ == id) mutatingId_ = -1;
     if (stateId_ == id) stateId_ = -1;
     const bool serversReply = serversId_ == id;
@@ -347,7 +361,11 @@ void HomeBinder::handleFailure(qint64 id, const QString &message) {
     if (handleUpdateReply(id, {}, message)) return;
     if (signOutId_ == id) signOutId_ = -1;
     if (switchAccountId_ == id) { switchAccountId_ = -1; pendingAccountId_.clear(); }
-    const bool losesState = id == mutatingId_ || id == stateId_;
+    const bool connectFailure = connectId_ == id;
+    if (connectFailure) connectId_ = -1;
+    if (connectFailure && disconnectId_ >= 0) return;
+    if (disconnectId_ == id) disconnectId_ = -1;
+    const bool losesState = connectFailure || id == mutatingId_ || id == stateId_;
     if (losesState) { stateKnown_ = false; lastState_ = {}; }
     if (id == mutatingId_) mutatingId_ = -1;
     if (id == stateId_) stateId_ = -1;
@@ -365,7 +383,7 @@ void HomeBinder::coreStopped() {
     lastState_ = {};
     signedIn_ = false;
     connecting_ = false;
-    mutatingId_ = stateId_ = serversId_ = -1;
+    mutatingId_ = stateId_ = serversId_ = connectId_ = disconnectId_ = -1;
     serversEmail_.clear();
     emit serversInvalidated();
     setEnabled();

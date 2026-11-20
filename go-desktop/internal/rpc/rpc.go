@@ -52,22 +52,75 @@ func Run(current *app.App) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	server := &Server{app: current, out: os.Stdout, updates: update.NewService(), ctx: ctx}
-	reader := bufio.NewReaderSize(os.Stdin, 1<<20)
+	server.serve(os.Stdin, current.ConnectContext)
+}
+
+// Only Connect runs outside the reader. A cancel is registered synchronously
+// before launching it, and Disconnect / Quit never race a late worker start.
+func (s *Server) serve(input io.Reader, connect func(context.Context) error) {
+	var done chan struct{}
+	var cancelConnect context.CancelFunc
+	stopConnect := func() {
+		if done != nil {
+			cancelConnect()
+			<-done
+			done, cancelConnect = nil, nil
+		}
+	}
+	defer stopConnect()
+	reader := bufio.NewReaderSize(input, 1<<20)
 	for {
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
 			var request Request
 			if json.Unmarshal(line, &request) == nil {
+				select {
+				case <-done:
+					// Don't cancel a successful connection's active context.
+					done, cancelConnect = nil, nil
+				default:
+				}
 				switch request.Method {
+				case "connect":
+					if done != nil {
+						if s.emit(Response{ID: request.ID, Error: "a connection is already starting", State: statePointer(s.app.State())}) != nil {
+							return
+						}
+						break
+					}
+					// Cancellation for a running connection is owned by App.
+					ctx, cancel := context.WithCancel(s.ctx)
+					cancelConnect = cancel
+					done = make(chan struct{})
+					go func(req Request, finished chan struct{}) {
+						defer close(finished)
+						connectErr := connect(ctx)
+						response := Response{ID: req.ID, State: statePointer(s.app.State())}
+						if connectErr != nil {
+							response.Error = connectErr.Error()
+							cancel()
+						}
+						_ = s.emit(response)
+					}(request, done)
 				case "check_update", "download_update":
-					// Network I/O must not block disconnect, quit or cancellation.
-					server.startUpdate(request, current.State().Version)
+					s.startUpdate(request, s.app.State().Version)
 				case "cancel_update":
-					if err := server.emit(server.handleUpdate(request, "")); err != nil {
+					if err := s.emit(s.handleUpdate(request, "")); err != nil {
+						return
+					}
+				case "disconnect", "quit":
+					stopConnect()
+					if err := s.emit(s.handle(request)); err != nil || request.Method == "quit" {
 						return
 					}
 				default:
-					if err := server.emit(server.handle(request)); err != nil || request.Method == "quit" {
+					if done != nil && request.Method != "state" {
+						if s.emit(Response{ID: request.ID, Error: "a connection is starting", State: statePointer(s.app.State())}) != nil {
+							return
+						}
+						break
+					}
+					if err := s.emit(s.handle(request)); err != nil {
 						return
 					}
 				}
@@ -320,6 +373,15 @@ func (s *Server) handle(request Request) Response {
 		if err := json.Unmarshal(request.Params, &body); err != nil || body.Hops == nil {
 			response.Error = "invalid proxy chain"
 		} else if err := s.app.SetChain(body.Hops); err != nil {
+			response.Error = err.Error()
+		}
+	case "proxy_port":
+		var body struct {
+			Port int `json:"port"`
+		}
+		if json.Unmarshal(request.Params, &body) != nil {
+			response.Error = "invalid proxy port"
+		} else if err := s.app.SetProxyPort(body.Port); err != nil {
 			response.Error = err.Error()
 		}
 	case "mode":

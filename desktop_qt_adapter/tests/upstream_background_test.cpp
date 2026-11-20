@@ -97,6 +97,7 @@ private slots:
     void gozarWordmarkReplacesOriginalResource();
     void sourceFlagFollowsSimulatedCore();
     void upstreamPowerButtonTriggersSimulatedCore();
+    void canCancelPendingConnectAndSetProxyPort();
     void serverAndSettingsUseCoreResponses();
     void originalModeControlWithFakeCore();
     void originalWindowPublicApiBindingWithFakeWindow();
@@ -612,6 +613,34 @@ void UpstreamBackgroundTest::originalWindowReadsRealCoreState() {
     QVERIFY(!state.value("live").toBool());
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 10000);
+}
+
+void UpstreamBackgroundTest::canCancelPendingConnectAndSetProxyPort() {
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    QSignalSpy visual(&binder, &HomeBinder::visualStateChanged);
+    QSignalSpy errors(&binder, &HomeBinder::error);
+    qputenv("FAKE_CORE_BLOCK_CONNECT", "1");
+    const bool started = bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE"));
+    QTRY_VERIFY_WITH_TIMEOUT(binder.isAvailable(), 5000);
+    qunsetenv("FAKE_CORE_BLOCK_CONNECT");
+    QVERIFY(started);
+    binder.toggleConnection();
+    QVERIFY(binder.canCancelConnect());
+    QVERIFY(binder.canTogglePower());
+    QVERIFY(!binder.canChangeMode());
+    QCOMPARE(visual.last().at(0).value<CONNECT_STATE>(), CONNECT_STATE_CONNECTING);
+    binder.toggleConnection();
+    QVERIFY(!binder.canTogglePower());
+    QTRY_VERIFY_WITH_TIMEOUT(binder.canChangeMode(), 5000);
+    QCOMPARE(visual.last().at(0).value<CONNECT_STATE>(), CONNECT_STATE_DISCONNECTED);
+    QCOMPARE(errors.size(), 0);
+    binder.setMode(QStringLiteral("proxy-only"));
+    QTRY_COMPARE_WITH_TIMEOUT(binder.currentState().value("mode").toString(), QStringLiteral("proxy-only"), 5000);
+    binder.setProxyPort(23981);
+    QTRY_COMPARE_WITH_TIMEOUT(binder.currentState().value("port").toInt(), 23981, 5000);
+    bridge.shutdown();
+    QTRY_VERIFY_WITH_TIMEOUT(!bridge.running(), 5000);
 }
 
 void UpstreamBackgroundTest::incompleteStateDisablesMutations() {

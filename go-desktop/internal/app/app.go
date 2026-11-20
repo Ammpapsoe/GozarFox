@@ -356,6 +356,27 @@ func (a *App) SetMode(mode config.ConnectionMode) error {
 	return nil
 }
 
+// SetProxyPort changes the persisted loopback listener port for either proxy mode.
+func (a *App) SetProxyPort(port int) error {
+	if port < 1 || port > 65535 {
+		return errors.New("proxy port must be between 1 and 65535")
+	}
+	a.connectionMu.Lock()
+	defer a.connectionMu.Unlock()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.live || a.connecting || a.modeLease != nil {
+		return errors.New("disconnect before changing the proxy port")
+	}
+	next := a.cfg
+	next.Port = port
+	if err := config.Save(next); err != nil {
+		return err
+	}
+	a.cfg = next
+	return nil
+}
+
 func (a *App) SetLanguage(language string) error {
 	if language != "" && language != "system" && language != "fa" && language != "en" {
 		return errors.New("unsupported language")
@@ -894,14 +915,21 @@ func (a *App) RefreshUsage() error {
 	return a.saveUsage(pass, access)
 }
 
-func (a *App) Connect() error {
+func (a *App) Connect() error { return a.ConnectContext(context.Background()) }
+
+func (a *App) ConnectContext(ctx context.Context) error {
 	a.connectionMu.Lock()
 	defer a.connectionMu.Unlock()
-	return a.connectLocked()
+	return a.connectLockedContext(ctx)
 }
 
 // connectLocked serializes startup with disconnects and setting changes.
-func (a *App) connectLocked() error {
+func (a *App) connectLocked() error { return a.connectLockedContext(context.Background()) }
+
+func (a *App) connectLockedContext(parent context.Context) error {
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	a.mu.Lock()
 	if a.live || a.connecting {
 		a.mu.Unlock()
@@ -937,7 +965,7 @@ func (a *App) connectLocked() error {
 		return err
 	}
 	a.modeLease = lease
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 	a.connectCancel = cancel
 	a.connecting = true
 	a.fault = ""
@@ -975,6 +1003,9 @@ func (a *App) connectLocked() error {
 }
 
 func (a *App) connect(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// The test seam substitutes relay preparation only. It never substitutes
 	// listener creation, Connect, or teardown, and is unset in production.
 	a.mu.Lock()
@@ -1002,8 +1033,14 @@ func (a *App) connect(ctx context.Context) error {
 		a.mu.Lock()
 		a.stage = "دریافت پاس پروکسی…"
 		a.mu.Unlock()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		pass, err = a.requestPass(access.token)
 		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if err := a.saveUsage(pass, access); err != nil {
@@ -1034,19 +1071,27 @@ func (a *App) connect(ctx context.Context) error {
 		return err
 	}
 	selectAndVerify := func(list []fxa.Location) (pathCandidate, *tunnel.Manager, error) {
+		if err := ctx.Err(); err != nil {
+			return pathCandidate{}, nil, err
+		}
 		var candidates []pathCandidate
 		if autoSelected(code) {
 			a.setStage("سنجش مسیرها…")
-			candidates = autoCandidates(list, hops, 2, 1200*time.Millisecond, 8)
+			candidates = autoCandidatesContext(ctx, list, hops, 2, 1200*time.Millisecond, 8)
 		} else {
 			place, err := pickLocation(list, code)
 			if err != nil {
 				return pathCandidate{}, nil, err
 			}
-			candidates = []pathCandidate{preparePath(place, hops)}
+			candidates = []pathCandidate{preparePathContext(ctx, place, hops)}
+		}
+		if err := ctx.Err(); err != nil {
+			return pathCandidate{}, nil, err
 		}
 		a.setStage("برقراری تونل…")
-		return choosePath(candidates, pass.Token, 8*time.Second, verifyPath)
+		return choosePathContext(ctx, candidates, pass.Token, 8*time.Second, func(candidate pathCandidate, token string, timeout time.Duration) (*tunnel.Manager, error) {
+			return verifyPathContext(ctx, candidate, token, timeout)
+		})
 	}
 	chosen, transport, err := selectAndVerify(servers)
 	if mayRetryFreshList(usingCachedServers, err, ctx.Err()) {
@@ -1188,11 +1233,15 @@ func (a *App) connect(ctx context.Context) error {
 	go a.watchTunnel(created)
 	a.startRenewal()
 	go a.refreshServersThroughTunnel()
-	if ip, err := transport.Probe(pass.Token, 12*time.Second); err == nil {
-		a.mu.Lock()
-		a.exit = ip
-		a.mu.Unlock()
-	}
+	go func() {
+		if ip, err := transport.Probe(pass.Token, 12*time.Second); err == nil {
+			a.mu.Lock()
+			if a.live && a.engine == created && a.transport == transport {
+				a.exit = ip
+			}
+			a.mu.Unlock()
+		}
+	}()
 	return nil
 }
 

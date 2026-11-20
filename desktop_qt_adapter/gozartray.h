@@ -15,6 +15,7 @@ public:
     GozarTray(HomeBinder *binder, LocationCatalog *catalog,
               gui_locations::LocationsModelManager *manager);
     void attachIfAvailable();
+    bool isVisible() const { return icon_.isVisible() && QSystemTrayIcon::isSystemTrayAvailable(); }
     QMenu *menu() { return &menu_; }
     void rebuild();
 signals:

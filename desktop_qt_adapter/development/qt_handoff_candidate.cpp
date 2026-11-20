@@ -333,7 +333,6 @@ int main(int argc, char **argv) {
     refreshTelemetry();
     if ((!probe && !bindOriginalPowerControl(home, &binder)) ||
         !bindOriginalLocationControls(home, &locations, &binder, true)) return 4;
-    QObject::connect(home, &ConnectWindow::ConnectWindowItem::closeClick, &shell, &QWidget::close);
     QObject::connect(home, &ConnectWindow::ConnectWindowItem::minimizeClick, &shell, &QWidget::showMinimized);
     QShortcut escape(QKeySequence(Qt::Key_Escape), &shell);
     escape.setEnabled(false);
@@ -380,6 +379,23 @@ int main(int argc, char **argv) {
     QObject::connect(&binder, &HomeBinder::serversReady, &shell, [&] { setStatus({}); });
     bindOriginalLocations(&locations, &manager, &binder, &catalog);
     GozarTray tray(&binder, &catalog, &manager);
+    QObject::connect(home, &ConnectWindow::ConnectWindowItem::closeClick, &shell, [&] {
+        const bool fa = LanguageController::instance().getLanguage() == QLatin1String("fa");
+        const auto text = [fa](const char *en, const char *persian) { return QString::fromUtf8(fa ? persian : en); };
+        QMessageBox choice(QMessageBox::Question, text("Close Gozar", "بستن گذر"),
+            text("Hide the window and keep Gozar running, or quit and disconnect?",
+                 "پنجره پنهان شود و گذر فعال بماند، یا اتصال قطع و برنامه بسته شود؟"),
+            QMessageBox::Cancel, &shell);
+        const auto hideLabel = tray.isVisible() ? text("Hide to tray", "پنهان کردن در سینی سیستم") : text("Minimize", "کوچک کردن پنجره");
+        auto *hide = choice.addButton(hideLabel, QMessageBox::ActionRole);
+        auto *quit = choice.addButton(text("Quit Gozar", "خروج از گذر"), QMessageBox::DestructiveRole);
+        choice.setDefaultButton(QMessageBox::Cancel);
+        choice.exec();
+        if (choice.clickedButton() == hide) {
+            if (tray.isVisible()) shell.hide();
+            else shell.showMinimized();
+        } else if (choice.clickedButton() == quit) shell.close();
+    });
     const auto showMainWindow = [&] {
         if (shell.isMinimized() || shell.isHidden()) shell.showNormal();
         shell.raise();

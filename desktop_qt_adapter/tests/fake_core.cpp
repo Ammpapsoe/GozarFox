@@ -41,6 +41,8 @@ int main(int argc, char **argv) {
     int serverRequests = 0;
     int updateChecks = 0;
     QJsonValue pendingCheck;
+    QJsonValue pendingConnect;
+    int proxyPort = 10810;
     QTemporaryDir updateDir;
     const auto emitResponse = [](const QJsonObject &response) {
         const auto bytes = QJsonDocument(response).toJson(QJsonDocument::Compact) + '\n';
@@ -48,6 +50,7 @@ int main(int argc, char **argv) {
         std::fflush(stdout);
     };
     const bool failLaterServers = qEnvironmentVariableIsSet("FAKE_CORE_SERVERS_FAIL_AFTER_FIRST");
+    const bool blockConnect = qEnvironmentVariableIsSet("FAKE_CORE_BLOCK_CONNECT");
     const bool quitError = qEnvironmentVariableIsSet("FAKE_CORE_QUIT_ERROR");
     while (std::fgets(line, sizeof(line), stdin)) {
         const auto request = QJsonDocument::fromJson(line).object();
@@ -89,7 +92,15 @@ int main(int argc, char **argv) {
         if (method == "switch_account") { activeId = params.value("id").toString(); live = false; }
         if (method == "logout") { signedIn = false; live = false; activeId.clear(); }
         if (method == "server") countryCode = params.value("code").toString();
-        if (method == "connect") live = true;
+        if (method == "proxy_port") proxyPort = params.value("port").toInt();
+        if (method == "connect") {
+            if (blockConnect) { pendingConnect = request.value("id"); continue; }
+            live = true;
+        }
+        if ((method == "disconnect" || method == "quit") && pendingConnect.isDouble()) {
+            emitResponse({{"id", pendingConnect}, {"error", "context canceled"}});
+            pendingConnect = {};
+        }
         if (method == "disconnect" || method == "quit") live = false;
         if (method == "mode") mode = params.value("mode").toString();
         if (method == "kill_switch") killSwitch = params.value("enabled").toBool();
@@ -104,7 +115,7 @@ int main(int argc, char **argv) {
             else warpUdp = params.value("enabled").toBool();
         }
         if (method == "chain") chain = params.value("hops").toArray();
-        QJsonObject state{{"signed_in", signedIn}, {"live", live}, {"connecting", false}, {"mode", mode},
+        QJsonObject state{{"signed_in", signedIn}, {"live", live}, {"connecting", pendingConnect.isDouble()}, {"mode", mode}, {"port", proxyPort},
                                 {"exit", live ? QStringLiteral("203.0.113.10") : QString()},
                                 {"kill_switch", killSwitch}, {"language", language}, {"theme", theme},
                                 {"recents", recents}, {"warp_udp", warpUdp}, {"chain", chain},

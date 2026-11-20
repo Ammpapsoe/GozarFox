@@ -81,3 +81,43 @@ func TestSystemProxyLifecycleReportsRestoreConflict(t *testing.T) {
 		t.Fatal("session was not closed")
 	}
 }
+
+func TestSystemProxyCancellationAllowsRetryOnlyWhenRollbackSucceeds(t *testing.T) {
+	for _, rollbackErr := range []error{nil, errors.New("rollback failed")} {
+		current, _ := newSystemProxyLifecycleApp(t, nil)
+		nextStart := current.systemProxyStart
+		started := make(chan struct{})
+		current.systemProxyStart = func(ctx context.Context, _ int) (io.Closer, error) {
+			close(started)
+			<-ctx.Done()
+			return nil, errors.Join(ctx.Err(), rollbackErr)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		result := make(chan error, 1)
+		go func() { result <- current.ConnectContext(ctx) }()
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			cancel()
+			t.Fatal("start not reached")
+		}
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatalf("ConnectContext = %v", err)
+		}
+		if current.State().Live || current.proxy != nil || current.modeLease != nil {
+			t.Fatal("cancel leaked listener or ownership")
+		}
+		current.systemProxyStart = nextStart
+		err := current.Connect()
+		if rollbackErr == nil && err != nil {
+			t.Fatalf("cancel prevented clean retry: %v", err)
+		}
+		if rollbackErr != nil && !errors.Is(err, rollbackErr) {
+			t.Fatalf("ignored rollback failure: %v", err)
+		}
+		if err := current.Disconnect(); !errors.Is(err, rollbackErr) {
+			t.Fatalf("disconnect must acknowledge rollback outcome: %v", err)
+		}
+	}
+}

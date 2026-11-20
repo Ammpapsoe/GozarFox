@@ -1,6 +1,7 @@
 package tunnel
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -50,8 +51,12 @@ func ParseChain(values []string) ([]Hop, error) {
 }
 
 func dialTCP(host string, port int, timeout time.Duration) (net.Conn, error) {
+	return dialTCPContext(context.Background(), host, port, timeout)
+}
+
+func dialTCPContext(ctx context.Context, host string, port int, timeout time.Duration) (net.Conn, error) {
 	dialer := net.Dialer{Timeout: timeout, KeepAlive: -1}
-	conn, err := dialer.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}

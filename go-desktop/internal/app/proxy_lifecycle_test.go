@@ -124,3 +124,38 @@ func TestConnectionModeProxyOnlyBindFailureReleasesOwnership(t *testing.T) {
 	}
 	current.Disconnect()
 }
+
+func TestSetProxyPortPersistsAndBindsExactLoopbackPort(t *testing.T) {
+	current := newProxyLifecycleApp(t)
+	reserve, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := reserve.Addr().(*net.TCPAddr).Port
+	if err := current.SetProxyPort(0); err == nil {
+		t.Fatal("accepted invalid port")
+	}
+	if err := current.SetProxyPort(65536); err == nil {
+		t.Fatal("accepted port past TCP range")
+	}
+	if err := current.SetProxyPort(port); err != nil {
+		t.Fatal(err)
+	}
+	if got := config.Load().Port; got != port {
+		t.Fatalf("persisted port = %d, want %d", got, port)
+	}
+	if err := current.Connect(); err == nil {
+		t.Fatal("silently ignored occupied configured port")
+	}
+	_ = reserve.Close()
+	if err := current.Connect(); err != nil {
+		t.Fatal(err)
+	}
+	if got := current.State().Port; got != port {
+		t.Fatalf("listener port = %d, want %d", got, port)
+	}
+	if err := current.SetProxyPort(port); err == nil {
+		t.Fatal("changed configuration during active proxy")
+	}
+	exerciseProxyLifecycleTraffic(t, port)
+}

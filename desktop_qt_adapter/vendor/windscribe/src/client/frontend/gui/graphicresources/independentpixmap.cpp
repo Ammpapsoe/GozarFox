@@ -42,6 +42,7 @@ void IndependentPixmap::draw(int x, int y, int w, int h, QPainter *painter, QCol
     QPainter p(&pixmap_);
     p.setCompositionMode(QPainter::CompositionMode_SourceIn);
     p.fillRect(pixmap_.rect(), color);
+    p.end();
     painter->drawPixmap(x, y, w, h, pixmap_);
 }
 

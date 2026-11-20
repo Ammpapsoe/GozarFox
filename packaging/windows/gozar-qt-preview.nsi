@@ -10,6 +10,7 @@ InstallDir "$LOCALAPPDATA\Programs\Gozar Qt Experimental"
 BrandingText "Gozar · Firefox VPN"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
+SetCompressorDictSize 32
 !define MUI_ABORTWARNING
 !define MUI_ICON "${ICON_FILE}"
 !define MUI_UNICON "${ICON_FILE}"

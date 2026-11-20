@@ -48,11 +48,13 @@ func Keep(cfg *Config, address netip.Addr) error {
 	return keep(cfg, address.Unmap())
 }
 
-func Neighbours(host string) []netip.Addr {
+func Neighbours(host string) []netip.Addr { return NeighboursContext(context.Background(), host) }
+
+func NeighboursContext(ctx context.Context, host string) []netip.Addr {
 	if address, err := netip.ParseAddr(host); err == nil {
 		return []netip.Addr{address.Unmap()}
 	}
-	found, err := net.LookupIP(host)
+	found, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 	if err != nil {
 		return nil
 	}

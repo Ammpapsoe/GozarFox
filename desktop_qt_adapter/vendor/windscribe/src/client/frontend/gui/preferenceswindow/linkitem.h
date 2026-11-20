@@ -31,7 +31,7 @@ public:
     void setLinkText(const QString &text);
     void setUrl(const QString &url);
     // This is the icon on the left side of the link text, if any
-    void setIcon(QSharedPointer<IndependentPixmap> icon);
+    void setIcon(QSharedPointer<IndependentPixmap> icon, const QColor &tint = {});
     // This is the icon on the far right (e.g. external link or subpage link arrow)
     void setLinkIcon(QSharedPointer<IndependentPixmap> icon);
     void setInProgress(bool inProgress);
@@ -60,6 +60,7 @@ private:
     QString linkText_;
     LinkType type_;
     QSharedPointer<IndependentPixmap> icon_;
+    QColor iconTint_;
     QSharedPointer<IndependentPixmap> linkIcon_;
     bool inProgress_;
     int spinnerRotation_;

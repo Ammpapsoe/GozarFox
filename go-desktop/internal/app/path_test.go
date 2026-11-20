@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -33,7 +34,7 @@ func TestChoosePathFallsBackToTheNextHealthyCandidate(t *testing.T) {
 	chosen, transport, err := choosePath([]pathCandidate{first, second}, "pass", time.Second, func(candidate pathCandidate, _ string, _ time.Duration) (*tunnel.Manager, error) {
 		attempts++
 		if candidate.place.Host == "first" {
-			return nil, errors.New("relay timed out")
+			return nil, context.DeadlineExceeded
 		}
 		return healthy, nil
 	})
@@ -143,5 +144,44 @@ func TestSetServerAutoClearsTheManualSelection(t *testing.T) {
 	}
 	if current.Config().Server != "" {
 		t.Fatal("REC should return to automatic selection")
+	}
+}
+
+func TestVerifyPathCancelsWhileRelayHandshakeIsBlocked(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() { c, _ := listener.Accept(); accepted <- c }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		port := listener.Addr().(*net.TCPAddr).Port
+		manager, err := verifyPathContext(ctx, pathCandidate{target: tunnel.Target{Host: "127.0.0.1", Port: port}}, "unused-fixture", 12*time.Second)
+		if manager != nil {
+			manager.Close()
+		}
+		result <- err
+	}()
+	select {
+	case conn := <-accepted:
+		if conn == nil {
+			t.Fatal("expected relay TCP socket")
+		}
+		defer conn.Close()
+	case <-time.After(4 * time.Second):
+		t.Fatal("handshake did not start")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("verify returned %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancel waited for handshake timeout")
 	}
 }
