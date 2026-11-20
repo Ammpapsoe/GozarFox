@@ -50,16 +50,24 @@ case "$GOOS" in
     cp "$core" "$bin/"
     cmp "$core" "$bin/gozar-core"
     arch="$GOARCH"; if [[ "$arch" == amd64 ]]; then arch=x86_64; fi
-    for binary in "$bin/Gozar" "$bin/gozar-original-ui" "$bin/gozar-core" "$app"/Contents/Frameworks/*.framework/Versions/A/*; do
-      [[ -f "$binary" ]] || continue
-      if ! lipo -archs "$binary" >/dev/null 2>&1; then continue; fi
-      if [[ "$(lipo -archs "$binary")" != "$arch" ]]; then
+    thin_macho() {
+      local binary=$1 architectures
+      if ! architectures=$(lipo -archs "$binary" 2>/dev/null); then return 0; fi
+      if [[ "$architectures" != "$arch" ]]; then
         lipo -thin "$arch" "$binary" -output "$binary.thin"
         chmod 755 "$binary.thin"
         mv "$binary.thin" "$binary"
       fi
-    done
+      [[ "$(lipo -archs "$binary")" == "$arch" ]]
+    }
+    # Surface unsupported launchers before invoking the deployment tool.
+    thin_macho "$bin/Gozar"
     macdeployqt "$app" -executable="$bin/gozar-original-ui"
+    # Qt frameworks and plugins may be universal. Drop only the foreign slice,
+    # then sign the final staged bundle below.
+    while IFS= read -r -d '' binary; do
+      thin_macho "$binary"
+    done < <(find "$app/Contents" -type f -print0)
     for binary in "$bin/Gozar" "$bin/gozar-original-ui" "$bin/gozar-core"; do
       [[ "$(lipo -archs "$binary")" == "$arch" ]]
     done ;;
@@ -85,7 +93,7 @@ case "$GOOS" in
   darwin)
     # Ad-hoc validates bundle layout only. This is not Developer ID/notarization.
     codesign --force --deep --sign - "$app"
-    python "$root/scripts/archive_macos.py" "$app" "$out/Gozar-$PACKAGE_LABEL.tar.xz"
+    python "$root/scripts/archive_macos.py" "$app" "$out/Gozar-$PACKAGE_LABEL.tar.xz" --record-over-budget
     mkdir "$RUNNER_TEMP/desktop-extracted"
     tar -xJf "$out/Gozar-$PACKAGE_LABEL.tar.xz" -C "$RUNNER_TEMP/desktop-extracted"
     extracted="$RUNNER_TEMP/desktop-extracted/Gozar.app"

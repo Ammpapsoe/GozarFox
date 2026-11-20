@@ -41,6 +41,8 @@ if set(versions.values()) != {'1.20.0'}:
     blockers.append('Component versions are unchanged; do not label the binaries 1.20.0.')
 if any(entry['name'].endswith('Windows-x64.zip') and entry['bytes'] >= 20_000_000 for entry in entries):
     blockers.append('Windows archive is outside the existing 20 MB download budget.')
+if label.startswith('macOS-') and entries[0]['bytes'] >= 17_000_000:
+    blockers.append('macOS archive is outside the existing 17 MB download budget.')
 report = {
     'source_commit': subprocess.check_output(('git', 'rev-parse', 'HEAD'), text=True).strip(),
     'platform': label,

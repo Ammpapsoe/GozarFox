@@ -1,8 +1,14 @@
+import argparse
 import pathlib
 import sys
 import zipfile
 
-source, destination = map(pathlib.Path, sys.argv[1:3])
+parser = argparse.ArgumentParser()
+parser.add_argument('source', type=pathlib.Path)
+parser.add_argument('destination', type=pathlib.Path)
+parser.add_argument('--record-over-budget', action='store_true')
+opts = parser.parse_args()
+source, destination = opts.source, opts.destination
 with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
     for path in sorted(source.rglob('*')):
         if path.is_file():
@@ -11,4 +17,7 @@ with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as
 # webview_windows plugin to the bundle, ~1 MB over the old 17 MB ceiling.
 size = destination.stat().st_size
 if size >= 20_000_000:
-    raise SystemExit(f'Windows archive exceeds the 20 MB download limit: {size} bytes')
+    message = f'Windows archive exceeds the 20 MB download limit: {size} bytes'
+    if not opts.record_over_budget:
+        raise SystemExit(message)
+    print('Validation only: ' + message, file=sys.stderr)

@@ -95,11 +95,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Failed to compile official-layout NSIS setup' }
           $core = Join-Path $env:RUNNER_TEMP 'same-commit/gozar-core.exe'
           ./scripts/test_windows_installer.ps1 -Installer $installer -InstallDir "$env:RUNNER_TEMP/Gozar package smoke" -VerifiedQtCore $core
-          # Keep the existing 20 MB ZIP budget. Report an over-budget package;
-          # the archive script creates the file before checking its size.
+          # Preserve the release ceiling; this validation records oversize packages.
           $zip = Join-Path $env:RUNNER_TEMP 'packages/Gozar-Windows-x64.zip'
-          python scripts/archive_windows.py $stage $zip
-          if ($LASTEXITCODE -ne 0 -and (!(Test-Path $zip) -or (Get-Item $zip).Length -lt 20000000)) { throw 'Windows ZIP construction failed' }
+          python scripts/archive_windows.py $stage $zip --record-over-budget
+          if ($LASTEXITCODE -ne 0) { throw 'Windows ZIP construction failed' }
       - name: Record package evidence, not release eligibility
         shell: bash
         run: |
