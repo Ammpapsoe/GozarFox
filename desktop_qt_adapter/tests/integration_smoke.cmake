@@ -1,8 +1,8 @@
 # Consolidated essential checks. Fail immediately and preserve each tool's
 # diagnostic output; never substitute the fake core for a real-core check.
-function(run_check name executable argument)
+function(run_check name executable)
   message(STATUS "Integration check: ${name}")
-  execute_process(COMMAND "${executable}" "${argument}" RESULT_VARIABLE result)
+  execute_process(COMMAND "${executable}" ${ARGN} RESULT_VARIABLE result TIMEOUT 45)
   if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "${name} failed: ${result}")
   endif()
@@ -14,4 +14,7 @@ if(DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")
 endif()
 if(DEFINED UPSTREAM_TEST AND NOT UPSTREAM_TEST STREQUAL "")
   run_check("upstream UI and server model" "${UPSTREAM_TEST}" "${FAKE_CORE}")
+endif()
+if(DEFINED QT_READONLY_PROBE AND NOT QT_READONLY_PROBE STREQUAL "" AND DEFINED REAL_CORE AND NOT REAL_CORE STREQUAL "")
+  run_check("standalone original Qt home and signed-out real core" "${QT_READONLY_PROBE}" "--ci-readonly" "${REAL_CORE}")
 endif()

@@ -135,9 +135,23 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     ${WS_FRONTEND_COMMON}/locations/model/proxymodels/sortedcities_proxymodel.cpp
     ${WS_FRONTEND_COMMON}/locations/model/proxymodels/sortedlocations_proxymodel.cpp
     ${WS_FRONTEND_COMMON}/locations/model/proxymodels/staticips_proxymodel.cpp)
+  # Compile the shared upstream widgets once for both the test runner and the
+  # isolated read-only development executable. These still use test shims.
+  get_target_property(gozar_widget_sources upstream_background_test SOURCES)
+  list(REMOVE_ITEM gozar_widget_sources tests/upstream_background_test.cpp)
+  set_property(TARGET upstream_background_test PROPERTY SOURCES tests/upstream_background_test.cpp)
+  add_library(gozar_test_widgets OBJECT ${gozar_widget_sources})
+  target_include_directories(gozar_test_widgets BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+  target_compile_definitions(gozar_test_widgets PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
+  target_link_libraries(gozar_test_widgets PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
+  target_sources(upstream_background_test PRIVATE $<TARGET_OBJECTS:gozar_test_widgets>)
   target_include_directories(upstream_background_test BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
   target_compile_definitions(upstream_background_test PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
   target_link_libraries(upstream_background_test PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network Qt6::Test)
+  add_executable(gozar_qt_readonly_probe development/qt_readonly_probe.cpp $<TARGET_OBJECTS:gozar_test_widgets>)
+  target_include_directories(gozar_qt_readonly_probe BEFORE PRIVATE tests/upstream_shims ${WS_GUI} ${WS_COMMON} ${WS_FRONTEND_COMMON})
+  target_compile_definitions(gozar_qt_readonly_probe PRIVATE WS_APP_IDENTIFIER="GozarQtTest")
+  target_link_libraries(gozar_qt_readonly_probe PRIVATE gozar_core_adapter Qt6::Widgets Qt6::Svg Qt6::Network)
   # Compile upstream translations unchanged and embed them at the exact path
   # expected by the original LanguageController.
   file(GLOB WS_TRANSLATIONS CONFIGURE_DEPENDS "${WS_GUI}/translations/ws_desktop_*.ts")
@@ -161,7 +175,8 @@ if(BUILD_TESTING)
     "-DREALCORE_TEST=$<TARGET_FILE:realcore_smoke>"
     "-DREAL_CORE=${GOZAR_REAL_CORE}")
   if(BUILD_UPSTREAM_SMOKE_TEST)
-    list(APPEND integration_args "-DUPSTREAM_TEST=$<TARGET_FILE:upstream_background_test>")
+    list(APPEND integration_args "-DUPSTREAM_TEST=$<TARGET_FILE:upstream_background_test>"
+      "-DQT_READONLY_PROBE=$<TARGET_FILE:gozar_qt_readonly_probe>")
   endif()
   add_test(NAME gozar_integration_smoke COMMAND "${CMAKE_COMMAND}" ${integration_args}
     -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration_smoke.cmake")

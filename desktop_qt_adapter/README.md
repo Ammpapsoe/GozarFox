@@ -70,9 +70,13 @@ state, but the complete application still has to call it only when the UI is
 actually ready and write the protocol line. Visibility does not establish GUI
 correctness or OS cleanup. The process launcher is also tested against a CI-only executable containing
 an actual upstream Qt widget and the readiness gate; it uses test-only backend
-shims and a fake core and is not a real application. No real Qt application
-executable is built or packaged yet. The preliminary distribution review is
-in `RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. The entry point
+shims and a fake core and is not a real application. `gozar_qt_readonly_probe` is a separate development executable that opens the
+original Qt home widget and reads signed-out state from an isolated real core;
+it has no login or active controls, uses test backend shims and is not a
+production application. It accepts only `--ci-readonly <core-path>` and cannot
+serve as the launcher target. No complete Qt application executable is built
+or packaged yet. The preliminary distribution review is in
+`RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. The entry point
 remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-time
 opt-in for future integration builds, not permission to distribute this WIP.
 A caller must not launch the next owner on an unconfirmed result. The fallback
