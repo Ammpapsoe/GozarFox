@@ -69,3 +69,25 @@ Desktop core dependencies
 The bundled GO-DEPS-LICENSES.txt contains the Go runtime, gVisor, WireGuard Go bindings,
 godbus, btree, Go x packages and other core dependency license and patent notices.
 Flutter framework and package notices are included in the app assets as NOTICES.Z.
+
+Windscribe Desktop App (Qt desktop preparation)
+------------------------------------------------
+The Qt interface includes selected UI source files, translations, and
+resources from Windscribe Desktop App, v2.26.2, commit
+5578945964760be0bf234c506fdbcbcfe07c974d.
+Source: https://github.com/Windscribe/Desktop-App/tree/5578945964760be0bf234c506fdbcbcfe07c974d
+Upstream license text: GNU General Public License, version 2; see
+ desktop_qt_adapter/vendor/windscribe/LICENSE in source and
+ WINDSCRIBE-GPL-2-LICENSE.txt in the staged Qt bundle.
+
+Gozar changes in the imported UI include connection-panel controls and
+navigation; location search, favourites, list rendering and tray menu;
+preferences controls and links; high-DPI icons, font rendering, and Persian
+font fallback. The generated resource map substitutes the Gozar wordmark
+and excludes the upstream Windscribe spinner. The Flutter launcher includes
+selected Windscribe SVG assets under desktop_flutter/assets/windscribe.
+
+This is an attribution and change summary, not a grant for the whole Qt
+executable, a trademark grant or release approval. Preserve applicable
+upstream file notices. File-level rights, modification notices and
+corresponding source delivery remain subject to release review.

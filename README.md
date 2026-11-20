@@ -128,19 +128,24 @@ On Linux, the built app requires GTK 3 and a graphical desktop. A Flutter bundle
 multiple files: keep the Go core, the executable, and the bundled data and libraries together.
 macOS downloads use .tar.xz; extract them in Terminal with `tar -xJf ARCHIVE.tar.xz`.
 
-Source code is licensed under GNU AGPL-3.0-or-later. See LICENSE, NOTICE, and WINTUN-LICENSE.txt.
+## Source licenses and desktop attribution
 
-The desktop connect screen (desktop_flutter/lib/windscribe_home.dart) follows
-the layout, palette and component language of the Windscribe desktop client
-(https://github.com/Windscribe/Desktop-App), which is licensed under the
-GNU General Public License, version 2 (see the cloned repository's LICENSE).
-That influence covers the appearance only — the connection logic, tunnel and
-account handling behind every button are original Gozar code.
+The repository's root license remains GNU AGPL-3.0-or-later. Third-party
+components retain their own applicable terms and notices; see `LICENSE`,
+`NOTICE`, and `CONTRIBUTORS.md`.
 
-A small set of Windscribe's own vector badges (connection state, network
-glyphs) ships verbatim inside desktop_flutter/assets/windscribe/, together
-with a copy of their license (LICENSE-WINDSCRIBE.txt), under the same
-GPL-2.0 terms.
+The Qt desktop preparation branch includes code, translations, and resources
+from [Windscribe Desktop App v2.26.2](https://github.com/Windscribe/Desktop-App/tree/5578945964760be0bf234c506fdbcbcfe07c974d).
+The copy of its GNU GPL version 2 license text is under
+`desktop_qt_adapter/vendor/windscribe/LICENSE`. The Flutter launcher also
+includes a small set of Windscribe vector assets and the upstream license
+text in `desktop_flutter/assets/windscribe`.
+
+The proposed licensing path is limited to the Qt interface and its adapter;
+it does not relicense the Go engine, the Flutter launcher, or third-party
+work. The presence of upstream license text or a successful packaging build
+is not release approval. See `docs/qt-desktop-license-and-release-checklist.md`
+for the outstanding rights, package, and signing checks.
 
 If Gozar helps you and you would like to support its development, you can donate TON to
 `UQDxiU-jPFK_TgB0wOzZndhf3IKJLTLm8Vg_Uaif7_C2eCL3`. Donations are optional and appreciated.
