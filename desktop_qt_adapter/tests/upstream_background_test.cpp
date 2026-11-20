@@ -1,6 +1,7 @@
 #include "corebridge.h"
 #include "homebinder.h"
 #include "uireadiness.h"
+#include "uicloseguard.h"
 #include "uilanguage.h"
 #include "languagecontroller.h"
 #include "originalhomebinding.h"
@@ -102,6 +103,8 @@ private slots:
     void locationsMapAndSelection();
     void originalWindowReadsRealCoreState();
     void incompleteStateDisablesMutations();
+    void closeWaitsForConfirmedCoreExit();
+    void closeRemainsBlockedOnUnconfirmedCleanup();
     void originalLanguagesAndDirection();
     void cleanupTestCase();
 };
@@ -617,6 +620,50 @@ void UpstreamBackgroundTest::incompleteStateDisablesMutations() {
     QCOMPARE(replies.size(), count);
     bridge.shutdown();
     QTRY_COMPARE_WITH_TIMEOUT(stopped.size(), 1, 5000);
+}
+
+void UpstreamBackgroundTest::closeWaitsForConfirmedCoreExit() {
+    QWidget window;
+    window.setAttribute(Qt::WA_QuitOnClose, false);
+    window.show();
+    CoreBridge bridge;
+    UiCloseGuard guard(&window, &bridge);
+    QSignalSpy ready(&bridge, &CoreBridge::ready);
+    QSignalSpy shutdown(&bridge, &CoreBridge::shutdownFinished);
+    QSignalSpy started(&guard, &UiCloseGuard::shutdownStarted);
+    QSignalSpy unconfirmed(&guard, &UiCloseGuard::shutdownUnconfirmed);
+    qputenv("FAKE_CORE_QUIT_DELAY_MS", "500");
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
+    qunsetenv("FAKE_CORE_QUIT_DELAY_MS");
+    window.close();
+    QCOMPARE(started.size(), 1);
+    QVERIFY(window.isVisible()); // quit response is not enough; await exit
+    window.close();
+    QCOMPARE(started.size(), 1); // no duplicate shutdown request
+    QTRY_COMPARE_WITH_TIMEOUT(shutdown.size(), 1, 5000);
+    QVERIFY(shutdown.at(0).at(0).toBool());
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isVisible(), 5000);
+    QCOMPARE(unconfirmed.size(), 0);
+}
+
+void UpstreamBackgroundTest::closeRemainsBlockedOnUnconfirmedCleanup() {
+    QWidget window;
+    window.setAttribute(Qt::WA_QuitOnClose, false);
+    window.show();
+    CoreBridge bridge;
+    UiCloseGuard guard(&window, &bridge);
+    QSignalSpy ready(&bridge, &CoreBridge::ready);
+    QSignalSpy unconfirmed(&guard, &UiCloseGuard::shutdownUnconfirmed);
+    qputenv("FAKE_CORE_QUIT_ERROR", "1");
+    QVERIFY(bridge.start(qEnvironmentVariable("GOZAR_FAKE_CORE")));
+    QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 5000);
+    qunsetenv("FAKE_CORE_QUIT_ERROR");
+    window.close();
+    QTRY_COMPARE_WITH_TIMEOUT(unconfirmed.size(), 1, 5000);
+    QVERIFY(window.isVisible());
+    window.close();
+    QVERIFY(window.isVisible()); // no automatic close or restart on failure
 }
 
 void UpstreamBackgroundTest::originalLanguagesAndDirection() {

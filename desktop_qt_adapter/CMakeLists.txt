@@ -48,7 +48,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   endif()
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
-    uireadiness.cpp uireadiness.h
+    uireadiness.cpp uireadiness.h uicloseguard.cpp uicloseguard.h
     uilanguage.cpp uilanguage.h originallanguagebinding.h
     ${WS_FRONTEND_COMMON}/languagecontroller.cpp ${WS_FRONTEND_COMMON}/languagecontroller.h
     ${WS_COMMON}/utils/languagesutil.cpp

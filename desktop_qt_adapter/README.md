@@ -77,8 +77,13 @@ remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-ti
 opt-in for future integration builds, not permission to distribute this WIP.
 A caller must not launch the next owner on an unconfirmed result. The fallback
 alone does not guarantee successful cleanup after a crash or when the event loop
-exits. The included fake core is only for tests and must never ship as the real
-core.
+exits. `UiCloseGuard` is an experimental Qt close-event coordinator: it keeps
+the window open until the core acknowledges shutdown and exits, and leaves an
+unconfirmed failure open for explicit recovery rather than forcing an exit.
+Its tests use a fake core; the full application must still wire it into every
+exit path, display errors, retain the event loop and verify OS cleanup. It
+cannot protect against OS shutdown, crashes or forced process termination. The
+included fake core is only for tests and must never ship as the real core.
 
 Build the isolated transport tests (Qt 6 Core and Test, CMake, compiler):
 
