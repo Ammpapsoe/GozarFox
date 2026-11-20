@@ -30,6 +30,7 @@
 #include <QTemporaryDir>
 #include <QtMath>
 #include <QtTest>
+#include <cstdio>
 
 // Emulates the public contract of the original window. The actual window
 // declaration is checked separately; this is not a full-window runtime test.
@@ -620,12 +621,54 @@ void UpstreamBackgroundTest::cleanupTestCase() {
     ImageResourcesSvg::instance().finishGracefully();
 }
 
+// A CI-only subprocess exercising Flutter -> actual upstream Qt widget ->
+// fake core. This executable contains test backend shims, cannot serve as the
+// real GUI, and must never be packaged or used with a real core/account.
+static int runHandoffFixture(QApplication &app) {
+    const QString corePath = qEnvironmentVariable("GOZAR_FAKE_CORE");
+    if (corePath.isEmpty()) return 2;
+    Preferences preferences;
+    PreferencesHelper helper;
+    QGraphicsScene scene;
+    auto *window = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
+    scene.addItem(window);
+    scene.setSceneRect(window->boundingRect());
+    QGraphicsView view(&scene);
+    view.resize(380, 300);
+    // Keep all controls disabled; readiness in this fixture proves process and
+    // rendering initialization only, not feature-complete functionality.
+    window->setInternetConnectivity(true);
+    window->setClickable(false);
+    CoreBridge bridge;
+    HomeBinder binder(&bridge, nullptr, nullptr);
+    bindOriginalHomeWindow(window, &binder);
+    UiReadiness gate(&view, &binder);
+    QObject::connect(&gate, &UiReadiness::readyForHandoff, &app, [&bridge] {
+        std::fputs("GOZAR_QT_READY_V1\n", stdout);
+        std::fflush(stdout);
+        QTimer::singleShot(1200, &bridge, &CoreBridge::shutdown);
+    });
+    QObject::connect(&bridge, &CoreBridge::shutdownFinished, &app,
+                     [&app](bool ok, const QString &) { app.exit(ok ? 0 : 3); });
+    QObject::connect(&bridge, &CoreBridge::transportError, &app,
+                     [&app](const QString &) { app.exit(4); });
+    QTimer::singleShot(15000, &app, [&app] { app.exit(5); });
+    if (!bridge.start(corePath)) return 6;
+    view.show();
+    gate.markUiInitialized();
+    const int result = app.exec();
+    ImageResourcesSvg::instance().finishGracefully();
+    return result;
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
-    qputenv("GOZAR_FAKE_CORE", argv[1]);
+    const bool handoffFixture = QByteArray(argv[1]) == "--handoff-stdio-v1";
+    if (!handoffFixture) qputenv("GOZAR_FAKE_CORE", argv[1]);
     int testArgc = 1;
     QApplication app(testArgc, argv);
     Q_INIT_RESOURCE(images);
+    if (handoffFixture) return runHandoffFixture(app);
     UpstreamBackgroundTest test;
     return QTest::qExec(&test, testArgc, argv);
 }

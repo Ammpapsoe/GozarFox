@@ -54,9 +54,11 @@ is initialized and its own core is signed in and disconnected. `UiReadiness`
 provides an experimental Qt-side gate for a visible window and verified core
 state, but the complete application still has to call it only when the UI is
 actually ready and write the protocol line. Visibility does not establish GUI
-correctness or OS cleanup. The process launcher has been exercised only with a
-simulated executable, and the Qt-side gate only in an isolated widget test.
-No real Qt application executable is built or packaged yet. The entry point
+correctness or OS cleanup. The process launcher is also tested against a CI-only executable containing
+an actual upstream Qt widget and the readiness gate; it uses test-only backend
+shims and a fake core and is not a real application. No real Qt application
+executable is built or packaged yet. The preliminary distribution review is
+in `RELEASE-LICENSE-REVIEW.md`; it is not legal clearance. The entry point
 remains disabled by default; `GOZAR_EXPERIMENTAL_ORIGINAL_QT` is only a build-time
 opt-in for future integration builds, not permission to distribute this WIP.
 A caller must not launch the next owner on an unconfirmed result. The fallback

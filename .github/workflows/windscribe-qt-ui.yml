@@ -66,10 +66,13 @@ jobs:
           set -euo pipefail
           ctest --test-dir "${RUNNER_TEMP}/qt-check" -C Release --output-on-failure
           fake="${RUNNER_TEMP}/qt-check/fake_core"
+          qt_fixture="${RUNNER_TEMP}/qt-check/upstream_background_test"
           if [[ "${RUNNER_OS}" == Windows ]]; then
             fake="${RUNNER_TEMP}/qt-check/Release/fake_core.exe"
+            qt_fixture="${RUNNER_TEMP}/qt-check/Release/upstream_background_test.exe"
           fi
           export GOZAR_HANDOFF_TEST_CORE="$fake"
+          export GOZAR_HANDOFF_TEST_QT="$qt_fixture"
           cd desktop_flutter
           flutter pub get
           flutter analyze

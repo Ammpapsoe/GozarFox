@@ -118,6 +118,20 @@ void main() {
     expect(core.running, isFalse);
   }, skip: fakePath == null ? 'Requires the GitHub-built process fixture' : false);
 
+  final qtFixture = Platform.environment['GOZAR_HANDOFF_TEST_QT'];
+  test('handoff reaches a real upstream Qt widget with a fake core', () async {
+    final core = Core(executablePath: fakePath);
+    await core.start();
+    expect((await core.call('state')).state?.signedIn, isTrue);
+    final target = OriginalUiProcessTarget(qtFixture!, environment: {
+      'GOZAR_FAKE_CORE': fakePath!,
+      'QT_QPA_PLATFORM': 'offscreen',
+    });
+    expect(await OriginalUiHandoff(core, target).transfer(), OriginalUiHandoffResult.ready);
+    expect(core.running, isFalse);
+    await expectLater(core.start(), throwsStateError);
+  }, skip: fakePath == null || qtFixture == null ? 'Requires GitHub-built Qt and fake core fixtures' : false);
+
   test('actual process exits before target launch is attempted', () async {
     final core = Core(executablePath: fakePath);
     await core.start();
