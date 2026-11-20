@@ -538,7 +538,7 @@ QJsonObject GozarPreferences::runUpdate(const QString &artifact, bool &ok) {
     actions->addStretch();
     auto *cancel = action(dialog, actions, local("Cancel", "لغو"));
     cancel->setObjectName(QStringLiteral("cancelUpdate"));
-    dialog.cancel = [=, this] {
+    dialog.cancel = [this, cancel, label] {
         if (!cancel->isEnabled()) return;
         if (binder_->cancelUpdate()) {
             label->setText(local("Cancelling…", "در حال لغو…"));
