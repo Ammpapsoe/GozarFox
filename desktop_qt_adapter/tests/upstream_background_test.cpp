@@ -21,6 +21,8 @@
 #include "dpiscalemanager.h"
 #include "graphicresources/imageresourcessvg.h"
 #include <QApplication>
+#include <QFile>
+#include <QSvgRenderer>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QImage>
@@ -88,6 +90,7 @@ private:
 class UpstreamBackgroundTest : public QObject {
     Q_OBJECT
 private slots:
+    void gozarWordmarkReplacesOriginalResource();
     void sourceFlagFollowsSimulatedCore();
     void upstreamPowerButtonTriggersSimulatedCore();
     void serverAndSettingsUseCoreResponses();
@@ -100,6 +103,18 @@ private slots:
     void originalLanguagesAndDirection();
     void cleanupTestCase();
 };
+
+void UpstreamBackgroundTest::gozarWordmarkReplacesOriginalResource() {
+    QFile logo(QStringLiteral(":/svg/LOGO.svg"));
+    QVERIFY(logo.open(QIODevice::ReadOnly));
+    const QByteArray data = logo.readAll();
+    QVERIFY(data.contains("gozar-brand"));
+    QVERIFY(!data.contains("Windscribe"));
+    QSvgRenderer renderer(data);
+    QVERIFY(renderer.isValid());
+    QCOMPARE(renderer.defaultSize(), QSize(107, 17));
+    QVERIFY(!QFile::exists(QStringLiteral(":/gif/windscribe_spinner.gif")));
+}
 
 void UpstreamBackgroundTest::sourceFlagFollowsSimulatedCore() {
     Preferences preferences;

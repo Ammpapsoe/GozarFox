@@ -280,10 +280,13 @@ class CoreReply {
 enum CoreHandoffResult { ready, busy, signedOut, connected, unconfirmed }
 
 class Core {
-  Core({this.executablePath});
+  Core({this.executablePath, Future<Process> Function(String, List<String>)? processStarter})
+      : _processStarter = processStarter;
 
   final String? executablePath;
+  final Future<Process> Function(String, List<String>)? _processStarter;
   Process? _process;
+  Future<void>? _starting;
   int _nextId = 0;
   bool _stopping = false;
   bool _handoffInProgress = false;
@@ -309,16 +312,38 @@ class Core {
     return File(candidate).existsSync() ? candidate : null;
   }
 
-  Future<void> start() async {
-    if (_process != null) return;
+  Future<void> start() {
     // A stopped or transferred owner cannot be restarted implicitly: a
     // partially launched replacement may already own the network state.
     if (_stopping || _handoffInProgress) {
-      throw StateError('core ownership is stopping or transferred');
+      return Future.error(StateError('core ownership is stopping or transferred'));
     }
+    if (_process != null) return Future.value();
+    if (_starting != null) return _starting!;
+    // Install the guard before invoking the asynchronous process starter: two
+    // overlapping calls must never start two core processes for this owner.
+    final completion = Completer<void>();
+    _starting = completion.future;
+    unawaited(() async {
+      try {
+        await _startOnce();
+        completion.complete();
+      } on Object catch (error, stack) {
+        completion.completeError(error, stack);
+      } finally {
+        _starting = null;
+      }
+    }());
+    return completion.future;
+  }
+
+  Future<void> _startOnce() async {
     final path = _findBinary();
     if (path == null) throw StateError('core not found');
-    final process = await Process.start(path, const ['--rpc']);
+    final starter = _processStarter;
+    final process = starter == null
+        ? await Process.start(path, const ['--rpc'])
+        : await starter(path, const ['--rpc']);
     _process = process;
     process.stdout
         .transform(utf8.decoder)
@@ -335,6 +360,12 @@ class Core {
       _pending.clear();
       if (!_stopping) onExit?.call();
     }));
+    if (_stopping) {
+      // The owner closed while the OS was spawning the child. The child still
+      // needs a graceful quit; do not leak it or kill it during cleanup.
+      _requestQuit(process);
+      throw StateError('core start cancelled by shutdown');
+    }
   }
 
   void _receive(String line) {
@@ -426,8 +457,17 @@ class Core {
   }
 
   Future<void> shutdown() async {
-    final process = _process;
+    final opening = _starting;
     stop();
+    if (opening != null) {
+      try {
+        await opening;
+      } on Object {
+        // An interrupted spawn can still have started a process. Wait for it
+        // below if present; failure is not permission to start another owner.
+      }
+    }
+    final process = _process;
     if (process == null) return;
     try {
       await process.exitCode.timeout(const Duration(seconds: 10));
@@ -437,9 +477,14 @@ class Core {
   }
 
   void stop() {
+    if (_stopping) return;
     final process = _process;
-    if (process == null || _stopping) return;
+    if (process == null && _starting == null) return;
     _stopping = true;
+    if (process != null) _requestQuit(process);
+  }
+
+  void _requestQuit(Process process) {
     try {
       process.stdin.writeln(jsonEncode({'id': ++_nextId, 'method': 'quit'}));
       unawaited(process.stdin.close());

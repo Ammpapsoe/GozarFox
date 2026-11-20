@@ -31,6 +31,21 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
   set(WS_GUI "${WINDSCRIBE_ROOT}/src/client/frontend/gui")
   set(WS_COMMON "${WINDSCRIBE_ROOT}/src/client/client-common")
   set(WS_FRONTEND_COMMON "${WINDSCRIBE_ROOT}/src/client/frontend/frontend-common")
+  # Preserve the pinned sources and generate a resource map with Gozar's own
+  # wordmark. This only addresses known marks, not licensing of all assets.
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  set(GOZAR_TEST_QRC "${CMAKE_CURRENT_BINARY_DIR}/images.qrc")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${WS_GUI}/images.qrc" "${CMAKE_CURRENT_SOURCE_DIR}/branding/create_resources.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg")
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/branding/create_resources.py"
+    --source "${WS_GUI}/images.qrc"
+    --logo "${CMAKE_CURRENT_SOURCE_DIR}/branding/gozar_logo.svg"
+    --output "${GOZAR_TEST_QRC}"
+    RESULT_VARIABLE resource_result ERROR_VARIABLE resource_error)
+  if(NOT resource_result EQUAL 0)
+    message(FATAL_ERROR "Failed to generate Gozar resource map: ${resource_error}")
+  endif()
   add_executable(upstream_background_test
     homebinder.cpp homebinder.h originalhomebinding.h
     uireadiness.cpp uireadiness.h
@@ -42,7 +57,7 @@ if(BUILD_UPSTREAM_SMOKE_TEST)
     tests/upstream_background_test.cpp tests/upstream_shims/categories.cpp
     tests/upstream_pingtime.cpp
     tests/upstream_shims/backend/preferences/preferences.h
-    ${WS_GUI}/images.qrc
+    ${GOZAR_TEST_QRC}
     ${WS_GUI}/dpiscalemanager.cpp ${WS_GUI}/dpiscalemanager.h
     ${WS_GUI}/mainwindowstate.cpp ${WS_GUI}/mainwindowstate.h
     ${WS_GUI}/commongraphics/scalablegraphicsobject.cpp ${WS_GUI}/commongraphics/scalablegraphicsobject.h

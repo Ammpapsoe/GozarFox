@@ -18,6 +18,13 @@ terms, trademarks and compatibility with Gozar's AGPL components require
 review before distribution. Separate processes do not automatically settle
 licence compatibility. No third-party source was relicensed by this directory.
 
+The test build generates a Qt resource map that substitutes an original Gozar
+wordmark for `svg/LOGO.svg` and omits the unsupported branded spinner; the
+pinned upstream source is not modified. This is not a complete artwork or
+trademark audit. The full original preferences feature that needs that spinner
+is not integrated. Other bundled graphics, translations and names still require
+review before distribution.
+
 The original GUI source is `src/client/frontend/gui`; notably,
 `connectwindow/connectwindowitem.cpp` calls `Background::onLocationSelected`
 with the country code; `background.cpp` and
@@ -39,7 +46,11 @@ instead of killing it immediately. Experimental `shutdownFinished` requires a
 successful quit response with disconnected state and a normal process exit; its
 positive result reflects the core's report, not independent verification of OS
 cleanup. The Dart `prepareUiHandoff` guard likewise refuses connected or unknown
-states and waits for quit acknowledgement and process exit. Experimental
+states and waits for quit acknowledgement and process exit. Concurrent starts
+on one Flutter Core object share a single process-start future; a stop during
+spawn requests graceful shutdown as soon as the process appears. This is not a
+system-wide singleton and does not prevent another application instance from
+starting its own core. Experimental
 `OriginalUiHandoff` can be injected into the unchanged Flutter login flow and
 existing signed-in startup. It checks target availability before shutdown and
 will only invoke the target after the previous core reports successful shutdown

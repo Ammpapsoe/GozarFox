@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="107" height="17" viewBox="0 0 107 17">
+  <title>Gozar</title>
+  <!-- Gozar wordmark: original geometric lettering, no Windscribe artwork. -->
+  <g id="gozar-brand" fill="#ffffff">
+    <path d="M1 3 L1 14 L13 14 L13 8 L7 8 L7 10.5 L10 10.5 L10 11.5 L4 11.5 L4 5.5 L13 5.5 L13 3 Z"/>
+    <path d="M19 3 L31 3 L31 14 L19 14 Z M22 5.5 L22 11.5 L28 11.5 L28 5.5 Z" fill-rule="evenodd"/>
+    <path d="M37 3 L49 3 L49 5.5 L41 11.5 L49 11.5 L49 14 L37 14 L37 11.5 L45 5.5 L37 5.5 Z"/>
+    <path d="M56 14 L60 3 L66 3 L70 14 L67 14 L66 11 L60 11 L59 14 Z M61 8.5 L65 8.5 L63.5 5.5 L62.5 5.5 Z" fill-rule="evenodd"/>
+    <path d="M76 3 L88 3 L88 9 L85 9 L89 14 L85 14 L81.5 9.5 L79 9.5 L79 14 L76 14 Z M79 5.5 L79 7 L85 7 L85 5.5 Z" fill-rule="evenodd"/>
+  </g>
+</svg>
