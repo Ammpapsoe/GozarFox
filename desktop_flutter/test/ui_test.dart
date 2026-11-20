@@ -192,6 +192,20 @@ class TransferFakeCore extends FakeCore {
   }
 }
 
+class ConnectedTransferCore extends TransferFakeCore {
+  ConnectedTransferCore() : super(signedIn: true, result: CoreHandoffResult.connected) {
+    live = true;
+  }
+  int stateRequests = 0;
+  final refresh = Completer<CoreReply>();
+
+  @override
+  Future<CoreReply> call(String method, [Map<String, dynamic>? params]) async {
+    if (method == 'state' && ++stateRequests == 2) return refresh.future;
+    return super.call(method, params);
+  }
+}
+
 class FakeOriginalUiTarget implements OriginalUiTarget {
   FakeOriginalUiTarget({this.available = true, this.ready = true});
   final bool available;
@@ -279,6 +293,31 @@ void main() {
     expect(core.running, isTrue);
     expect(target.launches, 0);
     expect(find.text('Gozar'), findsOneWidget);
+  });
+
+  testWidgets('connected handoff waits for fresh state before resuming',
+      (tester) async {
+    tester.view.physicalSize = const Size(480, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.localeTestValue = const Locale('en');
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearLocaleTestValue);
+    final core = ConnectedTransferCore();
+    final target = FakeOriginalUiTarget();
+    await tester.pumpWidget(GozarApp(core: core, originalUiTarget: target));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(core.stateRequests, 2);
+    expect(target.launches, 0);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    core.refresh.complete(CoreReply(
+        state: core.current, stateVerified: true, errorVerified: true));
+    await tester.pumpAndSettle();
+    expect(core.running, isTrue);
+    expect(core.live, isTrue);
+    expect(find.text('Gozar'), findsOneWidget);
+    expect(target.launches, 0);
   });
 
   testWidgets('existing login can hand off to an injected ready target',

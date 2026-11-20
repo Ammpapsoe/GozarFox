@@ -230,10 +230,10 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
     if (handoff == null || !mounted || _windowClosing || _uiHandoffActive) return false;
     _uiHandoffActive = true;
     setState(() => _starting = true);
-    final result = await handoff.transfer(canLaunch: () => mounted && !_windowClosing);
-    _uiHandoffActive = false;
-    if (!mounted) return true;
-    switch (result) {
+    try {
+      final result = await handoff.transfer(canLaunch: () => mounted && !_windowClosing);
+      if (!mounted) return true;
+      switch (result) {
       case OriginalUiHandoffResult.unavailable:
         setState(() => _starting = false);
         return false;
@@ -287,6 +287,9 @@ class _GozarScreenState extends State<GozarScreen> with WindowListener {
           }
         }
         return true;
+      }
+    } finally {
+      _uiHandoffActive = false;
     }
   }
 
