@@ -6,6 +6,10 @@ root=$(git rev-parse --show-toplevel)
 qt="$RUNNER_TEMP/production-layout-qt/gozar-original-ui"
 core="$RUNNER_TEMP/same-commit/gozar-core"
 out="$RUNNER_TEMP/packages"
+archive_flags=(--qt-desktop)
+if [[ "${GOZAR_OFFICIAL_PACKAGE:-0}" != 1 ]]; then
+  archive_flags+=(--record-over-budget)
+fi
 cd "$root/desktop_flutter"
 flutter pub get
 platform=$GOOS
@@ -93,7 +97,7 @@ case "$GOOS" in
   darwin)
     # Ad-hoc validates bundle layout only. This is not Developer ID/notarization.
     codesign --force --deep --sign - "$app"
-    python "$root/scripts/archive_macos.py" "$app" "$out/Gozar-$PACKAGE_LABEL.tar.xz" --record-over-budget
+    python "$root/scripts/archive_macos.py" "$app" "$out/Gozar-$PACKAGE_LABEL.tar.xz" "${archive_flags[@]}"
     mkdir "$RUNNER_TEMP/desktop-extracted"
     tar -xJf "$out/Gozar-$PACKAGE_LABEL.tar.xz" -C "$RUNNER_TEMP/desktop-extracted"
     extracted="$RUNNER_TEMP/desktop-extracted/Gozar.app"

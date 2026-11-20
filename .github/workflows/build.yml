@@ -174,6 +174,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26.11'
@@ -183,11 +186,34 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
+      - name: Select and authorize the desktop package layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          ui=flutter
+          if [[ -f packaging/desktop-release-ui ]]; then ui=$(cat packaging/desktop-release-ui); fi
+          case "$ui" in
+            qt)
+              python scripts/check_qt_release_prerequisites.py
+              echo 'GOZAR_DESKTOP_QT=1' >> "$GITHUB_ENV"
+              ;;
+            flutter) echo 'GOZAR_DESKTOP_QT=0' >> "$GITHUB_ENV" ;;
+            *) echo '::error::Unknown desktop package layout; refusing fallback'; exit 1 ;;
+          esac
+      - uses: jurplel/install-qt-action@v4
+        if: env.GOZAR_DESKTOP_QT == '1'
+        with:
+          version: '6.8.3'
+          host: ${{ matrix.platform == 'darwin' && 'mac' || matrix.platform }}
+          cache: true
       - name: Linux build dependencies
         if: matrix.platform == 'linux'
         run: |
           bash scripts/ci_apt.sh update -qq
           bash scripts/ci_apt.sh install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          if [[ "$GOZAR_DESKTOP_QT" == 1 ]]; then
+            bash scripts/ci_apt.sh install -y patchelf libxcb-cursor0 libxkbcommon-x11-0
+          fi
       - name: Inspect Go code
         working-directory: go-desktop
         shell: bash
@@ -266,7 +292,7 @@ jobs:
         shell: bash
         run: flutter test --reporter expanded
       - name: Build Linux
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux' && env.GOZAR_DESKTOP_QT != '1'
         working-directory: desktop_flutter
         shell: bash
         run: |
@@ -280,14 +306,14 @@ jobs:
           (cd .. && scripts/package_deb.sh "$GITHUB_WORKSPACE/desktop_flutter/build/linux/x64/release/bundle" "$GITHUB_WORKSPACE/desktop_flutter/out/Gozar-Linux-amd64.deb" "$VERSION")
           ls -lh out/*
       - name: Install Windows installer tool
-        if: matrix.platform == 'windows'
+        if: matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT != '1'
         shell: pwsh
         run: |
           $compiler = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
           if (!(Test-Path $compiler)) { choco install nsis --no-progress -y }
           if (!(Test-Path $compiler)) { throw 'NSIS compiler was not installed' }
       - name: Build Windows
-        if: matrix.platform == 'windows'
+        if: matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT != '1'
         working-directory: desktop_flutter
         shell: bash
         run: |
@@ -318,7 +344,7 @@ jobs:
             "$(cygpath -w "$PWD/../packaging/windows/gozar.nsi")"
           ls -lh out/*
       - name: Verify native Windows window with simulated core
-        if: ${{ matrix.platform == 'windows' && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT != '1' && !inputs.skip_graphics_tests }}
         working-directory: desktop_flutter
         shell: pwsh
         run: |
@@ -328,18 +354,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ../scripts/test_windows_ui.ps1 -Bundle $runner.DirectoryName -Core "$env:RUNNER_TEMP/gozar-ui-test-core.exe" -TestLog "$env:RUNNER_TEMP/gozar-ui-test.log" -Screenshot "$env:RUNNER_TEMP/gozar-ui-simulated.png"
       - uses: actions/upload-artifact@v4
-        if: ${{ matrix.platform == 'windows' && !startsWith(github.ref, 'refs/tags/v') && !(github.event_name == 'workflow_dispatch' && inputs.validate_release) && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT != '1' && !startsWith(github.ref, 'refs/tags/v') && !(github.event_name == 'workflow_dispatch' && inputs.validate_release) && !inputs.skip_graphics_tests }}
         with:
           name: gozar-windows-ui-simulated
           path: ${{ runner.temp }}/gozar-ui-simulated.png
           if-no-files-found: warn
       - name: Verify Windows installer and uninstaller
-        if: matrix.platform == 'windows'
+        if: matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT != '1'
         working-directory: desktop_flutter
         shell: pwsh
         run: ../scripts/test_windows_installer.ps1 -Installer out/Gozar-Windows-x64-Setup.exe -InstallDir "$env:RUNNER_TEMP/gozar-install-smoke"
       - name: Build macOS
-        if: matrix.platform == 'darwin'
+        if: matrix.platform == 'darwin' && env.GOZAR_DESKTOP_QT != '1'
         working-directory: desktop_flutter
         shell: bash
         env:
@@ -387,7 +413,7 @@ jobs:
           done < <(find "$EXTRACTED/Contents/Frameworks" -mindepth 1 -maxdepth 1 -type d -name '*.framework' -print0)
           ls -lh out/*
       - name: Verify native macOS window with simulated core
-        if: ${{ matrix.platform == 'darwin' && !inputs.skip_graphics_tests }}
+        if: ${{ matrix.platform == 'darwin' && env.GOZAR_DESKTOP_QT != '1' && !inputs.skip_graphics_tests }}
         working-directory: desktop_flutter
         shell: bash
         run: |
@@ -405,7 +431,43 @@ jobs:
           elif [ "$hidden_status" != 0 ]; then
             exit "$hidden_status"
           fi
+      - name: Build and stage the official Qt desktop layout
+        if: env.GOZAR_DESKTOP_QT == '1'
+        shell: bash
+        env:
+          GOOS: ${{ matrix.platform }}
+          GOARCH: ${{ matrix.arch }}
+          PACKAGE_LABEL: ${{ matrix.name }}
+          GOZAR_OFFICIAL_PACKAGE: '1'
+        run: |
+          set -euo pipefail
+          core="$RUNNER_TEMP/same-commit/gozar-core"
+          ldflags='-s -w'
+          if [[ "$GOOS" == windows ]]; then core+=.exe; ldflags+=' -H=windowsgui'; fi
+          mkdir -p "$(dirname "$core")" "$RUNNER_TEMP/packages"
+          (cd go-desktop && CGO_ENABLED=0 go build -trimpath -ldflags="$ldflags" -o "$core" ./cmd/gozar)
+          cmake -S desktop_qt_adapter -B "$RUNNER_TEMP/production-layout-qt" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGOZAR_REAL_CORE="$core"
+          cmake --build "$RUNNER_TEMP/production-layout-qt" --config Release --parallel 2
+          ctest --test-dir "$RUNNER_TEMP/production-layout-qt" -C Release --output-on-failure
+          bash scripts/stage_desktop_qt_packages.sh
+      - name: Build and test the installed Qt Windows package
+        if: matrix.platform == 'windows' && env.GOZAR_DESKTOP_QT == '1'
+        shell: pwsh
+        env:
+          GOZAR_OFFICIAL_PACKAGE: '1'
+        run: ./scripts/build_qt_windows_installer.ps1
+      - name: Check and collect the official Qt desktop package set
+        if: env.GOZAR_DESKTOP_QT == '1'
+        shell: bash
+        env:
+          PACKAGE_LABEL: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          python scripts/check_qt_public_package_sizes.py "$RUNNER_TEMP/packages" "$PACKAGE_LABEL"
+          mkdir -p desktop_flutter/out
+          cp "$RUNNER_TEMP/packages/"* desktop_flutter/out/
       - name: Check download size
+        if: env.GOZAR_DESKTOP_QT != '1'
         working-directory: desktop_flutter
         shell: bash
         run: |
@@ -570,6 +632,13 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - name: Recheck Qt distribution review before accessing signing keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f packaging/desktop-release-ui ]] && [[ "$(cat packaging/desktop-release-ui)" == qt ]]; then
+            python3 scripts/check_qt_release_prerequisites.py
+          fi
       - name: Require same-commit unit and packaging evidence
         if: startsWith(github.ref, 'refs/tags/v')
         env:

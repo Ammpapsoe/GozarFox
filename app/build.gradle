@@ -20,8 +20,8 @@ android {
         targetSdk 35
         // Prebuilt strip-mined NDK that CI installs explicitly.
         ndkVersion '27.0.12077973'
-        versionCode 69
-        versionName '1.19.0'
+        versionCode 70
+        versionName '1.20.0'
         manifestPlaceholders.appLabel = '@string/app_name'
         manifestPlaceholders.xiaomiAppId = System.getenv('XIAOMI_APP_ID') ?: ''
         manifestPlaceholders.xiaomiDebug = 'false'
