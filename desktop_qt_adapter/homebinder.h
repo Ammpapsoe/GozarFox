@@ -39,6 +39,7 @@ public:
 signals:
     void updateFinished(const QJsonObject &result, const QString &error);
     void signedOutConfirmed();
+    void accountSwitchConfirmed();
     void error(const QString &message);
     void stateChanged(const QJsonObject &state);
     void visualStateChanged(CONNECT_STATE state);
@@ -70,6 +71,8 @@ private:
     QString cancelError_;
     bool handleUpdateReply(qint64 id, const QJsonObject &response, const QString &error);
     qint64 signOutId_ = -1;
+    qint64 switchAccountId_ = -1;
+    QString pendingAccountId_;
     qint64 mutatingId_ = -1;
     qint64 stateId_ = -1;
     qint64 serversId_ = -1;

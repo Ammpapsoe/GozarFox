@@ -22,7 +22,7 @@ public:
         return curScale_;
     }
 
-    int curDevicePixelRatio() const;
+    qreal curDevicePixelRatio() const;
     QRect curScreenGeometry() const;
     double scaleOfScreen(const QScreen *screen) const;
     bool setMainWindow(QWidget *mainWindow);    // return true if DPI is changed

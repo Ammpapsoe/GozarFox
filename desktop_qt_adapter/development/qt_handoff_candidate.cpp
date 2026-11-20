@@ -42,6 +42,8 @@
 #include <QClipboard>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPainterPath>
+#include <QRegion>
 #include <QScreen>
 #include <QShortcut>
 #include <QWindow>
@@ -59,6 +61,38 @@
 #endif
 
 namespace {
+// Match the 9 logical px Van Gogh radius used by Windscribe’s preferences.
+qreal panelRadius(int height) { return qMin(9.0 * G_SCALE, height / 2.0); }
+
+class PanelOutline final : public QWidget {
+public:
+    explicit PanelOutline(QWidget *parent) : QWidget(parent) {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_NoSystemBackground);
+    }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(QColor(255, 255, 255, 29));
+        painter.setBrush(Qt::NoBrush);
+        const auto radius = panelRadius(height());
+        painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
+    }
+};
+
+void matchPanelFrame(QWidget &panel, PanelOutline &outline) {
+    if (panel.width() <= 0 || panel.height() <= 0) return;
+    const qreal radius = panelRadius(panel.height());
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(panel.rect()), radius, radius);
+    const QRegion mask(shape.toFillPolygon().toPolygon());
+    if (panel.mask() != mask) panel.setMask(mask);
+    if (outline.geometry() != panel.rect()) outline.setGeometry(panel.rect());
+    outline.raise();
+    outline.show();
+}
+
 class HomeView final : public QGraphicsView {
 public:
     using QGraphicsView::QGraphicsView;
@@ -152,6 +186,7 @@ int main(int argc, char **argv) {
     auto *home = new ConnectWindow::ConnectWindowItem(nullptr, &preferences, &helper);
     homeScene.addItem(home);
     HomeView homeView(&homeScene);
+    homeView.setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
     homeView.setFrameShape(QFrame::NoFrame);
     homeView.setAlignment(Qt::AlignTop | Qt::AlignLeft);
     homeView.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -182,7 +217,9 @@ int main(int argc, char **argv) {
     constexpr int locationsMotionMs = 250; // Windscribe EXPAND_ANIMATION_DURATION
 
     GozarPreferences settingsView(&binder, &language, &helper, probe);
-    enum class FlutterReturn { None, Login, AddAccount };
+    PanelOutline locationsOutline(&locationsClip);
+    PanelOutline settingsOutline(&settingsView);
+    enum class FlutterReturn { None, Login, AddAccount, SwitchedAccount };
     FlutterReturn flutterReturn = FlutterReturn::None;
 #ifdef Q_OS_WIN
     const auto flutterPath = QDir(app.applicationDirPath()).filePath(QStringLiteral("gozar.exe"));
@@ -205,6 +242,10 @@ int main(int argc, char **argv) {
         [&] { returnToFlutter(FlutterReturn::AddAccount); });
     QObject::connect(&binder, &HomeBinder::signedOutConfirmed, &shell,
         [&] { returnToFlutter(FlutterReturn::Login); });
+#ifdef Q_OS_WIN
+    QObject::connect(&binder, &HomeBinder::accountSwitchConfirmed, &shell,
+        [&] { returnToFlutter(FlutterReturn::SwitchedAccount); }, Qt::QueuedConnection);
+#endif
 #endif
     QObject::connect(&settingsView, &GozarPreferences::quitRequested, &shell, &QWidget::close);
     layout.addWidget(&settingsView);
@@ -225,7 +266,11 @@ int main(int argc, char **argv) {
         const int visibleLocationsHeight = qRound(locations.height() * locationsProgress);
         locationsClip.setFixedSize(width, visibleLocationsHeight);
         locations.move(0, visibleLocationsHeight - locations.height());
-        if (!settingsView.isHidden()) settingsView.fitPanel(width, room);
+        if (visibleLocationsHeight > 0) matchPanelFrame(locationsClip, locationsOutline);
+        if (!settingsView.isHidden()) {
+            settingsView.fitPanel(width, room);
+            matchPanelFrame(settingsView, settingsOutline);
+        }
         layout.invalidate();
         shell.setFixedSize(width, layout.sizeHint().height());
         if (screen && shell.isVisible() && !shell.isMinimized()) {
@@ -254,7 +299,12 @@ int main(int argc, char **argv) {
     });
     QObject::connect(&locations, &LocationsWindow::heightChanged, &shell, fitWindow);
     auto &dpi = DpiScaleManager::instance();
-    const auto rescale = [&] { home->updateScaling(); locations.updateScaling(); fitWindow(); };
+    const auto rescale = [&] {
+        ImageResourcesSvg::instance().invalidateDpiCache();
+        home->updateScaling();
+        locations.updateScaling();
+        fitWindow();
+    };
     QObject::connect(&dpi, &DpiScaleManager::scaleChanged, &shell, rescale);
     QObject::connect(&dpi, &DpiScaleManager::newScreen, &shell, [&](QScreen *) { fitWindow(); });
 
@@ -432,6 +482,11 @@ int main(int argc, char **argv) {
                         QTest::qWait(300); // capture the final state of the original tab animation
                         shell.grab().save(QDir(screenshots).filePath("connection-settings.png"));
                     }
+                    // Fail instead of silently accepting rounded DPR or square corners.
+                    const auto icon = ImageResourcesSvg::instance().getIndependentPixmap("locations/FAV_ICON_DESELECTED");
+                    if (!icon || !qFuzzyCompare(dpi.curDevicePixelRatio(), shell.devicePixelRatioF()) ||
+                        qAbs(icon->originalPixmapSize().width() - 16 * G_SCALE * shell.devicePixelRatioF()) > 1 ||
+                        settingsView.mask().isEmpty() || settingsView.mask().contains(QPoint(0, 0))) return false;
                     const auto settle = [&] {
                         QElapsedTimer pending;
                         pending.start();
@@ -465,6 +520,9 @@ int main(int argc, char **argv) {
                         QTest::qWait(300);
                         shell.grab().save(QDir(screenshots).filePath("account.png"));
                     }
+                    bool accountSwitchConfirmed = false;
+                    const auto switchObserved = QObject::connect(&binder, &HomeBinder::accountSwitchConfirmed, &shell,
+                                      [&] { accountSwitchConfirmed = true; });
                     bool sawAccountPicker = false;
                     auto dialogReady = QObject::connect(&settingsView, &GozarPreferences::accountDialogOpened, &shell, [&](QDialog *dialog) {
                         const auto *active = dialog->findChild<QPushButton *>(QStringLiteral("activeAccount"));
@@ -481,7 +539,8 @@ int main(int argc, char **argv) {
                     QElapsedTimer accountWait;
                     accountWait.start();
                     while (binder.currentState().value("email").toString() != QLatin1String("personal@example.test") && accountWait.elapsed() < 3000) QTest::qWait(20);
-                    if (binder.currentState().value("email").toString() != QLatin1String("personal@example.test")) return false;
+                    QObject::disconnect(switchObserved);
+                    if (!accountSwitchConfirmed || binder.currentState().value("email").toString() != QLatin1String("personal@example.test")) return false;
                     emit home->locationsClick();
                     if (!locations.isVisible() || locationsClip.height() == locations.height()) return false;
                     QTest::qWait(locationsMotionMs + 70);

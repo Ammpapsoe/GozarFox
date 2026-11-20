@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $setup = (Resolve-Path $Installer).Path
 $core = (Resolve-Path $VerifiedCore).Path
-$install = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\Gozar Qt Experimental'
+$install = Join-Path $env:RUNNER_TEMP 'Gozar Qt Preview install smoke'
 $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Gozar Qt Experimental.lnk'
 $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GozarQtExperimental'
 if ((Test-Path $install) -or (Test-Path $key) -or (Test-Path $shortcut)) { throw 'Preview install identities are already in use' }
@@ -14,7 +14,8 @@ function Invoke-Checked([string]$File, [string]$Flags, [string]$Directory) {
   if (!$child.WaitForExit(120000)) { Stop-Process -Id $child.Id -Force; throw "Timed out: $File" }
   if ($child.ExitCode -ne 0) { throw "Exit $($child.ExitCode): $File" }
 }
-Invoke-Checked $setup '/S' $env:RUNNER_TEMP
+# /D= must be the last NSIS argument and must not quote its path.
+Invoke-Checked $setup "/S /D=$install" $env:RUNNER_TEMP
 try {
   foreach ($name in @('gozar.exe','gozar-original-ui.exe','gozar-core.exe','flutter_windows.dll','screen_retriever_windows_plugin.dll','window_manager_plugin.dll','webview_windows_plugin.dll','WebView2Loader.dll','Qt6Core.dll','Qt6Gui.dll','Qt6Widgets.dll','Qt6Svg.dll','platforms\qwindows.dll','vcruntime140.dll','msvcp140.dll','data\flutter_assets\NOTICES.Z','EXPERIMENTAL-WARNING.txt','WINDSCRIBE-GPL-2-LICENSE.txt','Uninstall.exe')) {
     if (!(Test-Path (Join-Path $install $name) -PathType Leaf)) { throw "Missing installed file: $name" }

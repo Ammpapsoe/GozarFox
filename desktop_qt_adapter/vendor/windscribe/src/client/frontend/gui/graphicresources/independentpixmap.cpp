@@ -19,12 +19,12 @@ QSize IndependentPixmap::originalPixmapSize() const
 
 int IndependentPixmap::width() const
 {
-    return pixmap_.width() / pixmap_.devicePixelRatio();
+    return qRound(pixmap_.width() / pixmap_.devicePixelRatio());
 }
 
 int IndependentPixmap::height() const
 {
-    return pixmap_.height() / pixmap_.devicePixelRatio();
+    return qRound(pixmap_.height() / pixmap_.devicePixelRatio());
 }
 
 void IndependentPixmap::draw(int x, int y, QPainter *painter) const

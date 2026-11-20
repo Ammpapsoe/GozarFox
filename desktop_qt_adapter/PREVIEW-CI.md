@@ -17,7 +17,7 @@ Each job:
    checks. No account credentials or live VPN connection are used.
 3. Captures screenshots from the actual Qt executable with simulated server
    and traffic data plus reserved `example.test` account addresses in English
-   and Persian, and uploads them as a distinct
+   and Persian at 100%, 125% and 150%, and uploads them as a distinct
    artifact. No fixture core is included in the development package.
 4. Stages the existing Flutter sign-in UI and Qt candidate for owner
    evaluation. The experimental Qt launcher can reopen the Flutter app for
@@ -30,7 +30,7 @@ Each job:
 On Windows the workflow runs Flutter analysis and handoff tests with the built
 fixtures, deploys the real Qt runtime and app-local MSVC runtime, and builds one
 unsigned NSIS setup EXE. A runner smoke installs it, checks its layout and core
-hash, starts the installed Qt in a temporary signed-out profile with the Windows
+hash from a custom installation path with spaces, starts the installed Qt in a temporary signed-out profile with the Windows
 Qt plugin, and verifies removal. The EXE is uploaded **only after** the checks:
 `gozar-qt-windows-test-exe` → `Gozar-Qt-Experimental-Windows-x64-Setup.exe`.
 The Actions artifact wrapper is a ZIP containing that single EXE. Sign-in may
@@ -42,3 +42,19 @@ Other artifact names: `gozar-qt-screenshots-*` and
 `gozar-qt-real-core-*-EXPERIMENTAL-NOT-RELEASE`. The local test results do not
 establish Windows/macOS runtime behavior, independent tunnel cleanup, or legal
 approval. See `EXPERIMENTAL-WARNING.txt` and `RELEASE-LICENSE-REVIEW.md`.
+
+## Rendering and account-switch checks
+
+Qt 6 already takes the Windows display scale without system overrides. The
+adapter now retains fractional DPR for SVG rasterization, draws location text
+on the active Qt painter, and uses the upstream preferences radius of nine
+logical pixels for the attached panels. The Windows fractional capture steps
+use the native Qt plugin with a controlled Qt scale multiplier, not changes to
+the system display settings. Physical Windows monitor and mixed-DPI checks are
+still needed.
+
+On Windows only, a confirmed switch to the requested account with no live or
+pending connection schedules a guarded shutdown, then reopens Flutter to
+load that account and hand off normally. A failed switch or unconfirmed
+shutdown does not launch a second core. The fixture verifies the acknowledgement
+contract; it does not use a real account or prove a physical-machine round trip.

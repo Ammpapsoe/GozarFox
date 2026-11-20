@@ -136,7 +136,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
 
     // text
     painter->setOpacity(textOpacity);
-    IndependentPixmap pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
+    const auto pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
     WS_ASSERT(!pixmapCaption.isNull());
 
     // In favorites tab, show city name higher and pinned IP below
@@ -145,18 +145,18 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
         pixmapCaption.draw(rcCaption.left(), rcCaption.top(), painter);
 
         if (option.isShowCountryFlagForCity()) {
-            IndependentPixmap pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
+            const auto pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
             if (!pixmapNick.isNull()) {
                 QRect rc(rcCaption.left() + rcCaption.width() + 8*G_SCALE, option.rect.top() + 2*G_SCALE, pixmapNick.width(), pixmapNick.height());
                 pixmapNick.draw(rc.left(), rc.top(), painter);
             }
             painter->setOpacity(0.6);
 
-            IndependentPixmap pixmapPinnedIp = cache->pixmap(CityItemDelegateCache::kPinnedIpId);
+            const auto pixmapPinnedIp = cache->pixmap(CityItemDelegateCache::kPinnedIpId);
             WS_ASSERT(!pixmapPinnedIp.isNull());
             pixmapPinnedIp.draw(left_offs + 56*G_SCALE, option.rect.top() + 2*G_SCALE + pixmapCaption.height(), painter);
         } else {
-            IndependentPixmap pixmapStaticIp = cache->pixmap(CityItemDelegateCache::kStaticIpId);
+            const auto pixmapStaticIp = cache->pixmap(CityItemDelegateCache::kStaticIpId);
             WS_ASSERT(!pixmapStaticIp.isNull());
             pixmapStaticIp.draw(left_offs + 56*G_SCALE, option.rect.top() + 2*G_SCALE + pixmapCaption.height(), painter);
         }
@@ -166,7 +166,7 @@ void CityItemDelegate::paint(QPainter *painter, const ItemStyleOption &option, c
 
         // city text for non-static and non-custom views only (not in favorites tab)
         if (!gozarPresentation_ && !lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
-            IndependentPixmap pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
+            const auto pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
             if (!pixmapNick.isNull()) {
                 QRect rc( rcCaption.left() + rcCaption.width() + 8*G_SCALE,  option.rect.top(), pixmapNick.width(), option.rect.height());
                 pixmapNick.draw(rc.left(), rc.top() + (rc.height() -  pixmapNick.height()) / 2, painter);
@@ -272,20 +272,20 @@ IItemCacheData *CityItemDelegate::createCacheData(const QModelIndex &index) cons
     QString cityCaption = CommonGraphics::maybeTruncatedText(index.data().toString(),
                                                              FontManager::instance().getFont(15, QFont::Medium),
                                                              (lid.isCustomConfigsLocation() ? maxWidth : kCityCaptionMaxWidth)*G_SCALE);
-    cache->add(CityItemDelegateCache::kCityId, cityCaption, FontManager::instance().getFont(15, QFont::Medium), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->add(CityItemDelegateCache::kCityId, cityCaption, FontManager::instance().getFont(15, QFont::Medium));
 
     if (!lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
         QString nickCaption = CommonGraphics::maybeTruncatedText(index.data(kDisplayNickname).toString(),
                                                                  FontManager::instance().getFont(15, QFont::Normal),
                                                                  (maxWidth - 8)*G_SCALE - cache->pixmap(CityItemDelegateCache::kCityId).width());
-        cache->add(CityItemDelegateCache::kNickId, nickCaption, FontManager::instance().getFont(15, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+        cache->add(CityItemDelegateCache::kNickId, nickCaption, FontManager::instance().getFont(15, QFont::Normal));
     }
-    cache->add(CityItemDelegateCache::kStaticIpId, index.data(kStaticIp).toString(), FontManager::instance().getFont(12, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->add(CityItemDelegateCache::kStaticIpId, index.data(kStaticIp).toString(), FontManager::instance().getFont(12, QFont::Normal));
 
     QVariantList pinnedData = index.data(kPinnedIp).toList();
     QString pinnedIp = (pinnedData.size() == 2) ? pinnedData[1].toString() : QString();
     QString ipText = pinnedIp.isEmpty() ? QObject::tr("Random IP") : pinnedIp;
-    cache->add(CityItemDelegateCache::kPinnedIpId, ipText, FontManager::instance().getFont(12, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->add(CityItemDelegateCache::kPinnedIpId, ipText, FontManager::instance().getFont(12, QFont::Normal));
 
     return cache;
 }
@@ -299,20 +299,20 @@ void CityItemDelegate::updateCacheData(const QModelIndex &index, IItemCacheData 
     QString cityCaption = CommonGraphics::maybeTruncatedText(index.data().toString(),
                                                               FontManager::instance().getFont(15, QFont::Medium),
                                                               (lid.isCustomConfigsLocation() ? maxWidth : kCityCaptionMaxWidth)*G_SCALE);
-    cache->updateIfTextChanged(CityItemDelegateCache::kCityId, cityCaption, FontManager::instance().getFont(15, QFont::Medium), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->updateIfTextChanged(CityItemDelegateCache::kCityId, cityCaption, FontManager::instance().getFont(15, QFont::Medium));
 
     if (!lid.isStaticIpsLocation() && !lid.isCustomConfigsLocation()) {
         QString nickCaption = CommonGraphics::maybeTruncatedText(index.data(kDisplayNickname).toString(),
                                                                  FontManager::instance().getFont(15, QFont::Normal),
                                                                  (maxWidth - 8)*G_SCALE - cache->pixmap(CityItemDelegateCache::kCityId).width());
-        cache->updateIfTextChanged(CityItemDelegateCache::kNickId, nickCaption, FontManager::instance().getFont(15, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+        cache->updateIfTextChanged(CityItemDelegateCache::kNickId, nickCaption, FontManager::instance().getFont(15, QFont::Normal));
     }
-    cache->updateIfTextChanged(CityItemDelegateCache::kStaticIpId, index.data(kStaticIp).toString(), FontManager::instance().getFont(12, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->updateIfTextChanged(CityItemDelegateCache::kStaticIpId, index.data(kStaticIp).toString(), FontManager::instance().getFont(12, QFont::Normal));
 
     QVariantList pinnedData = index.data(kPinnedIp).toList();
     QString pinnedIp = (pinnedData.size() == 2) ? pinnedData[1].toString() : QString();
     QString ipText = pinnedIp.isEmpty() ? QObject::tr("Random IP") : pinnedIp;
-    cache->updateIfTextChanged(CityItemDelegateCache::kPinnedIpId, ipText, FontManager::instance().getFont(12, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->updateIfTextChanged(CityItemDelegateCache::kPinnedIpId, ipText, FontManager::instance().getFont(12, QFont::Normal));
 }
 
 bool CityItemDelegate::isForbiddenCursor(const QModelIndex &index) const
@@ -481,7 +481,7 @@ QRect CityItemDelegate::customConfigErrorRect(const QRect &itemRect) const
 QRect CityItemDelegate::captionRect(const QRect &itemRect, const IItemCacheData *cacheData) const
 {
     const CityItemDelegateCache *cache = static_cast<const CityItemDelegateCache *>(cacheData);
-    IndependentPixmap pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
+    const auto pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
     return QRect(itemRect.left() + 2*LOCATION_ITEM_MARGIN*G_SCALE + LOCATION_ITEM_FLAG_WIDTH*G_SCALE,
                  itemRect.top() + (itemRect.height() - pixmapCaption.height()) / 2,
                  pixmapCaption.width(), pixmapCaption.height());
@@ -490,11 +490,11 @@ QRect CityItemDelegate::captionRect(const QRect &itemRect, const IItemCacheData 
 QRect CityItemDelegate::nicknameRect(const QRect &itemRect, const IItemCacheData *cacheData) const
 {
     const CityItemDelegateCache *cache = static_cast<const CityItemDelegateCache *>(cacheData);
-    IndependentPixmap pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
+    const auto pixmapNick = cache->pixmap(CityItemDelegateCache::kNickId);
     if (pixmapNick.isNull())
         return QRect();
 
-    IndependentPixmap pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
+    const auto pixmapCaption = cache->pixmap(CityItemDelegateCache::kCityId);
 
     QRect rcCaption(itemRect.left() + 2*LOCATION_ITEM_MARGIN*G_SCALE + LOCATION_ITEM_FLAG_WIDTH*G_SCALE,
                    itemRect.top() + (itemRect.height() - pixmapCaption.height()) / 2,

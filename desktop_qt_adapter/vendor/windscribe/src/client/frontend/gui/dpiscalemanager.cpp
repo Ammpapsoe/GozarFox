@@ -101,17 +101,11 @@ void DpiScaleManager::onLogicalDotsPerInchChanged(qreal dpi)
     }
 }
 
-int DpiScaleManager::curDevicePixelRatio() const
+qreal DpiScaleManager::curDevicePixelRatio() const
 {
-    // curDevicePixelRatio_ should be 1 or 2 (not tested for other values)
-    int ratio = qRound(curDevicePixelRatio_);
-    if (ratio < 1) {
-        ratio = 1;
-    }
-    else if (ratio > 2) {
-        ratio = 2;
-    }
-    return ratio;
+    // Qt 6 already reports the effective DPR for this display, including 1.25,
+    // 1.5, and values above 2. Don't rasterize at a different scale.
+    return curDevicePixelRatio_;
 }
 
 QRect DpiScaleManager::curScreenGeometry() const

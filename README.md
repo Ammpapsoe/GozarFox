@@ -1,3 +1,9 @@
+# Gozar
+
+[![Android Universal APK](https://img.shields.io/badge/Android-Universal%20APK-3DDC84?logo=android&logoColor=white)](https://github.com/Ammpapsoe/GozarFox/releases/latest)
+
+For a single APK that works across the supported Android architectures, choose the `_universal.apk` asset in the latest release.
+
 Gozar is a Firefox VPN client for Android, Windows, macOS, and Linux.
 
 Android uses its existing Kotlin application and its shared core. Desktop has a native Flutter

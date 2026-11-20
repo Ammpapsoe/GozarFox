@@ -70,11 +70,19 @@ jobs:
           set -euo pipefail
           fixture="${RUNNER_TEMP}/qt-build/gozar_qt_handoff_fixture"
           if [[ "$RUNNER_OS" == Windows ]]; then fixture="${RUNNER_TEMP}/qt-build/Release/gozar_qt_handoff_fixture.exe"; fi
+          # Use the native Windows Qt backend, not Windows display-setting overrides.
+          if [[ "$RUNNER_OS" == Windows ]]; then export QT_QPA_PLATFORM=windows; fi
           output="${RUNNER_TEMP}/gozar-ui-screenshots"
-          mkdir -p "$output/en" "$output/fa"
+          mkdir -p "$output/en" "$output/fa" "$output/en-125" "$output/fa-125" "$output/en-150" "$output/fa-150"
           GOZAR_VISUAL_DIR="$output/en" "$fixture" --ci-layout
           GOZAR_VISUAL_DIR="$output/fa" GOZAR_VISUAL_FARSI=1 "$fixture" --ci-layout
-          for locale in en fa; do
+          for scale in 125 150; do
+            factor=1.25
+            if [[ "$scale" == 150 ]]; then factor=1.5; fi
+            QT_SCALE_FACTOR="$factor" GOZAR_VISUAL_DIR="$output/en-$scale" "$fixture" --ci-layout
+            QT_SCALE_FACTOR="$factor" GOZAR_VISUAL_FARSI=1 GOZAR_VISUAL_DIR="$output/fa-$scale" "$fixture" --ci-layout
+          done
+          for locale in en fa en-125 fa-125 en-150 fa-150; do
             for image in compact-home connected connection-settings account account-switcher server-list search favourites tray-menu about updates session support; do
               test -s "$output/$locale/$image.png"
             done
@@ -131,7 +139,7 @@ jobs:
           $removal = Join-Path $env:RUNNER_TEMP 'gozar-qt-remove.nsh'
           python packaging/windows/nsis-preview-payload.py $stage $removal
           if ($LASTEXITCODE -ne 0) { throw 'Failed to generate uninstall manifest' }
-          & $compiler /V2 "/DPAYLOAD_PATTERN=$stage\*.*" "/DREMOVE_PAYLOAD=$removal" "/DOUTPUT=$out\Gozar-Qt-Experimental-Windows-x64-Setup.exe" "/DICON_FILE=$env:GITHUB_WORKSPACE\desktop_flutter\windows\runner\resources\app_icon.ico" packaging/windows/gozar-qt-preview.nsi
+          & $compiler /V2 "/DWIZARD_FILE=$env:GITHUB_WORKSPACE\packaging\windows\wizard.bmp" "/DHEADER_FILE=$env:GITHUB_WORKSPACE\packaging\windows\header.bmp" "/DPAYLOAD_PATTERN=$stage\*.*" "/DREMOVE_PAYLOAD=$removal" "/DOUTPUT=$out\Gozar-Qt-Experimental-Windows-x64-Setup.exe" "/DICON_FILE=$env:GITHUB_WORKSPACE\desktop_flutter\windows\runner\resources\app_icon.ico" packaging/windows/gozar-qt-preview.nsi
           if ($LASTEXITCODE -ne 0) { throw 'Failed to compile setup EXE' }
       - name: Install, smoke-test with unchanged core, and uninstall
         if: matrix.platform == 'windows'

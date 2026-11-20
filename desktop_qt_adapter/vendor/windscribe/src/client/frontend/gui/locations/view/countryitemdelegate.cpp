@@ -106,7 +106,7 @@ void CountryItemDelegate::paint(QPainter *painter, const ItemStyleOption &option
     painter->setOpacity(textOpacity);
     QRect rc = option.rect;
     rc.adjust(56*G_SCALE, 0, 0, 0);
-    IndependentPixmap pixmap = cache->pixmap(CountryItemDelegateCache::kCaptionId);
+    const auto pixmap = cache->pixmap(CountryItemDelegateCache::kCaptionId);
     pixmap.draw(rc.left(), rc.top() + (rc.height() - pixmap.height()) / 2, painter);
 
     int xOffset = left_offs + option.rect.width() - 27*G_SCALE;
@@ -156,7 +156,7 @@ IItemCacheData *CountryItemDelegate::createCacheData(const QModelIndex &index) c
     QString countryCaption = CommonGraphics::maybeTruncatedText(index.data().toString(),
                                                                 FontManager::instance().getFont(16, QFont::Medium),
                                                                 static_cast<int>(maxWidth));
-    cache->add(CountryItemDelegateCache::kCaptionId, countryCaption, FontManager::instance().getFont(15, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->add(CountryItemDelegateCache::kCaptionId, countryCaption, FontManager::instance().getFont(15, QFont::Normal));
     return cache;
 }
 
@@ -171,7 +171,7 @@ void CountryItemDelegate::updateCacheData(const QModelIndex &index, IItemCacheDa
     QString countryCaption = CommonGraphics::maybeTruncatedText(index.data().toString(),
                                                                 FontManager::instance().getFont(16, QFont::Medium),
                                                                 static_cast<int>(maxWidth));
-    cache->updateIfTextChanged(CountryItemDelegateCache::kCaptionId, countryCaption, FontManager::instance().getFont(15, QFont::Normal), DpiScaleManager::instance().curDevicePixelRatio());
+    cache->updateIfTextChanged(CountryItemDelegateCache::kCaptionId, countryCaption, FontManager::instance().getFont(15, QFont::Normal));
 }
 
 bool CountryItemDelegate::isForbiddenCursor(const QModelIndex &index) const
@@ -240,7 +240,7 @@ void CountryItemDelegate::tooltipLeaveEvent(int tooltipId) const
 QRect CountryItemDelegate::captionRect(const QRect &itemRect, const IItemCacheData *cacheData) const
 {
     const CountryItemDelegateCache *cache = static_cast<const CountryItemDelegateCache *>(cacheData);
-    IndependentPixmap pixmap = cache->pixmap(CountryItemDelegateCache::kCaptionId);
+    const auto pixmap = cache->pixmap(CountryItemDelegateCache::kCaptionId);
     return QRect(itemRect.left() + 56*G_SCALE,
                 itemRect.top() + (itemRect.height() - pixmap.height()) / 2,
                 pixmap.width(),

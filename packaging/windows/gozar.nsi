@@ -27,6 +27,7 @@ Name "Gozar"
 Caption "Gozar Setup"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\Gozar"
+InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 SetCompressorDictSize 32
@@ -55,6 +56,7 @@ VIAddVersionKey "LegalCopyright" "Gozar contributors; see bundled licenses"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
 !insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_WELCOME
@@ -74,6 +76,27 @@ Function .onInit
   ready:
 FunctionEnd
 
+Function ValidateInstallDestination
+    ; Upgrade in place when registered. A first install must use a new folder,
+    ; since uninstall removes the app-owned data subdirectory.
+    StrCpy $1 0
+    ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar" "InstallLocation"
+    StrCmp $0 "" firstInstall
+    StrCmp $0 $INSTDIR allow done
+  firstInstall:
+    IfFileExists "$INSTDIR" done allow
+  allow:
+    StrCpy $1 1
+  done:
+FunctionEnd
+
+Function .onVerifyInstDir
+    Call ValidateInstallDestination
+    StrCmp $1 1 valid
+    Abort
+  valid:
+FunctionEnd
+
 Function un.onInit
     FindWindow $0 "FLUTTER_RUNNER_WIN32_WINDOW" "Gozar"
     StrCmp $0 0 ready
@@ -88,6 +111,11 @@ FunctionEnd
 Section "Gozar application and core" Main
     SectionIn RO
     SetShellVarContext current
+    Call ValidateInstallDestination
+    StrCmp $1 1 destinationOk
+    SetErrorLevel 2
+    Abort "Choose a new folder or the registered Gozar install location."
+  destinationOk:
     SetOutPath "$INSTDIR"
 !ifdef NSIS_WIN32_MAKENSIS
     File /r "${SOURCE}\*"

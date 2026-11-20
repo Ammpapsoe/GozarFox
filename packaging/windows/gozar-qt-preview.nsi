@@ -6,32 +6,66 @@ Unicode true
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GozarQtExperimental"
 Name "${PRODUCT}"
 OutFile "${OUTPUT}"
+InstallDir "$LOCALAPPDATA\Programs\Gozar Qt Experimental"
+BrandingText "Gozar · Firefox VPN"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 !define MUI_ABORTWARNING
 !define MUI_ICON "${ICON_FILE}"
+!define MUI_UNICON "${ICON_FILE}"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "${WIZARD_FILE}"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "${HEADER_FILE}"
 !define MUI_WELCOMEPAGE_TITLE "Gozar Qt experimental test build"
 !define MUI_WELCOMEPAGE_TEXT "Not a release. Quit every Gozar window before proceeding. This installs separate app files but uses the existing Gozar account and settings and can change network settings."
+!define MUI_FINISHPAGE_RUN "$INSTDIR\gozar.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch Gozar Qt Experimental"
+!define MUI_FINISHPAGE_RUN_NOTCHECKED
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_COMPONENTS
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
+!insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
 Function .onInit
   SetShellVarContext current
-  ; Use a fixed, per-user path. Ignore any /D= override; never replace stable Gozar.
-  StrCpy $INSTDIR "$LOCALAPPDATA\Programs\Gozar Qt Experimental"
-  IfFileExists "$INSTDIR" occupied ok
-occupied:
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  StrCmp $0 "" ok
   MessageBox MB_ICONEXCLAMATION|MB_OK "Uninstall the previous Gozar Qt Experimental build first." /SD IDOK
   SetErrorLevel 2
   Abort
 ok:
 FunctionEnd
 
-Section "Preview"
+Function .onVerifyInstDir
+  ; The preview always installs to a new folder, never into stable Gozar
+  ; or an existing directory with unrelated files.
+  IfFileExists "$INSTDIR" reject
+  Return
+reject:
+  Abort
+FunctionEnd
+
+Function un.onInit
   SetShellVarContext current
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 == ""
+  ${OrIf} $0 != $INSTDIR
+    SetErrorLevel 2
+    Abort
+  ${EndIf}
+FunctionEnd
+
+Section "Gozar Qt application and core" Preview
+  SectionIn RO
+  SetShellVarContext current
+  ; Also validate silent /D= installs, which bypass the directory picker.
+  IfFileExists "$INSTDIR" 0 +3
+    SetErrorLevel 2
+    Abort "Choose a new folder for the preview."
   SetOutPath "$INSTDIR"
   File /r "${PAYLOAD_PATTERN}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -47,10 +81,14 @@ Section "Preview"
     Abort "The preview could not be installed completely."
 SectionEnd
 
+Section /o "Create a desktop shortcut" DesktopLink
+  SetShellVarContext current
+  CreateShortcut "$DESKTOP\Gozar Qt Experimental.lnk" "$INSTDIR\gozar.exe"
+SectionEnd
+
 Section "Uninstall"
   SetShellVarContext current
   ; Remove only the known deployed files; never delete a Gozar profile.
-  StrCpy $INSTDIR "$LOCALAPPDATA\Programs\Gozar Qt Experimental"
   !include "${REMOVE_PAYLOAD}"
   IfErrors 0 +3
     SetErrorLevel 1
@@ -58,5 +96,6 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
   Delete "$SMPROGRAMS\Gozar Qt Experimental.lnk"
+  Delete "$DESKTOP\Gozar Qt Experimental.lnk"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
 SectionEnd

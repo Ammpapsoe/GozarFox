@@ -124,6 +124,7 @@ GozarPreferences::GozarPreferences(HomeBinder *binder, UiLanguage *language, Pre
     : binder_(binder), readOnly_(readOnly) {
     using namespace PreferencesWindow;
     setScene(&scene_);
+    setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform);
     setObjectName(QStringLiteral("gozarPreferences"));
     setFrameShape(QFrame::NoFrame);
     setAlignment(Qt::AlignTop | Qt::AlignLeft);

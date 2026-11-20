@@ -3,48 +3,48 @@
 
 namespace gui_locations {
 
-TextPixmap::TextPixmap(const QString &text, const QFont &font, qreal devicePixelRatio) : text_(text)
+TextPixmap::TextPixmap(const QString &text, const QFont &font) : font_(font), text_(text)
 {
-    if (!text.isEmpty())
-    {
-        QFontMetrics fm(font);
-        QRect rcText = fm.boundingRect(text);
-        QPixmap pixmap(fm.horizontalAdvance(text)*devicePixelRatio, rcText.height()*devicePixelRatio);
-        pixmap.setDevicePixelRatio(devicePixelRatio);
-        pixmap.fill(Qt::transparent);
-        {
-            QPainter painter(&pixmap);
-            painter.setPen(Qt::white);      // for current needs, we use only white color
-            painter.setFont(font);
-            painter.drawText(QRect(0, 0, fm.horizontalAdvance(text), rcText.height()), Qt::AlignLeft, text);
-        }
-        pixmap_ = IndependentPixmap(pixmap);
+    if (!text.isEmpty()) {
+        const QFontMetrics fm(font);
+        size_ = QSize(fm.horizontalAdvance(text), fm.boundingRect(text).height());
     }
 }
 
-void TextPixmaps::add(int id, const QString &text, const QFont &font, qreal devicePixelRatio)
+void TextPixmap::draw(int x, int y, QPainter *painter) const
 {
-    WS_ASSERT(!pixmaps_.contains(id));
-    pixmaps_[id] = TextPixmap(text, font, devicePixelRatio);
+    if (isNull()) return;
+    painter->save();
+    painter->setRenderHint(QPainter::TextAntialiasing);
+    painter->setPen(Qt::white);
+    painter->setFont(font_);
+    painter->drawText(QRect(QPoint(x, y), size_), Qt::AlignLeft, text_);
+    painter->restore();
 }
 
-void TextPixmaps::updateIfTextChanged(int id, const QString &text, const QFont &font, qreal devicePixelRatio)
+void TextPixmaps::add(int id, const QString &text, const QFont &font)
+{
+    WS_ASSERT(!pixmaps_.contains(id));
+    pixmaps_[id] = TextPixmap(text, font);
+}
+
+void TextPixmaps::updateIfTextChanged(int id, const QString &text, const QFont &font)
 {
     WS_ASSERT(pixmaps_.contains(id));
     auto it = pixmaps_.find(id);
     if (it != pixmaps_.end())
     {
-        if (it.value().text() != text)
+        if (it.value().text() != text || it.value().font() != font)
         {
-            pixmaps_[id] = TextPixmap(text, font, devicePixelRatio);
+            pixmaps_[id] = TextPixmap(text, font);
         }
     }
 }
 
-IndependentPixmap TextPixmaps::pixmap(int id) const
+TextPixmap TextPixmaps::pixmap(int id) const
 {
     WS_ASSERT(pixmaps_.contains(id));
-    return pixmaps_[id].pixmap();
+    return pixmaps_[id];
 }
 
 } // namespace gui_locations

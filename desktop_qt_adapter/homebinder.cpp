@@ -132,7 +132,8 @@ void HomeBinder::switchAccount(const QString &id) {
         const auto account = value.toObject();
         if (account.value(QStringLiteral("id")).toString() == id && account.value(QStringLiteral("active")).isBool() &&
             !account.value(QStringLiteral("active")).toBool()) {
-            sendMutation(QStringLiteral("switch_account"), {{QStringLiteral("id"), id}});
+            switchAccountId_ = sendMutation(QStringLiteral("switch_account"), {{QStringLiteral("id"), id}});
+            if (switchAccountId_ >= 0) pendingAccountId_ = id;
             return;
         }
     }
@@ -280,6 +281,9 @@ void HomeBinder::applyState(const QJsonObject &state) {
 
 void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
     if (handleUpdateReply(id, reply, {})) return;
+    const bool switchReply = switchAccountId_ == id;
+    const QString targetAccount = switchReply ? pendingAccountId_ : QString();
+    if (switchReply) { switchAccountId_ = -1; pendingAccountId_.clear(); }
     const bool signOutReply = signOutId_ == id;
     if (signOutReply) signOutId_ = -1;
     const bool needsState = mutatingId_ == id || stateId_ == id;
@@ -312,6 +316,17 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
         }
         setEnabled();
     }
+    if (switchReply) {
+        bool active = false;
+        for (const auto &value : lastState_.value(QStringLiteral("accounts")).toArray()) {
+            const auto account = value.toObject();
+            if (account.value(QStringLiteral("id")).toString() == targetAccount &&
+                account.value(QStringLiteral("active")).toBool()) active = true;
+        }
+        if (stateKnown_ && signedIn_ && !live_ && !connecting_ && active && !targetAccount.isEmpty())
+            emit accountSwitchConfirmed();
+        else emit error(tr("The core did not confirm the selected account."));
+    }
     if (signOutReply) {
         if (stateKnown_ && !signedIn_ && !live_ && !connecting_) emit signedOutConfirmed();
         else emit error(tr("The core did not confirm sign-out."));
@@ -331,6 +346,7 @@ void HomeBinder::handleReply(qint64 id, const QJsonObject &reply) {
 void HomeBinder::handleFailure(qint64 id, const QString &message) {
     if (handleUpdateReply(id, {}, message)) return;
     if (signOutId_ == id) signOutId_ = -1;
+    if (switchAccountId_ == id) { switchAccountId_ = -1; pendingAccountId_.clear(); }
     const bool losesState = id == mutatingId_ || id == stateId_;
     if (losesState) { stateKnown_ = false; lastState_ = {}; }
     if (id == mutatingId_) mutatingId_ = -1;
@@ -343,7 +359,8 @@ void HomeBinder::handleFailure(qint64 id, const QString &message) {
 }
 
 void HomeBinder::coreStopped() {
-    signOutId_ = -1;
+    signOutId_ = switchAccountId_ = -1;
+    pendingAccountId_.clear();
     stateKnown_ = false;
     lastState_ = {};
     signedIn_ = false;

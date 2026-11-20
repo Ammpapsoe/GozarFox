@@ -1,25 +1,28 @@
 #pragma once
 
-#include "textpixmap.h"
-#include "graphicresources/independentpixmap.h"
+#include <QFont>
+#include <QPainter>
 
 #include <QHash>
 
 namespace gui_locations {
 
-// Util class: convert the text to QPixmap to speed up subsequent drawings
-// The reason for this is that drawing text is quite slow and it speeds up significantly
-// todo: move to common utils?
+// Retain text and logical metrics, not a bitmap rasterized for another screen.
 class TextPixmap
 {
 public:
     TextPixmap() {}
-    explicit TextPixmap(const QString &text, const QFont &font, qreal devicePixelRatio);
-    IndependentPixmap pixmap() const { return pixmap_; }
+    explicit TextPixmap(const QString &text, const QFont &font);
+    void draw(int x, int y, QPainter *painter) const;
+    int width() const { return size_.width(); }
+    int height() const { return size_.height(); }
+    bool isNull() const { return text_.isEmpty(); }
+    QFont font() const { return font_; }
     QString text() const { return text_; }
 
 private:
-    IndependentPixmap pixmap_;
+    QFont font_;
+    QSize size_{0, 0};
     QString text_;
 };
 
@@ -28,9 +31,9 @@ class TextPixmaps
 {
 public:
     TextPixmaps() {}
-    void add(int id, const QString &text, const QFont &font, qreal devicePixelRatio);
-    void updateIfTextChanged(int id, const QString &text, const QFont &font, qreal devicePixelRatio);
-    IndependentPixmap pixmap(int id) const;
+    void add(int id, const QString &text, const QFont &font);
+    void updateIfTextChanged(int id, const QString &text, const QFont &font);
+    TextPixmap pixmap(int id) const;
 
 private:
     QHash<int, TextPixmap> pixmaps_;

@@ -25,6 +25,7 @@ public:
     }
 
     void clearHashAndStartPreloading();
+    void invalidateDpiCache();
     void finishGracefully();
 
     QSharedPointer<IndependentPixmap> getIndependentPixmap(const QString &name);

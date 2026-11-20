@@ -27,6 +27,12 @@ void ImageResourcesSvg::clearHash()
 }
 
 
+void ImageResourcesSvg::invalidateDpiCache()
+{
+    QMutexLocker locker(&mutex_);
+    clearHash();
+}
+
 void ImageResourcesSvg::clearHashAndStartPreloading()
 {
     bNeedFinish_ = true;
@@ -119,10 +125,14 @@ bool ImageResourcesSvg::loadFromResource(const QString &name)
     if (!render.isValid()) {
         return false;
     }
-    QPixmap pixmap(render.defaultSize() * G_SCALE * DpiScaleManager::instance().curDevicePixelRatio());
+    const qreal dpr = DpiScaleManager::instance().curDevicePixelRatio();
+    QPixmap pixmap((QSizeF(render.defaultSize()) * G_SCALE * dpr).toSize());
     pixmap.fill(Qt::transparent);
-    QPainter painter(&pixmap);
-    render.render(&painter);
+    {
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        render.render(&painter);
+    }
 
     pixmap.setDevicePixelRatio(DpiScaleManager::instance().curDevicePixelRatio());
     hashIndependent_[name] = QSharedPointer<IndependentPixmap>(new IndependentPixmap(pixmap));
@@ -141,7 +151,7 @@ bool ImageResourcesSvg::loadFromResourceWithCustomSize(const QString &name, int 
         return false;
     }
     const auto sizeScale = DpiScaleManager::instance().curDevicePixelRatio();
-    QSize realSize(width * sizeScale, height * sizeScale);
+    QSize realSize = (QSizeF(width, height) * sizeScale).toSize();
     if (flags & IMAGE_FLAG_SQUARE) {
         if (realSize.width() > realSize.height())
             realSize.setHeight(realSize.width());
@@ -156,6 +166,7 @@ bool ImageResourcesSvg::loadFromResourceWithCustomSize(const QString &name, int 
         QRectF rc(0, 0, width * sizeScale, height * sizeScale);
         rc.moveTo((realSize.width() - rc.width()) / 2, (realSize.height() - rc.height()) / 2);
         QPainter painter(&temp);
+        painter.setRenderHint(QPainter::Antialiasing);
         if (flags & IMAGE_FLAG_CIRCLE) {
             QPainterPath path;
             // NB: using "height" as width here to make a circle
@@ -163,6 +174,7 @@ bool ImageResourcesSvg::loadFromResourceWithCustomSize(const QString &name, int 
             painter.setClipPath(path);
         }
         render.render(&painter, rc);
+        painter.end();
         if (flags & IMAGE_FLAG_CIRCLE) {
             pixmap = temp.copy(QRect(pixmap.width()/2 - pixmap.height()/2, 0, pixmap.height(), pixmap.height()));
         } else {
