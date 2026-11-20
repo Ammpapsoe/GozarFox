@@ -116,6 +116,9 @@ Section "Gozar application and core" Main
     SetErrorLevel 2
     Abort "Choose a new folder or the registered Gozar install location."
   destinationOk:
+!ifdef REMOVE_QT_PAYLOAD
+    ClearErrors
+!endif
     SetOutPath "$INSTDIR"
 !ifdef NSIS_WIN32_MAKENSIS
     File /r "${SOURCE}\*"
@@ -132,6 +135,11 @@ Section "Gozar application and core" Main
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar" "NoModify" 1
     WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar" "NoRepair" 1
+!ifdef REMOVE_QT_PAYLOAD
+    IfErrors 0 +3
+        SetErrorLevel 1
+        Abort "Gozar could not be installed completely."
+!endif
 SectionEnd
 
 Section /o "Desktop shortcut" DesktopShortcut
@@ -143,6 +151,13 @@ Section "Uninstall"
     SetShellVarContext current
     Delete "$SMPROGRAMS\Gozar.lnk"
     Delete "$DESKTOP\Gozar.lnk"
+!ifdef REMOVE_QT_PAYLOAD
+    ClearErrors
+    !include "${REMOVE_QT_PAYLOAD}"
+    IfErrors 0 +3
+        SetErrorLevel 1
+        Abort "Close Gozar before removing the installed files."
+!else
     Delete "$INSTDIR\gozar.exe"
     Delete "$INSTDIR\gozar-core.exe"
     Delete "$INSTDIR\flutter_windows.dll"
@@ -158,6 +173,7 @@ Section "Uninstall"
     Delete "$INSTDIR\QPACK-LICENSE.txt"
     Delete "$INSTDIR\GO-DEPS-LICENSES.txt"
     RMDir /r "$INSTDIR\data"
+!endif
     Delete "$INSTDIR\Uninstall.exe"
     RMDir "$INSTDIR"
     DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Gozar"

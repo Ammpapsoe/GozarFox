@@ -1,0 +1,112 @@
+name: Prepare Qt desktop packages (validation only)
+
+# This workflow builds with the exact checked-out UI and core, and publishes
+# neither releases nor downloadable binaries. Only validation evidence leaves CI.
+on:
+  workflow_dispatch:
+  push:
+    branches: [packaging/qt-preparation]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Package ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: 'windows-2022', platform: 'windows', arch: 'amd64', host: 'windows', label: 'Windows-x64'}
+          - {runner: 'ubuntu-24.04', platform: 'linux', arch: 'amd64', host: 'linux', label: 'Linux-amd64'}
+          - {runner: 'macos-15-intel', platform: 'darwin', arch: 'amd64', host: 'mac', label: 'macOS-Intel'}
+          - {runner: 'macos-15', platform: 'darwin', arch: 'arm64', host: 'mac', label: 'macOS-ARM'}
+    env:
+      GOOS: ${{ matrix.platform }}
+      GOARCH: ${{ matrix.arch }}
+      PACKAGE_LABEL: ${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.11'
+          cache-dependency-path: go-desktop/go.sum
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: ${{ matrix.host }}
+          cache: true
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Install Linux packaging tools
+        if: matrix.platform == 'linux'
+        run: |
+          bash scripts/ci_apt.sh update -qq
+          bash scripts/ci_apt.sh install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev patchelf libxcb-cursor0 libxkbcommon-x11-0
+      - name: Build exact checkout core, Qt and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          core="$RUNNER_TEMP/same-commit/gozar-core"
+          ldflags='-s -w'
+          if [[ "$GOOS" == windows ]]; then core+=.exe; ldflags+=' -H=windowsgui'; fi
+          mkdir -p "$(dirname "$core")" "$RUNNER_TEMP/packages" "$RUNNER_TEMP/packaging-evidence"
+          (cd go-desktop && CGO_ENABLED=0 go build -trimpath -ldflags="$ldflags" -o "$core" ./cmd/gozar)
+          cmake -S desktop_qt_adapter -B "$RUNNER_TEMP/production-layout-qt" -DBUILD_UPSTREAM_SMOKE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGOZAR_REAL_CORE="$core"
+          cmake --build "$RUNNER_TEMP/production-layout-qt" --config Release --parallel 2
+          ctest --test-dir "$RUNNER_TEMP/production-layout-qt" -C Release --output-on-failure
+          python desktop_qt_adapter/branding/inventory_resources.py \
+            --qrc "$RUNNER_TEMP/production-layout-qt/images.qrc" --repository "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/packaging-evidence/qt-source-resources.csv"
+      - name: Stage native packages with existing Qt handoff
+        shell: bash
+        run: bash scripts/stage_desktop_qt_packages.sh
+      - name: Compile and test the standard Windows installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'desktop-qt-package-stage'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio C++ tools not available' }
+          $redist = Get-ChildItem "$vs\VC\Redist\MSVC" -Directory | Where-Object Name -Match '^\d+\.\d+\.\d+$' | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (!$redist) { throw 'Visual C++ Redistributable files not found' }
+          Copy-Item "$($redist.FullName)\x64\Microsoft.VC143.CRT\*.dll" $stage
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          if (!(Test-Path $compiler)) { choco install nsis --no-progress -y }
+          if (!(Test-Path $compiler)) { throw 'NSIS compiler not available' }
+          $manifest = Join-Path $env:RUNNER_TEMP 'gozar-uninstall-files.nsh'
+          python packaging/windows/nsis-preview-payload.py $stage $manifest
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to generate uninstall manifest' }
+          $version = (Select-String '^version:\s+(\d+\.\d+\.\d+)\+' desktop_flutter/pubspec.yaml).Matches.Groups[1].Value
+          if (!$version) { throw 'No version found in the unmodified launcher' }
+          $root = $env:GITHUB_WORKSPACE
+          $installer = Join-Path $env:RUNNER_TEMP 'packages/Gozar-Windows-x64-Setup.exe'
+          & $compiler /V2 /WX "/DSOURCE=$stage" "/DOUTPUT=$installer" "/DVERSION=$version" "/DLICENSE_FILE=$root\LICENSE" "/DICON_FILE=$root\desktop_flutter\windows\runner\resources\app_icon.ico" "/DWIZARD_FILE=$root\packaging\windows\wizard.bmp" "/DHEADER_FILE=$root\packaging\windows\header.bmp" "/DREMOVE_QT_PAYLOAD=$manifest" packaging/windows/gozar.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to compile official-layout NSIS setup' }
+          $core = Join-Path $env:RUNNER_TEMP 'same-commit/gozar-core.exe'
+          ./scripts/test_windows_installer.ps1 -Installer $installer -InstallDir "$env:RUNNER_TEMP/Gozar package smoke" -VerifiedQtCore $core
+          # Keep the existing 20 MB ZIP budget. Report an over-budget package;
+          # the archive script creates the file before checking its size.
+          $zip = Join-Path $env:RUNNER_TEMP 'packages/Gozar-Windows-x64.zip'
+          python scripts/archive_windows.py $stage $zip
+          if ($LASTEXITCODE -ne 0 -and (!(Test-Path $zip) -or (Get-Item $zip).Length -lt 20000000)) { throw 'Windows ZIP construction failed' }
+      - name: Record package evidence, not release eligibility
+        shell: bash
+        run: |
+          python scripts/report_desktop_qt_package_preparation.py "$RUNNER_TEMP/packages" "$RUNNER_TEMP/packaging-evidence/desktop-packages.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qt-packaging-evidence-${{ matrix.label }}
+          path: ${{ runner.temp }}/packaging-evidence/
+          if-no-files-found: error
+          retention-days: 14
