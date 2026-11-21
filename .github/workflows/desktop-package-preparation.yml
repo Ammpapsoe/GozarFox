@@ -83,6 +83,18 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/build_qt_windows_installer.ps1
+      - name: Inventory the staged runtime payload for the source-delivery review
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GOOS" in
+            windows) payload="$RUNNER_TEMP/desktop-qt-package-stage" ;;
+            linux) payload="$RUNNER_TEMP/desktop-extracted/bundle" ;;
+            darwin) payload="$RUNNER_TEMP/desktop-extracted/Gozar.app" ;;
+            *) exit 2 ;;
+          esac
+          python scripts/inventory_qt_staged_payload.py "$payload" \
+            "$RUNNER_TEMP/packaging-evidence/staged-payload.csv"
       - name: Authenticate tools for the internal Qt AppImage
         if: matrix.platform == 'linux'
         env:

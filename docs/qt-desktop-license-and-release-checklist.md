@@ -51,3 +51,11 @@ The official workflow produces a commit-bound `project-source` snapshot for
 Qt releases and includes it in signature and checksum verification alongside
 the DMGs. This is the project snapshot, not a substitute for supplying the
 applicable corresponding source for third-party components.
+
+The internal native validation produces a staged file inventory with paths,
+SHA-256 digests and origin hints after Windows CRT deployment and after
+Linux/macOS extraction. It contains no binary and does not decide licenses.
+Compare the listed runtimes with the exact dependency versions and source
+offers before finalizing the distribution record. The Linux derivative
+packages and Android still require their own inventory where their contents
+differ from the base staged payload.
