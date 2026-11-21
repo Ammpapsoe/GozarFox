@@ -885,6 +885,7 @@ jobs:
           sha256sum -c SHA256SUMS
       - name: Notes
         env:
+          GOZAR_QT_RELEASE: ${{ steps.version.outputs.qt }}
           GOZAR_ALLOW_DRAFT_NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_release && '1' || '0' }}
         run: |
           set -e

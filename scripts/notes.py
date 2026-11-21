@@ -51,12 +51,15 @@ base = f'https://github.com/{repo}/releases/download/{tag}/'
 windows_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="white" d="M0 0h7v7H0zm9 0h7v7H9zM0 9h7v7H0zm9 0h7v7H9z"/></svg>'
 windows_logo = 'data:image/svg+xml;base64,' + base64.b64encode(windows_svg.encode()).decode()
 
+is_qt_release = os.getenv('GOZAR_QT_RELEASE') == '1'
 apk = f'Gozar_{android}_'
+android_downloads = (badge('APK', 'Universal', '2da44e', 'android', apk + 'universal.apk')
+                     if is_qt_release else stack(
+                         badge('APK', 'ARM64', '2da44e', 'android', apk + 'arm64-v8a.apk'),
+                         badge('APK', 'ARMv7', '2da44e', 'android', apk + 'armeabi-v7a.apk'),
+                         badge('APK', 'x86__64', '2da44e', 'android', apk + 'x86_64.apk')))
 rows = [
-    ('**Android**', stack(
-        badge('APK', 'ARM64', '2da44e', 'android', apk + 'arm64-v8a.apk'),
-        badge('APK', 'ARMv7', '2da44e', 'android', apk + 'armeabi-v7a.apk'),
-        badge('APK', 'x86__64', '2da44e', 'android', apk + 'x86_64.apk'))),
+    ('**Android**', android_downloads),
     ('**Windows**', stack(
         badge('Installer', 'EXE__x64', '0550ae', windows_logo, 'Gozar-Windows-x64-Setup.exe'),
         badge('Portable', 'ZIP__x64', '0550ae', windows_logo, 'Gozar-Windows-x64.zip'))),
@@ -101,6 +104,14 @@ rows = [
         badge('Core', 'macOS__Intel', '4b4b4b', 'apple', 'Gozar-Core-macOS-Intel.tar.xz'),
         badge('Core', 'macOS__ARM64', '4b4b4b', 'apple', 'Gozar-Core-macOS-ARM.tar.xz'))),
 ]
+
+if is_qt_release:
+    mac = next(index for index, (name, _) in enumerate(rows) if name == '**macOS**')
+    rows[mac] = ('**macOS**', stack(
+        badge('DMG', 'Apple__Silicon', '24292f', 'apple', 'Gozar-macOS-ARM.dmg'),
+        badge('DMG', 'Intel', '24292f', 'apple', 'Gozar-macOS-Intel.dmg'), rows[mac][1]))
+    rows.append(('**Source**', badge('Source', 'TAR.XZ', '555555', 'github',
+                                  f'GozarFox-{version}-project-source.tar.xz')))
 
 release_version = tag.removeprefix('v').removesuffix('-desktop')
 notes_file = Path(__file__).resolve().parent.parent / 'docs' / 'release-notes' / f'{release_version}.md'

@@ -2,12 +2,17 @@ name: Android APK
 
 on:
   workflow_dispatch:
-    inputs: {}
+    inputs:
+      validate_universal_only:
+        description: Build and verify the officially signed Universal APK; upload evidence only
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-# One signed arm64 APK, nothing else: the fast loop for device testing.
+# The legacy fast loop uploads one arm64 APK; Universal validation uploads only evidence.
 # The full multi-platform release stays in build.yml, on tags.
 jobs:
   apk:
@@ -35,15 +40,20 @@ jobs:
             echo "::error::KEYSTORE_BASE64 is missing"
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
       - name: Build the signed release APK
         env:
           KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$KEYSTORE_FILE"' EXIT
+          bash ./gradlew :app:assembleRelease --no-daemon --stacktrace
       - name: Verify the signing identity
+        if: ${{ !inputs.validate_universal_only }}
         run: |
           set -e
           expected=800d24fa5cc38d2a63c216051d4710b950b0b3c4f457096ccfc11794a2b3bfd3
@@ -55,7 +65,19 @@ jobs:
             echo "$info"
             exit 1
           }
+      - name: Verify signed Universal APK and record its evidence
+        if: inputs.validate_universal_only
+        run: bash scripts/check_signed_universal_apk.sh app/build/outputs/apk/release/app-universal-release.apk "$RUNNER_TEMP/android-signing-evidence.json"
+      - name: Upload signing evidence only
+        if: inputs.validate_universal_only
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-universal-signing-evidence
+          path: ${{ runner.temp }}/android-signing-evidence.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload the APK
+        if: ${{ !inputs.validate_universal_only }}
         uses: actions/upload-artifact@v4
         with:
           name: gozar-android-arm64
