@@ -32,8 +32,8 @@
 | Platform | Validated internally | Official-format work still needed |
 | --- | --- | --- |
 | Windows x64 | NSIS Setup EXE and portable ZIP | Use the existing EXE; no MSI required by the EXE-or-MSI choice. Validate install, upgrade, notices and official signatures. |
-| macOS (Intel and Apple Silicon) | Separate `.app` tar.xz archives | DMG creation and mount verification are wired into internal validation, but not yet run. Plan how it coexists with the update archives, verify extracted bundle/notices, and verify signatures. Prior 25 MB cap applies to tar.xz, not a new DMG. |
-| Linux amd64 | DEB and tar.xz | Verify DEB install/upgrade and notices. Qt AppImage build/smoke is wired into validation and the official derivative job, but is not covered by the earlier green native run. |
+| macOS (Intel and Apple Silicon) | Separate `.app` tar.xz archives | DMGs were built and mount-verified in internal run `44802513430`. Official wiring adds them alongside the unchanged update archives; official signatures still need to be validated. Prior 25 MB cap applies to tar.xz, not a new DMG. |
+| Linux amd64 | DEB and tar.xz | Verify DEB install/upgrade and notices. Qt AppImage build and extracted-payload smoke passed in internal run `44802513430`; the official derivative job must still run. |
 
 The staging script already copies the root LICENSE, LICENSE-SCOPE.md, NOTICE and Windscribe
 GPLv2 text into the Qt layout. Restart from the same reviewed commit and
@@ -46,3 +46,8 @@ Do not add an approval record or create `v1.20.0` until rights and source
 provision are actually resolved, the appropriate tests and native checks
 succeed, and official signing validation passes. No publication date is
 implied by the successful validation-only workflow.
+
+The official workflow produces a commit-bound `project-source` snapshot for
+Qt releases and includes it in signature and checksum verification alongside
+the DMGs. This is the project snapshot, not a substitute for supplying the
+applicable corresponding source for third-party components.

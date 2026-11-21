@@ -101,3 +101,19 @@ upstream Windscribe files. The source version and attribution above apply
 to those imported resources; preserve any asset-specific terms. In
 particular, the embedded IBM Plex Sans font declares SIL OFL 1.1, not a
 blanket GPL grant. No trademark grant is implied.
+
+Desktop toolchain and runtime source references
+------------------------------------------------
+Qt 6.8.3 upstream source distributions and module-specific terms:
+https://download.qt.io/archive/qt/6.8/6.8.3/single/
+https://doc.qt.io/qt-6.8/licensing.html
+Flutter 3.47.7 upstream sources and applicable notices:
+https://github.com/flutter/flutter/tree/3.47.7
+Go 1.26.11 upstream toolchain sources and license:
+https://go.dev/dl/#go1.26.11
+https://github.com/golang/go/tree/go1.26.11
+
+These are upstream source references. Dependencies keep their respective
+terms, including any module-, plugin- and platform-specific notices.
+GozarFox project source snapshots do not include every external runtime
+source, and these links do not replace applicable source delivery duties.
